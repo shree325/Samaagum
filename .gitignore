@@ -1,0 +1,17 @@
+# Dependencies
+server/node_modules/
+client/node_modules/
+
+# Build outputs
+server/dist/
+server/*.tsbuildinfo
+client/build/
+client/dist/
+
+# Local Environment variables
+server/.env
+client/.env
+
+# System files
+.DS_Store
+Thumbs.db
