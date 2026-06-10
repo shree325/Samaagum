@@ -3,13 +3,15 @@ import { IBaseRepository } from './IBaseRepository';
 
 export class PostgresBaseRepository<T> implements IBaseRepository<T> {
   protected tableName: string;
+  protected pkName: string;
 
-  constructor(tableName: string) {
+  constructor(tableName: string, pkName: string = 'id') {
     this.tableName = tableName;
+    this.pkName = pkName;
   }
 
   async getById(id: string | number): Promise<T | null> {
-    const query = `SELECT * FROM ${this.tableName} WHERE id = $1`;
+    const query = `SELECT * FROM ${this.tableName} WHERE ${this.pkName} = $1`;
     const { rows } = await pool.query(query, [id]);
     return rows[0] || null;
   }
@@ -58,13 +60,13 @@ export class PostgresBaseRepository<T> implements IBaseRepository<T> {
     if (keys.length === 0) return this.getById(id);
 
     const setClause = keys.map((key, index) => `${key} = $${index + 1}`).join(', ');
-    const query = `UPDATE ${this.tableName} SET ${setClause} WHERE id = $${keys.length + 1} RETURNING *`;
+    const query = `UPDATE ${this.tableName} SET ${setClause} WHERE ${this.pkName} = $${keys.length + 1} RETURNING *`;
     const { rows } = await pool.query(query, [...values, id]);
     return rows[0] || null;
   }
 
   async delete(id: string | number): Promise<boolean> {
-    const query = `DELETE FROM ${this.tableName} WHERE id = $1`;
+    const query = `DELETE FROM ${this.tableName} WHERE ${this.pkName} = $1`;
     const result = await pool.query(query, [id]);
     return (result.rowCount ?? 0) > 0;
   }
