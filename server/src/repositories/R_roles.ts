@@ -1,0 +1,15 @@
+import pool from '../config/database';
+import { PostgresBaseRepository } from './PostgresBaseRepository';
+import { IRole, IR_roles } from './IR_roles';
+
+export class R_roles extends PostgresBaseRepository<IRole> implements IR_roles {
+    constructor() {
+        super('roles', 'role_id');
+    }
+
+    async findByKey(key: string): Promise<IRole | null> {
+        const query = `SELECT * FROM roles WHERE key = $1 LIMIT 1`;
+        const { rows } = await pool.query(query, [key]);
+        return rows[0] || null;
+    }
+}

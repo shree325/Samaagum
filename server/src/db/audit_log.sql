@@ -1,32 +1,67 @@
-DROP TABLE IF EXISTS audit_log CASCADE;
+CREATE TABLE IF NOT EXISTS audit_log (
+    audit_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-CREATE TABLE audit_log (
-    -- row_id: Primary key of the table (matches Siebel/CRM unique record identifier design).
-    row_id                    UUID         DEFAULT gen_random_uuid() PRIMARY KEY,
-    -- bu_id: Business Unit ID (used to isolate data by tenant/organization, matches multi-tenancy requirements).
-    bu_id                     UUID         NOT NULL REFERENCES tenants(row_id) ON DELETE CASCADE,
+    tenant_id           UUID NULL,
+    actor_user_id       UUID NULL,
 
-    actor_id                  UUID         NOT NULL, -- User performing the action
-    action                    VARCHAR(255) NOT NULL, -- 'role_changed', 'deleted', 'refunded'
-    resource_type             VARCHAR(100) NOT NULL,
-    resource_id               UUID         NOT NULL,
-    metadata                  JSONB,
+    action              audit_action_enum NOT NULL,
+    target_table        TEXT NOT NULL,
+    target_entity_id    UUID NULL,
 
-    -- Siebel-style System Columns (Simplified / Immutable logs)
-    -- created: Timestamp when the audit entry was written (Siebel system field).
-    created                   TIMESTAMPTZ  DEFAULT now(),
-    -- db_last_upd: System-level database write timestamp (used for replication tracking).
-    db_last_upd               TIMESTAMPTZ  DEFAULT now(),
-    -- db_last_upd_src: System/Source identifier of the database write operation.
-    db_last_upd_src           VARCHAR(50)  DEFAULT 'App'
+    before_json         JSONB NOT NULL DEFAULT '{}'::jsonb,
+    after_json          JSONB NOT NULL DEFAULT '{}'::jsonb,
+
+    created_by_user_id  UUID NULL,
+    updated_by_user_id  UUID NULL,
+    modification_num    INTEGER NOT NULL DEFAULT 1,
+
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT chk_audit_log_target_table_not_blank
+        CHECK (btrim(target_table) <> ''),
+
+    CONSTRAINT fk_audit_log_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants(tenant_id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT fk_audit_log_actor_user
+        FOREIGN KEY (actor_user_id)
+        REFERENCES users(user_id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT fk_audit_log_created_by
+        FOREIGN KEY (created_by_user_id)
+        REFERENCES users(user_id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT fk_audit_log_updated_by
+        FOREIGN KEY (updated_by_user_id)
+        REFERENCES users(user_id)
+        ON DELETE SET NULL
 );
 
--- Row-Level Security
-ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON audit_log
-    USING (bu_id = current_setting('app.current_tenant')::uuid);
+CREATE INDEX IF NOT EXISTS idx_audit_log_tenant_id
+    ON audit_log(tenant_id);
 
-CREATE INDEX idx_audit_log_bu_id    ON audit_log (bu_id);
-CREATE INDEX idx_audit_log_actor   ON audit_log (actor_id);
-CREATE INDEX idx_audit_log_resource ON audit_log (resource_type, resource_id);
-CREATE INDEX idx_audit_log_created  ON audit_log (created);
+CREATE INDEX IF NOT EXISTS idx_audit_log_actor_user_id
+    ON audit_log(actor_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_action
+    ON audit_log(action);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_target_table
+    ON audit_log(target_table);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_target_entity_id
+    ON audit_log(target_entity_id);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_created_at
+    ON audit_log(created_at);
+
+DROP TRIGGER IF EXISTS trg_audit_log_audit ON audit_log;
+CREATE TRIGGER trg_audit_log_audit
+BEFORE INSERT OR UPDATE ON audit_log
+FOR EACH ROW
+EXECUTE FUNCTION fn_set_audit_fields();

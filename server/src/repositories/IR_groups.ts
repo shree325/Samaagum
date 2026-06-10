@@ -1,31 +1,19 @@
+import { IBaseRepository } from "./IBaseRepository";
+
 export interface IGroup {
-  row_id?: string;
-  bu_id: string;
-  entity_id: string;
-  par_row_id?: string | null;
-
-  name: string;
-  description?: string | null;
-  status?: string;
-  pr_dept_ou_id?: string | null;
-  x_data?: Record<string, unknown> | null;
-
-  created?: Date;
-  created_by?: string | null;
-  last_upd?: Date;
-  last_upd_by?: string | null;
-  modification_num?: number;
-  conflict_id?: string;
-  db_last_upd?: Date;
-  db_last_upd_src?: string;
+    entity_id: string;
+    name: string;
+    slug: string;
+    join_mode: 'open' | 'approval_required' | 'invite_only';
+    join_form_id?: string | null;
+    listed: boolean;
+    subtype: 'community' | 'org' | 'group';
+    scope: 'public' | 'private';
+    created_at?: Date;
+    updated_at?: Date;
 }
 
-export interface IR_groups {
-  create(group: IGroup): Promise<IGroup>;
-  getById(rowId: string): Promise<IGroup | null>;
-  getByEntityId(entityId: string): Promise<IGroup | null>;
-  getByParentRowId(parRowId: string): Promise<IGroup[]>;
-  getAll(buId: string): Promise<IGroup[]>;
-  update(rowId: string, group: Partial<IGroup>): Promise<IGroup | null>;
-  delete(rowId: string): Promise<boolean>;
+export interface IR_groups extends IBaseRepository<IGroup> {
+    findBySlug(slug: string): Promise<IGroup | null>;
+    getPublicGroups(): Promise<IGroup[]>;
 }

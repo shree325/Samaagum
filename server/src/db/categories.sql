@@ -1,42 +1,54 @@
-DROP TABLE IF EXISTS categories CASCADE;
+CREATE TABLE IF NOT EXISTS categories (
+    category_id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-CREATE TABLE categories (
-    -- row_id: Primary key of the table (matches Siebel/CRM unique record identifier design).
-    row_id                    UUID         DEFAULT gen_random_uuid() PRIMARY KEY,
-    -- bu_id: Business Unit ID (used to isolate data by tenant/organization, matches multi-tenancy requirements).
-    bu_id                     UUID         NOT NULL REFERENCES tenants(row_id) ON DELETE CASCADE,
-    -- par_row_id: Parent Row ID (links this category record self-referentially to its parent category for tree structure).
-    par_row_id                UUID         REFERENCES categories(row_id) ON DELETE SET NULL, 
+    parent_id           UUID NULL,
+    slug                TEXT NOT NULL UNIQUE,
+    name                VARCHAR(150) NOT NULL,
+    status              category_status_enum NOT NULL DEFAULT 'active',
 
-    name                      VARCHAR(255) NOT NULL,
-    slug                      VARCHAR(255) NOT NULL,
+    created_by_user_id  UUID NULL,
+    updated_by_user_id  UUID NULL,
+    modification_num    INTEGER NOT NULL DEFAULT 1,
 
-    -- Siebel-style System Columns
-    -- created: Timestamp when the record was created (Siebel system field).
-    created                   TIMESTAMPTZ  DEFAULT now(),
-    -- created_by: User ID who created the record (Siebel system auditing field).
-    created_by                UUID,
-    -- last_upd: Timestamp when the record was last updated (Siebel system field).
-    last_upd                  TIMESTAMPTZ  DEFAULT now(),
-    -- last_upd_by: User ID who last updated the record (Siebel system auditing field).
-    last_upd_by               UUID,
-    -- modification_num: Record version count, incremented on every update (used for optimistic locking/concurrency control).
-    modification_num          INTEGER      DEFAULT 0,
-    -- conflict_id: Used for merge replication and conflict resolution (defaults to '0').
-    conflict_id               VARCHAR(15)  DEFAULT '0',
-    -- db_last_upd: System-level database write timestamp (used for replication tracking).
-    db_last_upd               TIMESTAMPTZ  DEFAULT now(),
-    -- db_last_upd_src: System/Source identifier of the database write operation.
-    db_last_upd_src           VARCHAR(50)  DEFAULT 'App',
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT uq_categories_bu_slug UNIQUE (bu_id, slug)
+    CONSTRAINT chk_categories_slug_not_blank
+        CHECK (btrim(slug) <> ''),
+
+    CONSTRAINT chk_categories_name_not_blank
+        CHECK (btrim(name) <> ''),
+
+    CONSTRAINT fk_categories_parent
+        FOREIGN KEY (parent_id)
+        REFERENCES categories(category_id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT fk_categories_created_by
+        FOREIGN KEY (created_by_user_id)
+        REFERENCES users(user_id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT fk_categories_updated_by
+        FOREIGN KEY (updated_by_user_id)
+        REFERENCES users(user_id)
+        ON DELETE SET NULL
 );
 
--- Row-Level Security
-ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON categories
-    USING (bu_id = current_setting('app.current_tenant')::uuid);
+CREATE INDEX IF NOT EXISTS idx_categories_parent_id
+    ON categories(parent_id);
 
-CREATE INDEX idx_categories_bu_id      ON categories (bu_id);
-CREATE INDEX idx_categories_par_row_id ON categories (par_row_id);
-CREATE INDEX idx_categories_slug       ON categories (slug);
+CREATE INDEX IF NOT EXISTS idx_categories_status
+    ON categories(status);
+
+CREATE INDEX IF NOT EXISTS idx_categories_created_by_user_id
+    ON categories(created_by_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_categories_updated_by_user_id
+    ON categories(updated_by_user_id);
+
+DROP TRIGGER IF EXISTS trg_categories_audit ON categories;
+CREATE TRIGGER trg_categories_audit
+BEFORE INSERT OR UPDATE ON categories
+FOR EACH ROW
+EXECUTE FUNCTION fn_set_audit_fields();

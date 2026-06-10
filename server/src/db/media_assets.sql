@@ -1,42 +1,71 @@
-DROP TABLE IF EXISTS media_assets CASCADE;
+CREATE TABLE IF NOT EXISTS media_assets (
+    asset_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-CREATE TABLE media_assets (
-    -- row_id: Primary key of the table (matches Siebel/CRM unique record identifier design).
-    row_id                    UUID         DEFAULT gen_random_uuid() PRIMARY KEY,
-    -- bu_id: Business Unit ID (used to isolate data by tenant/organization, matches multi-tenancy requirements).
-    bu_id                     UUID         NOT NULL REFERENCES tenants(row_id) ON DELETE CASCADE,
+    tenant_id           UUID NOT NULL,
+    owner_entity_id     UUID NOT NULL,
+    storage_key         TEXT NOT NULL UNIQUE,
+    mime                TEXT NOT NULL,
+    visibility          visibility_enum NOT NULL DEFAULT 'private',
 
-    owner_type                VARCHAR(100) NOT NULL, -- 'event', 'community', 'sponsor', 'user'
-    owner_id                  UUID         NOT NULL,
-    file_url                  TEXT         NOT NULL,
-    mime_type                 VARCHAR(100),
-    file_size                 BIGINT,
-    -- x_data: JSONB extension block representing the extension columns X_columns* (allows dynamic fields without altering schema).
-    x_data                    JSONB,
+    file_name           TEXT NULL,
+    size_bytes          BIGINT NULL,
+    file_data           BYTEA NULL,
+    metadata            JSONB NOT NULL DEFAULT '{}'::jsonb,
 
-    -- Siebel-style System Columns
-    -- created: Timestamp when the record was created (Siebel system field).
-    created                   TIMESTAMPTZ  DEFAULT now(),
-    -- created_by: User ID who created the record (Siebel system auditing field).
-    created_by                UUID,
-    -- last_upd: Timestamp when the record was last updated (Siebel system field).
-    last_upd                  TIMESTAMPTZ  DEFAULT now(),
-    -- last_upd_by: User ID who last updated the record (Siebel system auditing field).
-    last_upd_by               UUID,
-    -- modification_num: Record version count, incremented on every update (used for optimistic locking/concurrency control).
-    modification_num          INTEGER      DEFAULT 0,
-    -- conflict_id: Used for merge replication and conflict resolution (defaults to '0').
-    conflict_id               VARCHAR(15)  DEFAULT '0',
-    -- db_last_upd: System-level database write timestamp (used for replication tracking).
-    db_last_upd               TIMESTAMPTZ  DEFAULT now(),
-    -- db_last_upd_src: System/Source identifier of the database write operation.
-    db_last_upd_src           VARCHAR(50)  DEFAULT 'App'
+    created_by_user_id  UUID NULL,
+    updated_by_user_id  UUID NULL,
+    modification_num    INTEGER NOT NULL DEFAULT 1,
+
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT chk_media_assets_storage_key_not_blank
+        CHECK (btrim(storage_key) <> ''),
+
+    CONSTRAINT chk_media_assets_mime_not_blank
+        CHECK (btrim(mime) <> ''),
+
+    CONSTRAINT chk_media_assets_size_bytes
+        CHECK (size_bytes IS NULL OR size_bytes >= 0),
+
+    CONSTRAINT fk_media_assets_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants(tenant_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_media_assets_owner_entity
+        FOREIGN KEY (owner_entity_id)
+        REFERENCES entities(entity_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_media_assets_created_by
+        FOREIGN KEY (created_by_user_id)
+        REFERENCES users(user_id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT fk_media_assets_updated_by
+        FOREIGN KEY (updated_by_user_id)
+        REFERENCES users(user_id)
+        ON DELETE SET NULL
 );
 
--- Row-Level Security
-ALTER TABLE media_assets ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON media_assets
-    USING (bu_id = current_setting('app.current_tenant')::uuid);
+CREATE INDEX IF NOT EXISTS idx_media_assets_tenant_id
+    ON media_assets(tenant_id);
 
-CREATE INDEX idx_media_assets_bu_id  ON media_assets (bu_id);
-CREATE INDEX idx_media_assets_owner ON media_assets (owner_type, owner_id);
+CREATE INDEX IF NOT EXISTS idx_media_assets_owner_entity_id
+    ON media_assets(owner_entity_id);
+
+CREATE INDEX IF NOT EXISTS idx_media_assets_visibility
+    ON media_assets(visibility);
+
+CREATE INDEX IF NOT EXISTS idx_media_assets_created_by_user_id
+    ON media_assets(created_by_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_media_assets_updated_by_user_id
+    ON media_assets(updated_by_user_id);
+
+DROP TRIGGER IF EXISTS trg_media_assets_audit ON media_assets;
+CREATE TRIGGER trg_media_assets_audit
+BEFORE INSERT OR UPDATE ON media_assets
+FOR EACH ROW
+EXECUTE FUNCTION fn_set_audit_fields();

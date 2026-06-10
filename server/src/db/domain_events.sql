@@ -1,34 +1,60 @@
-DROP TABLE IF EXISTS domain_events CASCADE;
+CREATE TABLE IF NOT EXISTS domain_events (
+    event_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-CREATE TABLE domain_events (
-    -- row_id: Primary key of the table (matches Siebel/CRM unique record identifier design).
-    row_id                    UUID         DEFAULT gen_random_uuid() PRIMARY KEY,
-    -- bu_id: Business Unit ID (used to isolate data by tenant/organization, matches multi-tenancy requirements).
-    bu_id                     UUID         NOT NULL REFERENCES tenants(row_id) ON DELETE CASCADE,
+    tenant_id           UUID NOT NULL,
+    event_type          TEXT NOT NULL,
+    aggregate_type      TEXT NOT NULL,
+    aggregate_id        UUID NOT NULL,
+    payload             JSONB NOT NULL DEFAULT '{}'::jsonb,
 
-    aggregate_type            VARCHAR(100) NOT NULL, -- 'booking', 'ticket', etc.
-    aggregate_id              UUID         NOT NULL,
-    event_type                VARCHAR(100) NOT NULL, -- 'Booking Created', 'Ticket Checked In'
-    payload                   JSONB        NOT NULL,
-    occurred_at               TIMESTAMPTZ  DEFAULT now(),
+    occurred_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    published_at        TIMESTAMPTZ NULL,
 
-    -- Siebel-style System Columns (Simplified / Immutable logs)
-    -- created: Timestamp when the event record was logged (Siebel system field).
-    created                   TIMESTAMPTZ  DEFAULT now(),
-    -- created_by: User ID who triggered the event (Siebel system auditing field).
-    created_by                UUID,
-    -- db_last_upd: System-level database write timestamp (used for replication tracking).
-    db_last_upd               TIMESTAMPTZ  DEFAULT now(),
-    -- db_last_upd_src: System/Source identifier of the database write operation.
-    db_last_upd_src           VARCHAR(50)  DEFAULT 'App'
+    created_by_user_id  UUID NULL,
+    updated_by_user_id  UUID NULL,
+
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT chk_domain_events_event_type_not_blank
+        CHECK (btrim(event_type) <> ''),
+
+    CONSTRAINT chk_domain_events_aggregate_type_not_blank
+        CHECK (btrim(aggregate_type) <> ''),
+
+    CONSTRAINT fk_domain_events_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants(tenant_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_domain_events_created_by
+        FOREIGN KEY (created_by_user_id)
+        REFERENCES users(user_id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT fk_domain_events_updated_by
+        FOREIGN KEY (updated_by_user_id)
+        REFERENCES users(user_id)
+        ON DELETE SET NULL
 );
 
--- Row-Level Security
-ALTER TABLE domain_events ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON domain_events
-    USING (bu_id = current_setting('app.current_tenant')::uuid);
+CREATE INDEX IF NOT EXISTS idx_domain_events_tenant_id
+    ON domain_events(tenant_id);
 
-CREATE INDEX idx_domain_events_bu_id      ON domain_events (bu_id);
-CREATE INDEX idx_domain_events_aggregate  ON domain_events (aggregate_type, aggregate_id);
-CREATE INDEX idx_domain_events_type       ON domain_events (event_type);
-CREATE INDEX idx_domain_events_occurred   ON domain_events (occurred_at);
+CREATE INDEX IF NOT EXISTS idx_domain_events_event_type
+    ON domain_events(event_type);
+
+CREATE INDEX IF NOT EXISTS idx_domain_events_aggregate
+    ON domain_events(aggregate_type, aggregate_id);
+
+CREATE INDEX IF NOT EXISTS idx_domain_events_occurred_at
+    ON domain_events(occurred_at);
+
+CREATE INDEX IF NOT EXISTS idx_domain_events_published_at
+    ON domain_events(published_at);
+
+DROP TRIGGER IF EXISTS trg_domain_events_audit ON domain_events;
+CREATE TRIGGER trg_domain_events_audit
+BEFORE INSERT OR UPDATE ON domain_events
+FOR EACH ROW
+EXECUTE FUNCTION fn_set_audit_fields();

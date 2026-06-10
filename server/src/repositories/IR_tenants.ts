@@ -1,24 +1,16 @@
-export interface ITenant {
-  row_id?: string;
-  name: string;
-  slug: string;
-  status?: string;
+import { IBaseRepository } from './IBaseRepository';
 
-  created?: Date;
-  created_by?: string | null;
-  last_upd?: Date;
-  last_upd_by?: string | null;
-  modification_num?: number;
-  conflict_id?: string;
-  db_last_upd?: Date;
-  db_last_upd_src?: string;
+export interface ITenant {
+  tenant_id?: string;
+  slug: string;
+  name: string;
+  status?: string;
+  created_by_user_id?: string | null;
+  updated_by_user_id?: string | null;
+  created_at?: Date;
+  updated_at?: Date;
 }
 
-export interface IR_tenants {
-  create(tenant: ITenant): Promise<ITenant>;
-  getById(rowId: string): Promise<ITenant | null>;
-  getBySlug(slug: string): Promise<ITenant | null>;
-  getAll(): Promise<ITenant[]>;
-  update(rowId: string, tenant: Partial<ITenant>): Promise<ITenant | null>;
-  delete(rowId: string): Promise<boolean>;
+export interface IR_tenants extends IBaseRepository<ITenant> {
+  findBySlug(slug: string): Promise<ITenant | null>;
 }

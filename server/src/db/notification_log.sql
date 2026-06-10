@@ -1,31 +1,70 @@
-DROP TABLE IF EXISTS notification_log CASCADE;
+CREATE TABLE IF NOT EXISTS notification_log (
+    notification_id     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-CREATE TABLE notification_log (
-    -- row_id: Primary key of the table (matches Siebel/CRM unique record identifier design).
-    row_id                    UUID         DEFAULT gen_random_uuid() PRIMARY KEY,
-    -- bu_id: Business Unit ID (used to isolate data by tenant/organization, matches multi-tenancy requirements).
-    bu_id                     UUID         NOT NULL REFERENCES tenants(row_id) ON DELETE CASCADE,
+    tenant_id           UUID NULL,
+    user_id             UUID NOT NULL,
 
-    user_id                   UUID         NOT NULL,
-    notification_type         VARCHAR(100) NOT NULL, -- 'Ticket confirmation', 'Event reminder'
-    channel                   VARCHAR(50)  NOT NULL, -- 'email', 'sms', 'push'
-    status                    VARCHAR(50)  DEFAULT 'sent', -- 'sent', 'failed', 'pending'
-    sent_at                   TIMESTAMPTZ  DEFAULT now(),
+    channel             notification_channel_enum NOT NULL,
+    template_key        TEXT NOT NULL,
+    status              notification_status_enum NOT NULL DEFAULT 'queued',
+    provider_refs       JSONB NOT NULL DEFAULT '{}'::jsonb,
+    sent_at             TIMESTAMPTZ NULL,
 
-    -- Siebel-style System Columns (Simplified / Immutable logs)
-    -- created: Timestamp when the notification was created/logged (Siebel system field).
-    created                   TIMESTAMPTZ  DEFAULT now(),
-    -- db_last_upd: System-level database write timestamp (used for replication tracking).
-    db_last_upd               TIMESTAMPTZ  DEFAULT now(),
-    -- db_last_upd_src: System/Source identifier of the database write operation.
-    db_last_upd_src           VARCHAR(50)  DEFAULT 'App'
+    subject             TEXT NULL,
+    body                TEXT NULL,
+    metadata            JSONB NOT NULL DEFAULT '{}'::jsonb,
+
+    created_by_user_id  UUID NULL,
+    updated_by_user_id  UUID NULL,
+    modification_num    INTEGER NOT NULL DEFAULT 1,
+
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT chk_notification_log_template_key_not_blank
+        CHECK (btrim(template_key) <> ''),
+
+    CONSTRAINT fk_notification_log_tenant
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants(tenant_id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT fk_notification_log_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(user_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_notification_log_created_by
+        FOREIGN KEY (created_by_user_id)
+        REFERENCES users(user_id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT fk_notification_log_updated_by
+        FOREIGN KEY (updated_by_user_id)
+        REFERENCES users(user_id)
+        ON DELETE SET NULL
 );
 
--- Row-Level Security
-ALTER TABLE notification_log ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON notification_log
-    USING (bu_id = current_setting('app.current_tenant')::uuid);
+CREATE INDEX IF NOT EXISTS idx_notification_log_tenant_id
+    ON notification_log(tenant_id);
 
-CREATE INDEX idx_notification_log_bu_id   ON notification_log (bu_id);
-CREATE INDEX idx_notification_log_user_id ON notification_log (user_id);
-CREATE INDEX idx_notification_log_sent    ON notification_log (sent_at);
+CREATE INDEX IF NOT EXISTS idx_notification_log_user_id
+    ON notification_log(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_notification_log_channel
+    ON notification_log(channel);
+
+CREATE INDEX IF NOT EXISTS idx_notification_log_status
+    ON notification_log(status);
+
+CREATE INDEX IF NOT EXISTS idx_notification_log_template_key
+    ON notification_log(template_key);
+
+CREATE INDEX IF NOT EXISTS idx_notification_log_sent_at
+    ON notification_log(sent_at);
+
+DROP TRIGGER IF EXISTS trg_notification_log_audit ON notification_log;
+CREATE TRIGGER trg_notification_log_audit
+BEFORE INSERT OR UPDATE ON notification_log
+FOR EACH ROW
+EXECUTE FUNCTION fn_set_audit_fields();

@@ -1,36 +1,44 @@
-DROP TABLE IF EXISTS tenants CASCADE;
+CREATE TABLE IF NOT EXISTS tenants (
+    tenant_id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-CREATE TABLE tenants (
-    -- row_id: Primary key of the table (matches Siebel/CRM unique record identifier design).
-    row_id                    UUID         DEFAULT gen_random_uuid() PRIMARY KEY,
-    
-    -- Business details
-    name                      VARCHAR(255) NOT NULL,
-    slug                      VARCHAR(255) NOT NULL UNIQUE,
-    status                    VARCHAR(30)  DEFAULT 'active',
+    slug                TEXT NOT NULL UNIQUE,
+    name                VARCHAR(150) NOT NULL,
+    status              entity_status_enum NOT NULL DEFAULT 'active',
 
-    -- Siebel-style System Columns
-    -- created: Timestamp when the record was created (Siebel system field).
-    created                   TIMESTAMPTZ  DEFAULT now(),
-    -- created_by: User ID who created the record (Siebel system auditing field).
-    created_by                UUID,
-    -- last_upd: Timestamp when the record was last updated (Siebel system field).
-    last_upd                  TIMESTAMPTZ  DEFAULT now(),
-    -- last_upd_by: User ID who last updated the record (Siebel system auditing field).
-    last_upd_by               UUID,
-    -- modification_num: Record version count, incremented on every update (used for optimistic locking/concurrency control).
-    modification_num          INTEGER      DEFAULT 0,
-    -- conflict_id: Used for merge replication and conflict resolution (defaults to '0').
-    conflict_id               VARCHAR(15)  DEFAULT '0',
-    -- db_last_upd: System-level database write timestamp (used for replication tracking).
-    db_last_upd               TIMESTAMPTZ  DEFAULT now(),
-    -- db_last_upd_src: System/Source identifier of the database write operation.
-    db_last_upd_src           VARCHAR(50)  DEFAULT 'App'
+    created_by_user_id  UUID NULL,
+    updated_by_user_id  UUID NULL,
+
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT chk_tenants_slug_not_blank
+        CHECK (btrim(slug) <> ''),
+
+    CONSTRAINT chk_tenants_name_not_blank
+        CHECK (btrim(name) <> ''),
+
+    CONSTRAINT fk_tenants_created_by
+        FOREIGN KEY (created_by_user_id)
+        REFERENCES users(user_id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT fk_tenants_updated_by
+        FOREIGN KEY (updated_by_user_id)
+        REFERENCES users(user_id)
+        ON DELETE SET NULL
 );
 
--- Row-Level Security
-ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON tenants
-    USING (row_id = current_setting('app.current_tenant')::uuid);
+CREATE INDEX IF NOT EXISTS idx_tenants_status
+    ON tenants(status);
 
-CREATE INDEX idx_tenants_slug ON tenants (slug);
+CREATE INDEX IF NOT EXISTS idx_tenants_created_by_user_id
+    ON tenants(created_by_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_tenants_updated_by_user_id
+    ON tenants(updated_by_user_id);
+
+DROP TRIGGER IF EXISTS trg_tenants_audit ON tenants;
+CREATE TRIGGER trg_tenants_audit
+BEFORE INSERT OR UPDATE ON tenants
+FOR EACH ROW
+EXECUTE FUNCTION fn_set_audit_fields();

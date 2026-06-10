@@ -2,6 +2,10 @@ import express from 'express';
 import dotenv from 'dotenv';
 import pool from './config/database';
 
+import entityRoutes from './routes/entity.routes';
+import groupRoutes from './routes/group.routes';
+import rbacRoutes from './routes/rbac.routes';
+
 dotenv.config();
 
 const app = express();
@@ -26,6 +30,11 @@ app.get('/health', async (req, res) => {
     });
   }
 });
+
+// Register new routes
+app.use('/entities', entityRoutes);
+app.use('/groups', groupRoutes);
+app.use('/rbac', rbacRoutes);
 
 app.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
