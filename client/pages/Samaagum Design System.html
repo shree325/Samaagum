@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Samaagum — Design System</title>
+<link rel="stylesheet" href="../css/styles.css" />
+<style>
+  body { padding: 0; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 32px 120px; }
+
+  /* Top bar */
+  .topbar {
+    position: sticky; top: 0; z-index: 30;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 32px; margin-bottom: 8px;
+    background: color-mix(in oklch, var(--bg) 82%, transparent);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border-2);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .wordmark { font-family: var(--font-display); font-weight: 600; font-size: 22px; letter-spacing: -0.02em; }
+  .mode-toggle {
+    display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface);
+    border-radius: var(--r-pill); padding: 8px 14px; font-size: 13px; font-weight: 600;
+    color: var(--ink-2); box-shadow: var(--sh-sm); transition: all var(--t-std) var(--ease-out);
+  }
+  .mode-toggle:hover { color: var(--ink); transform: translateY(-1px); box-shadow: var(--sh-md); }
+
+  /* Hero */
+  .hero { padding: 72px 0 56px; }
+  .hero .eyebrow { margin-bottom: 18px; }
+  .hero h1 { font-family: var(--font-display); font-weight: 600; font-size: clamp(40px, 7vw, 72px); line-height: 1.0; letter-spacing: -0.03em; }
+  .hero p { margin-top: 20px; max-width: 560px; font-size: 18px; line-height: 1.6; color: var(--ink-2); }
+
+  section { margin-top: 72px; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 26px; padding-bottom: 14px; border-bottom: 1px solid var(--border-2); }
+  .sec-head h2 { font-family: var(--font-display); font-weight: 600; font-size: 26px; letter-spacing: -0.01em; }
+  .sec-head .num { font-size: 13px; font-weight: 600; color: var(--accent-2); font-variant-numeric: tabular-nums; }
+  .sec-head .desc { margin-left: auto; font-size: 14px; color: var(--ink-3); max-width: 360px; text-align: right; }
+
+  .grid { display: grid; gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 22px; box-shadow: var(--sh-sm); }
+  .label { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: var(--ink-2); }
+
+  /* Colors */
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+  .swatch { border-radius: var(--r-md); overflow: hidden; border: 1px solid var(--border); box-shadow: var(--sh-sm); }
+  .swatch .chip { height: 88px; }
+  .swatch .meta { padding: 12px 14px; background: var(--surface); }
+  .swatch .meta .n { font-size: 13px; font-weight: 600; }
+  .swatch .meta .v { margin-top: 3px; }
+
+  /* Type */
+  .type-row { display: flex; align-items: baseline; gap: 22px; padding: 18px 0; border-bottom: 1px solid var(--border-2); }
+  .type-row:last-child { border-bottom: none; }
+  .type-row .spec { width: 150px; flex-shrink: 0; }
+  .type-row .spec .n { font-size: 13px; font-weight: 600; }
+  .type-row .sample { color: var(--ink); }
+
+  /* Spacing */
+  .spacerow { display: flex; align-items: center; gap: 16px; padding: 9px 0; }
+  .spacerow .bar { height: 18px; background: var(--accent-grad); border-radius: 5px; }
+
+  /* Radius / shadow */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
+  .tile { background: var(--surface); border: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; gap: 14px; align-items: center; border-radius: var(--r-md); }
+  .tile .demo { width: 100%; height: 70px; background: var(--accent-soft); border: 1px solid color-mix(in oklch, var(--accent-2) 30%, transparent); }
+  .tile .shdemo { width: 100%; height: 70px; background: var(--surface); border-radius: var(--r-md); }
+
+  /* Components preview */
+  .comp-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+  @media (max-width: 720px){ .comp-grid { grid-template-columns: 1fr; } }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 9px; font-weight: 600; font-size: 15px; border-radius: var(--r-pill); padding: 14px 22px; cursor: pointer; border: 1px solid transparent; transition: all var(--t-std) var(--ease-out); }
+  .btn-primary { background: var(--accent-grad); color: var(--accent-ink); box-shadow: var(--sh-glow); }
+  .btn-primary:hover { transform: translateY(-2px); }
+  .btn-ghost { background: var(--surface); color: var(--ink); border-color: var(--border); box-shadow: var(--sh-sm); }
+  .btn-ghost:hover { background: var(--surface-2); }
+  .field-demo { display: flex; flex-direction: column; gap: 8px; }
+  .field-demo input { font-family: inherit; font-size: 15px; padding: 14px 16px; border-radius: var(--r-md); border: 1px solid var(--border); background: var(--field); color: var(--ink); outline: none; transition: all var(--t-std) var(--ease-out); }
+  .field-demo input:focus { border-color: color-mix(in oklch, var(--accent-2) 55%, var(--border)); box-shadow: var(--sh-focus); }
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip-c { padding: 10px 16px; border-radius: var(--r-pill); border: 1px solid var(--border); background: var(--surface); font-size: 14px; font-weight: 500; cursor: pointer; transition: all var(--t-std) var(--ease-out); }
+  .chip-c.on { background: var(--accent-soft); border-color: color-mix(in oklch, var(--accent-2) 45%, transparent); color: var(--accent-2); }
+  .otp-demo { display: flex; gap: 10px; }
+  .otp-demo .b { width: 46px; height: 56px; border-radius: var(--r-md); border: 1.5px solid var(--border); background: var(--field); display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 600; }
+  .otp-demo .b.active { border-color: var(--accent-2); box-shadow: var(--sh-focus); }
+
+  .motion-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap: 16px; }
+  .motion-card { background: var(--surface); border:1px solid var(--border); border-radius: var(--r-md); padding: 18px; }
+  .motion-card .ball { width: 34px; height: 34px; border-radius: 50%; background: var(--accent-grad); margin: 14px auto; }
+  .ease-bar { height: 6px; border-radius: 99px; background: var(--border); position: relative; overflow: hidden; }
+  .ease-bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 40%; border-radius: 99px; background: var(--accent-grad); animation: slideEase 2.4s infinite; }
+  @keyframes slideEase { 0%{left:-40%} 100%{left:100%} }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">
+      <svg width="30" height="30" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="lg" x1="6" y1="6" x2="34" y2="34" gradientUnits="userSpaceOnUse">
+            <stop stop-color="var(--accent-1)"/><stop offset="1" stop-color="var(--accent-2)"/>
+          </linearGradient>
+        </defs>
+        <circle cx="15" cy="16" r="9.2" fill="url(#lg)" opacity="0.92"/>
+        <circle cx="25" cy="16" r="9.2" fill="url(#lg)" opacity="0.62"/>
+        <circle cx="20" cy="25" r="9.2" fill="url(#lg)" opacity="0.8"/>
+      </svg>
+      <span class="wordmark">samaagum</span>
+    </div>
+    <button class="mode-toggle" id="modeBtn">
+      <span id="modeIcon">◐</span><span id="modeLabel">Dark mode</span>
+    </button>
+  </div>
+
+  <div class="wrap">
+    <header class="hero">
+      <div class="eyebrow">Design System · v1.0</div>
+      <h1>The system behind<br/><span class="grad-text">Samaagum</span>.</h1>
+      <p>A premium, community-first toolkit for authentication, networking and event discovery. Soft gradients, glassmorphism, generous spacing and warm motion — built to feel human and earn trust.</p>
+    </header>
+
+    <!-- LOGO -->
+    <section>
+      <div class="sec-head"><span class="num">00</span><h2>Logo &amp; mark</h2><span class="desc">Three circles converging — a confluence of people. “Samaagum” means gathering.</span></div>
+      <div class="grid" style="grid-template-columns: repeat(auto-fit,minmax(220px,1fr));">
+        <div class="card" style="display:flex;align-items:center;justify-content:center;gap:14px;min-height:130px;">
+          <svg width="48" height="48" viewBox="0 0 40 40"><circle cx="15" cy="16" r="9.2" fill="url(#lg)" opacity="0.92"/><circle cx="25" cy="16" r="9.2" fill="url(#lg)" opacity="0.62"/><circle cx="20" cy="25" r="9.2" fill="url(#lg)" opacity="0.8"/></svg>
+          <span class="wordmark" style="font-size:30px;">samaagum</span>
+        </div>
+        <div class="card" style="display:flex;align-items:center;justify-content:center;min-height:130px;">
+          <svg width="64" height="64" viewBox="0 0 40 40"><circle cx="15" cy="16" r="9.2" fill="url(#lg)" opacity="0.92"/><circle cx="25" cy="16" r="9.2" fill="url(#lg)" opacity="0.62"/><circle cx="20" cy="25" r="9.2" fill="url(#lg)" opacity="0.8"/></svg>
+        </div>
+        <div class="card" style="display:flex;align-items:center;justify-content:center;min-height:130px;background:#16161d;">
+          <span class="wordmark" style="font-size:30px;color:#fff;">samaagum</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- COLORS -->
+    <section>
+      <div class="sec-head"><span class="num">01</span><h2>Colors</h2><span class="desc">Sunset-blend accent over cool-neutral surfaces. Accents share chroma; only hue shifts.</span></div>
+      <p class="label" style="margin-bottom:12px;">Accent</p>
+      <div class="swatches" style="margin-bottom:26px;">
+        <div class="swatch"><div class="chip" style="background:var(--accent-grad)"></div><div class="meta"><div class="n">Gradient</div><div class="v mono">coral → violet</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--accent-1)"></div><div class="meta"><div class="n">Accent 1</div><div class="v mono">#FF6B4A</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--accent-2)"></div><div class="meta"><div class="n">Accent 2</div><div class="v mono">#6D5EFC</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--accent-soft)"></div><div class="meta"><div class="n">Accent soft</div><div class="v mono">12% tint</div></div></div>
+      </div>
+      <p class="label" style="margin-bottom:12px;">Neutrals &amp; surfaces</p>
+      <div class="swatches">
+        <div class="swatch"><div class="chip" style="background:var(--bg)"></div><div class="meta"><div class="n">Background</div><div class="v mono">--bg</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--surface);border-bottom:1px solid var(--border)"></div><div class="meta"><div class="n">Surface</div><div class="v mono">--surface</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--field)"></div><div class="meta"><div class="n">Field</div><div class="v mono">--field</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--ink)"></div><div class="meta"><div class="n">Ink</div><div class="v mono">--ink</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--ink-2)"></div><div class="meta"><div class="n">Ink 2</div><div class="v mono">--ink-2</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--border)"></div><div class="meta"><div class="n">Border</div><div class="v mono">--border</div></div></div>
+      </div>
+    </section>
+
+    <!-- TYPE -->
+    <section>
+      <div class="sec-head"><span class="num">02</span><h2>Typography</h2><span class="desc">Clash Display for storytelling headlines · General Sans for everything else.</span></div>
+      <div class="card">
+        <div class="type-row"><div class="spec"><div class="n">Display</div><div class="mono">Clash · 600 · 64/1.0</div></div><div class="sample" style="font-family:var(--font-display);font-weight:600;font-size:52px;line-height:1;letter-spacing:-0.03em;">Find your people</div></div>
+        <div class="type-row"><div class="spec"><div class="n">Heading 1</div><div class="mono">General · 600 · 34px</div></div><div class="sample" style="font-weight:600;font-size:34px;letter-spacing:-0.02em;">Welcome to Samaagum</div></div>
+        <div class="type-row"><div class="spec"><div class="n">Heading 2</div><div class="mono">General · 600 · 24px</div></div><div class="sample" style="font-weight:600;font-size:24px;letter-spacing:-0.01em;">Verify your email</div></div>
+        <div class="type-row"><div class="spec"><div class="n">Body L</div><div class="mono">General · 400 · 18px</div></div><div class="sample" style="font-size:18px;line-height:1.55;color:var(--ink-2)">Passwordless by design — we send a one-time code.</div></div>
+        <div class="type-row"><div class="spec"><div class="n">Body</div><div class="mono">General · 400 · 15px</div></div><div class="sample" style="font-size:15px;color:var(--ink-2)">We’ll never share your details with event hosts.</div></div>
+        <div class="type-row"><div class="spec"><div class="n">Label</div><div class="mono">General · 600 · 12px · 0.14em</div></div><div class="sample eyebrow">Continue with email</div></div>
+      </div>
+    </section>
+
+    <!-- SPACING -->
+    <section>
+      <div class="sec-head"><span class="num">03</span><h2>Spacing</h2><span class="desc">4-based scale. Rich, breathable spacing is part of the premium feel.</span></div>
+      <div class="card">
+        <div class="spacerow"><span class="mono" style="width:70px">4 · s-1</span><div class="bar" style="width:4px"></div></div>
+        <div class="spacerow"><span class="mono" style="width:70px">8 · s-2</span><div class="bar" style="width:8px"></div></div>
+        <div class="spacerow"><span class="mono" style="width:70px">12 · s-3</span><div class="bar" style="width:12px"></div></div>
+        <div class="spacerow"><span class="mono" style="width:70px">16 · s-4</span><div class="bar" style="width:16px"></div></div>
+        <div class="spacerow"><span class="mono" style="width:70px">24 · s-6</span><div class="bar" style="width:24px"></div></div>
+        <div class="spacerow"><span class="mono" style="width:70px">32 · s-7</span><div class="bar" style="width:32px"></div></div>
+        <div class="spacerow"><span class="mono" style="width:70px">48 · s-9</span><div class="bar" style="width:48px"></div></div>
+        <div class="spacerow"><span class="mono" style="width:70px">64 · s-10</span><div class="bar" style="width:64px"></div></div>
+      </div>
+    </section>
+
+    <!-- RADIUS + SHADOW -->
+    <section>
+      <div class="sec-head"><span class="num">04</span><h2>Radius &amp; shadows</h2><span class="desc">Large, soft corners. Layered, low-contrast shadows that feel like ambient light.</span></div>
+      <p class="label" style="margin-bottom:12px;">Border radius</p>
+      <div class="tiles" style="margin-bottom:26px;">
+        <div class="tile"><div class="demo" style="border-radius:var(--r-sm)"></div><span class="mono">12 · sm</span></div>
+        <div class="tile"><div class="demo" style="border-radius:var(--r-md)"></div><span class="mono">16 · md</span></div>
+        <div class="tile"><div class="demo" style="border-radius:var(--r-lg)"></div><span class="mono">22 · lg</span></div>
+        <div class="tile"><div class="demo" style="border-radius:var(--r-xl)"></div><span class="mono">30 · xl</span></div>
+        <div class="tile"><div class="demo" style="border-radius:var(--r-2xl)"></div><span class="mono">40 · 2xl</span></div>
+      </div>
+      <p class="label" style="margin-bottom:12px;">Elevation</p>
+      <div class="tiles">
+        <div class="tile"><div class="shdemo" style="box-shadow:var(--sh-sm)"></div><span class="mono">sm</span></div>
+        <div class="tile"><div class="shdemo" style="box-shadow:var(--sh-md)"></div><span class="mono">md</span></div>
+        <div class="tile"><div class="shdemo" style="box-shadow:var(--sh-lg)"></div><span class="mono">lg</span></div>
+        <div class="tile"><div class="shdemo" style="box-shadow:var(--sh-xl)"></div><span class="mono">xl</span></div>
+        <div class="tile"><div class="shdemo" style="box-shadow:var(--sh-glow)"></div><span class="mono">glow</span></div>
+      </div>
+    </section>
+
+    <!-- COMPONENTS -->
+    <section>
+      <div class="sec-head"><span class="num">05</span><h2>Components</h2><span class="desc">Core auth atoms — buttons, fields, OTP, interest chips.</span></div>
+      <div class="comp-grid">
+        <div class="card"><div class="label" style="margin-bottom:16px">Buttons</div><div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center"><button class="btn btn-primary">Continue</button><button class="btn btn-ghost"><svg width="17" height="17" viewBox="0 0 24 24"><path fill="#EA4335" d="M12 10.2v3.9h5.5c-.24 1.4-1.7 4.1-5.5 4.1-3.3 0-6-2.7-6-6.1s2.7-6.1 6-6.1c1.9 0 3.1.8 3.9 1.5l2.6-2.6C17.1 2.6 14.8 1.6 12 1.6 6.7 1.6 2.4 5.9 2.4 12s4.3 10.4 9.6 10.4c5.5 0 9.2-3.9 9.2-9.4 0-.6-.1-1.1-.2-1.6H12z"/></svg>Google</button></div></div>
+        <div class="card"><div class="label" style="margin-bottom:16px">Email field</div><div class="field-demo"><input placeholder="you@email.com" value="aanya@samaagum.co" readonly /></div></div>
+        <div class="card"><div class="label" style="margin-bottom:16px">OTP input</div><div class="otp-demo"><div class="b">4</div><div class="b">2</div><div class="b">8</div><div class="b active">1</div><div class="b"></div><div class="b"></div></div></div>
+        <div class="card"><div class="label" style="margin-bottom:16px">Interest chips</div><div class="chips"><span class="chip-c on">Startups</span><span class="chip-c">Design</span><span class="chip-c on">Music</span><span class="chip-c">Wellness</span><span class="chip-c">Investing</span></div></div>
+      </div>
+    </section>
+
+    <!-- MOTION -->
+    <section>
+      <div class="sec-head"><span class="num">06</span><h2>Motion principles</h2><span class="desc">Purposeful, soft, never blocking. Spring on selection; expo-out on transitions.</span></div>
+      <div class="motion-grid">
+        <div class="motion-card"><div class="label">Standard out</div><div class="ball" style="animation:floatY 2.6s var(--ease-out) infinite"></div><div class="mono">expo-out · 420ms</div></div>
+        <div class="motion-card"><div class="label">Spring select</div><div class="ball" style="animation:pop 1.6s var(--ease-spring) infinite"></div><div class="mono">spring · 240ms</div></div>
+        <div class="motion-card"><div class="label">Easing curve</div><div class="ease-bar" style="margin:22px 0"><i></i></div><div class="mono">0.16, 1, 0.3, 1</div></div>
+        <div class="motion-card"><div class="label">Durations</div><div style="margin:14px 0;display:flex;flex-direction:column;gap:6px" class="mono"><span>fast · 140ms</span><span>standard · 240ms</span><span>slow / step · 420ms</span></div></div>
+      </div>
+    </section>
+  </div>
+
+<script>
+  const btn = document.getElementById('modeBtn');
+  const html = document.documentElement;
+  btn.addEventListener('click', () => {
+    const dark = html.getAttribute('data-theme') === 'dark';
+    html.setAttribute('data-theme', dark ? 'light' : 'dark');
+    document.getElementById('modeLabel').textContent = dark ? 'Dark mode' : 'Light mode';
+    document.getElementById('modeIcon').textContent = dark ? '◐' : '◑';
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,98 @@
+/* ============================================================
+   SAMAAGUM — Global Design Tokens & Variables
+   ============================================================ */
+
+:root {
+  /* Fonts */
+  --font-display: 'Clash Display', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: 'General Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  /* Accent Colors */
+  --accent-1: #FF6B4A;
+  --accent-2: #6D5EFC;
+  --accent-grad: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+  --accent-soft: rgba(109, 94, 252, 0.12);
+  --accent-ink: #ffffff;
+
+  /* Light Theme Neutrals & Surfaces */
+  --bg: #ffffff;
+  --bg-2: #f8f7fa;
+  --surface: #ffffff;
+  --surface-2: #f1f0f5;
+  --field: #f3f2f7;
+  --ink: #1a1926;
+  --ink-2: #6b697d;
+  --ink-3: #9b99ad;
+  --border: rgba(26, 25, 38, 0.09);
+  --border-2: rgba(26, 25, 38, 0.05);
+
+  /* Glassmorphism */
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-stroke: rgba(26, 25, 38, 0.09);
+
+  /* Spacing */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-6: 24px;
+  --s-7: 32px;
+  --s-9: 48px;
+  --s-10: 64px;
+
+  /* Corner Radius */
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 22px;
+  --r-xl: 30px;
+  --r-2xl: 40px;
+  --r-pill: 999px;
+
+  /* Shadows */
+  --sh-sm: 0 1px 2px rgba(26, 25, 38, 0.05);
+  --sh-md: 0 4px 12px rgba(26, 25, 38, 0.08);
+  --sh-lg: 0 12px 30px rgba(26, 25, 38, 0.12);
+  --sh-xl: 0 24px 60px rgba(26, 25, 38, 0.18);
+  --sh-glow: 0 0 20px rgba(109, 94, 252, 0.25);
+  --sh-focus: 0 0 0 3px rgba(109, 94, 252, 0.3);
+
+  /* Motion */
+  --t-fast: 140ms;
+  --t-std: 240ms;
+  --t-slow: 420ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-std: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="dark"] {
+  --bg: #070610;
+  --bg-2: #0c0b18;
+  --surface: #14121f;
+  --surface-2: #1a1828;
+  --field: #1e1c2d;
+  --ink: #f4f3fb;
+  --ink-2: #aaa7c2;
+  --ink-3: #7c7a93;
+  --border: rgba(255, 255, 255, 0.09);
+  --border-2: rgba(255, 255, 255, 0.05);
+
+  --glass-bg: rgba(22, 20, 36, 0.55);
+  --glass-stroke: rgba(255, 255, 255, 0.12);
+
+  --sh-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sh-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --sh-lg: 0 12px 30px rgba(0, 0, 0, 0.6);
+  --sh-xl: 0 24px 60px rgba(0, 0, 0, 0.7);
+}
+
+/* Base Body Styles */
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

@@ -1,0 +1,175 @@
+/* ============================================================
+   Samaagum Home — Home feed + Discover
+   ============================================================ */
+
+function Greeting({ city }) {
+  const hr = new Date().getHours();
+  const part = hr < 12 ? "Good morning" : hr < 17 ? "Good afternoon" : "Good evening";
+  const first = ME.name.split(" ")[0];
+  return (
+    <div style={{ marginBottom: 22 }}>
+      <div className="eyebrow2">{part}, {first}</div>
+      <h1 style={{ fontFamily:"var(--font-display)", fontWeight:600, fontSize:30, letterSpacing:"-0.02em", color:"var(--ink)", marginTop:8, lineHeight:1.1 }}>
+        What's happening in <span className="grad-text">{city}</span>
+      </h1>
+    </div>
+  );
+}
+
+/* category + quick filter bar */
+function FeedFilters({ cat, setCat, quick, setQuick }) {
+  const quicks = [
+    { k:"trending", ic:<I.fire/>, label:"Trending" },
+    { k:"nearby", ic:<I.pin/>, label:"Nearby" },
+    { k:"upcoming", ic:<I.cal/>, label:"This week" },
+    { k:"free", ic:<I.ticket/>, label:"Free" },
+    { k:"online", ic:<I.online/>, label:"Online" },
+  ];
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:26 }}>
+      <div className="filterbar">
+        {CATS.map(([name]) => (
+          <FilterChip key={name} active={cat===name} onClick={()=>setCat(name)}>{name}</FilterChip>
+        ))}
+      </div>
+      <div className="filterbar">
+        {quicks.map(q => (
+          <FilterChip key={q.k} active={quick.includes(q.k)} icon={q.ic}
+            onClick={()=>setQuick(quick.includes(q.k)? quick.filter(x=>x!==q.k) : [...quick, q.k])}>
+            {q.label}
+          </FilterChip>
+        ))}
+        <div className="fdiv" />
+        <button className="fchip"><span className="cv"><I.filter/></span>All filters</button>
+      </div>
+    </div>
+  );
+}
+
+function HomeFeed({ st, go }) {
+  const [cat, setCat] = useState("All");
+  const [quick, setQuick] = useState([]);
+  const { saved, toggleSave, joined, toggleJoin, connected, toggleConnect, registered, city } = st;
+
+  const filtered = EVENTS.filter(e => {
+    if (cat!=="All" && e.cat!==cat) return false;
+    if (quick.includes("free") && e.type!=="Free") return false;
+    if (quick.includes("online") && !e.online) return false;
+    return true;
+  });
+
+  return (
+    <div className="scroll">
+      <div className="page wide view-enter">
+        <Greeting city={city} />
+        <FeedFilters cat={cat} setCat={setCat} quick={quick} setQuick={setQuick} />
+
+        {/* Featured */}
+        <FeatureCard ev={FEATURED} onOpen={(e)=>go("event", e)} saved={saved.has(FEATURED.id)} onSave={()=>toggleSave(FEATURED.id)} />
+
+        {/* Recommended rail */}
+        <div className="section">
+          <SectionBar title="Recommended for you" onMore={()=>go("discover")} />
+          {filtered.length ? (
+            <div className="ev-rail">
+              {filtered.map(ev => (
+                <EventCard key={ev.id} ev={ev} onOpen={(e)=>go("event", e)}
+                  saved={saved.has(ev.id)} onSave={()=>toggleSave(ev.id)} registered={registered.has(ev.id)} />
+              ))}
+            </div>
+          ) : (
+            <Empty icon={<I.compass/>} title="No events match those filters"
+              text="Try widening your category or clearing a quick filter to see more of what's on."
+              action={<button className="hbtn hbtn--soft hbtn--sm" onClick={()=>{ setCat("All"); setQuick([]); }}>Clear filters</button>} />
+          )}
+        </div>
+
+        {/* Your upcoming */}
+        <div className="section">
+          <SectionBar title="Your upcoming events" count={UPCOMING.length} onMore={()=>go("events")} />
+          <div className="ev-grid">
+            {UPCOMING.map(ev => (
+              <EventCard key={ev.id} ev={ev} onOpen={(e)=>go("event", e)}
+                saved={saved.has(ev.id)} onSave={()=>toggleSave(ev.id)} registered={true} />
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"1.4fr 1fr", gap:34, marginTop:40, alignItems:"start" }} className="feed-split">
+          {/* Recent discussions */}
+          <div>
+            <SectionBar title="Recent discussions" onMore={()=>go("groups")} />
+            <div className="disc-list">
+              {DISCUSSIONS.map(d => <DiscussionRow key={d.id} d={d} onOpen={()=>go("group", GROUPS.find(g=>g.name===d.group))} />)}
+            </div>
+          </div>
+          {/* Trending groups */}
+          <div>
+            <SectionBar title="Trending groups" onMore={()=>go("discover")} />
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              {TRENDING.map((g,i) => (
+                <GroupRow key={g.id} g={g} rank={i+1} onOpen={(g)=>go("group", g)}
+                  joined={joined.has(g.id)} onJoin={()=>toggleJoin(g.id)} />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Communities near me */}
+        <div className="section">
+          <SectionBar title="Communities near you" onMore={()=>go("discover")} />
+          <div className="ev-grid">
+            {NEAR.map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={joined.has(g.id)} onJoin={()=>toggleJoin(g.id)} />)}
+          </div>
+        </div>
+
+        {/* Suggested connections */}
+        <div className="section">
+          <SectionBar title="People you may know" onMore={()=>go("messages")} moreLabel="View all" />
+          <div className="people-grid">
+            {PEOPLE.map(p => <PersonCard key={p.name} p={p} connected={connected.has(p.name)} onConnect={()=>toggleConnect(p.name)} />)}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Discover (browse) ---------------- */
+function Discover({ st, go }) {
+  const [tab, setTab] = useState("events");
+  const [cat, setCat] = useState("All");
+  const { saved, toggleSave, joined, toggleJoin, registered } = st;
+  const evs = EVENTS.filter(e => cat==="All" || e.cat===cat);
+  const grps = GROUPS.filter(g => cat==="All" || g.cat===cat);
+  return (
+    <div className="scroll">
+      <div className="page wide view-enter">
+        <div style={{ marginBottom: 20 }}>
+          <div className="eyebrow2">Discover</div>
+          <h1 style={{ fontFamily:"var(--font-display)", fontWeight:600, fontSize:28, letterSpacing:"-0.02em", color:"var(--ink)", marginTop:8 }}>
+            Explore everything happening
+          </h1>
+        </div>
+        <div className="msg-seg" style={{ maxWidth:280, marginBottom:20 }}>
+          <button className={tab==="events"?"on":""} onClick={()=>setTab("events")}>Events</button>
+          <button className={tab==="groups"?"on":""} onClick={()=>setTab("groups")}>Groups</button>
+        </div>
+        <div className="filterbar" style={{ marginBottom:24 }}>
+          {CATS.map(([name]) => <FilterChip key={name} active={cat===name} onClick={()=>setCat(name)}>{name}</FilterChip>)}
+        </div>
+        {tab==="events" ? (
+          <div className="ev-grid">
+            {evs.map(ev => <EventCard key={ev.id} ev={ev} onOpen={(e)=>go("event", e)} saved={saved.has(ev.id)} onSave={()=>toggleSave(ev.id)} registered={registered.has(ev.id)} />)}
+          </div>
+        ) : (
+          <div className="ev-grid">
+            {grps.map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={joined.has(g.id)} onJoin={()=>toggleJoin(g.id)} />)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { HomeFeed, Discover, Greeting });
