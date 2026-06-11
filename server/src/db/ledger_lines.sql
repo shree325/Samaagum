@@ -1,40 +1,22 @@
+-- =====================================================================
+-- Samaagum  |  Table: ledger_lines
+-- Synced from schema_v2.sql  (v2.0 | June 2026)
+-- =====================================================================
+
 DROP TABLE IF EXISTS ledger_lines CASCADE;
 
 CREATE TABLE ledger_lines (
-
-    id                        UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-    tenant_id                 UUID        NOT NULL,
-
-    journal_id                UUID        NOT NULL,
-    account_id                UUID        NOT NULL,
-
-    line_no                   INTEGER      NOT NULL,
-
-    -- Money (multi-currency: minor units + ISO 4217)
-    debit_minor               BIGINT       DEFAULT 0,
-    credit_minor              BIGINT       DEFAULT 0,
-    currency                  CHAR(3)      NOT NULL,
-
-    memo                      TEXT,
-
-    -- System columns
-    created_at                TIMESTAMPTZ  DEFAULT now(),
-    created_by                UUID,
-    updated_at                TIMESTAMPTZ  DEFAULT now(),
-    updated_by                UUID,
-
-    CONSTRAINT chk_ledger_line_amounts CHECK (
-        (debit_minor > 0 AND credit_minor = 0)
-        OR
-        (credit_minor > 0 AND debit_minor = 0)
-    )
+  -- phase: MVP-0 | Individual debit/credit line within a journal
+  id          UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  journal_id  UUID          NOT NULL REFERENCES ledger_journals(id),
+  account_id  UUID          NOT NULL REFERENCES ledger_accounts(id),
+  debit_minor BIGINT        NOT NULL DEFAULT 0,
+  credit_minor BIGINT       NOT NULL DEFAULT 0,
+  currency    currency_code NOT NULL
 );
 
--- Row-Level Security
-ALTER TABLE ledger_lines ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON ledger_lines
-    USING (tenant_id = current_setting('app.current_tenant')::uuid);
+-- Indexes
+CREATE INDEX idx_ledger_lines_journal_id ON ledger_lines (journal_id);
+CREATE INDEX idx_ledger_lines_account_id ON ledger_lines (account_id);
 
-CREATE INDEX idx_ledger_lines_tenant   ON ledger_lines (tenant_id);
-CREATE INDEX idx_ledger_lines_journal  ON ledger_lines (journal_id);
-CREATE INDEX idx_ledger_lines_account  ON ledger_lines (account_id);
+COMMENT ON TABLE ledger_lines              IS 'phase:MVP-0';

@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IReferralClick, IR_referral_clicks } from "./IR_referral_clicks";
 
 export class R_referral_clicks implements IR_referral_clicks {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(rc: IReferralClick): Promise<IReferralClick> {
     const query = `

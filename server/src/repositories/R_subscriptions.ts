@@ -1,6 +1,6 @@
 import { PostgresBaseRepository } from './PostgresBaseRepository';
 import { ISubscription, IR_subscriptions } from './IR_subscriptions';
-import pool from '../config/database';
+import prisma from '../config/prisma';
 
 export class R_subscriptions extends PostgresBaseRepository<ISubscription> implements IR_subscriptions {
   constructor() {
@@ -9,19 +9,19 @@ export class R_subscriptions extends PostgresBaseRepository<ISubscription> imple
 
   async findByOwnerEntityId(ownerEntityId: string): Promise<ISubscription[]> {
     const query = `SELECT * FROM subscriptions WHERE owner_entity_id = $1`;
-    const { rows } = await pool.query(query, [ownerEntityId]);
+    const { rows } = await prisma.query(query, [ownerEntityId]);
     return rows;
   }
 
   async findByPlanId(planId: string): Promise<ISubscription[]> {
     const query = `SELECT * FROM subscriptions WHERE plan_id = $1`;
-    const { rows } = await pool.query(query, [planId]);
+    const { rows } = await prisma.query(query, [planId]);
     return rows;
   }
 
   async findByState(state: string): Promise<ISubscription[]> {
     const query = `SELECT * FROM subscriptions WHERE state = $1`;
-    const { rows } = await pool.query(query, [state]);
+    const { rows } = await prisma.query(query, [state]);
     return rows;
   }
 }

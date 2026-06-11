@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IOrgDomain, IR_org_domains } from "./IR_org_domains";
 
 export class R_org_domains implements IR_org_domains {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(d: IOrgDomain): Promise<IOrgDomain> {
     const query = `INSERT INTO org_domains (tenant_id, org_entity_id, domain_name, verification_status, is_primary, dns_record, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *;`;

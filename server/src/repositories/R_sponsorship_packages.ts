@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { ISponsorshipPackage, IR_sponsorship_packages } from "./IR_sponsorship_packages";
 
 export class R_sponsorship_packages implements IR_sponsorship_packages {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(p: ISponsorshipPackage): Promise<ISponsorshipPackage> {
     const query = `INSERT INTO sponsorship_packages (tenant_id, event_id, title, description, display_rank, price_minor, currency, benefits, inventory, status, creative_requirements, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *;`;

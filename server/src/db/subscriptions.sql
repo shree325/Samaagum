@@ -1,68 +1,36 @@
-CREATE TABLE IF NOT EXISTS subscriptions (
-    subscription_id     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+-- =====================================================================
+-- Samaagum  |  Table: subscriptions
+-- Synced from schema_v2.sql  (v2.0 | June 2026)
+-- =====================================================================
 
-    plan_id             UUID NOT NULL,
-    owner_entity_id     UUID NOT NULL,
-    sub_name            VARCHAR(150) NOT NULL,
-    sub_description     JSONB NOT NULL,
+DROP TABLE IF EXISTS subscriptions CASCADE;
 
-    valid_from          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    valid_to            TIMESTAMPTZ NULL,
-    state               subscription_state_enum NOT NULL DEFAULT 'pending',
-
-    created_by_user_id  UUID NULL,
-    updated_by_user_id  UUID NULL,
-
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT fk_subscriptions_plan
-        FOREIGN KEY (plan_id)
-        REFERENCES plans(plan_id)
-        ON DELETE RESTRICT,
-
-    CONSTRAINT fk_subscriptions_owner_entity
-        FOREIGN KEY (owner_entity_id)
-        REFERENCES entities(entity_id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT chk_subscriptions_valid_to
-        CHECK (valid_to IS NULL OR valid_to >= valid_from),
-
-    CONSTRAINT fk_subscriptions_created_by
-        FOREIGN KEY (created_by_user_id)
-        REFERENCES users(user_id)
-        ON DELETE SET NULL,
-
-    CONSTRAINT fk_subscriptions_updated_by
-        FOREIGN KEY (updated_by_user_id)
-        REFERENCES users(user_id)
-        ON DELETE SET NULL
+CREATE TABLE subscriptions (
+  -- phase: MVP-0 | Active subscription linking an entity to a plan
+  id              UUID              PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id       UUID              NOT NULL REFERENCES tenants(id),
+  plan_id         UUID              NOT NULL REFERENCES plans(id),
+  owner_entity_id UUID              NOT NULL REFERENCES entities(id),
+  state           subscription_state NOT NULL DEFAULT 'active',
+  valid_from      timestamptz       NOT NULL DEFAULT now(),
+  valid_to        timestamptz,
+  grace_until     timestamptz,
+  created_at      timestamptz       NOT NULL DEFAULT now(),
+  updated_at      timestamptz       NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_subscriptions_plan_id
-    ON subscriptions(plan_id);
+-- Indexes
+CREATE INDEX idx_subscriptions_owner_entity_id ON subscriptions (owner_entity_id);
 
-CREATE INDEX IF NOT EXISTS idx_subscriptions_owner_entity_id
-    ON subscriptions(owner_entity_id);
+-- Row-Level Security
+ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON subscriptions
+  USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-CREATE INDEX IF NOT EXISTS idx_subscriptions_state
-    ON subscriptions(state);
+-- updated_at trigger
+DROP TRIGGER IF EXISTS trg_subscriptions_updated ON subscriptions;
+CREATE TRIGGER trg_subscriptions_updated
+  BEFORE UPDATE ON subscriptions
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-CREATE INDEX IF NOT EXISTS idx_subscriptions_valid_from
-    ON subscriptions(valid_from);
-
-CREATE INDEX IF NOT EXISTS idx_subscriptions_valid_to
-    ON subscriptions(valid_to);
-
-CREATE INDEX IF NOT EXISTS idx_subscriptions_created_by_user_id
-    ON subscriptions(created_by_user_id);
-
-CREATE INDEX IF NOT EXISTS idx_subscriptions_updated_by_user_id
-    ON subscriptions(updated_by_user_id);
-
-DROP TRIGGER IF EXISTS trg_subscriptions_audit ON subscriptions;
-CREATE TRIGGER trg_subscriptions_audit
-BEFORE INSERT OR UPDATE ON subscriptions
-FOR EACH ROW
-EXECUTE FUNCTION fn_set_audit_fields();
+COMMENT ON TABLE subscriptions             IS 'phase:MVP-0';

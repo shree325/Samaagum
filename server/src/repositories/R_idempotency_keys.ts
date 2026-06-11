@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IIdempotencyKey, IR_idempotency_keys } from "./IR_idempotency_keys";
 
 export class R_idempotency_keys implements IR_idempotency_keys {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(ik: IIdempotencyKey): Promise<IIdempotencyKey> {
     const query = `

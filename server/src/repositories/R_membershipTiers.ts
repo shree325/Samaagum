@@ -1,6 +1,6 @@
 import { PostgresBaseRepository } from './PostgresBaseRepository';
 import { IMembershipTier, IR_membershipTiers } from './IR_membershipTiers';
-import pool from '../config/database';
+import prisma from '../config/prisma';
 
 export class R_membershipTiers extends PostgresBaseRepository<IMembershipTier> implements IR_membershipTiers {
   constructor() {
@@ -9,7 +9,7 @@ export class R_membershipTiers extends PostgresBaseRepository<IMembershipTier> i
 
   async findByEntityId(entityId: string): Promise<IMembershipTier[]> {
     const query = `SELECT * FROM membership_tiers WHERE entity_id = $1`;
-    const { rows } = await pool.query(query, [entityId]);
+    const { rows } = await prisma.query(query, [entityId]);
     return rows;
   }
 }

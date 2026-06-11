@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IEventMedia, IR_event_media } from "./IR_event_media";
 
 export class R_event_media implements IR_event_media {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(m: IEventMedia): Promise<IEventMedia> {
     const query = `

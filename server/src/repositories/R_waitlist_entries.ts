@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IWaitlistEntry, IR_waitlist_entries } from "./IR_waitlist_entries";
 
 export class R_waitlist_entries implements IR_waitlist_entries {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(w: IWaitlistEntry): Promise<IWaitlistEntry> {
     const query = `

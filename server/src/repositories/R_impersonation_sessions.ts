@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IImpersonationSession, IR_impersonation_sessions } from "./IR_impersonation_sessions";
 
 export class R_impersonation_sessions implements IR_impersonation_sessions {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(s: IImpersonationSession): Promise<IImpersonationSession> {
     const query = `

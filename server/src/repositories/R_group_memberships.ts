@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IGroupMembership, IR_group_memberships } from "./IR_group_memberships";
 
 export class R_group_memberships implements IR_group_memberships {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(gm: IGroupMembership): Promise<IGroupMembership> {
     const query = `

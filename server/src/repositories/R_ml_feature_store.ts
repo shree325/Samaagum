@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IMlFeatureStore, IR_ml_feature_store } from "./IR_ml_feature_store";
 
 export class R_ml_feature_store implements IR_ml_feature_store {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(f: IMlFeatureStore): Promise<IMlFeatureStore> {
     const query = `

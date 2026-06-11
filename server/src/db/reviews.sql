@@ -1,63 +1,32 @@
-CREATE TABLE IF NOT EXISTS reviews (
-    review_id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+-- =====================================================================
+-- Samaagum  |  Table: reviews
+-- Synced from schema_v2.sql  (v2.0 | June 2026)
+-- =====================================================================
 
-    tenant_id           UUID NOT NULL,
-    reviewer_user_id    UUID NOT NULL,
-    target_entity_id    UUID NOT NULL,
+DROP TABLE IF EXISTS reviews CASCADE;
 
-    content             JSONB NULL,
-    status              visibility_enum NOT NULL DEFAULT 'public',
-
-    created_by_user_id  UUID NULL,
-    updated_by_user_id  UUID NULL,
-    modification_num    INTEGER NOT NULL DEFAULT 1,
-
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT fk_reviews_tenant
-        FOREIGN KEY (tenant_id)
-        REFERENCES tenants(tenant_id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT fk_reviews_reviewer
-        FOREIGN KEY (reviewer_user_id)
-        REFERENCES users(user_id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT fk_reviews_target_entity
-        FOREIGN KEY (target_entity_id)
-        REFERENCES entities(entity_id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT fk_reviews_created_by
-        FOREIGN KEY (created_by_user_id)
-        REFERENCES users(user_id)
-        ON DELETE SET NULL,
-
-    CONSTRAINT fk_reviews_updated_by
-        FOREIGN KEY (updated_by_user_id)
-        REFERENCES users(user_id)
-        ON DELETE SET NULL,
-
-    CONSTRAINT uq_reviews_reviewer_target
-        UNIQUE (reviewer_user_id, target_entity_id)
+CREATE TABLE reviews (
+  -- phase: Phase-1.5 | User review of an event or entity
+  id              UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id       UUID            NOT NULL REFERENCES tenants(id),
+  author_user_id  UUID            NOT NULL REFERENCES users(id),
+  target_type     TEXT            NOT NULL,
+  target_id       UUID            NOT NULL,
+  body            TEXT,
+  status          review_status   NOT NULL DEFAULT 'pending',
+  created_at      timestamptz     NOT NULL DEFAULT now(),
+  updated_at      timestamptz     NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_reviews_tenant_id
-    ON reviews(tenant_id);
+-- Row-Level Security
+ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON reviews
+  USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-CREATE INDEX IF NOT EXISTS idx_reviews_reviewer_user_id
-    ON reviews(reviewer_user_id);
+-- updated_at trigger
+DROP TRIGGER IF EXISTS trg_reviews_updated ON reviews;
+CREATE TRIGGER trg_reviews_updated
+  BEFORE UPDATE ON reviews
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-CREATE INDEX IF NOT EXISTS idx_reviews_target_entity_id
-    ON reviews(target_entity_id);
-
-CREATE INDEX IF NOT EXISTS idx_reviews_status
-    ON reviews(status);
-
-DROP TRIGGER IF EXISTS trg_reviews_audit ON reviews;
-CREATE TRIGGER trg_reviews_audit
-BEFORE INSERT OR UPDATE ON reviews
-FOR EACH ROW
-EXECUTE FUNCTION fn_set_audit_fields();
+COMMENT ON TABLE reviews                   IS 'phase:Phase-1.5';

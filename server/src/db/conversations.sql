@@ -1,59 +1,30 @@
-CREATE TABLE IF NOT EXISTS conversations (
-    conversation_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+-- =====================================================================
+-- Samaagum  |  Table: conversations
+-- Synced from schema_v2.sql  (v2.0 | June 2026)
+-- =====================================================================
 
-    created_by_user_id   UUID NULL,
-    event_id             UUID NULL,
+DROP TABLE IF EXISTS conversations CASCADE;
 
-    type                 conversation_type_enum NOT NULL DEFAULT 'direct',
-    status               conversation_status_enum NOT NULL DEFAULT 'active',
-
-    created_by           UUID NULL, -- kept for compatibility with your model; mirrors creator if you use it
-    created_by_user_ref  UUID NULL, -- optional alias if you later want a separate business column
-
-    created_by_user_id_2 UUID NULL, -- not used; ignore in app layer if not needed
-
-    created_by_user_id_audit UUID NULL, -- not used; ignore in app layer if not needed
-
-    created_by_user_id_bypass UUID NULL, -- not used; ignore in app layer if not needed
-
-    created_by_user_id_x UUID NULL, -- not used; ignore in app layer if not needed
-
-    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-    updated_by_user_id   UUID NULL,
-    modification_num     INTEGER NOT NULL DEFAULT 1,
-    updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT fk_conversations_created_by
-        FOREIGN KEY (created_by_user_id)
-        REFERENCES users(user_id)
-        ON DELETE SET NULL,
-
-    CONSTRAINT fk_conversations_event
-        FOREIGN KEY (event_id)
-        REFERENCES events(event_id)
-        ON DELETE SET NULL,
-
-    CONSTRAINT fk_conversations_updated_by
-        FOREIGN KEY (updated_by_user_id)
-        REFERENCES users(user_id)
-        ON DELETE SET NULL
+CREATE TABLE conversations (
+  -- phase: MVP-0 | DM thread or organizer inbox thread
+  id          UUID                PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id   UUID                NOT NULL REFERENCES tenants(id),
+  type        conversation_type   NOT NULL DEFAULT 'dm',
+  event_id    UUID                REFERENCES events(id),
+  created_by  UUID                REFERENCES users(id),
+  created_at  timestamptz         NOT NULL DEFAULT now(),
+  updated_at  timestamptz         NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_conversations_created_by_user_id
-    ON conversations(created_by_user_id);
+-- Row-Level Security
+ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON conversations
+  USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-CREATE INDEX IF NOT EXISTS idx_conversations_event_id
-    ON conversations(event_id);
+-- updated_at trigger
+DROP TRIGGER IF EXISTS trg_conversations_updated ON conversations;
+CREATE TRIGGER trg_conversations_updated
+  BEFORE UPDATE ON conversations
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-CREATE INDEX IF NOT EXISTS idx_conversations_type
-    ON conversations(type);
-
-CREATE INDEX IF NOT EXISTS idx_conversations_status
-    ON conversations(status);
-
-DROP TRIGGER IF EXISTS trg_conversations_audit ON conversations;
-CREATE TRIGGER trg_conversations_audit
-BEFORE INSERT OR UPDATE ON conversations
-FOR EACH ROW
-EXECUTE FUNCTION fn_set_audit_fields();
+COMMENT ON TABLE conversations             IS 'phase:MVP-0';

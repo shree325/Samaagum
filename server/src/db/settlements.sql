@@ -1,39 +1,33 @@
+-- =====================================================================
+-- Samaagum  |  Table: settlements
+-- Synced from schema_v2.sql  (v2.0 | June 2026)
+-- =====================================================================
+
 DROP TABLE IF EXISTS settlements CASCADE;
 
 CREATE TABLE settlements (
-
-    id                        UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-    tenant_id                 UUID        NOT NULL,
-
-    owner_entity_id           UUID        NOT NULL,
-
-    period_start              TIMESTAMPTZ  NOT NULL,
-    period_end                TIMESTAMPTZ  NOT NULL,
-
-    -- Money breakdown (multi-currency: minor units + ISO 4217)
-    gross_minor               BIGINT       NOT NULL DEFAULT 0,
-    fees_minor                BIGINT       NOT NULL DEFAULT 0,
-    refunds_minor             BIGINT       NOT NULL DEFAULT 0,
-    net_minor                 BIGINT       NOT NULL DEFAULT 0,
-    currency                  CHAR(3)      NOT NULL,
-
-    status                    VARCHAR(50)  DEFAULT 'pending',
-    reconciled_at             TIMESTAMPTZ,
-    payout_reference          VARCHAR(255),
-
-    -- System columns
-    created_at                TIMESTAMPTZ  DEFAULT now(),
-    created_by                UUID,
-    updated_at                TIMESTAMPTZ  DEFAULT now(),
-    updated_by                UUID
+  -- phase: MVP-1 | Settlement batch payable to a community/org
+  id                    UUID              PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id             UUID              NOT NULL REFERENCES tenants(id),
+  owner_entity_id       UUID              NOT NULL REFERENCES entities(id),
+  status                settlement_status NOT NULL DEFAULT 'eligible',
+  amount_amount_minor   BIGINT,
+  amount_currency       currency_code,
+  scheduled_for         timestamptz,
+  paid_at               timestamptz,
+  created_at            timestamptz       NOT NULL DEFAULT now(),
+  updated_at            timestamptz       NOT NULL DEFAULT now()
 );
 
 -- Row-Level Security
 ALTER TABLE settlements ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON settlements
-    USING (tenant_id = current_setting('app.current_tenant')::uuid);
+  USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-CREATE INDEX idx_settlements_tenant  ON settlements (tenant_id);
-CREATE INDEX idx_settlements_owner   ON settlements (owner_entity_id);
-CREATE INDEX idx_settlements_status  ON settlements (status);
-CREATE INDEX idx_settlements_period  ON settlements (period_start, period_end);
+-- updated_at trigger
+DROP TRIGGER IF EXISTS trg_settlements_updated ON settlements;
+CREATE TRIGGER trg_settlements_updated
+  BEFORE UPDATE ON settlements
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+COMMENT ON TABLE settlements               IS 'phase:MVP-1';

@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IEntityPage, IR_entity_pages } from "./IR_entity_pages";
 
 export class R_entity_pages implements IR_entity_pages {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(p: IEntityPage): Promise<IEntityPage> {
     const query = `INSERT INTO entity_pages (tenant_id, owner_entity_id, page_type, slug, title, content_blocks, listed, status, published_at, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *;`;

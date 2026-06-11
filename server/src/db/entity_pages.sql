@@ -1,35 +1,30 @@
+-- =====================================================================
+-- Samaagum  |  Table: entity_pages
+-- Synced from schema_v2.sql  (v2.0 | June 2026)
+-- =====================================================================
+
 DROP TABLE IF EXISTS entity_pages CASCADE;
 
 CREATE TABLE entity_pages (
-
-    id                        UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-    tenant_id                 UUID        NOT NULL,
-
-    owner_entity_id           UUID        NOT NULL,
-
-    page_type                 VARCHAR(50)  NOT NULL DEFAULT 'about',
-    slug                      VARCHAR(255) NOT NULL,
-    title                     VARCHAR(255) NOT NULL,
-    content_blocks            JSONB,
-
-    listed                    BOOLEAN      DEFAULT TRUE,
-    status                    VARCHAR(50)  DEFAULT 'draft',
-    published_at              TIMESTAMPTZ,
-
-    -- System columns
-    created_at                TIMESTAMPTZ  DEFAULT now(),
-    created_by                UUID,
-    updated_at                TIMESTAMPTZ  DEFAULT now(),
-    updated_by                UUID,
-
-    CONSTRAINT uq_entity_pages_owner_slug UNIQUE (owner_entity_id, slug)
+  -- phase: MVP-1 | Public-facing landing page content for an entity
+  id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id       UUID          NOT NULL REFERENCES tenants(id),
+  owner_entity_id UUID          NOT NULL REFERENCES entities(id),
+  content         JSONB,
+  listed          listed_state  NOT NULL DEFAULT 'unlisted',
+  created_at      timestamptz   NOT NULL DEFAULT now(),
+  updated_at      timestamptz   NOT NULL DEFAULT now()
 );
 
 -- Row-Level Security
 ALTER TABLE entity_pages ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON entity_pages
-    USING (tenant_id = current_setting('app.current_tenant')::uuid);
+  USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-CREATE INDEX idx_entity_pages_tenant ON entity_pages (tenant_id);
-CREATE INDEX idx_entity_pages_owner  ON entity_pages (owner_entity_id);
-CREATE INDEX idx_entity_pages_slug   ON entity_pages (slug);
+-- updated_at trigger
+DROP TRIGGER IF EXISTS trg_entity_pages_updated ON entity_pages;
+CREATE TRIGGER trg_entity_pages_updated
+  BEFORE UPDATE ON entity_pages
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+COMMENT ON TABLE entity_pages              IS 'phase:MVP-1';

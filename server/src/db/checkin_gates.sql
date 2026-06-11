@@ -3,9 +3,9 @@ DROP TABLE IF EXISTS checkin_gates CASCADE;
 CREATE TABLE checkin_gates (
 
     id                        UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-    tenant_id                 UUID        NOT NULL,
+    tenant_id UUID        NOT NULL REFERENCES tenants(tenant_id),
 
-    event_id                  UUID        NOT NULL,
+    event_id UUID        NOT NULL REFERENCES events(id),
 
     name                      VARCHAR(255) NOT NULL,
     gate_code                 VARCHAR(50)  NOT NULL,

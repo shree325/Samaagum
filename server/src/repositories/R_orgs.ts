@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IOrg, IR_orgs } from "./IR_orgs";
 
 export class R_orgs implements IR_orgs {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(o: IOrg): Promise<IOrg> {
     const query = `INSERT INTO orgs (tenant_id, entity_id, legal_name, display_name, branding, support_email, support_phone, status, owner_entity_id, x_data, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *;`;

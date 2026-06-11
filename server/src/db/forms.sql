@@ -1,53 +1,35 @@
-CREATE TABLE IF NOT EXISTS forms (
-    form_id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+-- =====================================================================
+-- Samaagum  |  Table: forms
+-- Synced from schema_v2.sql  (v2.0 | June 2026)
+-- =====================================================================
 
-    owner_entity_id     UUID NOT NULL,
-    purpose             TEXT NOT NULL,
-    status              form_status_enum NOT NULL DEFAULT 'draft',
+DROP TABLE IF EXISTS forms CASCADE;
 
-    created_by_user_id  UUID NULL,
-    updated_by_user_id  UUID NULL,
-    modification_num    INTEGER NOT NULL DEFAULT 1,
-
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT chk_forms_purpose_not_blank
-        CHECK (btrim(purpose) <> ''),
-
-    CONSTRAINT fk_forms_owner_entity
-        FOREIGN KEY (owner_entity_id)
-        REFERENCES entities(entity_id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT fk_forms_created_by
-        FOREIGN KEY (created_by_user_id)
-        REFERENCES users(user_id)
-        ON DELETE SET NULL,
-
-    CONSTRAINT fk_forms_updated_by
-        FOREIGN KEY (updated_by_user_id)
-        REFERENCES users(user_id)
-        ON DELETE SET NULL
+CREATE TABLE forms (
+  -- phase: MVP-0 | Reusable dynamic forms (event registration, group join, etc.)
+  id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id       UUID          NOT NULL REFERENCES tenants(id),
+  owner_entity_id UUID          NOT NULL REFERENCES entities(id),
+  purpose         form_purpose  NOT NULL,
+  status          TEXT          NOT NULL DEFAULT 'active',
+  created_at      timestamptz   NOT NULL DEFAULT now(),
+  updated_at      timestamptz   NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_forms_owner_entity_id
-    ON forms(owner_entity_id);
 
-CREATE INDEX IF NOT EXISTS idx_forms_status
-    ON forms(status);
+-- Deferred: enforce FKs that reference forms/form_responses (created after groups/group_memberships)
+ALTER TABLE groups            ADD CONSTRAINT fk_groups_join_form   FOREIGN KEY (join_form_id)     REFERENCES forms(id)         ON DELETE SET NULL;
+ALTER TABLE group_memberships ADD CONSTRAINT fk_gm_form_response   FOREIGN KEY (form_response_id) REFERENCES form_responses(id) ON DELETE SET NULL;
 
-CREATE INDEX IF NOT EXISTS idx_forms_purpose
-    ON forms(purpose);
+-- Row-Level Security
+ALTER TABLE forms ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON forms
+  USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-CREATE INDEX IF NOT EXISTS idx_forms_created_by_user_id
-    ON forms(created_by_user_id);
+-- updated_at trigger
+DROP TRIGGER IF EXISTS trg_forms_updated ON forms;
+CREATE TRIGGER trg_forms_updated
+  BEFORE UPDATE ON forms
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-CREATE INDEX IF NOT EXISTS idx_forms_updated_by_user_id
-    ON forms(updated_by_user_id);
-
-DROP TRIGGER IF EXISTS trg_forms_audit ON forms;
-CREATE TRIGGER trg_forms_audit
-BEFORE INSERT OR UPDATE ON forms
-FOR EACH ROW
-EXECUTE FUNCTION fn_set_audit_fields();
+COMMENT ON TABLE forms                     IS 'phase:MVP-0';

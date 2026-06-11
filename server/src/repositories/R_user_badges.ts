@@ -1,0 +1,39 @@
+import { PrismaClient } from "@prisma/client";
+import { IUserBadges, IR_user_badges } from "./IR_user_badges";
+
+export class R_user_badges implements IR_user_badges {
+  constructor(private db: PrismaClient) {}
+
+  async create(data: IUserBadges): Promise<IUserBadges> {
+    const keys = Object.keys(data);
+    const values = Object.values(data);
+    const placeholders = keys.map((_, i) => '$' + (i + 1)).join(', ');
+    const query = `INSERT INTO user_badges (${keys.join(', ')}) VALUES (${placeholders}) RETURNING *`;
+    const rows = await this.db.$queryRawUnsafe<any[]>(query, ...values);
+    return rows[0];
+  }
+
+  async getById(row_id: string): Promise<IUserBadges | null> {
+    const rows = await this.db.$queryRawUnsafe<any[]>('SELECT * FROM user_badges WHERE row_id = $1', row_id);
+    return rows[0] || null;
+  }
+
+  async getAll(): Promise<IUserBadges[]> {
+    return this.db.$queryRawUnsafe<any[]>('SELECT * FROM user_badges');
+  }
+
+  async update(row_id: string, data: Partial<IUserBadges>): Promise<IUserBadges | null> {
+    const keys = Object.keys(data);
+    if (keys.length === 0) return null;
+    const setClause = keys.map((k, i) => `${k} = $${i + 2}`).join(', ');
+    const values = Object.values(data);
+    const query = `UPDATE user_badges SET ${setClause} WHERE row_id = $1 RETURNING *`;
+    const rows = await this.db.$queryRawUnsafe<any[]>(query, row_id, ...values);
+    return rows[0] || null;
+  }
+
+  async delete(row_id: string): Promise<boolean> {
+    const rowCount = await this.db.$executeRawUnsafe('DELETE FROM user_badges WHERE row_id = $1', row_id);
+    return (rowCount ?? 0) > 0;
+  }
+}

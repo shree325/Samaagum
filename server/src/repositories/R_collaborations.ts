@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { ICollaboration, IR_collaborations } from "./IR_collaborations";
 
 export class R_collaborations implements IR_collaborations {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(c: ICollaboration): Promise<ICollaboration> {
     const query = `INSERT INTO collaborations (tenant_id, entity_id, name, slug, description, cover_asset_id, visibility, status, member_count, x_data, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *;`;

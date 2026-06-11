@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IRefund, IR_refunds } from "./IR_refunds";
 
 export class R_refunds implements IR_refunds {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(r: IRefund): Promise<IRefund> {
     const query = `

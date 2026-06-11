@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IBundle, IR_bundles } from "./IR_bundles";
 
 export class R_bundles implements IR_bundles {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(b: IBundle): Promise<IBundle> {
     const query = `

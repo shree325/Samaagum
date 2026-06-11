@@ -1,4 +1,4 @@
-import pool from '../config/database';
+import prisma from '../config/prisma';
 import { PostgresBaseRepository } from './PostgresBaseRepository';
 import { IRole, IR_roles } from './IR_roles';
 
@@ -9,7 +9,7 @@ export class R_roles extends PostgresBaseRepository<IRole> implements IR_roles {
 
     async findByKey(key: string): Promise<IRole | null> {
         const query = `SELECT * FROM roles WHERE key = $1 LIMIT 1`;
-        const { rows } = await pool.query(query, [key]);
+        const { rows } = await prisma.query(query, [key]);
         return rows[0] || null;
     }
 }
