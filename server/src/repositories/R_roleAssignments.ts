@@ -1,4 +1,4 @@
-import pool from '../config/database';
+import prisma from '../config/prisma';
 import { PostgresBaseRepository } from './PostgresBaseRepository';
 import { IRoleAssignment, IR_roleAssignments } from './IR_roleAssignments';
 
@@ -12,7 +12,7 @@ export class R_roleAssignments extends PostgresBaseRepository<IRoleAssignment> i
             SELECT * FROM role_assignments 
             WHERE user_id = $1 AND role_id = $2 AND scope_entity_id = $3
         `;
-        const { rows: existing } = await pool.query(existsQuery, [
+        const { rows: existing } = await prisma.query(existsQuery, [
             assignment.user_id, assignment.role_id, assignment.scope_entity_id
         ]);
 
@@ -28,19 +28,19 @@ export class R_roleAssignments extends PostgresBaseRepository<IRoleAssignment> i
             DELETE FROM role_assignments
             WHERE user_id = $1 AND role_id = $2 AND scope_entity_id = $3
         `;
-        const result = await pool.query(query, [userId, roleId, scopeEntityId]);
+        const result = await prisma.query(query, [userId, roleId, scopeEntityId]);
         return (result.rowCount ?? 0) > 0;
     }
 
     async getUserRoles(userId: string): Promise<IRoleAssignment[]> {
         const query = `SELECT * FROM role_assignments WHERE user_id = $1`;
-        const { rows } = await pool.query(query, [userId]);
+        const { rows } = await prisma.query(query, [userId]);
         return rows;
     }
 
     async getEntityRoles(scopeEntityId: string): Promise<IRoleAssignment[]> {
         const query = `SELECT * FROM role_assignments WHERE scope_entity_id = $1`;
-        const { rows } = await pool.query(query, [scopeEntityId]);
+        const { rows } = await prisma.query(query, [scopeEntityId]);
         return rows;
     }
 
@@ -50,7 +50,7 @@ export class R_roleAssignments extends PostgresBaseRepository<IRoleAssignment> i
             WHERE user_id = $1 AND role_id = $2 AND scope_entity_id = $3
             LIMIT 1
         `;
-        const { rowCount } = await pool.query(query, [userId, roleId, scopeEntityId]);
+        const { rowCount } = await prisma.query(query, [userId, roleId, scopeEntityId]);
         return (rowCount ?? 0) > 0;
     }
 }

@@ -1,8 +1,8 @@
-import { Pool } from 'pg';
+import { PrismaClient } from '@prisma/client';
 import { ITicket, IR_tickets } from './IR_tickets';
 
 export class R_tickets implements IR_tickets {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(ticket: ITicket): Promise<ITicket> {
     const query = `

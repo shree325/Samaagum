@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { INotificationLog, IR_notification_log } from "./IR_notification_log";
 
 export class R_notification_log implements IR_notification_log {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(n: INotificationLog): Promise<INotificationLog> {
     const query = `

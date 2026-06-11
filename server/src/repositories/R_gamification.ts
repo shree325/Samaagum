@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IGamification, IR_gamification } from "./IR_gamification";
 
 export class R_gamification implements IR_gamification {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(g: IGamification): Promise<IGamification> {
     const query = `

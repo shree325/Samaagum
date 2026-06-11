@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { ITakeoverRequest, IR_takeover_requests } from "./IR_takeover_requests";
 
 export class R_takeover_requests implements IR_takeover_requests {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(r: ITakeoverRequest): Promise<ITakeoverRequest> {
     const query = `

@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { ICommission, IR_commissions } from "./IR_commissions";
 
 export class R_commissions implements IR_commissions {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(c: ICommission): Promise<ICommission> {
     const query = `INSERT INTO commissions (tenant_id, affiliate_id, source_type, source_id, amount_minor, currency, state, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *;`;

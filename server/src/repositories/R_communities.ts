@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { ICommunity, IR_communities } from "./IR_communities";
 
 export class R_communities implements IR_communities {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(c: ICommunity): Promise<ICommunity> {
     const query = `INSERT INTO communities (tenant_id, entity_id, name, slug, description, cover_asset_id, visibility, status, member_count, x_data, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *;`;

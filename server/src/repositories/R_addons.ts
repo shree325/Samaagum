@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IAddon, IR_addons } from "./IR_addons";
 
 export class R_addons implements IR_addons {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(a: IAddon): Promise<IAddon> {
     const query = `

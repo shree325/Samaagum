@@ -1,6 +1,6 @@
 import { PostgresBaseRepository } from './PostgresBaseRepository';
 import { IFormResponse, IR_formResponses } from './IR_formResponses';
-import pool from '../config/database';
+import prisma from '../config/prisma';
 
 export class R_formResponses extends PostgresBaseRepository<IFormResponse> implements IR_formResponses {
   constructor() {
@@ -9,13 +9,13 @@ export class R_formResponses extends PostgresBaseRepository<IFormResponse> imple
 
   async findByFormId(formId: string): Promise<IFormResponse[]> {
     const query = `SELECT * FROM form_responses WHERE form_id = $1`;
-    const { rows } = await pool.query(query, [formId]);
+    const { rows } = await prisma.query(query, [formId]);
     return rows;
   }
 
   async findByRespondentUserId(respondentUserId: string): Promise<IFormResponse[]> {
     const query = `SELECT * FROM form_responses WHERE respondent_user_id = $1`;
-    const { rows } = await pool.query(query, [respondentUserId]);
+    const { rows } = await prisma.query(query, [respondentUserId]);
     return rows;
   }
 }

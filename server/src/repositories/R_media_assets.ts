@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IMediaAsset, IR_media_assets } from "./IR_media_assets";
 
 export class R_media_assets implements IR_media_assets {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(a: IMediaAsset): Promise<IMediaAsset> {
     const query = `

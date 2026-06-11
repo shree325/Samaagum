@@ -1,8 +1,8 @@
-import { Pool } from 'pg';
+import { PrismaClient } from '@prisma/client';
 import { IEvent, IR_events } from './IR_events';
 
 export class R_events implements IR_events {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(event: IEvent): Promise<IEvent> {
     const query = `

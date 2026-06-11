@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { ISponsor, IR_sponsors } from "./IR_sponsors";
 
 export class R_sponsors implements IR_sponsors {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(s: ISponsor): Promise<ISponsor> {
     const query = `

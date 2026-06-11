@@ -1,8 +1,8 @@
-import { Pool } from 'pg';
+import { PrismaClient } from '@prisma/client';
 import { IProfile, IR_profiles } from './IR_profiles';
 
 export class R_profiles implements IR_profiles {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(profile: IProfile): Promise<IProfile> {
     const query = `

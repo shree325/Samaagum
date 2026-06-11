@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { ICheckinGate, IR_checkin_gates } from "./IR_checkin_gates";
 
 export class R_checkin_gates implements IR_checkin_gates {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(g: ICheckinGate): Promise<ICheckinGate> {
     const query = `

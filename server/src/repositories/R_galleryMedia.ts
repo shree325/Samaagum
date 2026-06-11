@@ -1,6 +1,6 @@
 import { PostgresBaseRepository } from './PostgresBaseRepository';
 import { IGalleryMedia, IR_galleryMedia } from './IR_galleryMedia';
-import pool from '../config/database';
+import prisma from '../config/prisma';
 
 export class R_galleryMedia extends PostgresBaseRepository<IGalleryMedia> implements IR_galleryMedia {
   constructor() {
@@ -9,13 +9,13 @@ export class R_galleryMedia extends PostgresBaseRepository<IGalleryMedia> implem
 
   async findByGalleryId(galleryId: string): Promise<IGalleryMedia[]> {
     const query = `SELECT * FROM gallery_media WHERE gallery_id = $1`;
-    const { rows } = await pool.query(query, [galleryId]);
+    const { rows } = await prisma.query(query, [galleryId]);
     return rows;
   }
 
   async findByAssetId(assetId: string): Promise<IGalleryMedia[]> {
     const query = `SELECT * FROM gallery_media WHERE asset_id = $1`;
-    const { rows } = await pool.query(query, [assetId]);
+    const { rows } = await prisma.query(query, [assetId]);
     return rows;
   }
 }

@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { ISignal, IR_signals } from "./IR_signals";
 
 export class R_signals implements IR_signals {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(s: ISignal): Promise<ISignal> {
     const query = `

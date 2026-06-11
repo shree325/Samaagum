@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { ICouponRedemption, IR_coupon_redemptions } from "./IR_coupon_redemptions";
 
 export class R_coupon_redemptions implements IR_coupon_redemptions {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(r: ICouponRedemption): Promise<ICouponRedemption> {
     const query = `

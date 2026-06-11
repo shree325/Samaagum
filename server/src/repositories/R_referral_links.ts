@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IReferralLink, IR_referral_links } from "./IR_referral_links";
 
 export class R_referral_links implements IR_referral_links {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(l: IReferralLink): Promise<IReferralLink> {
     const query = `INSERT INTO referral_links (tenant_id, affiliate_id, code, destination_url, campaign_name, status, expires_at, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *;`;

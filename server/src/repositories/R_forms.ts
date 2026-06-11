@@ -1,6 +1,6 @@
 import { PostgresBaseRepository } from './PostgresBaseRepository';
 import { IForm, IR_forms } from './IR_forms';
-import pool from '../config/database';
+import prisma from '../config/prisma';
 
 export class R_forms extends PostgresBaseRepository<IForm> implements IR_forms {
   constructor() {
@@ -9,13 +9,13 @@ export class R_forms extends PostgresBaseRepository<IForm> implements IR_forms {
 
   async findByOwnerEntityId(ownerEntityId: string): Promise<IForm[]> {
     const query = `SELECT * FROM forms WHERE owner_entity_id = $1`;
-    const { rows } = await pool.query(query, [ownerEntityId]);
+    const { rows } = await prisma.query(query, [ownerEntityId]);
     return rows;
   }
 
   async findByPurpose(purpose: string): Promise<IForm[]> {
     const query = `SELECT * FROM forms WHERE purpose = $1`;
-    const { rows } = await pool.query(query, [purpose]);
+    const { rows } = await prisma.query(query, [purpose]);
     return rows;
   }
 }

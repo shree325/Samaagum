@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { ISettlement, IR_settlements } from "./IR_settlements";
 
 export class R_settlements implements IR_settlements {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(s: ISettlement): Promise<ISettlement> {
     const query = `INSERT INTO settlements (tenant_id, owner_entity_id, period_start, period_end, gross_minor, fees_minor, refunds_minor, net_minor, currency, status, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *;`;

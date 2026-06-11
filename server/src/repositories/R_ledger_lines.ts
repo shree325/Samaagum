@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { ILedgerLine, IR_ledger_lines } from "./IR_ledger_lines";
 
 export class R_ledger_lines implements IR_ledger_lines {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(l: ILedgerLine): Promise<ILedgerLine> {
     const query = `

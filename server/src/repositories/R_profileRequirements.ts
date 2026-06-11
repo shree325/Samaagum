@@ -1,6 +1,6 @@
 import { PostgresBaseRepository } from './PostgresBaseRepository';
 import { IProfileRequirement, IR_profileRequirements } from './IR_profileRequirements';
-import pool from '../config/database';
+import prisma from '../config/prisma';
 
 export class R_profileRequirements extends PostgresBaseRepository<IProfileRequirement> implements IR_profileRequirements {
   constructor() {
@@ -9,13 +9,13 @@ export class R_profileRequirements extends PostgresBaseRepository<IProfileRequir
 
   async findByAttributeKey(attributeKey: string): Promise<IProfileRequirement | null> {
     const query = `SELECT * FROM profile_requirements WHERE attribute_key = $1`;
-    const { rows } = await pool.query(query, [attributeKey]);
+    const { rows } = await prisma.query(query, [attributeKey]);
     return rows[0] || null;
   }
 
   async findActive(): Promise<IProfileRequirement[]> {
     const query = `SELECT * FROM profile_requirements WHERE active = TRUE`;
-    const { rows } = await pool.query(query);
+    const { rows } = await prisma.query(query);
     return rows;
   }
 }

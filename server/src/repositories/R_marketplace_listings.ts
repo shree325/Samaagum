@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IMarketplaceListing, IR_marketplace_listings } from "./IR_marketplace_listings";
 
 export class R_marketplace_listings implements IR_marketplace_listings {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(l: IMarketplaceListing): Promise<IMarketplaceListing> {
     const query = `

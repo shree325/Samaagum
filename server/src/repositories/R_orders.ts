@@ -1,6 +1,6 @@
 import { PostgresBaseRepository } from './PostgresBaseRepository';
 import { IOrder, IR_orders } from './IR_orders';
-import pool from '../config/database';
+import prisma from '../config/prisma';
 
 export class R_orders extends PostgresBaseRepository<IOrder> implements IR_orders {
   constructor() {
@@ -9,7 +9,7 @@ export class R_orders extends PostgresBaseRepository<IOrder> implements IR_order
 
   async findByUserId(userId: number): Promise<IOrder[]> {
     const query = `SELECT * FROM orders WHERE user_id = $1`;
-    const { rows } = await pool.query(query, [userId]);
+    const { rows } = await prisma.query(query, [userId]);
     return rows;
   }
 }

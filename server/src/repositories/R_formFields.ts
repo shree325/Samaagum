@@ -1,6 +1,6 @@
 import { PostgresBaseRepository } from './PostgresBaseRepository';
 import { IFormField, IR_formFields } from './IR_formFields';
-import pool from '../config/database';
+import prisma from '../config/prisma';
 
 export class R_formFields extends PostgresBaseRepository<IFormField> implements IR_formFields {
   constructor() {
@@ -9,7 +9,7 @@ export class R_formFields extends PostgresBaseRepository<IFormField> implements 
 
   async findByFormId(formId: string): Promise<IFormField[]> {
     const query = `SELECT * FROM form_fields WHERE form_id = $1 ORDER BY position ASC`;
-    const { rows } = await pool.query(query, [formId]);
+    const { rows } = await prisma.query(query, [formId]);
     return rows;
   }
 }

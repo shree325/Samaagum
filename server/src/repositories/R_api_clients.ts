@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IApiClient, IR_api_clients } from "./IR_api_clients";
 
 export class R_api_clients implements IR_api_clients {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(c: IApiClient): Promise<IApiClient> {
     const query = `

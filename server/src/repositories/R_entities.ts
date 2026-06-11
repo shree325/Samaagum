@@ -1,8 +1,8 @@
-import { Pool } from 'pg';
+import { PrismaClient } from '@prisma/client';
 import { IEntity, IR_entities } from './IR_entities';
 
 export class R_entities implements IR_entities {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(entity: IEntity): Promise<IEntity> {
     const query = `

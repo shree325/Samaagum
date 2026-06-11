@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IAffiliatePayout, IR_affiliate_payouts } from "./IR_affiliate_payouts";
 
 export class R_affiliate_payouts implements IR_affiliate_payouts {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(p: IAffiliatePayout): Promise<IAffiliatePayout> {
     const query = `

@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IAffiliate, IR_affiliates } from "./IR_affiliates";
 
 export class R_affiliates implements IR_affiliates {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(a: IAffiliate): Promise<IAffiliate> {
     const query = `INSERT INTO affiliates (tenant_id, owner_user_id, owner_entity_id, referral_code, status, payout_method, payout_details, x_data, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *;`;

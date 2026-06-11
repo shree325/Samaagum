@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IFollow, IR_follows } from "./IR_follows";
 
 export class R_follows implements IR_follows {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(f: IFollow): Promise<IFollow> {
     const query = `INSERT INTO follows (tenant_id, user_id, entity_id, follow_state, muted, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *;`;

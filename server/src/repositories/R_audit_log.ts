@@ -1,8 +1,8 @@
-import { Pool } from "pg";
+import { PrismaClient } from '@prisma/client';
 import { IAuditLog, IR_audit_log } from "./IR_audit_log";
 
 export class R_audit_log implements IR_audit_log {
-  constructor(private db: Pool) {}
+  constructor(private db: PrismaClient) {}
 
   async create(l: IAuditLog): Promise<IAuditLog> {
     const query = `
