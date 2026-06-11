@@ -1,34 +1,22 @@
+-- =====================================================================
+-- Samaagum  |  Table: ledger_accounts
+-- Synced from schema_v2.sql  (v2.0 | June 2026)
+-- =====================================================================
+
 DROP TABLE IF EXISTS ledger_accounts CASCADE;
 
 CREATE TABLE ledger_accounts (
-
-    id                        UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-    tenant_id                 UUID        NOT NULL,
-
-    account_key               VARCHAR(100) NOT NULL,
-    name                      VARCHAR(255) NOT NULL,
-    account_type              VARCHAR(50)  NOT NULL,
-    normal_balance            VARCHAR(10)  NOT NULL DEFAULT 'debit',
-
-    owner_entity_id           UUID,
-    parent_account_id         UUID        REFERENCES ledger_accounts(id),
-
-    is_active                 BOOLEAN      DEFAULT TRUE,
-
-    -- System columns
-    created_at                TIMESTAMPTZ  DEFAULT now(),
-    created_by                UUID,
-    updated_at                TIMESTAMPTZ  DEFAULT now(),
-    updated_by                UUID,
-
-    CONSTRAINT uq_ledger_accounts_tenant_key UNIQUE (tenant_id, account_key),
-    CONSTRAINT chk_normal_balance CHECK (normal_balance IN ('debit', 'credit'))
+  -- phase: MVP-0 | Chart of accounts entry (per entity or platform-wide)
+  id              UUID  PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id       UUID  NOT NULL REFERENCES tenants(id),
+  key             TEXT  NOT NULL,
+  owner_entity_id UUID  REFERENCES entities(id),
+  UNIQUE (tenant_id, key, owner_entity_id)
 );
 
 -- Row-Level Security
 ALTER TABLE ledger_accounts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON ledger_accounts
-    USING (tenant_id = current_setting('app.current_tenant')::uuid);
+  USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-CREATE INDEX idx_ledger_accounts_tenant  ON ledger_accounts (tenant_id);
-CREATE INDEX idx_ledger_accounts_type    ON ledger_accounts (account_type);
+COMMENT ON TABLE ledger_accounts           IS 'phase:MVP-0';

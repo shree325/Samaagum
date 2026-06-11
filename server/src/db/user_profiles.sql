@@ -1,75 +1,36 @@
-CREATE TABLE IF NOT EXISTS profiles (
-    user_id             UUID PRIMARY KEY,
-    
-    tenant_id           UUID NOT NULL,
-    display_name        VARCHAR(150) NOT NULL,
-    bio                 TEXT NULL,
-    preferred_location  TEXT NULL,
-    photo_asset_id      UUID NULL,
-    cover_asset_id      UUID NULL,
-    template_key        TEXT NULL DEFAULT 'default',
-    website             TEXT NULL,
+-- =====================================================================
+-- Samaagum  |  Table: profiles
+-- Synced from schema_v2.sql  (v2.0 | June 2026)
+-- =====================================================================
 
-    created_by_user_id  UUID NULL,
-    updated_by_user_id  UUID NULL,
+DROP TABLE IF EXISTS profiles CASCADE;
 
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT fk_profiles_user
-        FOREIGN KEY (user_id)
-        REFERENCES users(user_id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT fk_profiles_tenant
-        FOREIGN KEY (tenant_id)
-        REFERENCES tenants(tenant_id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT fk_profiles_photo_asset
-        FOREIGN KEY (photo_asset_id)
-        REFERENCES media_assets(asset_id)
-        ON DELETE SET NULL,
-
-    CONSTRAINT fk_profiles_cover_asset
-        FOREIGN KEY (cover_asset_id)
-        REFERENCES media_assets(asset_id)
-        ON DELETE SET NULL,
-
-    CONSTRAINT chk_profiles_display_name_not_blank
-        CHECK (btrim(display_name) <> ''),
-
-    CONSTRAINT fk_profiles_created_by
-        FOREIGN KEY (created_by_user_id)
-        REFERENCES users(user_id)
-        ON DELETE SET NULL,
-
-    CONSTRAINT fk_profiles_updated_by
-        FOREIGN KEY (updated_by_user_id)
-        REFERENCES users(user_id)
-        ON DELETE SET NULL
+CREATE TABLE profiles (
+  -- phase: MVP-0 | Extended user profile (1-to-1 with users)
+  user_id             UUID        PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  tenant_id           UUID        NOT NULL REFERENCES tenants(id),
+  display_name        TEXT,
+  bio                 TEXT,
+  -- photo_asset_id / cover_asset_id FK added in deferred section below (after media_assets)
+  photo_asset_id      UUID,
+  cover_asset_id      UUID,
+  preferred_location  TEXT,
+  location_lat        DOUBLE PRECISION,
+  location_lng        DOUBLE PRECISION,
+  template_key        TEXT,
+  created_at          timestamptz NOT NULL DEFAULT now(),
+  updated_at          timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_profiles_tenant_id
-    ON profiles(tenant_id);
+-- Row-Level Security
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON profiles
+  USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-CREATE INDEX IF NOT EXISTS idx_profiles_display_name
-    ON profiles(display_name);
+-- updated_at trigger
+DROP TRIGGER IF EXISTS trg_profiles_updated ON profiles;
+CREATE TRIGGER trg_profiles_updated
+  BEFORE UPDATE ON profiles
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-CREATE INDEX IF NOT EXISTS idx_profiles_photo_asset_id
-    ON profiles(photo_asset_id);
-
-CREATE INDEX IF NOT EXISTS idx_profiles_cover_asset_id
-    ON profiles(cover_asset_id);
-
-CREATE INDEX IF NOT EXISTS idx_profiles_created_by_user_id
-    ON profiles(created_by_user_id);
-
-CREATE INDEX IF NOT EXISTS idx_profiles_updated_by_user_id
-    ON profiles(updated_by_user_id);
-
-DROP TRIGGER IF EXISTS trg_profiles_audit ON profiles;
-CREATE TRIGGER trg_profiles_audit
-BEFORE INSERT OR UPDATE ON profiles
-FOR EACH ROW
-EXECUTE FUNCTION fn_set_audit_fields();
+COMMENT ON TABLE profiles                  IS 'phase:MVP-0';

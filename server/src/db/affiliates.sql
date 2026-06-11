@@ -1,37 +1,34 @@
+-- =====================================================================
+-- Samaagum  |  Table: affiliates
+-- Synced from schema_v2.sql  (v2.0 | June 2026)
+-- =====================================================================
+
 DROP TABLE IF EXISTS affiliates CASCADE;
 
 CREATE TABLE affiliates (
-
-    id                        UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-    tenant_id                 UUID        NOT NULL,
-
-    owner_user_id             UUID,
-    owner_entity_id           UUID,
-
-    referral_code             VARCHAR(100) NOT NULL,
-    status                    VARCHAR(50)  DEFAULT 'active',
-
-    payout_method             VARCHAR(50),
-    payout_details            JSONB,
-
-    joined_at                 TIMESTAMPTZ  DEFAULT now(),
-
-    -- Extension / custom attributes
-    x_data                    JSONB,
-
-    -- System columns
-    created_at                TIMESTAMPTZ  DEFAULT now(),
-    created_by                UUID,
-    updated_at                TIMESTAMPTZ  DEFAULT now(),
-    updated_by                UUID,
-
-    CONSTRAINT uq_affiliates_tenant_code UNIQUE (tenant_id, referral_code)
+  -- phase: Phase-1.5 | Registered affiliate (earns commission on referrals)
+  id                          UUID  PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id                   UUID  NOT NULL REFERENCES tenants(id),
+  user_id                     UUID  NOT NULL REFERENCES users(id),
+  status                      TEXT  NOT NULL DEFAULT 'active',
+  wallet_balance_amount_minor BIGINT,
+  wallet_balance_currency     currency_code,
+  created_at                  timestamptz NOT NULL DEFAULT now(),
+  updated_at                  timestamptz NOT NULL DEFAULT now()
 );
+
+-- Indexes
+CREATE INDEX idx_affiliates_user_id ON affiliates (user_id);
 
 -- Row-Level Security
 ALTER TABLE affiliates ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON affiliates
-    USING (tenant_id = current_setting('app.current_tenant')::uuid);
+  USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-CREATE INDEX idx_affiliates_tenant   ON affiliates (tenant_id);
-CREATE INDEX idx_affiliates_code     ON affiliates (referral_code);
+-- updated_at trigger
+DROP TRIGGER IF EXISTS trg_affiliates_updated ON affiliates;
+CREATE TRIGGER trg_affiliates_updated
+  BEFORE UPDATE ON affiliates
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+COMMENT ON TABLE affiliates                IS 'phase:Phase-1.5';

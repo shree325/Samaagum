@@ -13,7 +13,7 @@ export class RBACService {
     }
 
     async createRole(role: Partial<IRole>): Promise<IRole> {
-        return this.roleRepo.create(role);
+        return this.roleRepo.create(role as IRole);
     }
 
     async assignRole(userId: string, roleId: string, scopeEntityId: string, grantedBy?: string): Promise<IRoleAssignment> {
@@ -21,8 +21,8 @@ export class RBACService {
             user_id: userId,
             role_id: roleId,
             scope_entity_id: scopeEntityId,
-            granted_by_user_id: grantedBy || null
-        });
+            granted_by_user_id: grantedBy || null,
+        } as IRoleAssignment);
     }
 
     async removeRole(userId: string, roleId: string, scopeEntityId: string): Promise<boolean> {

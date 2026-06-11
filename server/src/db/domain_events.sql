@@ -1,60 +1,34 @@
-CREATE TABLE IF NOT EXISTS domain_events (
-    event_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+-- =====================================================================
+-- Samaagum  |  Table: domain_events
+-- Synced from schema_v2.sql  (v2.0 | June 2026)
+-- =====================================================================
 
-    tenant_id           UUID NOT NULL,
-    event_type          TEXT NOT NULL,
-    aggregate_type      TEXT NOT NULL,
-    aggregate_id        UUID NOT NULL,
-    payload             JSONB NOT NULL DEFAULT '{}'::jsonb,
+DROP TABLE IF EXISTS domain_events CASCADE;
 
-    occurred_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    published_at        TIMESTAMPTZ NULL,
-
-    created_by_user_id  UUID NULL,
-    updated_by_user_id  UUID NULL,
-
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT chk_domain_events_event_type_not_blank
-        CHECK (btrim(event_type) <> ''),
-
-    CONSTRAINT chk_domain_events_aggregate_type_not_blank
-        CHECK (btrim(aggregate_type) <> ''),
-
-    CONSTRAINT fk_domain_events_tenant
-        FOREIGN KEY (tenant_id)
-        REFERENCES tenants(tenant_id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT fk_domain_events_created_by
-        FOREIGN KEY (created_by_user_id)
-        REFERENCES users(user_id)
-        ON DELETE SET NULL,
-
-    CONSTRAINT fk_domain_events_updated_by
-        FOREIGN KEY (updated_by_user_id)
-        REFERENCES users(user_id)
-        ON DELETE SET NULL
+CREATE TABLE domain_events (
+  -- phase: MVP-0 | Outbox / event sourcing record for domain events
+  id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id       UUID        NOT NULL REFERENCES tenants(id),
+  event_type      TEXT        NOT NULL,
+  schema_version  INT         NOT NULL DEFAULT 1,
+  aggregate_type  TEXT        NOT NULL,
+  aggregate_id    UUID        NOT NULL,
+  actor_user_id   UUID,
+  correlation_id  UUID,
+  causation_id    UUID,
+  payload         JSONB       NOT NULL DEFAULT '{}',
+  occurred_at     timestamptz NOT NULL DEFAULT now(),
+  published_at    timestamptz
 );
 
-CREATE INDEX IF NOT EXISTS idx_domain_events_tenant_id
-    ON domain_events(tenant_id);
+-- Indexes
+CREATE INDEX idx_domain_events_aggregate_id ON domain_events (aggregate_id);
+CREATE INDEX idx_domain_events_published_at ON domain_events (published_at);
+CREATE INDEX idx_domain_events_tenant_id ON domain_events (tenant_id);
 
-CREATE INDEX IF NOT EXISTS idx_domain_events_event_type
-    ON domain_events(event_type);
+-- Row-Level Security
+ALTER TABLE domain_events ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON domain_events
+  USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-CREATE INDEX IF NOT EXISTS idx_domain_events_aggregate
-    ON domain_events(aggregate_type, aggregate_id);
-
-CREATE INDEX IF NOT EXISTS idx_domain_events_occurred_at
-    ON domain_events(occurred_at);
-
-CREATE INDEX IF NOT EXISTS idx_domain_events_published_at
-    ON domain_events(published_at);
-
-DROP TRIGGER IF EXISTS trg_domain_events_audit ON domain_events;
-CREATE TRIGGER trg_domain_events_audit
-BEFORE INSERT OR UPDATE ON domain_events
-FOR EACH ROW
-EXECUTE FUNCTION fn_set_audit_fields();
+COMMENT ON TABLE domain_events             IS 'phase:MVP-0';

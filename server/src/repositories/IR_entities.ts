@@ -1,20 +1,21 @@
-import { IBaseRepository } from "./IBaseRepository";
-
 export interface IEntity {
-    entity_id?: string;
-    tenant_id: string;
-    parent_entity_id?: string | null;
-    entity_type: 'org' | 'community' | 'sub_community' | 'group';
-    name: string;
-    status: 'active' | 'inactive' | 'archived';
-    visibility: 'public' | 'private' | 'restricted';
-    metadata?: any;
-    created_at?: Date;
-    updated_at?: Date;
+  id?: string;
+  tenant_id: string;
+  entity_type: string;
+  parent_entity_id?: string | null;
+  user_id?: string | null;
+  status?: string;
+  visibility?: string;
+  created_at?: Date;
+  updated_at?: Date;
 }
 
-export interface IR_entities extends IBaseRepository<IEntity> {
-    getChildren(parentEntityId: string): Promise<IEntity[]>;
-    findByType(entityType: string): Promise<IEntity[]>;
-    findByTenant(tenantId: string): Promise<IEntity[]>;
+export interface IR_entities {
+  create(entity: IEntity): Promise<IEntity>;
+  getById(id: string): Promise<IEntity | null>;
+  getByTenant(tenantId: string): Promise<IEntity[]>;
+  getByParent(parentEntityId: string): Promise<IEntity[]>;
+  getByType(tenantId: string, entityType: string): Promise<IEntity[]>;
+  update(id: string, entity: Partial<IEntity>): Promise<IEntity | null>;
+  delete(id: string): Promise<boolean>;
 }

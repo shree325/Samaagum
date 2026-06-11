@@ -1,61 +1,18 @@
-CREATE TABLE IF NOT EXISTS profile_requirement_status (
-    status_id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+-- =====================================================================
+-- Samaagum  |  Table: profile_requirement_status
+-- Synced from schema_v2.sql  (v2.0 | June 2026)
+-- =====================================================================
 
-    user_id             UUID NOT NULL,
-    requirement_id      UUID NOT NULL,
+DROP TABLE IF EXISTS profile_requirement_status CASCADE;
 
-    satisfied_at        TIMESTAMPTZ NULL,
-    last_prompted_at     TIMESTAMPTZ NULL,
-    status              profile_requirement_status_enum NOT NULL DEFAULT 'pending',
-
-    created_by_user_id  UUID NULL,
-    updated_by_user_id  UUID NULL,
-    modification_num    INTEGER NOT NULL DEFAULT 1,
-
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT fk_profile_requirement_status_user
-        FOREIGN KEY (user_id)
-        REFERENCES users(user_id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT fk_profile_requirement_status_requirement
-        FOREIGN KEY (requirement_id)
-        REFERENCES profile_requirements(requirement_id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT uq_profile_requirement_status
-        UNIQUE (user_id, requirement_id),
-
-    CONSTRAINT fk_profile_requirement_status_created_by
-        FOREIGN KEY (created_by_user_id)
-        REFERENCES users(user_id)
-        ON DELETE SET NULL,
-
-    CONSTRAINT fk_profile_requirement_status_updated_by
-        FOREIGN KEY (updated_by_user_id)
-        REFERENCES users(user_id)
-        ON DELETE SET NULL
+CREATE TABLE profile_requirement_status (
+  -- phase: MVP-0 | Per-user status of each profile requirement
+  user_id             UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  requirement_id      UUID NOT NULL REFERENCES profile_requirements(id),
+  status              requirement_status NOT NULL DEFAULT 'unsatisfied',
+  satisfied_at        timestamptz,
+  last_prompted_at    timestamptz,
+  PRIMARY KEY (user_id, requirement_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_profile_requirement_status_user_id
-    ON profile_requirement_status(user_id);
-
-CREATE INDEX IF NOT EXISTS idx_profile_requirement_status_requirement_id
-    ON profile_requirement_status(requirement_id);
-
-CREATE INDEX IF NOT EXISTS idx_profile_requirement_status_status
-    ON profile_requirement_status(status);
-
-CREATE INDEX IF NOT EXISTS idx_profile_requirement_status_created_by_user_id
-    ON profile_requirement_status(created_by_user_id);
-
-CREATE INDEX IF NOT EXISTS idx_profile_requirement_status_updated_by_user_id
-    ON profile_requirement_status(updated_by_user_id);
-
-DROP TRIGGER IF EXISTS trg_profile_requirement_status_audit ON profile_requirement_status;
-CREATE TRIGGER trg_profile_requirement_status_audit
-BEFORE INSERT OR UPDATE ON profile_requirement_status
-FOR EACH ROW
-EXECUTE FUNCTION fn_set_audit_fields();
+COMMENT ON TABLE profile_requirement_status IS 'phase:MVP-0';

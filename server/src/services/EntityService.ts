@@ -1,3 +1,4 @@
+import pool from '../config/database';
 import { R_entities } from '../repositories/R_entities';
 import { IEntity } from '../repositories/IR_entities';
 
@@ -5,53 +6,45 @@ export class EntityService {
     private entityRepo: R_entities;
 
     constructor() {
-        this.entityRepo = new R_entities();
+        this.entityRepo = new R_entities(pool);
     }
 
-    async createOrganization(tenantId: string, name: string, metadata?: any): Promise<IEntity> {
+    async createOrganization(tenantId: string, metadata?: any): Promise<IEntity> {
         return this.entityRepo.create({
             tenant_id: tenantId,
             entity_type: 'org',
-            name,
             status: 'active',
             visibility: 'public',
-            metadata: metadata || {}
         });
     }
 
-    async createCommunity(tenantId: string, parentEntityId: string, name: string, metadata?: any): Promise<IEntity> {
+    async createCommunity(tenantId: string, parentEntityId: string): Promise<IEntity> {
         return this.entityRepo.create({
             tenant_id: tenantId,
             parent_entity_id: parentEntityId,
             entity_type: 'community',
-            name,
             status: 'active',
             visibility: 'public',
-            metadata: metadata || {}
         });
     }
 
-    async createSubCommunity(tenantId: string, parentEntityId: string, name: string, metadata?: any): Promise<IEntity> {
+    async createSubCommunity(tenantId: string, parentEntityId: string): Promise<IEntity> {
         return this.entityRepo.create({
             tenant_id: tenantId,
             parent_entity_id: parentEntityId,
             entity_type: 'sub_community',
-            name,
             status: 'active',
             visibility: 'public',
-            metadata: metadata || {}
         });
     }
 
-    async createGroup(tenantId: string, parentEntityId: string, name: string, metadata?: any): Promise<IEntity> {
+    async createGroup(tenantId: string, parentEntityId: string): Promise<IEntity> {
         return this.entityRepo.create({
             tenant_id: tenantId,
             parent_entity_id: parentEntityId,
             entity_type: 'group',
-            name,
             status: 'active',
             visibility: 'private',
-            metadata: metadata || {}
         });
     }
 

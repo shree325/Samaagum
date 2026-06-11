@@ -1,30 +1,25 @@
+-- =====================================================================
+-- Samaagum  |  Table: wishlists
+-- Synced from schema_v2.sql  (v2.0 | June 2026)
+-- =====================================================================
+
 DROP TABLE IF EXISTS wishlists CASCADE;
 
 CREATE TABLE wishlists (
-
-    id                        UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-    tenant_id                 UUID        NOT NULL,
-
-    user_id                   UUID        NOT NULL,
-    event_id                  UUID        NOT NULL,
-
-    alert_opt_in              BOOLEAN      DEFAULT FALSE,
-    source                    VARCHAR(50),
-
-    -- System columns
-    created_at                TIMESTAMPTZ  DEFAULT now(),
-    created_by                UUID,
-    updated_at                TIMESTAMPTZ  DEFAULT now(),
-    updated_by                UUID,
-
-    CONSTRAINT uq_wishlists_user_event UNIQUE (user_id, event_id)
+  -- phase: MVP-0 | User's saved/bookmarked events
+  user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  event_id    UUID        NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  tenant_id   UUID        NOT NULL REFERENCES tenants(id),
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, event_id)
 );
+
+-- Indexes
+CREATE INDEX idx_wishlists_event_id ON wishlists (event_id);
 
 -- Row-Level Security
 ALTER TABLE wishlists ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON wishlists
-    USING (tenant_id = current_setting('app.current_tenant')::uuid);
+  USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-CREATE INDEX idx_wishlists_tenant ON wishlists (tenant_id);
-CREATE INDEX idx_wishlists_user   ON wishlists (user_id);
-CREATE INDEX idx_wishlists_event  ON wishlists (event_id);
+COMMENT ON TABLE wishlists                 IS 'phase:MVP-0';

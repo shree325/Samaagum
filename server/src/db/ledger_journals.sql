@@ -1,39 +1,23 @@
+-- =====================================================================
+-- Samaagum  |  Table: ledger_journals
+-- Synced from schema_v2.sql  (v2.0 | June 2026)
+-- =====================================================================
+
 DROP TABLE IF EXISTS ledger_journals CASCADE;
 
 CREATE TABLE ledger_journals (
-
-    id                        UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-    tenant_id                 UUID        NOT NULL,
-
-    journal_type              VARCHAR(50)  NOT NULL,
-    source_type               VARCHAR(50)  NOT NULL,
-    source_id                 UUID         NOT NULL,
-
-    narration                 TEXT,
-    posted_at                 TIMESTAMPTZ  DEFAULT now(),
-
-    -- Reversal support (immutable journals — corrections via reversal only)
-    reversal_of_journal_id    UUID        REFERENCES ledger_journals(id),
-
-    status                    VARCHAR(20)  DEFAULT 'posted',
-
-    -- Optimistic concurrency
-    modification_num          INTEGER      DEFAULT 0,
-
-    -- System columns
-    created_at                TIMESTAMPTZ  DEFAULT now(),
-    created_by                UUID,
-    updated_at                TIMESTAMPTZ  DEFAULT now(),
-    updated_by                UUID,
-
-    CONSTRAINT chk_journal_status CHECK (status IN ('draft', 'posted', 'reversed'))
+  -- phase: MVP-0 | A set of double-entry ledger lines representing one financial event
+  id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id       UUID        NOT NULL REFERENCES tenants(id),
+  journal_type    TEXT        NOT NULL,
+  source_type     TEXT,
+  source_id       UUID,
+  posted_at       timestamptz NOT NULL DEFAULT now()
 );
 
 -- Row-Level Security
 ALTER TABLE ledger_journals ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON ledger_journals
-    USING (tenant_id = current_setting('app.current_tenant')::uuid);
+  USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-CREATE INDEX idx_ledger_journals_tenant  ON ledger_journals (tenant_id);
-CREATE INDEX idx_ledger_journals_source  ON ledger_journals (source_type, source_id);
-CREATE INDEX idx_ledger_journals_status  ON ledger_journals (status);
+COMMENT ON TABLE ledger_journals           IS 'phase:MVP-0';

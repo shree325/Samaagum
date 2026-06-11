@@ -1,30 +1,25 @@
+-- =====================================================================
+-- Samaagum  |  Table: follows
+-- Synced from schema_v2.sql  (v2.0 | June 2026)
+-- =====================================================================
+
 DROP TABLE IF EXISTS follows CASCADE;
 
 CREATE TABLE follows (
-
-    id                        UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-    tenant_id                 UUID        NOT NULL,
-
-    user_id                   UUID        NOT NULL,
-    entity_id                 UUID        NOT NULL,
-
-    follow_state              VARCHAR(50)  DEFAULT 'active',
-    muted                     BOOLEAN      DEFAULT FALSE,
-
-    -- System columns
-    created_at                TIMESTAMPTZ  DEFAULT now(),
-    created_by                UUID,
-    updated_at                TIMESTAMPTZ  DEFAULT now(),
-    updated_by                UUID,
-
-    CONSTRAINT uq_follows_user_entity UNIQUE (user_id, entity_id)
+  -- phase: MVP-1 | User follows an entity (community, org, person)
+  user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  entity_id   UUID        NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  tenant_id   UUID        NOT NULL REFERENCES tenants(id),
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, entity_id)
 );
+
+-- Indexes
+CREATE INDEX idx_follows_entity_id ON follows (entity_id);
 
 -- Row-Level Security
 ALTER TABLE follows ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON follows
-    USING (tenant_id = current_setting('app.current_tenant')::uuid);
+  USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-CREATE INDEX idx_follows_tenant   ON follows (tenant_id);
-CREATE INDEX idx_follows_user     ON follows (user_id);
-CREATE INDEX idx_follows_entity   ON follows (entity_id);
+COMMENT ON TABLE follows                   IS 'phase:MVP-1';

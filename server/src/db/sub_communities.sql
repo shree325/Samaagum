@@ -3,10 +3,13 @@ DROP TABLE IF EXISTS sub_communities CASCADE;
 CREATE TABLE sub_communities (
 
     id                        UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-    tenant_id                 UUID        NOT NULL,
+    -- tenant_id: References tenants(row_id) to isolate data by tenant.
+    tenant_id                 UUID        NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
 
-    entity_id                 UUID        NOT NULL UNIQUE,
-    community_entity_id       UUID        NOT NULL,
+    -- entity_id: Links to the base entity table in the registry.
+    entity_id                 UUID        NOT NULL UNIQUE REFERENCES entities(row_id) ON DELETE CASCADE,
+    -- community_entity_id: References the parent community entity.
+    community_entity_id       UUID        NOT NULL REFERENCES entities(row_id) ON DELETE CASCADE,
 
     name                      VARCHAR(255) NOT NULL,
     slug                      VARCHAR(255) NOT NULL,

@@ -13,15 +13,15 @@ export class GroupService {
     }
 
     async createGroup(group: Partial<IGroup>): Promise<IGroup> {
-        return this.groupRepo.create(group);
+        return this.groupRepo.create(group as IGroup);
     }
 
-    async joinGroup(groupId: string, userId: string, state: IGroupMembership['state'] = 'pending'): Promise<IGroupMembership> {
+    async joinGroup(groupId: string, userId: string, state: 'active' | 'pending' | 'rejected' | 'left' | 'removed' = 'pending'): Promise<IGroupMembership> {
         return this.membershipRepo.joinGroup({
             group_id: groupId,
             user_id: userId,
-            state
-        });
+            state,
+        } as IGroupMembership);
     }
 
     async leaveGroup(groupId: string, userId: string): Promise<boolean> {

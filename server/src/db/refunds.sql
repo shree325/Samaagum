@@ -1,41 +1,39 @@
+-- =====================================================================
+-- Samaagum  |  Table: refunds
+-- Synced from schema_v2.sql  (v2.0 | June 2026)
+-- =====================================================================
+
 DROP TABLE IF EXISTS refunds CASCADE;
 
 CREATE TABLE refunds (
-
-    id                        UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-    tenant_id                 UUID        NOT NULL,
-
-    payment_id                UUID        NOT NULL,
-    line_item_id              UUID,
-    approved_by               UUID,
-
-    -- Money (multi-currency: minor units + ISO 4217)
-    amount_minor              BIGINT       NOT NULL,
-    currency                  CHAR(3)      NOT NULL,
-
-    mode                      VARCHAR(50)  NOT NULL,
-    status                    VARCHAR(50)  DEFAULT 'pending',
-    is_partial                BOOLEAN      DEFAULT FALSE,
-
-    reason                    TEXT,
-    external_ref              VARCHAR(255),
-
-    requested_at              TIMESTAMPTZ  DEFAULT now(),
-    approved_at               TIMESTAMPTZ,
-    processed_at              TIMESTAMPTZ,
-
-    -- System columns
-    created_at                TIMESTAMPTZ  DEFAULT now(),
-    created_by                UUID,
-    updated_at                TIMESTAMPTZ  DEFAULT now(),
-    updated_by                UUID
+  -- phase: MVP-0 | Refund request and tracking for a payment
+  id                    UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id             UUID          NOT NULL REFERENCES tenants(id),
+  payment_id            UUID          NOT NULL REFERENCES payments(id),
+  line_item_id          UUID          REFERENCES booking_line_items(id),
+  amount_amount_minor   BIGINT,
+  amount_currency       currency_code,
+  mode                  refund_mode   NOT NULL DEFAULT 'gateway',
+  status                refund_status NOT NULL DEFAULT 'requested',
+  reason                TEXT,
+  maker_user_id         UUID          REFERENCES users(id),
+  checker_user_id       UUID          REFERENCES users(id),
+  created_at            timestamptz   NOT NULL DEFAULT now(),
+  updated_at            timestamptz   NOT NULL DEFAULT now()
 );
+
+-- Indexes
+CREATE INDEX idx_refunds_payment_id ON refunds (payment_id);
 
 -- Row-Level Security
 ALTER TABLE refunds ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON refunds
-    USING (tenant_id = current_setting('app.current_tenant')::uuid);
+  USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-CREATE INDEX idx_refunds_tenant    ON refunds (tenant_id);
-CREATE INDEX idx_refunds_payment   ON refunds (payment_id);
-CREATE INDEX idx_refunds_status    ON refunds (status);
+-- updated_at trigger
+DROP TRIGGER IF EXISTS trg_refunds_updated ON refunds;
+CREATE TRIGGER trg_refunds_updated
+  BEFORE UPDATE ON refunds
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+COMMENT ON TABLE refunds                   IS 'phase:MVP-0';

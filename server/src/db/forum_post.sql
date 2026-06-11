@@ -1,73 +1,37 @@
-CREATE TABLE IF NOT EXISTS forum_posts (
-    post_id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+-- =====================================================================
+-- Samaagum  |  Table: forum_posts
+-- Synced from schema_v2.sql  (v2.0 | June 2026)
+-- =====================================================================
 
-    author_user_id       UUID NOT NULL,
-    scope_type           forum_scope_type_enum NOT NULL,
-    scope_id             UUID NULL,
+DROP TABLE IF EXISTS forum_posts CASCADE;
 
-    title                TEXT NOT NULL,
-    body                 TEXT NOT NULL,
-    pinned               BOOLEAN NOT NULL DEFAULT FALSE,
-    status               forum_post_status_enum NOT NULL DEFAULT 'draft',
-
-    created_by_user_id   UUID NULL,
-    updated_by_user_id   UUID NULL,
-    modification_num     INTEGER NOT NULL DEFAULT 1,
-
-    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-    CONSTRAINT fk_forum_posts_author
-        FOREIGN KEY (author_user_id)
-        REFERENCES users(user_id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT fk_forum_posts_created_by
-        FOREIGN KEY (created_by_user_id)
-        REFERENCES users(user_id)
-        ON DELETE SET NULL,
-
-    CONSTRAINT fk_forum_posts_updated_by
-        FOREIGN KEY (updated_by_user_id)
-        REFERENCES users(user_id)
-        ON DELETE SET NULL,
-
-    CONSTRAINT chk_forum_posts_title_not_blank
-        CHECK (btrim(title) <> ''),
-
-    CONSTRAINT chk_forum_posts_body_not_blank
-        CHECK (btrim(body) <> '')
+CREATE TABLE forum_posts (
+  -- phase: MVP-0 | Discussion post scoped to a community/event/group
+  id              UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id       UUID            NOT NULL REFERENCES tenants(id),
+  scope_type      TEXT            NOT NULL,
+  scope_id        UUID            NOT NULL,
+  author_user_id  UUID            NOT NULL REFERENCES users(id),
+  title           TEXT,
+  body            TEXT,
+  pinned          BOOLEAN         NOT NULL DEFAULT false,
+  status          content_status  NOT NULL DEFAULT 'active',
+  created_at      timestamptz     NOT NULL DEFAULT now(),
+  updated_at      timestamptz     NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_forum_posts_author_user_id
-    ON forum_posts(author_user_id);
+-- Indexes
+CREATE INDEX idx_forum_posts_scope_id ON forum_posts (scope_id);
 
-CREATE INDEX IF NOT EXISTS idx_forum_posts_scope
-    ON forum_posts(scope_type, scope_id);
+-- Row-Level Security
+ALTER TABLE forum_posts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON forum_posts
+  USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
 
-CREATE INDEX IF NOT EXISTS idx_forum_posts_status
-    ON forum_posts(status);
+-- updated_at trigger
+DROP TRIGGER IF EXISTS trg_forum_posts_updated ON forum_posts;
+CREATE TRIGGER trg_forum_posts_updated
+  BEFORE UPDATE ON forum_posts
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-CREATE INDEX IF NOT EXISTS idx_forum_posts_pinned
-    ON forum_posts(pinned);
-
-CREATE INDEX IF NOT EXISTS idx_forum_posts_created_at
-    ON forum_posts(created_at);
-
-CREATE INDEX IF NOT EXISTS idx_forum_posts_created_by_user_id
-    ON forum_posts(created_by_user_id);
-
-CREATE INDEX IF NOT EXISTS idx_forum_posts_updated_by_user_id
-    ON forum_posts(updated_by_user_id);
-
-DROP TRIGGER IF EXISTS trg_forum_posts_audit ON forum_posts;
-CREATE TRIGGER trg_forum_posts_audit
-BEFORE INSERT OR UPDATE ON forum_posts
-FOR EACH ROW
-EXECUTE FUNCTION fn_set_audit_fields();
-
-DROP TRIGGER IF EXISTS trg_forum_posts_scope ON forum_posts;
-CREATE TRIGGER trg_forum_posts_scope
-BEFORE INSERT OR UPDATE ON forum_posts
-FOR EACH ROW
-EXECUTE FUNCTION fn_validate_forum_scope();
+COMMENT ON TABLE forum_posts               IS 'phase:MVP-0';
