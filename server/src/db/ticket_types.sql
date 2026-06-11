@@ -36,6 +36,9 @@ CREATE TABLE ticket_types (
     -- Forward-compatible membership rule
     membership_tier_id         UUID,
 
+    -- Eligibility rules (e.g. age range, membership tier, invite-only)
+    eligibility                JSONB NULL,
+
     -- Optimistic concurrency
     modification_num           INTEGER      DEFAULT 0,
 

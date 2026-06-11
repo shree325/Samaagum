@@ -6,13 +6,14 @@ export class R_sponsors implements IR_sponsors {
 
   async create(s: ISponsor): Promise<ISponsor> {
     const query = `
-      INSERT INTO sponsors (bu_id, name, logo_url, website_url, contact_email, x_data, created_by, last_upd_by)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      INSERT INTO sponsors (bu_id, entity_id, name, logo_url, website_url, contact_email, x_data, created_by, last_upd_by)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *;
     `;
     const values = [
-      s.bu_id, s.name, s.logo_url || null, s.website_url || null, s.contact_email || null,
-      s.x_data ? JSON.stringify(s.x_data) : null, s.created_by || null, s.last_upd_by || null
+      s.bu_id, s.entity_id || null, s.name, s.logo_url || null, s.website_url || null,
+      s.contact_email || null, s.x_data ? JSON.stringify(s.x_data) : null,
+      s.created_by || null, s.last_upd_by || null
     ];
     const { rows } = await this.db.query(query, values);
     return rows[0];

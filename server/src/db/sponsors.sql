@@ -5,6 +5,8 @@ CREATE TABLE sponsors (
     row_id                    UUID         DEFAULT gen_random_uuid() PRIMARY KEY,
     -- bu_id: Business Unit ID (used to isolate data by tenant/organization, matches multi-tenancy requirements).
     bu_id                     UUID         NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+    -- entity_id: Links sponsor to platform entity for role assignments and entity-level features.
+    entity_id                 UUID         NULL REFERENCES entities(entity_id) ON DELETE SET NULL,
 
     name                      VARCHAR(255) NOT NULL,
     logo_url                  TEXT,

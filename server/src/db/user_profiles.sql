@@ -10,6 +10,9 @@ CREATE TABLE IF NOT EXISTS profiles (
     template_key        TEXT NULL DEFAULT 'default',
     website             TEXT NULL,
 
+    location_lat        DOUBLE PRECISION NULL,
+    location_lng        DOUBLE PRECISION NULL,
+
     created_by_user_id  UUID NULL,
     updated_by_user_id  UUID NULL,
 

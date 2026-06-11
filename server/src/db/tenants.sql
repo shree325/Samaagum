@@ -5,6 +5,9 @@ CREATE TABLE IF NOT EXISTS tenants (
     name                VARCHAR(150) NOT NULL,
     status              entity_status_enum NOT NULL DEFAULT 'active',
 
+    default_currency    CHAR(3) NOT NULL DEFAULT 'INR',
+    default_locale      VARCHAR(10) NOT NULL DEFAULT 'en',
+
     created_by_user_id  UUID NULL,
     updated_by_user_id  UUID NULL,
 

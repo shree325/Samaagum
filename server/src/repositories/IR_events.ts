@@ -38,6 +38,8 @@ export interface IEvent {
   registration_close_at?: Date | null;
 
   metadata?: Record<string, unknown>;
+  cash_enabled?: boolean;
+  financial_locked_at?: Date | null;
   modification_num?: number;
 
   created_by_user_id?: string | null;

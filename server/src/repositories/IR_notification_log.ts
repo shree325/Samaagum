@@ -1,22 +1,30 @@
+import { IBaseRepository } from './IBaseRepository';
+
 export interface INotificationLog {
-  row_id?: string;
-  bu_id: string;
+  notification_id?: string;
+  tenant_id?: string | null;
   user_id: string;
 
-  notification_type: string;
-  channel: string;
-  status?: string;
-  sent_at?: Date;
+  channel: 'email' | 'sms' | 'push' | 'in_app';
+  template_key: string;
+  status?: 'queued' | 'sent' | 'failed' | 'retry';
+  provider_refs?: Record<string, unknown>;
+  sent_at?: Date | null;
 
-  created?: Date;
-  db_last_upd?: Date;
-  db_last_upd_src?: string;
+  subject?: string | null;
+  body?: string | null;
+  metadata?: Record<string, unknown>;
+
+  created_by_user_id?: string | null;
+  updated_by_user_id?: string | null;
+  modification_num?: number;
+
+  created_at?: Date;
+  updated_at?: Date;
 }
 
-export interface IR_notification_log {
-  create(log: INotificationLog): Promise<INotificationLog>;
-  getById(rowId: string): Promise<INotificationLog | null>;
-  getByUserId(userId: string): Promise<INotificationLog[]>;
-  getAll(buId: string): Promise<INotificationLog[]>;
-  delete(rowId: string): Promise<boolean>;
+export interface IR_notification_log extends IBaseRepository<INotificationLog> {
+  findByUserId(userId: string): Promise<INotificationLog[]>;
+  findByChannel(channel: string): Promise<INotificationLog[]>;
+  findPending(tenantId: string): Promise<INotificationLog[]>;
 }

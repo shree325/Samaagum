@@ -7,32 +7,38 @@ export class R_bookings
     implements IR_bookings {
 
     constructor() {
-        super("bookings", "booking_id");
+        super("bookings", "id");
     }
 
     async findByUserId(userId: string): Promise<IBooking[]> {
-
-        const query = `
-            SELECT *
-            FROM bookings
-            WHERE booker_user_id = $1
-        `;
-
-        const result = await pool.query(query, [userId]);
-
-        return result.rows;
+        const { rows } = await pool.query(
+            `SELECT * FROM bookings WHERE booker_user_id = $1 ORDER BY created_at DESC`,
+            [userId]
+        );
+        return rows;
     }
 
     async findByEventId(eventId: string): Promise<IBooking[]> {
+        const { rows } = await pool.query(
+            `SELECT * FROM bookings WHERE event_id = $1 ORDER BY created_at DESC`,
+            [eventId]
+        );
+        return rows;
+    }
 
-        const query = `
-            SELECT *
-            FROM bookings
-            WHERE event_id = $1
-        `;
+    async findByReference(bookingReference: string): Promise<IBooking | null> {
+        const { rows } = await pool.query(
+            `SELECT * FROM bookings WHERE booking_reference = $1`,
+            [bookingReference]
+        );
+        return rows[0] || null;
+    }
 
-        const result = await pool.query(query, [eventId]);
-
-        return result.rows;
+    async findByTenant(tenantId: string): Promise<IBooking[]> {
+        const { rows } = await pool.query(
+            `SELECT * FROM bookings WHERE tenant_id = $1 ORDER BY created_at DESC`,
+            [tenantId]
+        );
+        return rows;
     }
 }

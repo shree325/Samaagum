@@ -1,54 +1,41 @@
-import { Pool } from "pg";
-import { IAuditLog, IR_audit_log } from "./IR_audit_log";
+import { PostgresBaseRepository } from './PostgresBaseRepository';
+import { IAuditLog, IR_audit_log } from './IR_audit_log';
+import pool from '../config/database';
 
-export class R_audit_log implements IR_audit_log {
-  constructor(private db: Pool) {}
-
-  async create(l: IAuditLog): Promise<IAuditLog> {
-    const query = `
-      INSERT INTO audit_log (bu_id, actor_id, action, resource_type, resource_id, metadata)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING *;
-    `;
-    const values = [
-      l.bu_id, l.actor_id, l.action, l.resource_type, l.resource_id,
-      l.metadata ? JSON.stringify(l.metadata) : null
-    ];
-    const { rows } = await this.db.query(query, values);
-    return rows[0];
+export class R_audit_log extends PostgresBaseRepository<IAuditLog> implements IR_audit_log {
+  constructor() {
+    super('audit_log', 'audit_id');
   }
 
-  async getById(rowId: string): Promise<IAuditLog | null> {
-    const { rows } = await this.db.query(`SELECT * FROM audit_log WHERE row_id = $1`, [rowId]);
-    return rows[0] || null;
-  }
-
-  async getByActor(actorId: string): Promise<IAuditLog[]> {
-    const { rows } = await this.db.query(
-      `SELECT * FROM audit_log WHERE actor_id = $1 ORDER BY created DESC`,
-      [actorId]
+  async findByActor(actorUserId: string): Promise<IAuditLog[]> {
+    const { rows } = await pool.query(
+      `SELECT * FROM audit_log WHERE actor_user_id = $1 ORDER BY created_at DESC`,
+      [actorUserId]
     );
     return rows;
   }
 
-  async getByResource(resourceType: string, resourceId: string): Promise<IAuditLog[]> {
-    const { rows } = await this.db.query(
-      `SELECT * FROM audit_log WHERE resource_type = $1 AND resource_id = $2 ORDER BY created DESC`,
-      [resourceType, resourceId]
+  async findByTargetTable(targetTable: string): Promise<IAuditLog[]> {
+    const { rows } = await pool.query(
+      `SELECT * FROM audit_log WHERE target_table = $1 ORDER BY created_at DESC`,
+      [targetTable]
     );
     return rows;
   }
 
-  async getAll(buId: string): Promise<IAuditLog[]> {
-    const { rows } = await this.db.query(
-      `SELECT * FROM audit_log WHERE bu_id = $1 ORDER BY created DESC`,
-      [buId]
+  async findByTargetEntity(targetEntityId: string): Promise<IAuditLog[]> {
+    const { rows } = await pool.query(
+      `SELECT * FROM audit_log WHERE target_entity_id = $1 ORDER BY created_at DESC`,
+      [targetEntityId]
     );
     return rows;
   }
 
-  async delete(rowId: string): Promise<boolean> {
-    const result = await this.db.query(`DELETE FROM audit_log WHERE row_id = $1`, [rowId]);
-    return (result.rowCount ?? 0) > 0;
+  async findByTenant(tenantId: string): Promise<IAuditLog[]> {
+    const { rows } = await pool.query(
+      `SELECT * FROM audit_log WHERE tenant_id = $1 ORDER BY created_at DESC`,
+      [tenantId]
+    );
+    return rows;
   }
 }

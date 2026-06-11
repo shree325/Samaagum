@@ -10,6 +10,8 @@ export interface IProfile {
   cover_asset_id?: string | null;
   template_key?: string | null;
   website?: string | null;
+  location_lat?: number | null;
+  location_lng?: number | null;
   created_at?: Date;
   updated_at?: Date;
 }

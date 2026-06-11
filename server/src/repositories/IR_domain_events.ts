@@ -1,23 +1,26 @@
-export interface IDomainEvent {
-  row_id?: string;
-  bu_id: string;
+import { IBaseRepository } from './IBaseRepository';
 
+export interface IDomainEvent {
+  event_id?: string;
+  tenant_id: string;
+
+  event_type: string;
   aggregate_type: string;
   aggregate_id: string;
-  event_type: string;
   payload: Record<string, unknown>;
-  occurred_at?: Date;
 
-  created?: Date;
-  created_by?: string | null;
-  db_last_upd?: Date;
-  db_last_upd_src?: string;
+  occurred_at?: Date;
+  published_at?: Date | null;
+
+  created_by_user_id?: string | null;
+  updated_by_user_id?: string | null;
+
+  created_at?: Date;
+  updated_at?: Date;
 }
 
-export interface IR_domain_events {
-  create(event: IDomainEvent): Promise<IDomainEvent>;
-  getById(rowId: string): Promise<IDomainEvent | null>;
-  getByAggregate(aggregateType: string, aggregateId: string): Promise<IDomainEvent[]>;
-  getAll(buId: string): Promise<IDomainEvent[]>;
-  delete(rowId: string): Promise<boolean>;
+export interface IR_domain_events extends IBaseRepository<IDomainEvent> {
+  findByAggregate(aggregateType: string, aggregateId: string): Promise<IDomainEvent[]>;
+  findByEventType(eventType: string): Promise<IDomainEvent[]>;
+  findUnpublished(tenantId: string): Promise<IDomainEvent[]>;
 }

@@ -26,6 +26,7 @@ export interface ITicketType {
   status?: string;
 
   membership_tier_id?: string | null;
+  eligibility?: Record<string, unknown> | null;
   modification_num?: number;
 
   created_at?: Date;

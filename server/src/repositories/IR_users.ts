@@ -9,6 +9,12 @@ export interface IUser {
   state?: 'pending' | 'active' | 'suspended' | 'deleted';
   phone_number?: string | null;
   activated_at?: Date | null;
+  email_verified?: boolean;
+  preferred_currency?: string | null;
+  gender?: string | null;
+  dob?: Date | null;
+  profile_completed?: boolean;
+  deleted_at?: Date | null;
   created_by_user_id?: string | null;
   updated_by_user_id?: string | null;
   created_at?: Date;

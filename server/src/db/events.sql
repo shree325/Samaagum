@@ -45,6 +45,10 @@ CREATE TABLE IF NOT EXISTS events (
     -- Extension
     metadata                JSONB NOT NULL DEFAULT '{}'::jsonb,
 
+    -- Financial controls
+    cash_enabled            BOOLEAN NOT NULL DEFAULT FALSE,
+    financial_locked_at     TIMESTAMPTZ NULL,
+
     -- Audit
     created_by_user_id      UUID NULL,
     updated_by_user_id      UUID NULL,

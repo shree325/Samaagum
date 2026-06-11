@@ -5,6 +5,8 @@ export interface ITenant {
   slug: string;
   name: string;
   status?: string;
+  default_currency?: string;
+  default_locale?: string;
   created_by_user_id?: string | null;
   updated_by_user_id?: string | null;
   created_at?: Date;

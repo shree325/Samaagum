@@ -1,6 +1,7 @@
 export interface ISponsor {
   row_id?: string;
   bu_id: string;
+  entity_id?: string | null;
 
   name: string;
   logo_url?: string | null;

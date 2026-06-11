@@ -1,29 +1,29 @@
+import { IBaseRepository } from './IBaseRepository';
+
 export interface IMediaAsset {
-  row_id?: string;
-  bu_id: string;
+  asset_id?: string;
+  tenant_id: string;
+  owner_entity_id: string;
 
-  owner_type: string;
-  owner_id: string;
-  file_url: string;
-  mime_type?: string | null;
-  file_size?: number | null;
-  x_data?: Record<string, unknown> | null;
+  storage_key: string;
+  mime: string;
+  visibility?: 'public' | 'private' | 'restricted';
 
-  created?: Date;
-  created_by?: string | null;
-  last_upd?: Date;
-  last_upd_by?: string | null;
+  file_name?: string | null;
+  size_bytes?: number | null;
+  file_data?: Buffer | null;
+  metadata?: Record<string, unknown>;
+
+  created_by_user_id?: string | null;
+  updated_by_user_id?: string | null;
   modification_num?: number;
-  conflict_id?: string;
-  db_last_upd?: Date;
-  db_last_upd_src?: string;
+
+  created_at?: Date;
+  updated_at?: Date;
 }
 
-export interface IR_media_assets {
-  create(asset: IMediaAsset): Promise<IMediaAsset>;
-  getById(rowId: string): Promise<IMediaAsset | null>;
-  getByOwner(ownerType: string, ownerId: string): Promise<IMediaAsset[]>;
-  getAll(buId: string): Promise<IMediaAsset[]>;
-  update(rowId: string, asset: Partial<IMediaAsset>): Promise<IMediaAsset | null>;
-  delete(rowId: string): Promise<boolean>;
+export interface IR_media_assets extends IBaseRepository<IMediaAsset> {
+  findByOwnerEntity(ownerEntityId: string): Promise<IMediaAsset[]>;
+  findByStorageKey(storageKey: string): Promise<IMediaAsset | null>;
+  findByTenant(tenantId: string): Promise<IMediaAsset[]>;
 }

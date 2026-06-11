@@ -11,11 +11,11 @@ export class R_ticket_types implements IR_ticket_types {
         price_minor, currency, capacity, quantity_sold, max_per_booking,
         sale_start_at, sale_end_at, early_bird_price_minor, early_bird_ends_at,
         visibility, sort_order, is_active, status,
-        membership_tier_id, modification_num, created_by, updated_by
+        membership_tier_id, eligibility, modification_num, created_by, updated_by
       )
       VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-        $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21
+        $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22
       )
       RETURNING *;
     `;
@@ -25,7 +25,9 @@ export class R_ticket_types implements IR_ticket_types {
       tt.max_per_booking, tt.sale_start_at, tt.sale_end_at,
       tt.early_bird_price_minor, tt.early_bird_ends_at,
       tt.visibility, tt.sort_order, tt.is_active, tt.status,
-      tt.membership_tier_id, tt.modification_num ?? 0,
+      tt.membership_tier_id,
+      tt.eligibility ? JSON.stringify(tt.eligibility) : null,
+      tt.modification_num ?? 0,
       tt.created_by, tt.updated_by,
     ];
     const result = await this.db.query(query, values);

@@ -11,6 +11,14 @@ CREATE TABLE IF NOT EXISTS users (
     activated_at        TIMESTAMPTZ NULL,
 
     phone_number        TEXT NULL,
+
+    email_verified      BOOLEAN NOT NULL DEFAULT FALSE,
+    preferred_currency  CHAR(3) NULL DEFAULT 'INR',
+    gender              VARCHAR(50) NULL,
+    dob                 DATE NULL,
+    profile_completed   BOOLEAN NOT NULL DEFAULT FALSE,
+    deleted_at          TIMESTAMPTZ NULL,
+
     created_by_user_id  UUID NULL,
     updated_by_user_id  UUID NULL,
 
