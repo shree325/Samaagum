@@ -7,6 +7,10 @@ CREATE TABLE IF NOT EXISTS auth_identities (
     provider_email      TEXT NULL,
     password_hash       TEXT NULL,
 
+    created_by_user_id  UUID NULL,
+    updated_by_user_id  UUID NULL,
+    modification_num    INTEGER NOT NULL DEFAULT 1,
+
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 

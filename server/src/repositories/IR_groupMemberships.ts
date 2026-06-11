@@ -1,7 +1,7 @@
 import { IBaseRepository } from "./IBaseRepository";
 
 export interface IGroupMembership {
-    membership_id?: string;
+    id?: string;
     group_id: string;
     user_id: string;
     state: 'pending' | 'active' | 'rejected' | 'left' | 'removed';

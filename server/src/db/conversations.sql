@@ -7,21 +7,10 @@ CREATE TABLE IF NOT EXISTS conversations (
     type                 conversation_type_enum NOT NULL DEFAULT 'direct',
     status               conversation_status_enum NOT NULL DEFAULT 'active',
 
-    created_by           UUID NULL, -- kept for compatibility with your model; mirrors creator if you use it
-    created_by_user_ref  UUID NULL, -- optional alias if you later want a separate business column
-
-    created_by_user_id_2 UUID NULL, -- not used; ignore in app layer if not needed
-
-    created_by_user_id_audit UUID NULL, -- not used; ignore in app layer if not needed
-
-    created_by_user_id_bypass UUID NULL, -- not used; ignore in app layer if not needed
-
-    created_by_user_id_x UUID NULL, -- not used; ignore in app layer if not needed
-
-    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
     updated_by_user_id   UUID NULL,
     modification_num     INTEGER NOT NULL DEFAULT 1,
+
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     CONSTRAINT fk_conversations_created_by

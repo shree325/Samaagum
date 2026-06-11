@@ -1,10 +1,11 @@
+import { IBaseRepository } from './IBaseRepository';
+
 export interface IEvent {
-  id?: string;
+  event_id?: string;
   tenant_id: string;
 
   hosted_by_entity_id: string;
   parent_event_id?: string | null;
-  event_category_id?: string | null;
   registration_form_id?: string | null;
 
   title: string;
@@ -17,13 +18,12 @@ export interface IEvent {
   ends_at: Date;
   venue_timezone?: string;
 
-  location_type?: string;
+  location_type?: string | null;
   venue?: Record<string, unknown> | null;
   online_link?: string | null;
 
-  banner_asset_id?: string | null;
-  banner_url?: string | null;
   cover_asset_id?: string | null;
+  banner_asset_id?: string | null;
 
   visibility?: string;
   status?: string;
@@ -33,29 +33,21 @@ export interface IEvent {
   registration_mode?: string;
   approval_required?: boolean;
 
-  cash_enabled?: boolean;
-  cash_payment_instructions?: string | null;
-
-  financial_locked_at?: Date | null;
   published_at?: Date | null;
   registration_open_at?: Date | null;
   registration_close_at?: Date | null;
 
-  x_data?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown>;
   modification_num?: number;
 
+  created_by_user_id?: string | null;
+  updated_by_user_id?: string | null;
   created_at?: Date;
-  created_by?: string | null;
   updated_at?: Date;
-  updated_by?: string | null;
 }
 
-export interface IR_events {
-  create(event: IEvent): Promise<IEvent>;
-  getById(id: string): Promise<IEvent | null>;
-  getBySlug(tenantId: string, slug: string): Promise<IEvent | null>;
-  getByHostEntity(entityId: string): Promise<IEvent[]>;
-  getAll(): Promise<IEvent[]>;
-  update(id: string, event: Partial<IEvent>): Promise<IEvent | null>;
-  delete(id: string): Promise<boolean>;
-}
+export interface IR_events extends IBaseRepository<IEvent> {
+  findByHostedEntityId(entityId: string): Promise<IEvent[]>;
+  findBySlug(tenantId: string, slug: string): Promise<IEvent | null>;
+  findUpcoming(tenantId: string): Promise<IEvent[]>;
+}

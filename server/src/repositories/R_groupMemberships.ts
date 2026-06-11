@@ -4,7 +4,7 @@ import { IGroupMembership, IR_groupMemberships } from './IR_groupMemberships';
 
 export class R_groupMemberships extends PostgresBaseRepository<IGroupMembership> implements IR_groupMemberships {
     constructor() {
-        super('group_memberships', 'membership_id');
+        super('group_memberships', 'id');
     }
 
     async joinGroup(membership: IGroupMembership): Promise<IGroupMembership> {

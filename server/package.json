@@ -6,7 +6,9 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "nodemon src/index.ts"
+    "dev": "nodemon src/index.ts",
+    "db:list": "ts-node list-tables.ts",
+    "db:migrate": "ts-node src/db/migrate.ts"
   },
   "keywords": [],
   "author": "",

@@ -432,7 +432,12 @@ CREATE TABLE IF NOT EXISTS groups (
     CONSTRAINT fk_groups_entity
         FOREIGN KEY (entity_id)
         REFERENCES entities(entity_id)
-        ON DELETE CASCADE
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_groups_join_form
+        FOREIGN KEY (join_form_id)
+        REFERENCES forms(form_id)
+        ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_groups_join_mode
@@ -576,6 +581,11 @@ CREATE TABLE IF NOT EXISTS group_memberships (
     CONSTRAINT fk_group_memberships_accepted_by
         FOREIGN KEY (accepted_by_user_id)
         REFERENCES users(user_id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT fk_group_memberships_form_response
+        FOREIGN KEY (form_response_id)
+        REFERENCES form_responses(response_id)
         ON DELETE SET NULL,
 
     CONSTRAINT uq_group_memberships

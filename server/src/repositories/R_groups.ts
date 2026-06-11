@@ -7,14 +7,14 @@ export class R_groups extends PostgresBaseRepository<IGroup> implements IR_group
         super('groups', 'entity_id');
     }
 
-    async findBySlug(slug: string): Promise<IGroup | null> {
-        const query = `SELECT * FROM groups WHERE slug = $1 LIMIT 1`;
-        const { rows } = await pool.query(query, [slug]);
-        return rows[0] || null;
+    async findByJoinMode(joinMode: 'open' | 'approval_required' | 'invite_only'): Promise<IGroup[]> {
+        const query = `SELECT * FROM groups WHERE join_mode = $1`;
+        const { rows } = await pool.query(query, [joinMode]);
+        return rows;
     }
 
-    async getPublicGroups(): Promise<IGroup[]> {
-        const query = `SELECT * FROM groups WHERE scope = 'public' AND listed = true`;
+    async getListedGroups(): Promise<IGroup[]> {
+        const query = `SELECT * FROM groups WHERE listed = true`;
         const { rows } = await pool.query(query);
         return rows;
     }

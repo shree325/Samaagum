@@ -4,9 +4,9 @@ CREATE TABLE marketplace_listings (
     -- row_id: Primary key of the table (matches Siebel/CRM unique record identifier design).
     row_id                    UUID         DEFAULT gen_random_uuid() PRIMARY KEY,
     -- bu_id: Business Unit ID (used to isolate data by tenant/organization, matches multi-tenancy requirements).
-    bu_id                     UUID         NOT NULL REFERENCES tenants(row_id) ON DELETE CASCADE,
+    bu_id                     UUID         NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     -- par_row_id: Parent Row ID (links this listing directly to the entity that is selling the item/vendor service).
-    par_row_id                UUID         NOT NULL REFERENCES entities(row_id) ON DELETE CASCADE, 
+    par_row_id                UUID         NOT NULL REFERENCES entities(entity_id) ON DELETE CASCADE, 
 
     title                     VARCHAR(255) NOT NULL,
     description               TEXT,

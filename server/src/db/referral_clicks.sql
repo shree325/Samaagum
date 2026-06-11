@@ -4,7 +4,7 @@ CREATE TABLE referral_clicks (
     -- row_id: Primary key of the table (matches Siebel/CRM unique record identifier design).
     row_id                    UUID         DEFAULT gen_random_uuid() PRIMARY KEY,
     -- bu_id: Business Unit ID (used to isolate data by tenant/organization, matches multi-tenancy requirements).
-    bu_id                     UUID         NOT NULL REFERENCES tenants(row_id) ON DELETE CASCADE,
+    bu_id                     UUID         NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     -- par_row_id: Parent Row ID (links this click event directly to its parent referral link).
     par_row_id                UUID         NOT NULL REFERENCES referral_links(id) ON DELETE CASCADE, 
 
