@@ -25,6 +25,14 @@ const Icons = {
 };
 
 // --- INITIAL MOCK DATA ---
+const INITIAL_USERS = [
+  { id: "usr-1", name: "Aanya Reddy", email: "aanya@samaagum.co", role: "Super Admin", status: "Active", joined: "1 month ago" },
+  { id: "usr-2", name: "Dev Kapoor", email: "dev@samaagum.co", role: "Platform Admin", status: "Active", joined: "3 weeks ago" },
+  { id: "usr-3", name: "Mira Shah", email: "mira@gmail.com", role: "Event Host", status: "Active", joined: "2 weeks ago" },
+  { id: "usr-4", name: "Leo Patel", email: "leo@gmail.com", role: "Participant", status: "Active", joined: "1 week ago" },
+  { id: "usr-5", name: "SpamBot99", email: "spambot99@scam.org", role: "Participant", status: "Suspended", joined: "3 days ago" },
+];
+
 const INITIAL_KYC = [
   { id: "kyc-1", name: "Echo Collective", type: "Event Host", email: "echo@collective.in", submitted: "2 hours ago", docName: "Certificate of Incorporation & PAN", docNumber: "AAACE9912A", status: "Pending", notes: "" },
   { id: "kyc-2", name: "Letterform Lab", type: "Event Host", email: "admin@letterform.org", submitted: "1 day ago", docName: "Aadhaar Card & GST Registry", docNumber: "GST-29AAAAA1111A1Z1", status: "Pending", notes: "" },
@@ -104,6 +112,32 @@ function App() {
   const logAction = (actor, action) => {
     const time = new Date().toISOString().replace('T', ' ').substring(0, 19);
     setAuditLogs(prev => [{ time, actor, action }, ...prev]);
+  };
+
+  const [usersList, setUsersList] = useState(INITIAL_USERS);
+
+  const handleUpdateUser = (id, updates) => {
+    setUsersList(prev => prev.map(u => {
+      if (u.id === id) {
+        const updated = { ...u, ...updates };
+        if (updates.role) {
+          logAction(user?.email || "Admin", `Changed user ${u.name} role to ${updates.role}.`);
+          addToast(`Updated ${u.name}'s role to ${updates.role}.`);
+        }
+        if (updates.status) {
+          logAction(user?.email || "Admin", `${updates.status === "Suspended" ? "Suspended" : "Activated"} user ${u.name}.`);
+          addToast(`User ${u.name} is now ${updates.status.toLowerCase()}.`);
+        }
+        return updated;
+      }
+      return u;
+    }));
+  };
+
+  const handleAddUser = (newUser) => {
+    setUsersList(prev => [newUser, ...prev]);
+    logAction(user?.email || "Admin", `Invited new user ${newUser.name} (${newUser.email}) with role ${newUser.role}.`);
+    addToast(`Successfully invited ${newUser.name}.`);
   };
 
   // Modals state
@@ -354,6 +388,10 @@ function App() {
               <Icons.dashboard /> Dashboard
             </button>
             
+            <button className={`sidebar-item ${activeTab === "users" ? "active" : ""}`} onClick={() => setActiveTab("users")}>
+              <Icons.users /> User Management
+            </button>
+            
             <button className={`sidebar-item ${activeTab === "kyc" ? "active" : ""}`} onClick={() => setActiveTab("kyc")}>
               <Icons.shield /> KYC Verification
               {kycList.filter(k => k.status === "Pending").length > 0 && (
@@ -439,6 +477,14 @@ function App() {
               tenants={tenantsList}
               user={user}
               setActiveTab={setActiveTab}
+            />
+          )}
+
+          {activeTab === "users" && (
+            <UsersView 
+              users={usersList} 
+              onUpdateUser={handleUpdateUser} 
+              onAddUser={handleAddUser} 
             />
           )}
 
@@ -1223,6 +1269,168 @@ function AuditView({ logs }) {
           * End of real-time stream. Awaiting administrative state changes.
         </div>
       </div>
+    </div>
+  );
+}
+
+// User Management View
+function UsersView({ users, onUpdateUser, onAddUser }) {
+  const [search, setSearch] = useState("");
+  const [filterRole, setFilterRole] = useState("All");
+  const [showAddModal, setShowAddModal] = useState(false);
+  
+  // Add User Form States
+  const [newName, setNewName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newRole, setNewRole] = useState("Participant");
+
+  const filtered = users.filter(u => {
+    const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase());
+    const matchRole = filterRole === "All" || u.role === filterRole;
+    return matchSearch && matchRole;
+  });
+
+  const allRoles = ["Participant", "Event Host", "Group Organizer", "Community Admin", "Platform Admin", "Super Admin"];
+
+  const handleAdd = (e) => {
+    e.preventDefault();
+    if (!newName || !newEmail) return;
+    onAddUser({
+      id: "usr-" + Math.floor(1000 + Math.random() * 9000),
+      name: newName,
+      email: newEmail,
+      role: newRole,
+      status: "Active",
+      joined: "Just now"
+    });
+    setNewName("");
+    setNewEmail("");
+    setNewRole("Participant");
+    setShowAddModal(false);
+  };
+
+  return (
+    <div className="data-panel" style={{ padding: "24px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", gap: "16px", flexWrap: "wrap" }}>
+        <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "600" }}>Manage Registered Users</h3>
+        <button className="hbtn hbtn--primary" onClick={() => setShowAddModal(true)} style={{ background: "var(--accent-2)", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "6px", cursor: "pointer", fontWeight: "600", fontSize: "13px" }}>
+          + Invite User
+        </button>
+      </div>
+
+      <div style={{ display: "flex", gap: "12px", marginBottom: "20px", flexWrap: "wrap" }}>
+        <input 
+          type="text" 
+          placeholder="Search by name or email..." 
+          value={search} 
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ flex: 1, minWidth: "200px", padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)", outline: "none" }}
+        />
+        <select 
+          value={filterRole} 
+          onChange={(e) => setFilterRole(e.target.value)}
+          style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)", outline: "none" }}
+        >
+          <option value="All">All Roles</option>
+          {allRoles.map(r => <option key={r} value={r}>{r}</option>)}
+        </select>
+      </div>
+
+      <div className="table-wrapper">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>User Info</th>
+              <th>System Role</th>
+              <th>Status</th>
+              <th>Joined</th>
+              <th style={{ textAlign: "right" }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(u => (
+              <tr key={u.id}>
+                <td>
+                  <div>
+                    <span style={{ fontWeight: "600", display: "block" }}>{u.name}</span>
+                    <span style={{ fontSize: "12px", color: "var(--ink-3)" }}>{u.email}</span>
+                  </div>
+                </td>
+                <td>
+                  <select 
+                    value={u.role} 
+                    onChange={(e) => onUpdateUser(u.id, { role: e.target.value })}
+                    style={{ padding: "4px 8px", borderRadius: "4px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)", fontSize: "12.5px", outline: "none" }}
+                  >
+                    {allRoles.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </td>
+                <td>
+                  <span className={`pill ${u.status === "Active" ? "green" : "red"}`} style={{ padding: "3px 8px", fontSize: "11px", fontWeight: "600", borderRadius: "12px" }}>
+                    {u.status}
+                  </span>
+                </td>
+                <td style={{ fontSize: "13px", color: "var(--ink-3)" }}>{u.joined}</td>
+                <td style={{ textAlign: "right" }}>
+                  <button 
+                    onClick={() => onUpdateUser(u.id, { status: u.status === "Active" ? "Suspended" : "Active" })}
+                    style={{ background: "transparent", border: "none", color: u.status === "Active" ? "#ef4444" : "#10b981", cursor: "pointer", fontSize: "12.5px", fontWeight: "600" }}
+                  >
+                    {u.status === "Active" ? "Suspend" : "Activate"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {showAddModal && (
+        <div className="modal-overlay" style={{ zIndex: 1000 }}>
+          <div className="modal-card" style={{ maxWidth: "450px" }}>
+            <div className="modal-header">
+              <h3>Invite New User</h3>
+              <button onClick={() => setShowAddModal(false)} style={{ background: "transparent", border: "none", color: "var(--ink)", cursor: "pointer" }}><Icons.close /></button>
+            </div>
+            <form onSubmit={handleAdd} className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12.5px", fontWeight: "600" }}>Name</label>
+                <input 
+                  type="text" 
+                  required 
+                  value={newName} 
+                  onChange={(e) => setNewName(e.target.value)} 
+                  style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)" }}
+                />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12.5px", fontWeight: "600" }}>Email Address</label>
+                <input 
+                  type="email" 
+                  required 
+                  value={newEmail} 
+                  onChange={(e) => setNewEmail(e.target.value)} 
+                  style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)" }}
+                />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12.5px", fontWeight: "600" }}>Initial Role</label>
+                <select 
+                  value={newRole} 
+                  onChange={(e) => setNewRole(e.target.value)} 
+                  style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)" }}
+                >
+                  {allRoles.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
+                <button type="button" className="hbtn hbtn--ghost" onClick={() => setShowAddModal(false)} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid var(--border)", background: "transparent", color: "var(--ink)", cursor: "pointer" }}>Cancel</button>
+                <button type="submit" className="hbtn hbtn--primary" style={{ background: "var(--accent-2)", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "6px", cursor: "pointer", fontWeight: "600" }}>Send Invitation</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
