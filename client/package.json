@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "serve -l 8080",
-    "start": "serve -l 8080"
+    "dev": "npx -y kill-port 8080 && serve -l 8080",
+    "start": "npx -y kill-port 8080 && serve -l 8080"
   },
   "dependencies": {
     "serve": "^14.2.4"

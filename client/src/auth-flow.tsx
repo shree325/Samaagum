@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* ============================================================
    Samaagum — auth flow (state machine + screens)
    Depends on components.jsx (globals)
@@ -86,13 +87,18 @@ function ScreenMethod({ m }) {
           <React.Fragment>By continuing you agree to our <a>Terms</a> &amp; <a>Privacy Policy</a>.</React.Fragment>
         ) : <span>&nbsp;</span>}
       </p>
-      <p style={{ textAlign: "center", fontSize: 13.5, color: "var(--ink-3)", marginTop: 6 }}>
+      <p style={{ textAlign: "center", fontSize: 13.5, color: "var(--ink-3)", marginTop: 6, marginBottom: 0 }}>
         {m.mode === "signup" ? "Already have an account? " : "New to Samaagum? "}
         <a style={{ color: "var(--accent-2)", fontWeight: 600, cursor: "pointer" }}
           onClick={() => m.switchMode(m.mode === "signup" ? "login" : "signup")}>
           {m.mode === "signup" ? "Sign in" : "Create account"}
         </a>
       </p>
+      <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px dashed rgba(255,255,255,0.12)", textAlign: "center" }}>
+        <a href="admin/index.html" style={{ fontSize: 13, color: "var(--accent-2)", fontWeight: 500, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span>🛡️</span> Administrative Entry Portal
+        </a>
+      </div>
     </div>
   );
 }

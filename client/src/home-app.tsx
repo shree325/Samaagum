@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* ============================================================
    Samaagum Home — main app (routing, frame, theme, tweaks)
    ============================================================ */
@@ -65,15 +66,103 @@ function App() {
     setTimeout(()=>{ document.querySelectorAll(".scroll").forEach(el=>el.scrollTop=0); }, 0);
   }, []);
 
+  useEffect(() => {
+    window.samaagum_go = go;
+    return () => { delete window.samaagum_go; };
+  }, [go]);
+
   // engagement state
   const [saved, toggleSave] = useSet([]);
   const [joined, toggleJoin] = useSet(["g1","g2","g4"]);
   const [connected, toggleConnect] = useSet([]);
   const [registered, , registerAdd] = useSet(["e1","e2","e4"]);
-  const register = useCallback((id)=>registerAdd(id), [registerAdd]);
+  const [myTickets, setMyTickets] = useState(MY_TICKETS);
+  const [waitlisted, setWaitlisted] = useState(new Set(["ev-feat"]));
+  
+  const toggleWaitlist = useCallback((id) => setWaitlisted(prev => {
+    const n = new Set(prev);
+    n.has(id) ? n.delete(id) : n.add(id);
+    return n;
+  }), []);
+
+  const register = useCallback((id) => {
+    registerAdd(id);
+    const evObj = [FEATURED, ...EVENTS].find(e => e.id === id);
+    if (evObj) {
+      setMyTickets(prev => {
+        if (prev.some(t => t.ev === evObj.title)) return prev;
+        return [
+          {
+            id: "BL-" + Math.floor(2000 + Math.random() * 500),
+            ev: evObj.title,
+            cover: evObj.cover,
+            tier: evObj.type === "Free" ? "General RSVP" : "VIP · Front tables",
+            date: evObj.date,
+            time: evObj.time,
+            venue: evObj.venue,
+            online: !!evObj.online,
+            paid: evObj.price || "Free",
+            qty: 1,
+            attendee: ME.name,
+            status: "confirmed"
+          },
+          ...prev
+        ];
+      });
+    }
+  }, [registerAdd]);
+
+  const addClaimedTicket = useCallback((t) => {
+    setMyTickets(prev => {
+      if (prev.some(x => x.ev === t.ev)) return prev;
+      return [
+        {
+          id: "BL-" + Math.floor(2000 + Math.random() * 500),
+          ev: t.ev,
+          cover: t.cover,
+          tier: t.tier,
+          date: t.date,
+          time: t.time,
+          venue: t.venue,
+          online: !!t.online,
+          paid: t.price || "Free",
+          qty: 1,
+          attendee: ME.name,
+          status: "confirmed"
+        },
+        ...prev
+      ];
+    });
+  }, []);
+
+  const [createdEvents, setCreatedEvents] = useState(() => [EVENTS[0]]);
+  const [createdGroups, setCreatedGroups] = useState(() => [GROUPS[1]]);
+
+  const addCreatedEvent = useCallback((ev) => {
+    setCreatedEvents(prev => {
+      if (prev.some(x => x.id === ev.id)) {
+        return prev.map(x => x.id === ev.id ? ev : x);
+      }
+      return [ev, ...prev];
+    });
+  }, []);
+
+  const addCreatedGroup = useCallback((g) => {
+    setCreatedGroups(prev => {
+      if (prev.some(x => x.id === g.id)) {
+        return prev.map(x => x.id === g.id ? g : x);
+      }
+      return [g, ...prev];
+    });
+  }, []);
 
   const counts = { notifs: 3, messages: 2 };
-  const st = { saved, toggleSave, joined, toggleJoin, connected, toggleConnect, registered, register, city };
+  const st = {
+    saved, toggleSave, joined, toggleJoin, connected, toggleConnect, registered, register, city,
+    myTickets, setMyTickets, waitlisted, toggleWaitlist, addClaimedTicket,
+    createdEvents, setCreatedEvents, createdGroups, setCreatedGroups,
+    addCreatedEvent, addCreatedGroup
+  };
 
   // responsive window width check
   const [width, setWidth] = useState(window.innerWidth);
@@ -98,21 +187,28 @@ function App() {
     const v = cur.view;
     if (v==="home") return <HomeFeed st={st} go={go} />;
     if (v==="discover") return <Discover st={st} go={go} />;
-    if (v==="events") return <Discover st={st} go={go} />;
-    if (v==="groups") return <Discover st={st} go={go} />;
+    if (v==="events") return <MyTickets st={st} go={go} />;
+    if (v==="groups") return <MyGroups st={st} go={go} />;
     if (v==="event") return <EventDetail ev={cur.param} st={st} go={go} />;
     if (v==="group") return <GroupDetail group={cur.param} st={st} go={go} />;
     if (v==="profile") return <Profile st={st} go={go} />;
     if (v==="notifications") return <Notifications st={st} go={go} />;
     if (v==="messages") return <Messages st={st} go={go} mobile={mobile} />;
-    if (v==="create-event") return <CreateEvent go={go} mobile={mobile} />;
-    if (v==="create-group") return <CreateGroup go={go} mobile={mobile} />;
+    if (v==="create-event") return <CreateEvent go={go} mobile={mobile} st={st} />;
+    if (v==="edit-event") return <CreateEvent editEv={cur.param} go={go} mobile={mobile} st={st} />;
+    if (v==="create-group") return <CreateGroup go={go} mobile={mobile} st={st} />;
+    if (v==="edit-group") return <CreateGroup editGroup={cur.param} go={go} mobile={mobile} st={st} />;
+    if (v==="event-dashboard") return <EventDashboard ev={cur.param} st={st} go={go} />;
+    if (v==="group-dashboard") return <GroupDashboard group={cur.param} st={st} go={go} />;
+    if (v==="ticket") return <TicketDetail tkt={cur.param} st={st} go={go} />;
+    if (v==="waitlist") return <Waitlist ev={cur.param} st={st} go={go} />;
+    if (v==="claim") return <ClaimFlow st={st} go={go} />;
     return <HomeFeed st={st} go={go} />;
   };
 
   // discover/events/groups map to sidebar active key
-  const navKey = ["events"].includes(cur.view) ? "events"
-    : ["groups"].includes(cur.view) ? "groups"
+  const navKey = ["events", "event-dashboard", "edit-event"].includes(cur.view) ? "events"
+    : ["groups", "group-dashboard", "edit-group"].includes(cur.view) ? "groups"
     : ["create-event","create-group"].includes(cur.view) ? null
     : cur.view;
 

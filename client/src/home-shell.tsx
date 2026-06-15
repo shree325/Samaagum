@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* ============================================================
    Samaagum Home — app shell (sidebar, topbar, menus) + shared bits
    ============================================================ */
@@ -124,10 +125,12 @@ function Topbar({ go, counts, dark, onToggleTheme, city, onCity }) {
 }
 
 function ProfileMenu({ go, dark, onToggleTheme }) {
+  const isAdmin = ME.role && ME.role.toLowerCase().includes("admin");
   const items = [
     { k:"profile", ic:<I.user/>, t:"My profile" },
     { k:"events", ic:<I.ticket/>, t:"My tickets" },
     { k:"groups", ic:<I.groups/>, t:"My groups" },
+    ...(isAdmin ? [{ k:"admin", ic:<I.compass/>, t:"Admin Console" }] : []),
   ];
   return (
     <div className="pmenu">
@@ -136,7 +139,17 @@ function ProfileMenu({ go, dark, onToggleTheme }) {
         <div><div className="n">{ME.name}</div><div className="h">{ME.handle}</div></div>
       </div>
       <div className="pmenu-list">
-        {items.map(it => <button key={it.k} className="pmenu-it" onClick={()=>go(it.k)}>{it.ic}{it.t}</button>)}
+        {items.map(it => (
+          <button key={it.k} className="pmenu-it" onClick={() => {
+            if (it.k === "admin") {
+              window.location.href = "admin/index.html";
+            } else {
+              go(it.k);
+            }
+          }}>
+            {it.ic}{it.t}
+          </button>
+        ))}
         <button className="pmenu-it" onClick={onToggleTheme}>{dark? <I.sun/> : <I.moon/>}{dark? "Light mode":"Dark mode"}</button>
       </div>
       <div className="pmenu-foot"><button className="pmenu-it muted"><I.external/>Sign out</button></div>

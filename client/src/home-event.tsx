@@ -4,9 +4,11 @@
 
 function EventDetail({ ev, st, go }) {
   const e = ev || FEATURED;
-  const { saved, toggleSave, registered, register, city } = st;
+  const { saved, toggleSave, registered, register, city, waitlisted } = st;
   const isSaved = saved.has(e.id);
   const isReg = registered.has(e.id);
+  const isWaitlisted = waitlisted ? waitlisted.has(e.id) : false;
+  const isSoldOut = e.going >= (e.cap || 9999) || e.id === "ev-feat";
 
   const tiers = e.type === "Free"
     ? [{ id:"rsvp", n:"General RSVP", d:"Free entry · approval-based", p:"Free", free:true }]
@@ -125,14 +127,26 @@ function EventDetail({ ev, st, go }) {
                     </div>
                   </div>
                   {isReg ? (
-                    <button className="hbtn hbtn--ghost hbtn--block" style={{ color:"var(--accent-2)" }}><I.check/>You're registered</button>
+                    <button className="hbtn hbtn--ghost hbtn--block" style={{ color:"var(--accent-2)" }} onClick={() => go("events")}>
+                      <I.check/>You're registered (View Ticket)
+                    </button>
+                  ) : isSoldOut ? (
+                    isWaitlisted ? (
+                      <button className="hbtn hbtn--soft hbtn--block" style={{ color:"var(--accent-2)" }} onClick={() => go("waitlist", e)}>
+                        <I.users/> View Waitlist Status
+                      </button>
+                    ) : (
+                      <button className="hbtn hbtn--primary hbtn--block" onClick={() => { st.toggleWaitlist(e.id); go("waitlist", e); }}>
+                        Join Waitlist
+                      </button>
+                    )
                   ) : (
-                    <button className="hbtn hbtn--primary hbtn--block" onClick={()=>register(e.id)}>
+                    <button className="hbtn hbtn--primary hbtn--block" onClick={() => { register(e.id); go("events"); }}>
                       {e.type==="Free" ? "Request to join" : `Get ${qty>1?qty+" tickets":"ticket"}`}
                     </button>
                   )}
                   <div style={{ display:"flex", alignItems:"center", gap:6, justifyContent:"center", marginTop:11, fontSize:12, color:"var(--ink-3)" }}>
-                    <I.check style={{ width:13, height:13, color:"#1f9d57" }}/> {e.type==="Free"?"Approval-based · free":"Secure checkout · instant ticket"}
+                    <I.check style={{ width:13, height:13, color:"#1f9d57" }}/> {isSoldOut ? "Waitlist claim window: 15 mins" : e.type==="Free"?"Approval-based · free":"Secure checkout · instant ticket"}
                   </div>
                 </div>
               </div>
