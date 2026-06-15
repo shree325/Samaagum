@@ -14,6 +14,10 @@ const Icons = {
   dispute: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
   terminal: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>,
   key: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>,
+  tag: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
+  credit: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>,
+  tag: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
+  credit: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>,
   settings: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
   dashboard: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>,
   tenant: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>,
@@ -316,7 +320,7 @@ function App() {
             <svg width="48" height="48" viewBox="0 0 40 40">
               <defs>
                 <linearGradient id="lg-admin" x1="6" y1="6" x2="34" y2="34" gradientUnits="userSpaceOnUse">
-                  <stop stop-color="var(--accent-1)"/><stop offset="1" stop-color="var(--accent-2)"/>
+                  <stop stopColor="var(--accent-1)"/><stop offset="1" stopColor="var(--accent-2)"/>
                 </linearGradient>
               </defs>
               <circle cx="15" cy="16" r="9.2" fill="url(#lg-admin)" opacity="0.92"/>
@@ -367,6 +371,7 @@ function App() {
 
   // Active role variables
   const isSuperAdmin = user.role === "Super Admin";
+  const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
 
   return (
     <div className="admin-container">
@@ -419,6 +424,14 @@ function App() {
                 <Icons.tenant /> Tenant Provisioning
               </button>
             )}
+
+            <button className={`sidebar-item ${activeTab === "subscriptions" ? "active" : ""}`} onClick={() => setActiveTab("subscriptions")}>
+              <Icons.credit /> Subscription Plans
+            </button>
+
+            <button className={`sidebar-item ${activeTab === "coupons" ? "active" : ""}`} onClick={() => setActiveTab("coupons")}>
+              <Icons.tag /> Coupon Management
+            </button>
 
             <button className={`sidebar-item ${activeTab === "rbac" ? "active" : ""}`} onClick={() => setActiveTab("rbac")}>
               <Icons.key /> RBAC Governance
@@ -520,6 +533,14 @@ function App() {
               featureFlags={featureFlags}
               onToggleFlag={toggleFeatureFlag}
             />
+          )}
+
+          {activeTab === "subscriptions" && (
+            <SubscriptionPlansView user={user} apiBase={apiBase} />
+          )}
+
+          {activeTab === "coupons" && (
+            <CouponsView user={user} apiBase={apiBase} />
           )}
 
           {activeTab === "rbac" && (
@@ -1185,68 +1206,980 @@ function TenantsView({ tenants, newTenant, onFormChange, onCheckboxChange, onSub
   );
 }
 
-// RBAC View
-function RbacView({ matrix, user, onToggle }) {
-  const isSuper = user.role === "Super Admin";
-  const allRoles = ["Participant", "Event Host", "Group Organizer", "Community Admin", "Platform Admin", "Super Admin"];
+// RBAC View (Dynamic PostgreSQL Integration)
+function RbacView({ user }) {
+  const isSuper = user.role === "Super Admin" || user.role === "Platform Admin"; // Let both view; super admin can modify.
+  const isSuperAdmin = user.role === "Super Admin";
+
+  const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+
+  const [activeSubTab, setActiveSubTab] = React.useState("roles");
+  const [roles, setRoles] = React.useState([]);
+  const [responsibilities, setResponsibilities] = React.useState([]);
+  const [positions, setPositions] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState(null);
+
+  // Search filter
+  const [search, setSearch] = React.useState("");
+
+  // Modals & Form States
+  const [modalOpen, setModalOpen] = React.useState(null); // 'role' | 'responsibility' | 'position' | null
+  const [editItem, setEditItem] = React.useState(null); // Item being edited, null for create
+
+  // Form Fields
+  const [roleForm, setRoleForm] = React.useState({
+    name: "",
+    displayName: "",
+    description: "",
+    responsibilities: [],
+    defaultPosition: "",
+    hierarchyLevel: 100,
+    isActive: true,
+    isDefault: false
+  });
+
+  const [respForm, setRespForm] = React.useState({
+    name: "",
+    displayName: "",
+    description: "",
+    category: "dashboard",
+    routePath: "",
+    componentName: "",
+    iconName: "Circle",
+    requiredFeatures: "[]",
+    sortOrder: 0,
+    isActive: true
+  });
+
+  const [posForm, setPosForm] = React.useState({
+    name: "",
+    displayName: "",
+    description: "",
+    hierarchyLevel: 100,
+    dataAccessLevel: "individual",
+    customConditions: "[]",
+    dataAccessLimits: "{}",
+    isActive: true
+  });
+
+  // Load Data
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [rRes, respRes, pRes] = await Promise.all([
+        fetch(apiBase + "/api/admin/rbac/roles").then(res => res.json()),
+        fetch(apiBase + "/api/admin/rbac/responsibilities").then(res => res.json()),
+        fetch(apiBase + "/api/admin/rbac/positions").then(res => res.json())
+      ]);
+
+      if (rRes.success) setRoles(rRes.data.roles || rRes.data);
+      if (respRes.success) setResponsibilities(respRes.data);
+      if (pRes.success) setPositions(pRes.data);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to fetch RBAC configuration from backend API.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    loadData();
+  }, []);
+
+  // API Call Helpers
+  const handleRoleSubmit = async (e) => {
+    e.preventDefault();
+    if (!roleForm.name || !roleForm.displayName) return;
+
+    try {
+      const url = editItem ? `${apiBase}/api/admin/rbac/roles/${editItem.id}` : `${apiBase}/api/admin/rbac/roles`;
+      const method = editItem ? "PUT" : "POST";
+      const payload = {
+        name: roleForm.name,
+        displayName: roleForm.displayName,
+        description: roleForm.description,
+        responsibilities: roleForm.responsibilities,
+        defaultPosition: roleForm.defaultPosition || null,
+        hierarchyLevel: Number(roleForm.hierarchyLevel),
+        isActive: roleForm.isActive,
+        isDefault: roleForm.isDefault
+      };
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to save role");
+
+      setModalOpen(null);
+      loadData();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleRespSubmit = async (e) => {
+    e.preventDefault();
+    if (!respForm.name || !respForm.displayName || !respForm.routePath || !respForm.componentName) return;
+
+    let parsedFeatures = [];
+    try {
+      parsedFeatures = JSON.parse(respForm.requiredFeatures || "[]");
+    } catch {
+      alert("Required Features must be a valid JSON array.");
+      return;
+    }
+
+    try {
+      const url = editItem ? `${apiBase}/api/admin/rbac/responsibilities/${editItem.id}` : `${apiBase}/api/admin/rbac/responsibilities`;
+      const method = editItem ? "PUT" : "POST";
+      const payload = {
+        name: respForm.name,
+        displayName: respForm.displayName,
+        description: respForm.description,
+        category: respForm.category,
+        routePath: respForm.routePath,
+        componentName: respForm.componentName,
+        iconName: respForm.iconName,
+        requiredFeatures: parsedFeatures,
+        sortOrder: Number(respForm.sortOrder),
+        isActive: respForm.isActive
+      };
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to save responsibility");
+
+      setModalOpen(null);
+      loadData();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handlePosSubmit = async (e) => {
+    e.preventDefault();
+    if (!posForm.name || !posForm.displayName) return;
+
+    let parsedConditions = [];
+    let parsedLimits = {};
+    try {
+      parsedConditions = JSON.parse(posForm.customConditions || "[]");
+    } catch {
+      alert("Custom Conditions must be a valid JSON array.");
+      return;
+    }
+    try {
+      parsedLimits = JSON.parse(posForm.dataAccessLimits || "{}");
+    } catch {
+      alert("Data Access Limits must be a valid JSON object.");
+      return;
+    }
+
+    try {
+      const url = editItem ? `${apiBase}/api/admin/rbac/positions/${editItem.id}` : `${apiBase}/api/admin/rbac/positions`;
+      const method = editItem ? "PUT" : "POST";
+      const payload = {
+        name: posForm.name,
+        displayName: posForm.displayName,
+        description: posForm.description,
+        hierarchyLevel: Number(posForm.hierarchyLevel),
+        dataAccessLevel: posForm.dataAccessLevel,
+        customConditions: parsedConditions,
+        dataAccessLimits: parsedLimits,
+        isActive: posForm.isActive
+      };
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to save position");
+
+      setModalOpen(null);
+      loadData();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleDelete = async (type, id) => {
+    if (!confirm(`Are you sure you want to delete this ${type}?`)) return;
+    try {
+      const res = await fetch(`${apiBase}/api/admin/rbac/${type}s/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || `Failed to delete ${type}`);
+      loadData();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  // Matrix toggle permission
+  const handleMatrixToggle = async (role, respId) => {
+    if (!isSuperAdmin) {
+      alert("Access Denied: Only Super Admin can modify system policies.");
+      return;
+    }
+
+    const currentIds = Array.isArray(role.responsibility_ids) ? role.responsibility_ids : [];
+    const isLinked = currentIds.includes(respId);
+    const updatedIds = isLinked
+      ? currentIds.filter(id => id !== respId)
+      : [...currentIds, respId];
+
+    try {
+      const res = await fetch(`${apiBase}/api/admin/rbac/roles/${role.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ responsibilities: updatedIds })
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Failed to update permissions matrix");
+      }
+      loadData();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  // Open modals with prefilled values
+  const openEditRole = (role) => {
+    setEditItem(role);
+    setRoleForm({
+      name: role.name,
+      displayName: role.display_name,
+      description: role.description || "",
+      responsibilities: Array.isArray(role.responsibility_ids) ? role.responsibility_ids : [],
+      defaultPosition: role.default_position_id || "",
+      hierarchyLevel: role.hierarchy_level,
+      isActive: role.is_active,
+      isDefault: role.is_default
+    });
+    setModalOpen("role");
+  };
+
+  const openCreateRole = () => {
+    setEditItem(null);
+    setRoleForm({
+      name: "",
+      displayName: "",
+      description: "",
+      responsibilities: [],
+      defaultPosition: "",
+      hierarchyLevel: 100,
+      isActive: true,
+      isDefault: false
+    });
+    setModalOpen("role");
+  };
+
+  const openEditResp = (resp) => {
+    setEditItem(resp);
+    setRespForm({
+      name: resp.name,
+      displayName: resp.display_name,
+      description: resp.description || "",
+      category: resp.category,
+      routePath: resp.route_path,
+      componentName: resp.component_name,
+      iconName: resp.icon_name || "Circle",
+      requiredFeatures: JSON.stringify(resp.required_features || []),
+      sortOrder: resp.sort_order,
+      isActive: resp.is_active
+    });
+    setModalOpen("responsibility");
+  };
+
+  const openCreateResp = () => {
+    setEditItem(null);
+    setRespForm({
+      name: "",
+      displayName: "",
+      description: "",
+      category: "dashboard",
+      routePath: "",
+      componentName: "",
+      iconName: "Circle",
+      requiredFeatures: "[]",
+      sortOrder: 0,
+      isActive: true
+    });
+    setModalOpen("responsibility");
+  };
+
+  const openEditPos = (pos) => {
+    setEditItem(pos);
+    setPosForm({
+      name: pos.name,
+      displayName: pos.display_name,
+      description: pos.description || "",
+      hierarchyLevel: pos.hierarchy_level,
+      dataAccessLevel: pos.data_access_level,
+      customConditions: JSON.stringify(pos.custom_conditions || []),
+      dataAccessLimits: JSON.stringify(pos.data_access_limits || {}),
+      isActive: pos.is_active
+    });
+    setModalOpen("position");
+  };
+
+  const openCreatePos = () => {
+    setEditItem(null);
+    setPosForm({
+      name: "",
+      displayName: "",
+      description: "",
+      hierarchyLevel: 1000,
+      dataAccessLevel: "individual",
+      customConditions: "[]",
+      dataAccessLimits: "{}",
+      isActive: true
+    });
+    setModalOpen("position");
+  };
 
   return (
-    <div className="data-panel">
-      <div className="panel-header">
-        <h3>Global Role-Based Access Control (RBAC)</h3>
-        {!isSuper && (
-          <span style={{ fontSize: "12px", color: "var(--ink-3)", background: "var(--surface-2)", padding: "4px 10px", borderRadius: "12px" }}>
-            🔒 Read-only. Super Admin authorization required to modify.
+    <div className="data-panel" style={{ padding: "24px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: "18px", fontWeight: "600" }}>PostgreSQL Role-Based Access Control (RBAC)</h3>
+          <p style={{ margin: "4px 0 0 0", fontSize: "13px", color: "var(--ink-3)" }}>
+            Configure and govern system identities, granular routes, operational responsibilities, and access bounds.
+          </p>
+        </div>
+        {!isSuperAdmin && (
+          <span style={{ fontSize: "12px", color: "var(--ink-3)", background: "var(--surface-2)", padding: "6px 12px", borderRadius: "20px", border: "1px solid var(--border)" }}>
+            🔒 Read-only (Super Admin privileges required)
           </span>
         )}
       </div>
-      <div className="table-wrapper">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th style={{ width: "300px" }}>Permission Metric</th>
-              {allRoles.map(role => (
-                <th key={role} style={{ textAlign: "center", fontSize: "12px" }}>{role}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {matrix.map(row => (
-              <tr key={row.permission}>
-                <td>
-                  <div>
-                    <span style={{ fontWeight: "600", display: "block" }}>{row.permission}</span>
-                    <span style={{ fontSize: "11px", color: "var(--ink-3)" }}>{row.desc}</span>
-                  </div>
-                </td>
-                {allRoles.map(role => {
-                  const allowed = row.roles.includes(role);
-                  return (
-                    <td key={role} style={{ textAlign: "center" }}>
-                      <input 
-                        type="checkbox" 
-                        checked={allowed} 
-                        disabled={!isSuper}
-                        onChange={() => onToggle(row.permission, role)}
-                        style={{ 
-                          width: "16px", 
-                          height: "16px", 
-                          accentColor: "var(--accent-2)", 
-                          cursor: isSuper ? "pointer" : "not-allowed",
-                          opacity: allowed ? 1 : 0.25
-                        }}
-                      />
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+
+      {/* Sub tabs */}
+      <div style={{ display: "flex", gap: "8px", borderBottom: "1px solid var(--border)", paddingBottom: "12px", marginBottom: "20px" }}>
+        <button className={`btn-sm ${activeSubTab === "roles" ? "btn-sm-primary" : "btn-sm-ghost"}`} onClick={() => { setActiveSubTab("roles"); setSearch(""); }}>
+          Roles ({roles.length})
+        </button>
+        <button className={`btn-sm ${activeSubTab === "responsibilities" ? "btn-sm-primary" : "btn-sm-ghost"}`} onClick={() => { setActiveSubTab("responsibilities"); setSearch(""); }}>
+          Responsibilities ({responsibilities.length})
+        </button>
+        <button className={`btn-sm ${activeSubTab === "positions" ? "btn-sm-primary" : "btn-sm-ghost"}`} onClick={() => { setActiveSubTab("positions"); setSearch(""); }}>
+          Positions ({positions.length})
+        </button>
+        <button className={`btn-sm ${activeSubTab === "matrix" ? "btn-sm-primary" : "btn-sm-ghost"}`} onClick={() => { setActiveSubTab("matrix"); setSearch(""); }}>
+          Permissions Matrix
+        </button>
       </div>
+
+      {loading && (
+        <div style={{ padding: "40px", textAlign: "center", color: "var(--ink-3)" }}>
+          🔄 Loading RBAC policies...
+        </div>
+      )}
+
+      {error && (
+        <div style={{ padding: "16px", background: "rgba(239, 68, 68, 0.1)", border: "1px solid #ef4444", borderRadius: "6px", color: "#ef4444", marginBottom: "20px" }}>
+          ⚠️ {error}
+        </div>
+      )}
+
+      {!loading && !error && (
+        <div>
+          {/* SEARCH & ADD BAR (except for Matrix) */}
+          {activeSubTab !== "matrix" && (
+            <div style={{ display: "flex", gap: "12px", marginBottom: "20px", flexWrap: "wrap" }}>
+              <input
+                type="text"
+                placeholder={`Search ${activeSubTab}...`}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{ flex: 1, minWidth: "200px", padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)", outline: "none" }}
+              />
+              {isSuperAdmin && activeSubTab === "roles" && (
+                <button className="btn-sm btn-sm-primary" onClick={openCreateRole}>+ Create Role</button>
+              )}
+              {isSuperAdmin && activeSubTab === "responsibilities" && (
+                <button className="btn-sm btn-sm-primary" onClick={openCreateResp}>+ Add Responsibility</button>
+              )}
+              {isSuperAdmin && activeSubTab === "positions" && (
+                <button className="btn-sm btn-sm-primary" onClick={openCreatePos}>+ Add Position</button>
+              )}
+            </div>
+          )}
+
+          {/* ── ROLES SUB TAB ────────────────────────────────────────────────── */}
+          {activeSubTab === "roles" && (
+            <div className="table-wrapper">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Role Info</th>
+                    <th>Type</th>
+                    <th>Hierarchy</th>
+                    <th>Default Position</th>
+                    <th>Responsibilities Linked</th>
+                    <th>Status</th>
+                    {isSuperAdmin && <th style={{ textAlign: "right" }}>Actions</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {roles.filter(r => r.name.toLowerCase().includes(search.toLowerCase()) || r.display_name.toLowerCase().includes(search.toLowerCase())).map(role => (
+                    <tr key={role.id}>
+                      <td>
+                        <div>
+                          <span style={{ fontWeight: "600", display: "block" }}>{role.display_name}</span>
+                          <span style={{ fontSize: "11px", color: "var(--ink-3)" }}>{role.name} {role.is_default && <span style={{ color: "var(--accent-1)", fontWeight: "bold" }}>(Default)</span>}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`pill ${role.is_system_role ? 'blue' : 'gray'}`}>
+                          {role.is_system_role ? "System" : "Custom"}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="badge-status pending" style={{ background: "transparent", border: "1px solid var(--border)" }}>
+                          Level {role.hierarchy_level}
+                        </span>
+                      </td>
+                      <td>
+                        {role.position?.display_name || <span style={{ color: "var(--ink-3)" }}>— None</span>}
+                      </td>
+                      <td>
+                        <span style={{ fontWeight: "600" }}>
+                          {Array.isArray(role.responsibility_ids) ? role.responsibility_ids.length : 0} items
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`pill ${role.is_active ? 'green' : 'red'}`}>
+                          {role.is_active ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      {isSuperAdmin && (
+                        <td style={{ textAlign: "right" }}>
+                          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                            <button className="btn-sm btn-sm-ghost" onClick={() => openEditRole(role)}>Edit</button>
+                            {!role.is_system_role && (
+                              <button className="btn-sm btn-sm-danger" onClick={() => handleDelete("role", role.id)}>Delete</button>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* ── RESPONSIBILITIES SUB TAB ─────────────────────────────────────── */}
+          {activeSubTab === "responsibilities" && (
+            <div className="table-wrapper">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Display Name / Path</th>
+                    <th>Category</th>
+                    <th>Component Name</th>
+                    <th>Icon</th>
+                    <th>Sort Order</th>
+                    <th>Status</th>
+                    {isSuperAdmin && <th style={{ textAlign: "right" }}>Actions</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {responsibilities.filter(r => r.name.toLowerCase().includes(search.toLowerCase()) || r.display_name.toLowerCase().includes(search.toLowerCase())).map(resp => (
+                    <tr key={resp.id}>
+                      <td>
+                        <div>
+                          <span style={{ fontWeight: "600", display: "block" }}>{resp.display_name}</span>
+                          <span style={{ fontSize: "11px", color: "var(--ink-3)", fontFamily: "monospace" }}>{resp.route_path}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="pill blue" style={{ textTransform: "uppercase", fontSize: "10px" }}>{resp.category}</span>
+                      </td>
+                      <td className="mono">{resp.component_name}</td>
+                      <td>
+                        <span style={{ fontFamily: "monospace", color: "var(--accent-2)" }}>{resp.icon_name}</span>
+                      </td>
+                      <td style={{ fontWeight: "bold" }}>{resp.sort_order}</td>
+                      <td>
+                        <span className={`pill ${resp.is_active ? 'green' : 'red'}`}>
+                          {resp.is_active ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      {isSuperAdmin && (
+                        <td style={{ textAlign: "right" }}>
+                          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                            <button className="btn-sm btn-sm-ghost" onClick={() => openEditResp(resp)}>Edit</button>
+                            <button className="btn-sm btn-sm-danger" onClick={() => handleDelete("responsibility", resp.id)}>Delete</button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* ── POSITIONS SUB TAB ────────────────────────────────────────────── */}
+          {activeSubTab === "positions" && (
+            <div className="table-wrapper">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Position Info</th>
+                    <th>Data Access Level</th>
+                    <th>Hierarchy</th>
+                    <th>Limits Count</th>
+                    <th>Status</th>
+                    {isSuperAdmin && <th style={{ textAlign: "right" }}>Actions</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {positions.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.display_name.toLowerCase().includes(search.toLowerCase())).map(pos => {
+                    const limits = pos.data_access_limits || {};
+                    const limitKeys = Object.keys(limits);
+                    return (
+                      <tr key={pos.id}>
+                        <td>
+                          <div>
+                            <span style={{ fontWeight: "600", display: "block" }}>{pos.display_name}</span>
+                            <span style={{ fontSize: "11px", color: "var(--ink-3)" }}>{pos.name}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <span className="pill green" style={{ textTransform: "capitalize" }}>{pos.data_access_level}</span>
+                        </td>
+                        <td>Level {pos.hierarchy_level}</td>
+                        <td>
+                          <span style={{ fontWeight: "600" }}>{limitKeys.length} thresholds</span>
+                        </td>
+                        <td>
+                          <span className={`pill ${pos.is_active ? 'green' : 'red'}`}>
+                            {pos.is_active ? "Active" : "Inactive"}
+                          </span>
+                        </td>
+                        {isSuperAdmin && (
+                          <td style={{ textAlign: "right" }}>
+                            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                              <button className="btn-sm btn-sm-ghost" onClick={() => openEditPos(pos)}>Edit</button>
+                              <button className="btn-sm btn-sm-danger" onClick={() => handleDelete("position", pos.id)}>Delete</button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* ── PERMISSIONS MATRIX SUB TAB ──────────────────────────────────── */}
+          {activeSubTab === "matrix" && (
+            <div className="table-wrapper">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: "300px" }}>Granular Responsibility</th>
+                    {roles.map(role => (
+                      <th key={role.id} style={{ textAlign: "center", fontSize: "11px" }}>{role.display_name}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {responsibilities.map(resp => (
+                    <tr key={resp.id}>
+                      <td>
+                        <div>
+                          <span style={{ fontWeight: "600", display: "block" }}>{resp.display_name}</span>
+                          <span style={{ fontSize: "11px", color: "var(--ink-3)" }}>{resp.description || `Allows routing to ${resp.route_path}`}</span>
+                        </div>
+                      </td>
+                      {roles.map(role => {
+                        const currentIds = Array.isArray(role.responsibility_ids) ? role.responsibility_ids : [];
+                        const allowed = currentIds.includes(resp.id);
+                        return (
+                          <td key={role.id} style={{ textAlign: "center" }}>
+                            <input
+                              type="checkbox"
+                              checked={allowed}
+                              disabled={!isSuperAdmin}
+                              onChange={() => handleMatrixToggle(role, resp.id)}
+                              style={{
+                                width: "16px",
+                                height: "16px",
+                                accentColor: "var(--accent-2)",
+                                cursor: isSuperAdmin ? "pointer" : "not-allowed",
+                                opacity: allowed ? 1 : 0.25
+                              }}
+                            />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── ROLE FORM DIALOG ───────────────────────────────────────────────── */}
+      {modalOpen === "role" && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: "550px" }}>
+            <div className="modal-header">
+              <h3>{editItem ? "Modify Custom Role" : "Provision New Role"}</h3>
+              <button onClick={() => setModalOpen(null)} style={{ background: "transparent", border: "none", color: "var(--ink)", cursor: "pointer" }}><Icons.close /></button>
+            </div>
+            <form onSubmit={handleRoleSubmit}>
+              <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div className="form-group">
+                  <label>Role Name (Unique Identifier)</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. support_staff"
+                    disabled={!!editItem}
+                    value={roleForm.name}
+                    onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Display Name</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. Support Staff"
+                    value={roleForm.displayName}
+                    onChange={(e) => setRoleForm({ ...roleForm, displayName: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Description</label>
+                  <textarea
+                    className="form-control"
+                    placeholder="Describe context & boundaries..."
+                    style={{ height: "60px", resize: "none" }}
+                    value={roleForm.description}
+                    onChange={(e) => setRoleForm({ ...roleForm, description: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Hierarchy Level (1-1000)</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    min="1"
+                    max="1000"
+                    value={roleForm.hierarchyLevel}
+                    onChange={(e) => setRoleForm({ ...roleForm, hierarchyLevel: Number(e.target.value) })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Default Position Access Bounds</label>
+                  <select
+                    className="form-control"
+                    value={roleForm.defaultPosition}
+                    onChange={(e) => setRoleForm({ ...roleForm, defaultPosition: e.target.value })}
+                  >
+                    <option value="">— No default position bounds</option>
+                    {positions.map(p => (
+                      <option key={p.id} value={p.id}>{p.display_name} (Level: {p.hierarchy_level})</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div style={{ display: "flex", gap: "20px", marginTop: "8px" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "13px" }}>
+                    <input
+                      type="checkbox"
+                      checked={roleForm.isActive}
+                      onChange={(e) => setRoleForm({ ...roleForm, isActive: e.target.checked })}
+                    />
+                    Is Active Role
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "13px" }}>
+                    <input
+                      type="checkbox"
+                      checked={roleForm.isDefault}
+                      onChange={(e) => setRoleForm({ ...roleForm, isDefault: e.target.checked })}
+                    />
+                    Is Tenant Default
+                  </label>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-sm btn-sm-ghost" onClick={() => setModalOpen(null)}>Cancel</button>
+                <button type="submit" className="btn-sm btn-sm-primary">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── RESPONSIBILITY FORM DIALOG ────────────────────────────────────── */}
+      {modalOpen === "responsibility" && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: "550px" }}>
+            <div className="modal-header">
+              <h3>{editItem ? "Edit Responsibility" : "Define Responsibility"}</h3>
+              <button onClick={() => setModalOpen(null)} style={{ background: "transparent", border: "none", color: "var(--ink)", cursor: "pointer" }}><Icons.close /></button>
+            </div>
+            <form onSubmit={handleRespSubmit}>
+              <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div className="form-group">
+                  <label>Identifier Name (Unique)</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. analytics_view"
+                    disabled={!!editItem}
+                    value={respForm.name}
+                    onChange={(e) => setRespForm({ ...respForm, name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Display Name</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. View Analytics Dashboard"
+                    value={respForm.displayName}
+                    onChange={(e) => setRespForm({ ...respForm, displayName: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Description</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Briefly state target capability..."
+                    value={respForm.description}
+                    onChange={(e) => setRespForm({ ...respForm, description: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Category</label>
+                  <select
+                    className="form-control"
+                    value={respForm.category}
+                    onChange={(e) => setRespForm({ ...respForm, category: e.target.value })}
+                  >
+                    <option value="dashboard">Dashboard</option>
+                    <option value="trading">Trading</option>
+                    <option value="portfolio">Portfolio</option>
+                    <option value="options">Options</option>
+                    <option value="futures">Futures</option>
+                    <option value="fii_dii">FII/DII</option>
+                    <option value="screeners">Screeners</option>
+                    <option value="research">Research</option>
+                    <option value="pair_trading">Pair Trading</option>
+                    <option value="reports">Reports</option>
+                    <option value="account">Account</option>
+                    <option value="admin">Admin</option>
+                    <option value="team">Team</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Frontend Route Path</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. /admin/analytics"
+                    value={respForm.routePath}
+                    onChange={(e) => setRespForm({ ...respForm, routePath: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Component Name</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. AnalyticsConsole"
+                    value={respForm.componentName}
+                    onChange={(e) => setRespForm({ ...respForm, componentName: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Lucide Icon Name</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. BarChart3"
+                    value={respForm.iconName}
+                    onChange={(e) => setRespForm({ ...respForm, iconName: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Required Platform Features (JSON Array)</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder='e.g. ["analytics_engine"]'
+                    value={respForm.requiredFeatures}
+                    onChange={(e) => setRespForm({ ...respForm, requiredFeatures: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Sort Order</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={respForm.sortOrder}
+                    onChange={(e) => setRespForm({ ...respForm, sortOrder: Number(e.target.value) })}
+                  />
+                </div>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "13px", marginTop: "6px" }}>
+                  <input
+                    type="checkbox"
+                    checked={respForm.isActive}
+                    onChange={(e) => setRespForm({ ...respForm, isActive: e.target.checked })}
+                  />
+                  Is Active Policy
+                </label>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-sm btn-sm-ghost" onClick={() => setModalOpen(null)}>Cancel</button>
+                <button type="submit" className="btn-sm btn-sm-primary">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── POSITION FORM DIALOG ──────────────────────────────────────────── */}
+      {modalOpen === "position" && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: "550px" }}>
+            <div className="modal-header">
+              <h3>{editItem ? "Edit Access Position" : "Define Access Position"}</h3>
+              <button onClick={() => setModalOpen(null)} style={{ background: "transparent", border: "none", color: "var(--ink)", cursor: "pointer" }}><Icons.close /></button>
+            </div>
+            <form onSubmit={handlePosSubmit}>
+              <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div className="form-group">
+                  <label>Identifier Name (Unique)</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. regional_director"
+                    disabled={!!editItem}
+                    value={posForm.name}
+                    onChange={(e) => setPosForm({ ...posForm, name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Display Name</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. Regional Director"
+                    value={posForm.displayName}
+                    onChange={(e) => setPosForm({ ...posForm, displayName: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Description</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Describe position context..."
+                    value={posForm.description}
+                    onChange={(e) => setPosForm({ ...posForm, description: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Hierarchy level (1-1000)</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    min="1"
+                    max="1000"
+                    value={posForm.hierarchyLevel}
+                    onChange={(e) => setPosForm({ ...posForm, hierarchyLevel: Number(e.target.value) })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Data Access Scope</label>
+                  <select
+                    className="form-control"
+                    value={posForm.dataAccessLevel}
+                    onChange={(e) => setPosForm({ ...posForm, dataAccessLevel: e.target.value })}
+                  >
+                    <option value="individual">Individual (Only own records)</option>
+                    <option value="team">Team (Records of immediate team)</option>
+                    <option value="department">Department (All department records)</option>
+                    <option value="regional">Regional (Records within assigned region)</option>
+                    <option value="organization">Organization (Full organizational tenant read/write)</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Custom Conditions (JSON Array)</label>
+                  <textarea
+                    className="form-control mono"
+                    placeholder='e.g. [{"field": "region", "operator": "equals", "value": "South"}]'
+                    style={{ height: "60px", fontSize: "11px", resize: "none" }}
+                    value={posForm.customConditions}
+                    onChange={(e) => setPosForm({ ...posForm, customConditions: e.target.value })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Data Access Limits / Thresholds (JSON Object)</label>
+                  <textarea
+                    className="form-control mono"
+                    placeholder='e.g. {"maxPortfolios": 10, "sla": "4 hours"}'
+                    style={{ height: "80px", fontSize: "11px", resize: "none" }}
+                    value={posForm.dataAccessLimits}
+                    onChange={(e) => setPosForm({ ...posForm, dataAccessLimits: e.target.value })}
+                  />
+                </div>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "13px", marginTop: "6px" }}>
+                  <input
+                    type="checkbox"
+                    checked={posForm.isActive}
+                    onChange={(e) => setPosForm({ ...posForm, isActive: e.target.checked })}
+                  />
+                  Is Active Position
+                </label>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-sm btn-sm-ghost" onClick={() => setModalOpen(null)}>Cancel</button>
+                <button type="submit" className="btn-sm btn-sm-primary">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
 
 // System Audit Logs View
 function AuditView({ logs }) {
@@ -1426,6 +2359,588 @@ function UsersView({ users, onUpdateUser, onAddUser }) {
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
                 <button type="button" className="hbtn hbtn--ghost" onClick={() => setShowAddModal(false)} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid var(--border)", background: "transparent", color: "var(--ink)", cursor: "pointer" }}>Cancel</button>
                 <button type="submit" className="hbtn hbtn--primary" style={{ background: "var(--accent-2)", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "6px", cursor: "pointer", fontWeight: "600" }}>Send Invitation</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── SUBSCRIPTION PLANS VIEW ─────────────────────────────────────────────────
+function SubscriptionPlansView({ user, apiBase }) {
+  const isSuperAdmin = user.role === "Super Admin";
+  const [plans, setPlans] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [positions, setPositions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const emptyForm = {
+    name: "", displayName: "", description: "", category: "individual",
+    planType: "monthly", isActive: true, isPopular: false, groupName: "",
+    pricing: { monthly: 0, yearly: 0, yearlyDiscount: 0 },
+    metadata: { maxUsers: 1, maxWatchlists: 5, maxAlerts: 10, apiCallsPerMonth: 1000, dataRetentionDays: 30, supportLevel: "basic", sla: "Best effort", customBranding: false, whiteLabel: false, dedicatedSupport: false },
+    trial: { enabled: false, duration: 14 },
+    visibility: { availableForSignup: true, hideFromPricing: false },
+    rbac: { assignedRole: "", assignedPosition: "", autoAssignRole: true }
+  };
+  const [form, setForm] = useState({ ...emptyForm });
+
+  const load = async () => {
+    setLoading(true); setError(null);
+    try {
+      const [pRes, rRes, posRes] = await Promise.all([
+        fetch(apiBase + "/api/admin/plans").then(r => r.json()),
+        fetch(apiBase + "/api/admin/plans/roles/available").then(r => r.json()),
+        fetch(apiBase + "/api/admin/plans/positions/available").then(r => r.json()),
+      ]);
+      if (pRes.success) setPlans(pRes.data?.plans || []);
+      if (rRes.success) setRoles(rRes.data?.roles || []);
+      if (posRes.success) setPositions(posRes.data?.positions || []);
+    } catch (e) { setError("Failed to load subscription plans."); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const setF = (path, value) => {
+    setForm(prev => {
+      const keys = path.split(".");
+      const next = { ...prev };
+      let cur = next;
+      for (let i = 0; i < keys.length - 1; i++) { cur[keys[i]] = { ...cur[keys[i]] }; cur = cur[keys[i]]; }
+      cur[keys[keys.length - 1]] = value;
+      return next;
+    });
+  };
+
+  const openCreate = () => { setEditItem(null); setForm({ ...emptyForm }); setModalOpen(true); };
+  const openEdit = (p) => {
+    setEditItem(p);
+    setForm({
+      name: p.name, displayName: p.display_name, description: p.description || "",
+      category: p.category, planType: p.plan_type, isActive: p.is_active, isPopular: p.is_popular,
+      groupName: p.group_name || "",
+      pricing: {
+        monthly: p.pricing?.monthly?.amount ?? p.pricing?.monthly ?? 0,
+        yearly: p.pricing?.yearly?.amount ?? p.pricing?.yearly ?? 0,
+        yearlyDiscount: p.pricing?.yearly?.discount ?? 0
+      },
+      metadata: p.metadata || emptyForm.metadata,
+      trial: p.trial || emptyForm.trial,
+      visibility: p.visibility || emptyForm.visibility,
+      rbac: { assignedRole: p.rbac_role_id || "", assignedPosition: p.rbac_position_id || "", autoAssignRole: p.rbac_auto_assign ?? true }
+    });
+    setModalOpen(true);
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        name: form.name, displayName: form.displayName, description: form.description,
+        category: form.category, planType: form.planType, isActive: form.isActive, isPopular: form.isPopular,
+        groupName: form.groupName,
+        pricing: { monthly: { amount: Number(form.pricing.monthly), currency: "INR" }, yearly: { amount: Number(form.pricing.yearly), currency: "INR", discount: Number(form.pricing.yearlyDiscount) } },
+        metadata: form.metadata, trial: form.trial, visibility: form.visibility,
+        rbac: { assignedRole: form.rbac.assignedRole || null, assignedPosition: form.rbac.assignedPosition || null, autoAssignRole: form.rbac.autoAssignRole }
+      };
+      const url = editItem ? `${apiBase}/api/admin/plans/${editItem.id}` : `${apiBase}/api/admin/plans`;
+      const res = await fetch(url, { method: editItem ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      setModalOpen(false); load();
+    } catch (err) { alert(err.message); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm("Delete this plan?")) return;
+    const res = await fetch(`${apiBase}/api/admin/plans/${id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) { alert(data.message); return; }
+    load();
+  };
+
+  const priceDisplay = (p) => {
+    const amt = p.pricing?.monthly?.amount ?? p.pricing?.monthly;
+    if (amt === 0 || amt === undefined) return "Free";
+    return `₹${Number(amt).toLocaleString()}/mo`;
+  };
+
+  return (
+    <div className="data-panel" style={{ padding: "24px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: "18px", fontWeight: "600" }}>Subscription Plans</h3>
+          <p style={{ margin: "4px 0 0 0", fontSize: "13px", color: "var(--ink-3)" }}>Manage pricing tiers with RBAC role & position assignments.</p>
+        </div>
+        {isSuperAdmin && <button className="btn-sm btn-sm-primary" onClick={openCreate}>+ Create Plan</button>}
+      </div>
+
+      {loading && <div style={{ padding: "40px", textAlign: "center", color: "var(--ink-3)" }}>🔄 Loading plans...</div>}
+      {error && <div style={{ padding: "16px", background: "rgba(239,68,68,0.1)", border: "1px solid #ef4444", borderRadius: "6px", color: "#ef4444", marginBottom: "20px" }}>⚠️ {error}</div>}
+
+      {!loading && !error && (
+        <div className="table-wrapper">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Plan</th><th>Category</th><th>Type</th><th>Price</th>
+                <th>Assigned Role</th><th>Assigned Position</th><th>Status</th>
+                {isSuperAdmin && <th style={{ textAlign: "right" }}>Actions</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {plans.map(p => (
+                <tr key={p.id}>
+                  <td>
+                    <div>
+                      <span style={{ fontWeight: "600", display: "block" }}>{p.display_name} {p.is_popular && <span style={{ color: "var(--accent-1)", fontSize: "11px" }}>★ Popular</span>}</span>
+                      <span style={{ fontSize: "11px", color: "var(--ink-3)" }}>{p.name}</span>
+                    </div>
+                  </td>
+                  <td><span className="pill blue" style={{ textTransform: "capitalize" }}>{p.category}</span></td>
+                  <td><span className="pill gray">{p.plan_type}</span></td>
+                  <td style={{ fontWeight: "700", color: "var(--accent-1)" }}>{priceDisplay(p)}</td>
+                  <td style={{ fontSize: "12px" }}>{roles.find(r => r.id === p.rbac_role_id)?.display_name || <span style={{ color: "var(--ink-3)" }}>—</span>}</td>
+                  <td style={{ fontSize: "12px" }}>{positions.find(pos => pos.id === p.rbac_position_id)?.display_name || <span style={{ color: "var(--ink-3)" }}>—</span>}</td>
+                  <td><span className={`pill ${p.is_active ? "green" : "red"}`}>{p.is_active ? "Active" : "Inactive"}</span></td>
+                  {isSuperAdmin && (
+                    <td style={{ textAlign: "right" }}>
+                      <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                        <button className="btn-sm btn-sm-ghost" onClick={() => openEdit(p)}>Edit</button>
+                        <button className="btn-sm btn-sm-danger" onClick={() => handleDelete(p.id)}>Delete</button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+              {plans.length === 0 && (
+                <tr><td colSpan="8" style={{ textAlign: "center", padding: "32px", color: "var(--ink-3)" }}>No subscription plans yet. Create your first plan.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {modalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: "580px", maxHeight: "90vh", overflowY: "auto" }}>
+            <div className="modal-header">
+              <h3>{editItem ? "Edit Plan" : "Create Subscription Plan"}</h3>
+              <button onClick={() => setModalOpen(false)} style={{ background: "transparent", border: "none", color: "var(--ink)", cursor: "pointer" }}><Icons.close /></button>
+            </div>
+            <form onSubmit={handleSave}>
+              <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div className="form-group">
+                    <label>Plan Name (Identifier)</label>
+                    <input className="form-control" placeholder="e.g. basic" disabled={!!editItem} value={form.name} onChange={e => setF("name", e.target.value.toLowerCase())} required />
+                  </div>
+                  <div className="form-group">
+                    <label>Display Name</label>
+                    <input className="form-control" placeholder="e.g. Basic Plan" value={form.displayName} onChange={e => setF("displayName", e.target.value)} required />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Description</label>
+                  <textarea className="form-control" style={{ height: "56px", resize: "none" }} value={form.description} onChange={e => setF("description", e.target.value)} />
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
+                  <div className="form-group">
+                    <label>Category</label>
+                    <select className="form-control" value={form.category} onChange={e => setF("category", e.target.value)}>
+                      <option value="individual">Individual</option>
+                      <option value="team">Team</option>
+                      <option value="enterprise">Enterprise</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Plan Type</label>
+                    <select className="form-control" value={form.planType} onChange={e => setF("planType", e.target.value)}>
+                      <option value="free">Free</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="yearly">Yearly</option>
+                      <option value="lifetime">Lifetime</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Group</label>
+                    <input className="form-control" placeholder="standard" value={form.groupName} onChange={e => setF("groupName", e.target.value)} />
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
+                  <div className="form-group">
+                    <label>Monthly Price (₹)</label>
+                    <input type="number" min="0" className="form-control" value={form.pricing.monthly} onChange={e => setF("pricing.monthly", e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>Yearly Price (₹)</label>
+                    <input type="number" min="0" className="form-control" value={form.pricing.yearly} onChange={e => setF("pricing.yearly", e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>Yearly Discount (%)</label>
+                    <input type="number" min="0" max="100" className="form-control" value={form.pricing.yearlyDiscount} onChange={e => setF("pricing.yearlyDiscount", e.target.value)} />
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
+                  <div className="form-group">
+                    <label>Max Users</label>
+                    <input type="number" min="1" className="form-control" value={form.metadata.maxUsers} onChange={e => setF("metadata.maxUsers", Number(e.target.value))} />
+                  </div>
+                  <div className="form-group">
+                    <label>Max Watchlists</label>
+                    <input type="number" min="0" className="form-control" value={form.metadata.maxWatchlists} onChange={e => setF("metadata.maxWatchlists", Number(e.target.value))} />
+                  </div>
+                  <div className="form-group">
+                    <label>API Calls/Month</label>
+                    <input type="number" min="0" className="form-control" value={form.metadata.apiCallsPerMonth} onChange={e => setF("metadata.apiCallsPerMonth", Number(e.target.value))} />
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div className="form-group">
+                    <label>Support Level</label>
+                    <select className="form-control" value={form.metadata.supportLevel} onChange={e => setF("metadata.supportLevel", e.target.value)}>
+                      <option value="basic">Basic</option>
+                      <option value="standard">Standard</option>
+                      <option value="premium">Premium</option>
+                      <option value="enterprise">Enterprise</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>SLA</label>
+                    <input className="form-control" value={form.metadata.sla} onChange={e => setF("metadata.sla", e.target.value)} />
+                  </div>
+                </div>
+
+                {/* RBAC Assignment */}
+                <div style={{ background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: "8px", padding: "16px" }}>
+                  <div style={{ fontSize: "13px", fontWeight: "600", marginBottom: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Icons.shield style={{ width: "16px", height: "16px", color: "var(--accent-2)" }} /> RBAC Assignment
+                  </div>
+                  <p style={{ fontSize: "11px", color: "var(--ink-3)", margin: "0 0 12px 0" }}>
+                    When a user subscribes, they auto-receive this role & position.
+                  </p>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <div className="form-group">
+                      <label>Assign Role</label>
+                      <select className="form-control" value={form.rbac.assignedRole} onChange={e => setF("rbac.assignedRole", e.target.value)}>
+                        <option value="">— No Role</option>
+                        {roles.map(r => (
+                          <option key={r.id} value={r.id}>{r.display_name} (L{r.hierarchy_level})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Assign Position</label>
+                      <select className="form-control" value={form.rbac.assignedPosition} onChange={e => setF("rbac.assignedPosition", e.target.value)}>
+                        <option value="">— No Position</option>
+                        {positions.map(p => (
+                          <option key={p.id} value={p.id}>{p.display_name} ({p.data_access_level})</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer", marginTop: "8px" }}>
+                    <input type="checkbox" checked={form.rbac.autoAssignRole} onChange={e => setF("rbac.autoAssignRole", e.target.checked)} />
+                    Auto-assign role on subscription
+                  </label>
+                </div>
+
+                <div style={{ display: "flex", gap: "20px" }}>
+                  {[{ k: "isActive", l: "Active" }, { k: "isPopular", l: "Mark as Popular" }].map(item => (
+                    <label key={item.k} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+                      <input type="checkbox" checked={form[item.k]} onChange={e => setF(item.k, e.target.checked)} />
+                      {item.l}
+                    </label>
+                  ))}
+                </div>
+
+                <div style={{ display: "flex", gap: "20px" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+                    <input type="checkbox" checked={form.trial.enabled} onChange={e => setF("trial.enabled", e.target.checked)} />
+                    Enable Free Trial
+                  </label>
+                  {form.trial.enabled && (
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <input type="number" min="1" className="form-control" style={{ width: "100px" }} placeholder="Days" value={form.trial.duration} onChange={e => setF("trial.duration", Number(e.target.value))} />
+                    </div>
+                  )}
+                </div>
+
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-sm btn-sm-ghost" onClick={() => setModalOpen(false)}>Cancel</button>
+                <button type="submit" className="btn-sm btn-sm-primary">{editItem ? "Update Plan" : "Create Plan"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── COUPONS VIEW ──────────────────────────────────────────────────────────────
+function CouponsView({ user, apiBase }) {
+  const isSuperAdmin = user.role === "Super Admin";
+  const [coupons, setCoupons] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editItem, setEditItem] = useState(null);
+  const [copied, setCopied] = useState(null);
+
+  const emptyForm = {
+    code: "", description: "", discountType: "percent", amount: 0,
+    dateExpires: "", isActive: true, freeShipping: false,
+    usageRestrictions: { minimumAmount: 0, individualUse: false, excludeSaleItems: false },
+    usageLimits: { usageLimit: "", usageLimitPerUser: 1 },
+    emailSettings: { sendNotificationEmail: false, notifyOnUsage: false, notifyOnExpiry: false }
+  };
+  const [form, setForm] = useState({ ...emptyForm });
+
+  const load = async () => {
+    setLoading(true); setError(null);
+    try {
+      const res = await fetch(apiBase + "/api/admin/coupons").then(r => r.json());
+      if (res.success) setCoupons(res.data?.coupons || []);
+    } catch (e) { setError("Failed to load coupons."); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const openCreate = () => { setEditItem(null); setForm({ ...emptyForm }); setModalOpen(true); };
+  const openEdit = (c) => {
+    setEditItem(c);
+    setForm({
+      code: c.code, description: c.description || "", discountType: c.discount_type,
+      amount: c.amount, dateExpires: c.date_expires ? new Date(c.date_expires).toISOString().split("T")[0] : "",
+      isActive: c.is_active, freeShipping: c.free_shipping || false,
+      usageRestrictions: { minimumAmount: c.usage_restrictions?.minimumAmount || 0, individualUse: c.usage_restrictions?.individualUse || false, excludeSaleItems: c.usage_restrictions?.excludeSaleItems || false },
+      usageLimits: { usageLimit: c.usage_limits?.usageLimit || "", usageLimitPerUser: c.usage_limits?.usageLimitPerUser || 1 },
+      emailSettings: { sendNotificationEmail: c.email_settings?.sendNotificationEmail || false, notifyOnUsage: c.email_settings?.notifyOnUsage || false, notifyOnExpiry: c.email_settings?.notifyOnExpiry || false }
+    });
+    setModalOpen(true);
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        code: form.code, description: form.description, discountType: form.discountType,
+        amount: Number(form.amount), dateExpires: form.dateExpires || null,
+        isActive: form.isActive, freeShipping: form.freeShipping,
+        usageRestrictions: { ...form.usageRestrictions, minimumAmount: Number(form.usageRestrictions.minimumAmount) },
+        usageLimits: { usageLimit: form.usageLimits.usageLimit ? Number(form.usageLimits.usageLimit) : undefined, usageLimitPerUser: Number(form.usageLimits.usageLimitPerUser) },
+        emailSettings: form.emailSettings
+      };
+      const url = editItem ? `${apiBase}/api/admin/coupons/${editItem.id}` : `${apiBase}/api/admin/coupons`;
+      const res = await fetch(url, { method: editItem ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      setModalOpen(false); load();
+    } catch (err) { alert(err.message); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm("Delete this coupon?")) return;
+    const res = await fetch(`${apiBase}/api/admin/coupons/${id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) { alert(data.message); return; }
+    load();
+  };
+
+  const copyCode = (code) => {
+    navigator.clipboard.writeText(code).catch(() => {});
+    setCopied(code);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const isExpired = (c) => c.date_expires && new Date(c.date_expires) < new Date();
+  const fmtDiscount = (c) => c.discount_type === "percent" ? `${c.amount}%` : `₹${c.amount}`;
+
+  const filtered = coupons.filter(c =>
+    (typeFilter === "all" || c.discount_type === typeFilter) &&
+    (c.code.toLowerCase().includes(search.toLowerCase()) || (c.description || "").toLowerCase().includes(search.toLowerCase()))
+  );
+
+  return (
+    <div className="data-panel" style={{ padding: "24px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: "18px", fontWeight: "600" }}>Coupon Management</h3>
+          <p style={{ margin: "4px 0 0 0", fontSize: "13px", color: "var(--ink-3)" }}>Percentage and fixed-amount discount codes.</p>
+        </div>
+        {isSuperAdmin && <button className="btn-sm btn-sm-primary" onClick={openCreate}>+ Add Coupon</button>}
+      </div>
+
+      <div style={{ display: "flex", gap: "12px", marginBottom: "20px", flexWrap: "wrap" }}>
+        <input type="text" placeholder="Search code or description..." value={search} onChange={e => setSearch(e.target.value)}
+          style={{ flex: 1, minWidth: "200px", padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)", outline: "none" }} />
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+          style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)", outline: "none" }}>
+          <option value="all">All Types</option>
+          <option value="percent">Percentage</option>
+          <option value="fixed_cart">Fixed Cart</option>
+          <option value="fixed_product">Fixed Product</option>
+        </select>
+      </div>
+
+      {loading && <div style={{ padding: "40px", textAlign: "center", color: "var(--ink-3)" }}>🔄 Loading coupons...</div>}
+      {error && <div style={{ padding: "16px", background: "rgba(239,68,68,0.1)", border: "1px solid #ef4444", borderRadius: "6px", color: "#ef4444", marginBottom: "20px" }}>⚠️ {error}</div>}
+
+      {!loading && !error && (
+        <div className="table-wrapper">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Code</th><th>Type</th><th>Discount</th><th>Used</th>
+                <th>Expires</th><th>Status</th>
+                {isSuperAdmin && <th style={{ textAlign: "right" }}>Actions</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(c => (
+                <tr key={c.id}>
+                  <td>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <code style={{ fontFamily: "monospace", fontWeight: "700", fontSize: "13px" }}>{c.code}</code>
+                      <button onClick={() => copyCode(c.code)} style={{ background: "transparent", border: "none", cursor: "pointer", color: copied === c.code ? "#10b981" : "var(--ink-3)", fontSize: "12px" }}>
+                        {copied === c.code ? "✓" : "⎘"}
+                      </button>
+                    </div>
+                    {c.description && <div style={{ fontSize: "11px", color: "var(--ink-3)" }}>{c.description}</div>}
+                  </td>
+                  <td><span className="pill blue" style={{ fontSize: "10px", textTransform: "uppercase" }}>{c.discount_type.replace("_", " ")}</span></td>
+                  <td style={{ fontWeight: "700", color: "var(--accent-1)" }}>{fmtDiscount(c)}</td>
+                  <td>{c.usage_count ?? 0}{c.usage_limits?.usageLimit ? ` / ${c.usage_limits.usageLimit}` : ""}</td>
+                  <td style={{ fontSize: "12px", color: isExpired(c) ? "#ef4444" : "inherit" }}>
+                    {c.date_expires ? new Date(c.date_expires).toLocaleDateString() : "Never"}{isExpired(c) ? " ⚠" : ""}
+                  </td>
+                  <td>
+                    <span className={`pill ${c.is_active && !isExpired(c) ? "green" : "red"}`}>
+                      {isExpired(c) ? "Expired" : c.is_active ? "Active" : "Inactive"}
+                    </span>
+                  </td>
+                  {isSuperAdmin && (
+                    <td style={{ textAlign: "right" }}>
+                      <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                        <button className="btn-sm btn-sm-ghost" onClick={() => openEdit(c)}>Edit</button>
+                        <button className="btn-sm btn-sm-danger" onClick={() => handleDelete(c.id)}>Delete</button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr><td colSpan="7" style={{ textAlign: "center", padding: "32px", color: "var(--ink-3)" }}>No coupons found.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {modalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: "520px", maxHeight: "90vh", overflowY: "auto" }}>
+            <div className="modal-header">
+              <h3>{editItem ? `Edit Coupon: ${editItem.code}` : "Create Coupon"}</h3>
+              <button onClick={() => setModalOpen(false)} style={{ background: "transparent", border: "none", color: "var(--ink)", cursor: "pointer" }}><Icons.close /></button>
+            </div>
+            <form onSubmit={handleSave}>
+              <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div className="form-group">
+                    <label>Coupon Code</label>
+                    <input className="form-control" placeholder="e.g. SAVE20" disabled={!!editItem}
+                      value={form.code} onChange={e => setForm(p => ({ ...p, code: e.target.value.toUpperCase() }))} required />
+                  </div>
+                  <div className="form-group">
+                    <label>Discount Type</label>
+                    <select className="form-control" value={form.discountType} onChange={e => setForm(p => ({ ...p, discountType: e.target.value }))}>
+                      <option value="percent">Percentage (%)</option>
+                      <option value="fixed_cart">Fixed Cart (₹)</option>
+                      <option value="fixed_product">Fixed Product (₹)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Description</label>
+                  <textarea className="form-control" style={{ height: "56px", resize: "none" }} value={form.description}
+                    onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div className="form-group">
+                    <label>Amount ({form.discountType === "percent" ? "%" : "₹"})</label>
+                    <input type="number" min="0" className="form-control" value={form.amount}
+                      onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} required />
+                  </div>
+                  <div className="form-group">
+                    <label>Expiry Date</label>
+                    <input type="date" className="form-control" value={form.dateExpires}
+                      onChange={e => setForm(p => ({ ...p, dateExpires: e.target.value }))} />
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div className="form-group">
+                    <label>Total Usage Limit</label>
+                    <input type="number" min="0" className="form-control" placeholder="Unlimited"
+                      value={form.usageLimits.usageLimit}
+                      onChange={e => setForm(p => ({ ...p, usageLimits: { ...p.usageLimits, usageLimit: e.target.value } }))} />
+                  </div>
+                  <div className="form-group">
+                    <label>Per User Limit</label>
+                    <input type="number" min="1" className="form-control" value={form.usageLimits.usageLimitPerUser}
+                      onChange={e => setForm(p => ({ ...p, usageLimits: { ...p.usageLimits, usageLimitPerUser: e.target.value } }))} />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Minimum Spend (₹)</label>
+                  <input type="number" min="0" className="form-control" value={form.usageRestrictions.minimumAmount}
+                    onChange={e => setForm(p => ({ ...p, usageRestrictions: { ...p.usageRestrictions, minimumAmount: e.target.value } }))} />
+                </div>
+
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "16px" }}>
+                  {[
+                    { k: "isActive", l: "Active", top: true },
+                    { k: "freeShipping", l: "Free Shipping", top: true },
+                    { k: "usageRestrictions.individualUse", l: "Individual Use Only", top: false },
+                    { k: "usageRestrictions.excludeSaleItems", l: "Exclude Sale Items", top: false },
+                  ].map(item => {
+                    const val = item.top ? form[item.k] : form.usageRestrictions[item.k.split(".")[1]];
+                    const onChange = item.top
+                      ? (e) => setForm(p => ({ ...p, [item.k]: e.target.checked }))
+                      : (e) => setForm(p => ({ ...p, usageRestrictions: { ...p.usageRestrictions, [item.k.split(".")[1]]: e.target.checked } }));
+                    return (
+                      <label key={item.k} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+                        <input type="checkbox" checked={val} onChange={onChange} />{item.l}
+                      </label>
+                    );
+                  })}
+                </div>
+
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-sm btn-sm-ghost" onClick={() => setModalOpen(false)}>Cancel</button>
+                <button type="submit" className="btn-sm btn-sm-primary">{editItem ? "Update Coupon" : "Create Coupon"}</button>
               </div>
             </form>
           </div>
