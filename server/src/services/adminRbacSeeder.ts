@@ -35,13 +35,12 @@ const positions = [
 export async function seedAdminRBAC(): Promise<void> {
     console.log('--- Seeding Admin RBAC ---');
 
-    await prisma.$executeRawUnsafe(`TRUNCATE tenants, users, admin_responsibilities, admin_positions, admin_roles CASCADE`);
-
     // Seed default tenant
     const tenantId = '00000000-0000-0000-0000-000000000000';
     await prisma.$executeRawUnsafe(
         `INSERT INTO tenants (id, slug, name, status, default_currency, default_locale)
-         VALUES ($1, $2, $3, 'active', 'INR', 'en')`,
+         VALUES ($1, $2, $3, 'active', 'INR', 'en')
+         ON CONFLICT (id) DO NOTHING`,
         tenantId, 'default', 'Default Tenant'
     );
     console.log('Seeded default tenant');
@@ -50,7 +49,8 @@ export async function seedAdminRBAC(): Promise<void> {
     const userId = '00000000-0000-0000-0000-000000000001';
     await prisma.$executeRawUnsafe(
         `INSERT INTO users (id, tenant_id, primary_email, email_verified, state, locale)
-         VALUES ($1, $2, $3, true, 'active', 'en')`,
+         VALUES ($1, $2, $3, true, 'active', 'en')
+         ON CONFLICT (id) DO NOTHING`,
         userId, tenantId, 'aanya@samaagum.com'
     );
     console.log('Seeded default user');
@@ -59,7 +59,10 @@ export async function seedAdminRBAC(): Promise<void> {
     for (const r of responsibilities) {
         await prisma.$executeRawUnsafe(
             `INSERT INTO admin_responsibilities (name, display_name, description, category, route_path, component_name, icon_name, sort_order)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             ON CONFLICT (name) DO UPDATE
+             SET display_name = EXCLUDED.display_name, description = EXCLUDED.description, category = EXCLUDED.category,
+                 route_path = EXCLUDED.route_path, component_name = EXCLUDED.component_name, icon_name = EXCLUDED.icon_name, sort_order = EXCLUDED.sort_order`,
             r.name, r.display_name, r.description, r.category, r.route_path, r.component_name, r.icon_name, r.sort_order
         );
     }
@@ -69,7 +72,10 @@ export async function seedAdminRBAC(): Promise<void> {
     for (const p of positions) {
         await prisma.$executeRawUnsafe(
             `INSERT INTO admin_positions (name, display_name, description, hierarchy_level, data_access_level, custom_conditions, data_access_limits)
-             VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb)`,
+             VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb)
+             ON CONFLICT (name) DO UPDATE
+             SET display_name = EXCLUDED.display_name, description = EXCLUDED.description, hierarchy_level = EXCLUDED.hierarchy_level,
+                 data_access_level = EXCLUDED.data_access_level, custom_conditions = EXCLUDED.custom_conditions, data_access_limits = EXCLUDED.data_access_limits`,
             p.name, p.display_name, p.description, p.hierarchy_level, p.data_access_level,
             JSON.stringify((p as any).custom_conditions || []),
             JSON.stringify(p.data_access_limits)
@@ -90,54 +96,42 @@ export async function seedAdminRBAC(): Promise<void> {
     const individualPosId = posRows.find(p => p.name === 'individual')?.id;
     const adminPosId = posRows.find(p => p.name === 'organization_admin')?.id;
 
-    // Insert default roles
-    const freeUserRoleRows = await prisma.$queryRawUnsafe<{ id: string }[]>(
-        `INSERT INTO admin_roles (name, display_name, description, responsibility_ids, default_position_id, hierarchy_level, is_system_role, is_active, is_default)
-         VALUES ($1, $2, $3, $4::jsonb, $5::uuid, $6, $7, $8, $9) RETURNING id`,
-        'free_user', 'Free User', 'Basic access to main dashboard',
-        JSON.stringify(dashboardRespIds), individualPosId, 1000, true, true, true
-    );
-    const freeUserRoleId = freeUserRoleRows[0]?.id;
+    // Helper to upsert role and return its ID
+    const upsertRole = async (
+        name: string,
+        displayName: string,
+        description: string,
+        responsibilityIds: string[],
+        defaultPositionId: string | undefined,
+        hierarchyLevel: number,
+        isSystemRole: boolean,
+        isActive: boolean,
+        isDefault: boolean
+    ) => {
+        const rows = await prisma.$queryRawUnsafe<{ id: string }[]>(
+            `INSERT INTO admin_roles (name, display_name, description, tenant_id, responsibility_ids, default_position_id, hierarchy_level, is_system_role, is_active, is_default)
+             VALUES ($1, $2, $3, null, $4::jsonb, $5::uuid, $6, $7, $8, $9)
+             ON CONFLICT ON CONSTRAINT admin_roles_name_tenant_id_key DO UPDATE
+             SET display_name = EXCLUDED.display_name,
+                 description = EXCLUDED.description,
+                 responsibility_ids = EXCLUDED.responsibility_ids,
+                 default_position_id = EXCLUDED.default_position_id,
+                 hierarchy_level = EXCLUDED.hierarchy_level,
+                 is_system_role = EXCLUDED.is_system_role,
+                 is_active = EXCLUDED.is_active,
+                 is_default = EXCLUDED.is_default
+             RETURNING id`,
+            name, displayName, description, JSON.stringify(responsibilityIds), defaultPositionId || null, hierarchyLevel, isSystemRole, isActive, isDefault
+        );
+        return rows[0]?.id;
+    };
 
-    const basicHostRoleRows = await prisma.$queryRawUnsafe<{ id: string }[]>(
-        `INSERT INTO admin_roles (name, display_name, description, responsibility_ids, default_position_id, hierarchy_level, is_system_role, is_active, is_default)
-         VALUES ($1, $2, $3, $4::jsonb, $5::uuid, $6, $7, $8, $9) RETURNING id`,
-        'basic_host', 'Basic Host', 'Enhanced access for basic event hosts',
-        JSON.stringify(dashboardRespIds), individualPosId, 800, true, true, false
-    );
-    const basicHostRoleId = basicHostRoleRows[0]?.id;
-
-    const proHostRoleRows = await prisma.$queryRawUnsafe<{ id: string }[]>(
-        `INSERT INTO admin_roles (name, display_name, description, responsibility_ids, default_position_id, hierarchy_level, is_system_role, is_active, is_default)
-         VALUES ($1, $2, $3, $4::jsonb, $5::uuid, $6, $7, $8, $9) RETURNING id`,
-        'pro_host', 'Pro Host', 'Premium access for pro organizers',
-        JSON.stringify(allRespIds), individualPosId, 500, true, true, false
-    );
-    const proHostRoleId = proHostRoleRows[0]?.id;
-
-    const enterpriseHostRoleRows = await prisma.$queryRawUnsafe<{ id: string }[]>(
-        `INSERT INTO admin_roles (name, display_name, description, responsibility_ids, default_position_id, hierarchy_level, is_system_role, is_active, is_default)
-         VALUES ($1, $2, $3, $4::jsonb, $5::uuid, $6, $7, $8, $9) RETURNING id`,
-        'enterprise_host', 'Enterprise Host', 'Full administrative event hosting features',
-        JSON.stringify(allRespIds), adminPosId, 300, true, true, false
-    );
-    const enterpriseHostRoleId = enterpriseHostRoleRows[0]?.id;
-
-    const adminRoleRows = await prisma.$queryRawUnsafe<{ id: string }[]>(
-        `INSERT INTO admin_roles (name, display_name, description, responsibility_ids, default_position_id, hierarchy_level, is_system_role, is_active, is_default)
-         VALUES ($1, $2, $3, $4::jsonb, $5::uuid, $6, $7, $8, $9) RETURNING id`,
-        'admin', 'Administrator', 'Full administrative access to manage the entire system',
-        JSON.stringify(allRespIds), adminPosId, 2, true, true, false
-    );
-    const adminRoleId = adminRoleRows[0]?.id;
-
-    const superAdminRoleRows = await prisma.$queryRawUnsafe<{ id: string }[]>(
-        `INSERT INTO admin_roles (name, display_name, description, responsibility_ids, default_position_id, hierarchy_level, is_system_role, is_active, is_default)
-         VALUES ($1, $2, $3, $4::jsonb, $5::uuid, $6, $7, $8, $9) RETURNING id`,
-        'super_admin', 'Super Administrator', 'Unrestricted platform-wide super administrative access',
-        JSON.stringify(allRespIds), adminPosId, 1, true, true, false
-    );
-    const superAdminRoleId = superAdminRoleRows[0]?.id;
+    const freeUserRoleId = await upsertRole('free_user', 'Free User', 'Basic access to main dashboard', dashboardRespIds, individualPosId, 1000, true, true, true);
+    const basicHostRoleId = await upsertRole('basic_host', 'Basic Host', 'Enhanced access for basic event hosts', dashboardRespIds, individualPosId, 800, true, true, false);
+    const proHostRoleId = await upsertRole('pro_host', 'Pro Host', 'Premium access for pro organizers', allRespIds, individualPosId, 500, true, true, false);
+    const enterpriseHostRoleId = await upsertRole('enterprise_host', 'Enterprise Host', 'Full administrative event hosting features', allRespIds, adminPosId, 300, true, true, false);
+    const adminRoleId = await upsertRole('admin', 'Administrator', 'Full administrative access to manage the entire system', allRespIds, adminPosId, 2, true, true, false);
+    const superAdminRoleId = await upsertRole('super_admin', 'Super Administrator', 'Unrestricted platform-wide super administrative access', allRespIds, adminPosId, 1, true, true, false);
 
     console.log('Seeded roles');
 
@@ -236,7 +230,12 @@ export async function seedAdminRBAC(): Promise<void> {
 
     await prisma.$executeRawUnsafe(
         `INSERT INTO admin_subscription_plans (name, display_name, description, category, plan_type, is_active, is_popular, pricing, features, limits, metadata, visibility, rbac_role_id, rbac_position_id, rbac_auto_assign)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb, $13::uuid, $14::uuid, $15)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb, $13::uuid, $14::uuid, $15)
+         ON CONFLICT (name) DO UPDATE
+         SET display_name = EXCLUDED.display_name, description = EXCLUDED.description, category = EXCLUDED.category, plan_type = EXCLUDED.plan_type,
+             is_active = EXCLUDED.is_active, is_popular = EXCLUDED.is_popular, pricing = EXCLUDED.pricing, features = EXCLUDED.features,
+             limits = EXCLUDED.limits, metadata = EXCLUDED.metadata, visibility = EXCLUDED.visibility, rbac_role_id = EXCLUDED.rbac_role_id,
+             rbac_position_id = EXCLUDED.rbac_position_id, rbac_auto_assign = EXCLUDED.rbac_auto_assign`,
         'basic', 'Basic Member', 'Perfect for regular community members', 'individual', 'monthly', true, false,
         JSON.stringify(basicPricing), JSON.stringify(basicFeatures), '[]', '{}', '{}', basicHostRoleId, individualPosId, true
     );
@@ -254,7 +253,12 @@ export async function seedAdminRBAC(): Promise<void> {
 
     await prisma.$executeRawUnsafe(
         `INSERT INTO admin_subscription_plans (name, display_name, description, category, plan_type, is_active, is_popular, pricing, features, limits, metadata, visibility, rbac_role_id, rbac_position_id, rbac_auto_assign)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb, $13::uuid, $14::uuid, $15)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb, $13::uuid, $14::uuid, $15)
+         ON CONFLICT (name) DO UPDATE
+         SET display_name = EXCLUDED.display_name, description = EXCLUDED.description, category = EXCLUDED.category, plan_type = EXCLUDED.plan_type,
+             is_active = EXCLUDED.is_active, is_popular = EXCLUDED.is_popular, pricing = EXCLUDED.pricing, features = EXCLUDED.features,
+             limits = EXCLUDED.limits, metadata = EXCLUDED.metadata, visibility = EXCLUDED.visibility, rbac_role_id = EXCLUDED.rbac_role_id,
+             rbac_position_id = EXCLUDED.rbac_position_id, rbac_auto_assign = EXCLUDED.rbac_auto_assign`,
         'premium', 'Pro Member', 'The ultimate community experience with VIP access', 'individual', 'monthly', true, true,
         JSON.stringify(proPricing), JSON.stringify(proFeatures), '[]', '{}', '{}', proHostRoleId, individualPosId, true
     );
@@ -272,7 +276,10 @@ export async function seedAdminRBAC(): Promise<void> {
 
     await prisma.$executeRawUnsafe(
         `INSERT INTO admin_coupons (code, description, discount_type, amount, is_active, usage_restrictions, usage_limits, applicable_plan_ids, free_shipping, usage_count)
-         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, false, 0)`,
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, false, 0)
+         ON CONFLICT ON CONSTRAINT admin_coupons_code_tenant_id_key DO UPDATE
+         SET description = EXCLUDED.description, discount_type = EXCLUDED.discount_type, amount = EXCLUDED.amount, is_active = EXCLUDED.is_active,
+             usage_restrictions = EXCLUDED.usage_restrictions, usage_limits = EXCLUDED.usage_limits, applicable_plan_ids = EXCLUDED.applicable_plan_ids`,
         'WELCOME20', '20% welcome discount for new subscribers', 'percent', 20.00, true,
         JSON.stringify(welcomeCouponRestrictions), JSON.stringify(welcomeCouponLimits), '[]'
     );
@@ -281,7 +288,11 @@ export async function seedAdminRBAC(): Promise<void> {
 
     // ── Seed Platform Settings (Auth & Communication) ──────────────────────
     const defaultAuthSettings = {
-        google: { enabled: false, clientId: '', clientSecret: '' },
+        google: {
+            enabled: !!process.env.GOOGLE_CLIENT_ID,
+            clientId: process.env.GOOGLE_CLIENT_ID || '',
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET || ''
+        },
         linkedin: { enabled: false, clientId: '', clientSecret: '' }
     };
     const defaultCommSettings = {
@@ -297,17 +308,13 @@ export async function seedAdminRBAC(): Promise<void> {
         smtpPass: ''
     };
 
-    const hasAuthRow = await prisma.$queryRawUnsafe<{ id: string }[]>(
-        `SELECT id FROM platform_settings WHERE key = 'auth_settings'`
+    await prisma.$executeRawUnsafe(
+        `INSERT INTO platform_settings (scope_tenant_id, key, value, updated_at)
+         VALUES (null, 'auth_settings', $1::jsonb, now())
+         ON CONFLICT ON CONSTRAINT platform_settings_scope_tenant_id_key_key DO UPDATE SET value = $1::jsonb, updated_at = now()`,
+        JSON.stringify(defaultAuthSettings)
     );
-    if (hasAuthRow.length === 0) {
-        await prisma.$executeRawUnsafe(
-            `INSERT INTO platform_settings (scope_tenant_id, key, value, updated_at)
-             VALUES (null, 'auth_settings', $1::jsonb, now())`,
-            JSON.stringify(defaultAuthSettings)
-        );
-        console.log('Seeded default platform auth settings');
-    }
+    console.log('Seeded platform auth settings with active Google OAuth credentials');
 
     const hasCommRow = await prisma.$queryRawUnsafe<{ id: string }[]>(
         `SELECT id FROM platform_settings WHERE key = 'communication_settings'`
