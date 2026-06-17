@@ -2118,3 +2118,15 @@ enum waitlist_state {
   converted
   lapsed
 }
+
+model otp_verifications {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email      String   @db.VarChar(255)
+  otp_hash   String   @db.VarChar(255)
+  purpose    String   @db.VarChar(100)
+  attempts   Int      @default(0)
+  verified   Boolean  @default(false)
+  expires_at DateTime @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+}
+

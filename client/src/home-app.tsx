@@ -60,6 +60,8 @@ function App() {
 
   useEffect(() => {
     const token = localStorage.getItem('token') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMSIsInRlbmFudElkIjoiMDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAwIn0.mocksignature';
+    
+    // Fetch subscription status
     fetch(`${apiBase}/api/subscription/status`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
@@ -73,6 +75,26 @@ function App() {
         }
       })
       .catch(err => console.error('Error fetching subscription status', err));
+
+    // Fetch user profile details
+    fetch(`${apiBase}/api/admin/user/profile`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success) {
+          if (res.data.email) {
+            ME.handle = `@${res.data.email.split('@')[0]}`;
+          }
+          if (res.data.profile) {
+            const prof = res.data.profile;
+            if (prof.display_name) ME.name = prof.display_name;
+            if (prof.bio) ME.role = prof.bio;
+            if (prof.preferred_location) ME.location = prof.preferred_location;
+          }
+        }
+      })
+      .catch(err => console.error('Error fetching user profile', err));
   }, []);
 
   // navigation stack

@@ -429,6 +429,66 @@ paths:
         '200':
           description: Feature flags saved successfully
 
+  # ── Settings endpoints ─────────────────────────────────────────────────────
+  /api/admin/settings/auth:
+    get:
+      summary: Retrieve authentication integration settings
+      operationId: getAuthSettings
+      responses:
+        '200':
+          description: Enriched auth settings object
+    post:
+      summary: Save authentication settings
+      operationId: saveAuthSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Auth settings saved successfully
+
+  /api/admin/settings/communication:
+    get:
+      summary: Retrieve communication credentials settings
+      operationId: getCommunicationSettings
+      responses:
+        '200':
+          description: Enriched communication settings object
+    post:
+      summary: Save communication settings
+      operationId: saveCommunicationSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Communication settings saved successfully
+
+  /api/admin/settings/communication/test:
+    post:
+      summary: Verify mailer configuration by sending test email
+      operationId: testCommunication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+      responses:
+        '200':
+          description: Test email routed successfully
+
 components:
   schemas:
     RoleInput:

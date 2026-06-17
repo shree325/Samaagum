@@ -712,6 +712,10 @@ function App() {
             <button className={`sidebar-item ${activeTab === "audit" ? "active" : ""}`} onClick={() => setActiveTab("audit")}>
               <Icons.terminal /> System Audit Logs
             </button>
+
+            <button className={`sidebar-item ${activeTab === "settings" ? "active" : ""}`} onClick={() => setActiveTab("settings")}>
+              <Icons.settings /> System Settings
+            </button>
           </nav>
         </div>
 
@@ -827,6 +831,10 @@ function App() {
             <AuditView 
               logs={auditLogs} 
             />
+          )}
+
+          {activeTab === "settings" && (
+            <SettingsView user={user} logAction={logAction} addToast={addToast} />
           )}
         </div>
       </main>
@@ -3281,6 +3289,498 @@ function CouponsView({ user, apiBase }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function SettingsView({ user, logAction, addToast }) {
+  const [authSettings, setAuthSettings] = React.useState({
+    google: { enabled: false, clientId: '', clientSecret: '' },
+    linkedin: { enabled: false, clientId: '', clientSecret: '' }
+  });
+  const [authLoading, setAuthLoading] = React.useState(true);
+  const [authSaving, setAuthSaving] = React.useState(false);
+  const [authError, setAuthError] = React.useState(null);
+
+  const [commSettings, setCommSettings] = React.useState({
+    provider: 'brevo',
+    enabled: false,
+    senderEmail: '',
+    senderName: '',
+    brevoApiKey: '',
+    brevoTemplateId: '',
+    smtpHost: '',
+    smtpPort: 587,
+    smtpSecure: false,
+    smtpUser: '',
+    smtpPass: ''
+  });
+  const [commLoading, setCommLoading] = React.useState(true);
+  const [commSaving, setCommSaving] = React.useState(false);
+  const [commError, setCommError] = React.useState(null);
+
+  const [testEmail, setTestEmail] = React.useState('');
+  const [testLoading, setTestLoading] = React.useState(false);
+  const [testStatus, setTestStatus] = React.useState(null);
+
+  React.useEffect(() => {
+    loadAuthSettings();
+    loadCommSettings();
+  }, []);
+
+  const loadAuthSettings = async () => {
+    try {
+      setAuthLoading(true);
+      const res = await apiClient.settings.getAuthSettings();
+      if (res.success) {
+        setAuthSettings(res.data);
+      }
+    } catch (err) {
+      setAuthError(err.message || 'Failed to load authentication settings');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const loadCommSettings = async () => {
+    try {
+      setCommLoading(true);
+      const res = await apiClient.settings.getCommunicationSettings();
+      if (res.success) {
+        setCommSettings(res.data);
+      }
+    } catch (err) {
+      setCommError(err.message || 'Failed to load communication settings');
+    } finally {
+      setCommLoading(false);
+    }
+  };
+
+  const handleSaveAuth = async (e) => {
+    e.preventDefault();
+    try {
+      setAuthSaving(true);
+      setAuthError(null);
+      const res = await apiClient.settings.saveAuthSettings(authSettings);
+      if (res.success) {
+        addToast(res.message || 'Authentication settings saved successfully', 'success');
+        logAction(user.email, 'Updated OAuth settings configuration.');
+        await loadAuthSettings();
+      }
+    } catch (err) {
+      setAuthError(err.message || 'Failed to save authentication settings');
+    } finally {
+      setAuthSaving(false);
+    }
+  };
+
+  const handleSaveComm = async (e) => {
+    e.preventDefault();
+    try {
+      setCommSaving(true);
+      setCommError(null);
+      const res = await apiClient.settings.saveCommunicationSettings(commSettings);
+      if (res.success) {
+        addToast(res.message || 'Communication settings saved successfully', 'success');
+        logAction(user.email, 'Updated Communication credentials.');
+        await loadCommSettings();
+      }
+    } catch (err) {
+      setCommError(err.message || 'Failed to save communication settings');
+    } finally {
+      setCommSaving(false);
+    }
+  };
+
+  const handleTestConnection = async () => {
+    if (!testEmail) {
+      setTestStatus({ success: false, message: 'Please enter a recipient email address' });
+      return;
+    }
+    try {
+      setTestLoading(true);
+      setTestStatus(null);
+      const res = await apiClient.settings.testCommunication({ email: testEmail });
+      if (res.success) {
+        setTestStatus({ success: true, message: res.message || 'Test email sent successfully!' });
+      } else {
+        setTestStatus({ success: false, message: res.message || 'Failed to send test email' });
+      }
+    } catch (err) {
+      setTestStatus({ success: false, message: err.message || 'Error occurred while testing connection' });
+    } finally {
+      setTestLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <div style={{ marginBottom: "32px" }}>
+        <h2 style={{ fontFamily: "var(--font-display)", fontWeight: "600", fontSize: "28px", margin: "0 0 8px 0" }}>
+          System Settings
+        </h2>
+        <p style={{ color: "var(--ink-2)", margin: 0, fontSize: "15px" }}>
+          Configure third-party integrations, OAuth providers, and transactional communication credentials.
+        </p>
+      </div>
+
+      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', alignItems: 'start', cursor: 'default' }}>
+        
+        {/* Auth settings card */}
+        <div className="stat-card" style={{ height: 'auto', display: 'flex', flexDirection: 'column', gap: '20px', padding: '24px', cursor: 'default' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid var(--border-color, rgba(255,255,255,0.06))', paddingBottom: '12px' }}>
+            <Icons.shield style={{ color: 'var(--accent-1)' }} />
+            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Admin Auth Integration</h3>
+          </div>
+
+          {authLoading ? (
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--ink-2)' }}>Loading auth settings...</div>
+          ) : (
+            <form onSubmit={handleSaveAuth} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {authError && <div className="alert-badge text-danger" style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgb(239,68,68)', color: '#f87171', padding: '10px', borderRadius: '6px', fontSize: '13px' }}>{authError}</div>}
+
+              {/* GOOGLE AUTH */}
+              <div style={{ padding: '16px', background: 'var(--bg-card, rgba(255,255,255,0.02))', borderRadius: '8px', border: '1px solid var(--border-color, rgba(255,255,255,0.04))' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500 }}>
+                    Google OAuth
+                  </span>
+                  <label style={{ position: 'relative', display: 'inline-block', width: '40px', height: '22px' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={authSettings.google.enabled} 
+                      onChange={(e) => setAuthSettings({
+                        ...authSettings,
+                        google: { ...authSettings.google, enabled: e.target.checked }
+                      })}
+                      style={{ opacity: 0, width: 0, height: 0 }} 
+                    />
+                    <span className="slider round" style={{ position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: authSettings.google.enabled ? 'var(--accent-1)' : '#555', transition: '0.3s', borderRadius: '22px' }}>
+                      <span style={{ position: 'absolute', height: '16px', width: '16px', left: authSettings.google.enabled ? '20px' : '3px', bottom: '3px', backgroundColor: 'white', transition: '0.3s', borderRadius: '50%' }}></span>
+                    </span>
+                  </label>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', opacity: authSettings.google.enabled ? 1 : 0.6 }}>
+                  <div className="form-group">
+                    <label style={{ fontSize: '12px', marginBottom: '4px' }}>Client ID</label>
+                    <input 
+                      type="text" 
+                      className="form-control"
+                      value={authSettings.google.clientId}
+                      disabled={!authSettings.google.enabled}
+                      onChange={(e) => setAuthSettings({
+                        ...authSettings,
+                        google: { ...authSettings.google, clientId: e.target.value }
+                      })}
+                      placeholder="Enter Google Client ID"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label style={{ fontSize: '12px', marginBottom: '4px' }}>Client Secret</label>
+                    <input 
+                      type="password" 
+                      className="form-control"
+                      value={authSettings.google.clientSecret}
+                      disabled={!authSettings.google.enabled}
+                      onChange={(e) => setAuthSettings({
+                        ...authSettings,
+                        google: { ...authSettings.google, clientSecret: e.target.value }
+                      })}
+                      placeholder="Enter Google Client Secret"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* LINKEDIN AUTH */}
+              <div style={{ padding: '16px', background: 'var(--bg-card, rgba(255,255,255,0.02))', borderRadius: '8px', border: '1px solid var(--border-color, rgba(255,255,255,0.04))' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500 }}>
+                    LinkedIn OAuth
+                  </span>
+                  <label style={{ position: 'relative', display: 'inline-block', width: '40px', height: '22px' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={authSettings.linkedin.enabled} 
+                      onChange={(e) => setAuthSettings({
+                        ...authSettings,
+                        linkedin: { ...authSettings.linkedin, enabled: e.target.checked }
+                      })}
+                      style={{ opacity: 0, width: 0, height: 0 }} 
+                    />
+                    <span className="slider round" style={{ position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: authSettings.linkedin.enabled ? 'var(--accent-1)' : '#555', transition: '0.3s', borderRadius: '22px' }}>
+                      <span style={{ position: 'absolute', height: '16px', width: '16px', left: authSettings.linkedin.enabled ? '20px' : '3px', bottom: '3px', backgroundColor: 'white', transition: '0.3s', borderRadius: '50%' }}></span>
+                    </span>
+                  </label>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', opacity: authSettings.linkedin.enabled ? 1 : 0.6 }}>
+                  <div className="form-group">
+                    <label style={{ fontSize: '12px', marginBottom: '4px' }}>Client ID</label>
+                    <input 
+                      type="text" 
+                      className="form-control"
+                      value={authSettings.linkedin.clientId}
+                      disabled={!authSettings.linkedin.enabled}
+                      onChange={(e) => setAuthSettings({
+                        ...authSettings,
+                        linkedin: { ...authSettings.linkedin, clientId: e.target.value }
+                      })}
+                      placeholder="Enter LinkedIn Client ID"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label style={{ fontSize: '12px', marginBottom: '4px' }}>Client Secret</label>
+                    <input 
+                      type="password" 
+                      className="form-control"
+                      value={authSettings.linkedin.clientSecret}
+                      disabled={!authSettings.linkedin.enabled}
+                      onChange={(e) => setAuthSettings({
+                        ...authSettings,
+                        linkedin: { ...authSettings.linkedin, clientSecret: e.target.value }
+                      })}
+                      placeholder="Enter LinkedIn Client Secret"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={authSaving}
+                className="btn-sm btn-sm-primary"
+                style={{ width: '100%', padding: '10px', height: 'auto' }}
+              >
+                {authSaving ? 'Saving Auth Settings...' : 'Save Auth Configuration'}
+              </button>
+            </form>
+          )}
+        </div>
+
+        {/* Communication credentials card */}
+        <div className="stat-card" style={{ height: 'auto', display: 'flex', flexDirection: 'column', gap: '20px', padding: '24px', cursor: 'default' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid var(--border-color, rgba(255,255,255,0.06))', paddingBottom: '12px' }}>
+            <Icons.terminal style={{ color: 'var(--accent-2)' }} />
+            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Communication Credentials</h3>
+          </div>
+
+          {commLoading ? (
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--ink-2)' }}>Loading communication settings...</div>
+          ) : (
+            <form onSubmit={handleSaveComm} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {commError && <div className="alert-badge text-danger" style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgb(239,68,68)', color: '#f87171', padding: '10px', borderRadius: '6px', fontSize: '13px' }}>{commError}</div>}
+
+              {/* Main Enable Toggle */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-card, rgba(255,255,255,0.02))', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border-color, rgba(255,255,255,0.04))' }}>
+                <div>
+                  <span style={{ display: 'block', fontWeight: 500 }}>Enable System Emails</span>
+                  <span style={{ fontSize: '11px', color: 'var(--ink-2)' }}>Allow app to send transactional notifications</span>
+                </div>
+                <label style={{ position: 'relative', display: 'inline-block', width: '40px', height: '22px' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={commSettings.enabled} 
+                    onChange={(e) => setCommSettings({ ...commSettings, enabled: e.target.checked })}
+                    style={{ opacity: 0, width: 0, height: 0 }} 
+                  />
+                  <span className="slider round" style={{ position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: commSettings.enabled ? 'var(--accent-2)' : '#555', transition: '0.3s', borderRadius: '22px' }}>
+                    <span style={{ position: 'absolute', height: '16px', width: '16px', left: commSettings.enabled ? '20px' : '3px', bottom: '3px', backgroundColor: 'white', transition: '0.3s', borderRadius: '50%' }}></span>
+                  </span>
+                </label>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', opacity: commSettings.enabled ? 1 : 0.6 }}>
+                {/* Provider Picker */}
+                <div className="form-group">
+                  <label style={{ fontSize: '12px', marginBottom: '4px' }}>Email Provider</label>
+                  <select 
+                    className="form-control"
+                    value={commSettings.provider}
+                    disabled={!commSettings.enabled}
+                    onChange={(e) => setCommSettings({ ...commSettings, provider: e.target.value })}
+                  >
+                    <option value="brevo">Sendinblue / Brevo API</option>
+                    <option value="smtp">Custom SMTP Server</option>
+                  </select>
+                </div>
+
+                {/* Sender Details */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="form-group">
+                    <label style={{ fontSize: '12px', marginBottom: '4px' }}>Sender Name</label>
+                    <input 
+                      type="text" 
+                      className="form-control"
+                      value={commSettings.senderName}
+                      disabled={!commSettings.enabled}
+                      onChange={(e) => setCommSettings({ ...commSettings, senderName: e.target.value })}
+                      placeholder="e.g. Samaagum Alerts"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label style={{ fontSize: '12px', marginBottom: '4px' }}>Sender Email</label>
+                    <input 
+                      type="email" 
+                      className="form-control"
+                      value={commSettings.senderEmail}
+                      disabled={!commSettings.enabled}
+                      onChange={(e) => setCommSettings({ ...commSettings, senderEmail: e.target.value })}
+                      placeholder="alerts@domain.com"
+                    />
+                  </div>
+                </div>
+
+                {/* BREVO CONFIG */}
+                {commSettings.provider === 'brevo' && (
+                  <div style={{ padding: '16px', background: 'rgba(109,94,252,0.04)', borderRadius: '8px', border: '1px solid rgba(109,94,252,0.15)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ fontWeight: 500, fontSize: '13px', color: 'var(--accent-2)' }}>Brevo API Configuration</div>
+                    <div className="form-group">
+                      <label style={{ fontSize: '12px', marginBottom: '4px' }}>Brevo API Key v3</label>
+                      <input 
+                        type="password" 
+                        className="form-control"
+                        value={commSettings.brevoApiKey}
+                        disabled={!commSettings.enabled}
+                        onChange={(e) => setCommSettings({ ...commSettings, brevoApiKey: e.target.value })}
+                        placeholder="xkeysib-..."
+                      />
+                    </div>
+                    <div className="form-group" style={{ marginTop: '10px' }}>
+                      <label style={{ fontSize: '12px', marginBottom: '4px' }}>Brevo Template ID (Optional)</label>
+                      <input 
+                        type="number" 
+                        className="form-control"
+                        value={commSettings.brevoTemplateId || ''}
+                        disabled={!commSettings.enabled}
+                        onChange={(e) => setCommSettings({ ...commSettings, brevoTemplateId: e.target.value ? Number(e.target.value) : '' })}
+                        placeholder="e.g. 1"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* SMTP CONFIG */}
+                {commSettings.provider === 'smtp' && (
+                  <div style={{ padding: '16px', background: 'var(--bg-card, rgba(255,255,255,0.02))', borderRadius: '8px', border: '1px solid var(--border-color, rgba(255,255,255,0.05))', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ fontWeight: 500, fontSize: '13px' }}>SMTP Configuration</div>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', gap: '12px' }}>
+                      <div className="form-group">
+                        <label style={{ fontSize: '11px', marginBottom: '4px' }}>SMTP Host</label>
+                        <input 
+                          type="text" 
+                          className="form-control"
+                          value={commSettings.smtpHost}
+                          disabled={!commSettings.enabled}
+                          onChange={(e) => setCommSettings({ ...commSettings, smtpHost: e.target.value })}
+                          placeholder="smtp.example.com"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label style={{ fontSize: '11px', marginBottom: '4px' }}>Port</label>
+                        <input 
+                          type="number" 
+                          className="form-control"
+                          value={commSettings.smtpPort}
+                          disabled={!commSettings.enabled}
+                          onChange={(e) => setCommSettings({ ...commSettings, smtpPort: e.target.value ? Number(e.target.value) : 587 })}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div className="form-group">
+                        <label style={{ fontSize: '11px', marginBottom: '4px' }}>SMTP User</label>
+                        <input 
+                          type="text" 
+                          className="form-control"
+                          value={commSettings.smtpUser}
+                          disabled={!commSettings.enabled}
+                          onChange={(e) => setCommSettings({ ...commSettings, smtpUser: e.target.value })}
+                          placeholder="Username/Email"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label style={{ fontSize: '11px', marginBottom: '4px' }}>SMTP Password</label>
+                        <input 
+                          type="password" 
+                          className="form-control"
+                          value={commSettings.smtpPass}
+                          disabled={!commSettings.enabled}
+                          onChange={(e) => setCommSettings({ ...commSettings, smtpPass: e.target.value })}
+                          placeholder="Password"
+                        />
+                      </div>
+                    </div>
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={commSettings.smtpSecure}
+                        disabled={!commSettings.enabled}
+                        onChange={(e) => setCommSettings({ ...commSettings, smtpSecure: e.target.checked })}
+                      />
+                      Use SSL/TLS (Secure Connection)
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={commSaving}
+                className="btn-sm btn-sm-primary"
+                style={{ width: '100%', padding: '10px', height: 'auto', background: 'var(--accent-2)' }}
+              >
+                {commSaving ? 'Saving Credentials...' : 'Save Communication Configuration'}
+              </button>
+            </form>
+          )}
+
+          {/* Connection Test Sub-card */}
+          {commSettings.enabled && (
+            <div style={{ marginTop: '10px', borderTop: '1px solid var(--border-color, rgba(255,255,255,0.06))', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ fontWeight: 500, fontSize: '13px' }}>Test Communication Integration</div>
+              <p style={{ fontSize: '11px', color: 'var(--ink-2)', margin: 0 }}>Send a quick validation email to verify your configured Brevo or SMTP credentials.</p>
+              
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <input 
+                  type="email"
+                  placeholder="recipient@test.com"
+                  value={testEmail}
+                  className="form-control"
+                  onChange={(e) => setTestEmail(e.target.value)}
+                  style={{ flex: 1, fontSize: '13px' }}
+                />
+                <button 
+                  onClick={handleTestConnection}
+                  disabled={testLoading || !testEmail}
+                  className="btn-sm"
+                  style={{ padding: '8px 16px', background: 'rgba(255,255,255,0.1)', height: 'auto' }}
+                >
+                  {testLoading ? 'Testing...' : 'Send Test'}
+                </button>
+              </div>
+
+              {testStatus && (
+                <div style={{ 
+                  padding: '8px 12px', 
+                  borderRadius: '6px', 
+                  fontSize: '12px',
+                  background: testStatus.success ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
+                  border: `1px solid ${testStatus.success ? 'rgb(16,185,129)' : 'rgb(239,68,68)'}`,
+                  color: testStatus.success ? '#34d399' : '#f87171'
+                }}>
+                  {testStatus.message}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+      </div>
     </div>
   );
 }

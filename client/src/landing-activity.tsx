@@ -140,7 +140,7 @@ function Footer() {
   const cols = [
     ["Product", ["Communities", "Events", "Networking", "Profiles", "Discussions"]],
     ["Company", ["About", "Careers", "Blog", "Press"]],
-    ["Resources", ["Help center", "Guidelines", "Privacy", "Terms", "Admin Console"]],
+    ["Resources", ["Help center", "Guidelines", "Privacy", "Terms"]],
   ];
   return (
     <footer className="footer">
@@ -153,10 +153,9 @@ function Footer() {
           {cols.map(([h, links]) => (
             <div key={h}>
               <h5>{h}</h5>
-              {links.map(l => {
-                const isAdmin = l === "Admin Console";
-                return <a key={l} href={isAdmin ? "pages/admin/index.html" : AUTH}>{l}</a>;
-              })}
+              {links.map(l => (
+                <a key={l} href={AUTH}>{l}</a>
+              ))}
             </div>
           ))}
         </div>

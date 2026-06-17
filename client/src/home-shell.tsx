@@ -153,7 +153,18 @@ function ProfileMenu({ go, dark, onToggleTheme }) {
         ))}
         <button className="pmenu-it" onClick={onToggleTheme}>{dark? <I.sun/> : <I.moon/>}{dark? "Light mode":"Dark mode"}</button>
       </div>
-      <div className="pmenu-foot"><button className="pmenu-it muted"><I.external/>Sign out</button></div>
+      <div className="pmenu-foot">
+        <button 
+          className="pmenu-it muted" 
+          onClick={() => {
+            localStorage.removeItem('token');
+            localStorage.removeItem('samaagum_admin_token');
+            window.location.href = "/";
+          }}
+        >
+          <I.external/>Sign out
+        </button>
+      </div>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { createAdminCouponRouter } from './controllers/adminCouponRoutes';
 import { createAdminSettingsRouter } from './controllers/adminSettingsRoutes';
 import { createUserSubscriptionRouter } from './controllers/userSubscriptionRoutes';
 import { seedAdminRBAC } from './services/adminRbacSeeder';
+import { seedPlatformSettings } from './settings-library/settingsSeeder';
 
 dotenv.config();
 
@@ -19,9 +20,15 @@ prisma.admin_roles.count()
             return seedAdminRBAC();
         }
     })
+    .then(() => {
+        return seedPlatformSettings(async (query: string, params: any[]) => {
+            return prisma.$queryRawUnsafe(query, ...params);
+        });
+    })
     .catch((err) => {
         console.error('❌ Error during auto-seeding:', err.message || err);
     });
+
 
 
 const app = express();

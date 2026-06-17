@@ -53,10 +53,30 @@ function ScreenMethod({ m }) {
       m.goName(m.mode === "signup" ? "profile" : "done");
     }, 1100);
   };
-  const cont = () => {
+  const cont = async () => {
     if (!valid) { setErr("Enter a valid email address"); return; }
     setCLoading(true);
-    setTimeout(() => { m.set({ email }); m.next(); }, 850);
+    setErr("");
+    try {
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+      const res = await fetch(`${apiBase}/api/admin/otp/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, purpose: m.mode === 'signup' ? 'Signup' : 'Login' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        m.set({ email, otp: data.code || '' });
+        m.next();
+      } else {
+        setErr(data.message || "Failed to send verification code");
+      }
+    } catch (e) {
+      setErr("Failed to connect to authentication service");
+    } finally {
+      setCLoading(false);
+    }
   };
 
   return (
@@ -94,11 +114,6 @@ function ScreenMethod({ m }) {
           {m.mode === "signup" ? "Sign in" : "Create account"}
         </a>
       </p>
-      <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px dashed rgba(255,255,255,0.12)", textAlign: "center" }}>
-        <a href="admin/index.html" style={{ fontSize: 13, color: "var(--accent-2)", fontWeight: 500, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <span>🛡️</span> Administrative Entry Portal
-        </a>
-      </div>
     </div>
   );
 }
@@ -108,14 +123,80 @@ function ScreenOtp({ m }) {
   const [status, setStatus] = useState("");
   const [secs, reset] = useCountdown(30, m.step);
   const verifying = useRef(false);
+  const [errMsg, setErrMsg] = useState("");
+
+  const handleResend = async () => {
+    setErrMsg("");
+    try {
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+      const res = await fetch(`${apiBase}/api/admin/otp/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: m.data.email, purpose: m.mode === 'signup' ? 'Signup' : 'Login' })
+      });
+      const data = await res.json();
+      if (data.success) {
+        reset();
+        if (data.code) {
+          m.set({ otp: data.code });
+          setCode(data.code);
+        }
+      } else {
+        setErrMsg(data.message || "Failed to resend code");
+      }
+    } catch (e) {
+      setErrMsg("Failed to connect to authentication service");
+    }
+  };
 
   useEffect(() => {
     if (code.length === 6 && !verifying.current) {
       verifying.current = true;
-      setTimeout(() => {
-        setStatus("ok");
-        setTimeout(() => { m.set({ otp: code }); m.next(); }, 650);
-      }, 500);
+      setErrMsg("");
+      setStatus("");
+      
+      const verifyCode = async () => {
+        try {
+          const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+          const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+          const res = await fetch(`${apiBase}/api/admin/otp/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: m.data.email,
+              purpose: m.mode === 'signup' ? 'Signup' : 'Login',
+              code: code
+            })
+          });
+          const data = await res.json();
+          if (data.success) {
+            setStatus("ok");
+            if (data.token) {
+              localStorage.setItem('token', data.token);
+              localStorage.setItem('samaagum_admin_token', data.token);
+            }
+            setTimeout(() => {
+              m.set({ otp: code });
+              m.next();
+            }, 650);
+          } else {
+            setStatus("error");
+            setErrMsg(data.message || "Incorrect verification code");
+            verifying.current = false;
+          }
+        } catch (e) {
+          setStatus("error");
+          setErrMsg("Failed to verify code");
+          verifying.current = false;
+        }
+      };
+      
+      verifyCode();
+    } else if (code.length < 6) {
+      setStatus("");
+      setErrMsg("");
+      verifying.current = false;
     }
   }, [code]);
 
@@ -126,14 +207,19 @@ function ScreenOtp({ m }) {
       <div style={{ marginTop: 24 }}>
         <OTPInput value={code} onChange={setCode} status={status} />
       </div>
+      {errMsg && (
+        <p style={{ color: "var(--accent-1, #ff5555)", fontSize: "13px", marginTop: "12px", textAlign: "center", fontWeight: "500" }}>
+          {errMsg}
+        </p>
+      )}
       <p style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 14, textAlign: "center" }}>
         <Ic.spark style={{ verticalAlign: "-2px", marginRight: 5, color: "var(--accent-2)" }} />
-        Demo — enter any 6 digits to continue
+        Please enter the code sent to your email to verify your identity.
       </p>
       <p className="otp-resend">
         {secs > 0
           ? <React.Fragment>Resend code in <b>0:{String(secs).padStart(2, "0")}</b></React.Fragment>
-          : <a onClick={reset}>Resend code</a>}
+          : <a onClick={handleResend} style={{ cursor: 'pointer' }}>Resend code</a>}
       </p>
     </div>
   );
@@ -226,7 +312,43 @@ function ScreenLocation({ m }) {
   const list = q
     ? CITIES.filter(([c]) => c.toLowerCase().includes(q.toLowerCase()))
     : CITIES.slice(0, 4);
-  const finish = () => { setLoading(true); setTimeout(() => { m.set({ city }); m.next(); }, 800); };
+  const finish = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+        
+        await fetch(`${apiBase}/api/admin/user/profile`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            displayName: m.data.name,
+            bio: m.data.role || '',
+            preferredLocation: city ? city[0] : 'Bengaluru'
+          })
+        });
+      }
+    } catch (e) {
+      console.error('Failed to save profile to database:', e);
+    }
+
+    if (window.ME) {
+      window.ME.name = m.data.name || window.ME.name;
+      window.ME.role = m.data.role || window.ME.role;
+      window.ME.location = city ? `${city[0]}, ${city[1]}` : window.ME.location;
+      if (m.data.email) {
+        window.ME.handle = `@${m.data.email.split('@')[0]}`;
+      }
+    }
+
+    m.set({ city });
+    m.next();
+  };
 
   return (
     <div>
