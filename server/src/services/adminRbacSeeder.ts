@@ -7,6 +7,29 @@ function hashKey(plain: string): string {
     return crypto.createHash('sha256').update(plain).digest('hex');
 }
 
+async function upsertGlobalPlatformSetting(key: string, value: any) {
+    const existing = await prisma.$queryRawUnsafe<{ id: string }[]>(
+        `SELECT id FROM platform_settings WHERE scope_tenant_id IS NULL AND key = $1 LIMIT 1`,
+        key
+    );
+
+    if (existing && existing.length > 0) {
+        await prisma.$executeRawUnsafe(
+            `UPDATE platform_settings SET value = $1::jsonb, updated_at = now() WHERE id = $2::uuid`,
+            JSON.stringify(value),
+            existing[0].id
+        );
+    } else {
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO platform_settings (id, scope_tenant_id, key, value, updated_at)
+             VALUES (gen_random_uuid(), null, $1, $2::jsonb, now())`,
+            key,
+            JSON.stringify(value)
+        );
+    }
+}
+
+
 const responsibilities = [
     { name: 'dashboard_main', display_name: 'Main Dashboard', description: 'Access to the main dashboard', category: 'dashboard', route_path: '/dashboard', component_name: 'Dashboard', icon_name: 'LayoutDashboard', sort_order: 1 },
     { name: 'events_management', display_name: 'Manage Events', description: 'Access to create and modify community events', category: 'dashboard', route_path: '/admin/events', component_name: 'EventsManagement', icon_name: 'Calendar', sort_order: 2 },
@@ -185,20 +208,16 @@ export async function seedAdminRBAC(): Promise<void> {
         ]
     };
 
-    await prisma.$executeRawUnsafe(
-        `INSERT INTO platform_settings (scope_tenant_id, key, value, updated_at)
-         VALUES (null, 'admin_credentials', $1::jsonb, now())
-         ON CONFLICT ON CONSTRAINT platform_settings_scope_tenant_id_key_key DO UPDATE SET value = $1::jsonb, updated_at = now()`,
-        JSON.stringify(credentialsPayload)
-    );
+    await upsertGlobalPlatformSetting('admin_credentials', credentialsPayload);
 
     // Also keep super_admin_config for OTP flow compatibility
-    await prisma.$executeRawUnsafe(
-        `INSERT INTO platform_settings (scope_tenant_id, key, value, updated_at)
-         VALUES (null, 'super_admin_config', $1::jsonb, now())
-         ON CONFLICT ON CONSTRAINT platform_settings_scope_tenant_id_key_key DO UPDATE SET value = $1::jsonb, updated_at = now()`,
-        JSON.stringify({ adminEmail: superAdminEmail, adminUserId: superAdminUserId, superAdminRoleId, adminRoleId })
-    );
+    await upsertGlobalPlatformSetting('super_admin_config', {
+        adminEmail: superAdminEmail,
+        adminUserId: superAdminUserId,
+        superAdminRoleId,
+        adminRoleId
+    });
+
 
     console.log('');
     console.log('╔══════════════════════════════════════════════════════╗');
@@ -308,25 +327,26 @@ export async function seedAdminRBAC(): Promise<void> {
         smtpPass: ''
     };
 
-    await prisma.$executeRawUnsafe(
-        `INSERT INTO platform_settings (scope_tenant_id, key, value, updated_at)
-         VALUES (null, 'auth_settings', $1::jsonb, now())
-         ON CONFLICT ON CONSTRAINT platform_settings_scope_tenant_id_key_key DO UPDATE SET value = $1::jsonb, updated_at = now()`,
-        JSON.stringify(defaultAuthSettings)
+    // Only seed default auth_settings if they do not exist in the database yet
+    const hasAuthRow = await prisma.$queryRawUnsafe<{ id: string }[]>(
+        `SELECT id FROM platform_settings WHERE scope_tenant_id IS NULL AND key = 'auth_settings' LIMIT 1`
     );
-    console.log('Seeded platform auth settings with active Google OAuth credentials');
+
+    if (hasAuthRow.length === 0) {
+        await upsertGlobalPlatformSetting('auth_settings', defaultAuthSettings);
+        console.log('Seeded platform auth settings with default credentials');
+    } else {
+        console.log('Platform auth settings already exist, skipping...');
+    }
 
     const hasCommRow = await prisma.$queryRawUnsafe<{ id: string }[]>(
-        `SELECT id FROM platform_settings WHERE key = 'communication_settings'`
+        `SELECT id FROM platform_settings WHERE scope_tenant_id IS NULL AND key = 'communication_settings' LIMIT 1`
     );
     if (hasCommRow.length === 0) {
-        await prisma.$executeRawUnsafe(
-            `INSERT INTO platform_settings (scope_tenant_id, key, value, updated_at)
-             VALUES (null, 'communication_settings', $1::jsonb, now())`,
-            JSON.stringify(defaultCommSettings)
-        );
+        await upsertGlobalPlatformSetting('communication_settings', defaultCommSettings);
         console.log('Seeded default platform communication settings');
     }
+
 
     console.log('--- Admin RBAC Seeding Complete ---');
 }
