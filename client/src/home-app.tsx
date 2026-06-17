@@ -15,6 +15,7 @@ function TabBar({ view, go, counts }) {
     { k:"home", ic:<I.home/>, label:"Home" },
     { k:"discover", ic:<I.compass/>, label:"Discover" },
     { k:"create-event", ic:<I.plus/>, label:"", fab:true },
+    { k:"create-group", ic:<I.users/>, label:"", fab:true },
     { k:"messages", ic:<I.chat/>, label:"Chats", badge: counts.messages },
     { k:"profile", ic:<I.user/>, label:"You" },
   ];
@@ -22,7 +23,7 @@ function TabBar({ view, go, counts }) {
   return (
     <div className="tabbar">
       {tabs.map(t => t.fab ? (
-        <button key={t.k} className="tab" onClick={()=>go("create-event")}><span className="fab">{t.ic}</span></button>
+        <button key={t.k} className="tab" onClick={() => go(t.k)}><span className="fab">{t.ic}</span></button>
       ) : (
         <button key={t.k} className={`tab ${active(t.k)?"on":""}`} onClick={()=>go(t.k)}>
           <span className="ic">{t.ic}</span>{t.label}
@@ -52,6 +53,7 @@ function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [city, setCity] = useState("Bengaluru");
   const [cityOpen, setCityOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // navigation stack
   const [stack, setStack] = useState([{ view:"home", param:null }]);
@@ -105,8 +107,20 @@ function App() {
     if (v==="profile") return <Profile st={st} go={go} />;
     if (v==="notifications") return <Notifications st={st} go={go} />;
     if (v==="messages") return <Messages st={st} go={go} mobile={mobile} />;
-    if (v==="create-event") return <CreateEvent go={go} mobile={mobile} />;
-    if (v==="create-group") return <CreateGroup go={go} mobile={mobile} />;
+    if (v==="create-event") {
+      const CreateEventComp = typeof window !== "undefined" ? window.CreateEvent : null;
+      if (CreateEventComp) {
+        return <CreateEventComp go={go} mobile={mobile} />;
+      }
+      return <div style={{ padding: 40, textAlign: "center" }}>Loading Create Event module...</div>;
+    }
+    if (v==="create-group") {
+      const CreateGroupComp = typeof window !== "undefined" ? window.CreateGroup : null;
+      if (CreateGroupComp) {
+        return <CreateGroupComp go={go} mobile={mobile} />;
+      }
+      return <div style={{ padding: 40, textAlign: "center" }}>Loading Create Group module...</div>;
+    }
     return <HomeFeed st={st} go={go} />;
   };
 
@@ -117,8 +131,8 @@ function App() {
     : cur.view;
 
   return (
-    <div className={`app ${mobile?"mobile":""}`}>
-      {!mobile && <Sidebar view={navKey} go={go} counts={counts} />}
+    <div className={`app ${mobile?"mobile":""} ${sidebarCollapsed?"collapsed":""}`}>
+      {!mobile && <Sidebar view={navKey} go={go} counts={counts} collapsed={sidebarCollapsed} onToggleCollapse={()=>setSidebarCollapsed(v=>!v)} />}
       <div className="content">
         {mobile ? <MobileTop go={go} counts={counts} city={city} />
                 : <Topbar go={go} counts={counts} dark={t.dark} onToggleTheme={()=>setTweak("dark", !t.dark)} city={city} onCity={()=>setCityOpen(true)} />}

@@ -1,7 +1,9 @@
-/* ============================================================
-   Samaagum Home — Create event + Create group (Luma-grade, live preview)
-   ============================================================ */
+// Deprecated: This file has been split into create_event.tsx and CreateGroup.tsx
+// Please do not use or import this file.
+const { useState, useRef, useEffect, useCallback, useMemo } = React;
 
+// Reuse existing components and utilities from the project
+// Assuming CoverPicker, I, Grain, etc. are globally available via the app bundle
 const COVER_SWATCHES = Object.entries(COVERS).map(([k,v])=>({k,v}));
 
 function CoverPicker({ value, onPick }) {
@@ -17,238 +19,303 @@ function CoverPicker({ value, onPick }) {
   );
 }
 
-function Toggle({ on, onClick }) { return <button className={`tg ${on?"on":""}`} onClick={onClick} />; }
 
-/* ---------------- Create Event ---------------- */
-function CreateEvent({ go, mobile }) {
-  const [title, setTitle] = useState("");
+function CreateGroup({ go, mobile }) {
+  const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
   const [cover, setCover] = useState(COVERS.sunset);
-  const [type, setType] = useState("paid");
-  const [cat, setCat] = useState("Startups");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
-  const [venue, setVenue] = useState("");
+  const [privacy, setPrivacy] = useState("public"); // public | private | invite-only
   const [desc, setDesc] = useState("");
-  const [approval, setApproval] = useState(false);
-  const [cash, setCash] = useState(false);
-  const [tickets, setTickets] = useState([{ n:"Early Bird", cap:"50", price:"499" }]);
-  const types = [
-    { k:"paid", ic:<I.ticket/>, t:"Paid", d:"Sell tickets" },
-    { k:"free", ic:<I.users/>, t:"Free", d:"RSVP only" },
-    { k:"online", ic:<I.online/>, t:"Online", d:"Virtual link" },
-  ];
-  const setTk = (i,key,v) => setTickets(ts => ts.map((t,j)=>j===i?{...t,[key]:v}:t));
+  const [memberInput, setMemberInput] = useState("");
+  const [members, setMembers] = useState(["Me"]);
 
-  const previewEv = {
-    cover, cat, type: type==="free"?"Free":"Paid", online: type==="online",
-    month:"JUN", day:"18", title: title||"Your event title",
-    date: date||"Date TBD", time: time||"Time TBD",
-    venue: type==="online"?"Online":(venue||"Venue TBD"),
-    going: 0, price: type==="paid"?`₹${tickets[0]?.price||"—"}`:"Free", attendees:[],
+  const [showBannerMenu, setShowBannerMenu] = useState(false);
+  const [bannerError, setBannerError] = useState("");
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+  const [isDraggingBanner, setIsDraggingBanner] = useState(false);
+  const fileInputRef = useRef(null);
+
+  // Auto‑slug from name
+  useEffect(() => {
+    if (name && (!slug || slug === name.slice(0, -1).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, ""))) {
+      setSlug(name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, ""));
+    }
+  }, [name]);
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) validateAndProcessFile(file);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDraggingBanner(true);
+  };
+
+  const handleDragLeave = () => setIsDraggingBanner(false);
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDraggingBanner(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      validateAndProcessFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const validateAndProcessFile = async (file) => {
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      setBannerError("Client Validation Error: Invalid format. Please use JPG, PNG, or WEBP.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setBannerError("Client Validation Error: File size exceeds 5MB limit.");
+      return;
+    }
+    setBannerError("");
+    setIsUploadingBanner(true);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      const reader = new FileReader();
+      reader.onload = () => {
+        setCover(reader.result);
+        setIsUploadingBanner(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      setBannerError(err.message);
+      setIsUploadingBanner(false);
+    }
+  };
+
+  const addMember = (e) => {
+    if (e.key === "Enter" && memberInput.trim()) {
+      setMembers([...members, memberInput.trim()]);
+      setMemberInput("");
+    }
+  };
+
+  const removeMember = (i) => {
+    setMembers(members.filter((_, idx) => idx !== i));
+  };
+
+  const previewGroup = {
+    cover,
+    name: name || "Untitled Group",
+    slug: slug || "your-group-slug",
+    privacy,
+    members,
+  };
+
+  const cardStyle = {
+    background: "var(--surface)",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--r-lg)",
+    padding: "24px",
+    marginBottom: "24px",
+    boxShadow: "var(--sh-sm)"
   };
 
   return (
     <div className={`create ${mobile?"single":""}`}>
-      <div className="create-form">
-        <div className="cf-inner">
-          <div className="create-head">
-            <button className="hbtn hbtn--ghost hbtn--sm" onClick={()=>go("home")} style={{ padding:"7px 11px" }}><I.arrowL/></button>
-            <div><div className="ck">New event</div><h1>Create an event</h1></div>
-          </div>
-
-          <div className={`cover-up ${cover?"filled":""}`} style={cover?{ background:cover }:{}}>
-            {cover && <Grain/>}
-            <div className="up-hint" style={cover?{ color:"#fff" }:{}}>
-              <div className="uic" style={cover?{ background:"rgba(255,255,255,0.2)", color:"#fff" }:{}}><I.image/></div>
-              {cover ? "Looks great — pick a theme below" : "Upload a cover image"}
-            </div>
-          </div>
-          <CoverPicker value={cover} onPick={setCover} />
-
-          <div style={{ marginTop:22 }}>
-            <input className="title-input" placeholder="Event title" value={title} onChange={e=>setTitle(e.target.value)} />
-          </div>
-
-          <div className="cfield" style={{ marginTop:18 }}>
-            <label>Event type</label>
-            <div className="type-pills">
-              {types.map(t => (
-                <button key={t.k} className={`type-pill ${type===t.k?"on":""}`} onClick={()=>setType(t.k)}>
-                  <span className="tpic">{t.ic}</span><span className="tpt">{t.t}</span><span className="tpd">{t.d}</span>
-                </button>
-              ))}
+      <div className="create-form" style={{ backgroundColor: "var(--bg-2)", padding: mobile ? "24px 20px 100px" : "32px 40px 100px", position: "relative" }}>
+        <div className="cf-inner" style={{ maxWidth: 720, margin: "0 auto" }}>
+          <div className="create-head" style={{ marginBottom: 32 }}>
+            <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => go("home")} style={{ padding:"7px 11px", background: "var(--surface)" }}>
+              <I.arrowL/>
+            </button>
+            <div>
+              <div className="ck">New group</div>
+              <h1>Create a group</h1>
             </div>
           </div>
 
-          <div className="crow">
-            <div className="cfield"><label>Date</label><input className="cinput" type="text" placeholder="Thu, Jun 18" value={date} onChange={e=>setDate(e.target.value)} /></div>
-            <div className="cfield"><label>Time</label><input className="cinput" type="text" placeholder="6:30 PM" value={time} onChange={e=>setTime(e.target.value)} /></div>
-          </div>
-
-          <div className="cfield">
-            <label>{type==="online"?"Meeting link":"Venue"} <span className="opt">{type==="online"?"· revealed after registration":""}</span></label>
-            <input className="cinput" placeholder={type==="online"?"https://meet.samaagum.co/…":"Add a venue or address"} value={venue} onChange={e=>setVenue(e.target.value)} />
-          </div>
-
-          <div className="crow">
-            <div className="cfield"><label>Category</label>
-              <select className="cselect" value={cat} onChange={e=>setCat(e.target.value)}>
-                {CATS.filter(c=>c[0]!=="All").map(([c])=> <option key={c}>{c}</option>)}
-              </select>
-            </div>
-            <div className="cfield"><label>Capacity <span className="opt">· hard cap</span></label><input className="cinput" placeholder="180" /></div>
-          </div>
-
-          <div className="cfield">
-            <label>Description</label>
-            <textarea className="ctext" placeholder="Tell people what to expect — the vibe, who it's for, what they'll leave with." value={desc} onChange={e=>setDesc(e.target.value)} />
-          </div>
-
-          {type==="paid" && (
-            <div className="cfield">
-              <label>Ticket types</label>
-              {tickets.map((t,i) => (
-                <div key={i} className="ticket-row">
-                  <span className="grip"><I.more style={{ transform:"rotate(90deg)" }}/></span>
-                  <div className="tr-i">
-                    <input className="tr-mini" placeholder="Tier name" value={t.n} onChange={e=>setTk(i,"n",e.target.value)} />
-                    <input className="tr-mini" placeholder="Qty" value={t.cap} onChange={e=>setTk(i,"cap",e.target.value)} />
-                    <input className="tr-mini" placeholder="₹ Price" value={t.price} onChange={e=>setTk(i,"price",e.target.value)} />
+          {/* Banner Upload */}
+          <div style={{ ...cardStyle, display: "grid", gridTemplateColumns: mobile ? "1fr" : "1.2fr 1fr", gap: 32 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--ink)", marginBottom: 8 }}>Banner</label>
+              <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/jpeg,image/png,image/webp" style={{ display: "none" }} />
+              <div
+                className={`cover-up ${cover?"filled":""}`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => setShowBannerMenu(prev => !prev)}
+                style={{
+                  ...(cover && !cover.startsWith("linear-gradient") ? { backgroundImage: `url(${cover})`, backgroundSize: "cover", backgroundPosition: "center" } : cover ? { background: cover } : {}),
+                  borderRadius: "var(--r-md)",
+                  marginBottom: 8,
+                  height: 180,
+                  position: "relative",
+                  border: isDraggingBanner ? "2.5px dashed var(--accent-2)" : "1.5px dashed var(--border)",
+                  transition: "all 0.2s ease",
+                  cursor: "pointer"
+                }}
+              >
+                {cover && cover.startsWith("linear-gradient") && <Grain/>}
+                {isUploadingBanner && (
+                  <div style={{ position: "absolute", inset: 0, background: "rgba(0, 0, 0, 0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--r-md)" }}>
+                    <span style={{ color: "#fff", fontSize: 13, fontWeight: 600 }}>Uploading &amp; Verifying...</span>
                   </div>
-                  {tickets.length>1 && <button className="tr-del" onClick={()=>setTickets(ts=>ts.filter((_,j)=>j!==i))}><I.x/></button>}
+                )}
+                <div className="up-hint" style={{ color: cover ? "#fff" : "var(--ink-3)", textShadow: cover && !cover.startsWith("linear-gradient") ? "0 1px 4px rgba(0,0,0,0.6)" : "none" }}>
+                  <div className="uic" style={{ background: cover ? "rgba(255,255,255,0.25)" : "var(--accent-soft)", color: cover ? "#fff" : "var(--accent-2)" }}>
+                    <I.image/>
+                  </div>
+                  {cover ? "Click or Drag to Manage Banner" : "Click or Drag to Upload Cover"}
                 </div>
-              ))}
-              <button className="add-row" onClick={()=>setTickets(ts=>[...ts,{ n:"", cap:"", price:"" }])}><I.plus/>Add ticket type</button>
+                {showBannerMenu && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "100%",
+                      left: 0,
+                      zIndex: 10,
+                      width: "180px",
+                      background: "var(--surface)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "var(--r-md)",
+                      boxShadow: "var(--sh-lg)",
+                      padding: "4px",
+                      marginTop: "6px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "2px"
+                    }}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <button className="hbtn hbtn--ghost hbtn--sm" style={{ width: "100%", textAlign: "left", justifyContent: "flex-start", padding: "8px 12px", border: "none" }}
+                      onClick={() => { fileInputRef.current?.click(); setShowBannerMenu(false); }}>
+                      📤 Upload Image
+                    </button>
+                    <button className="hbtn hbtn--ghost hbtn--sm" style={{ width: "100%", textAlign: "left", justifyContent: "flex-start", padding: "8px 12px", border: "none" }}
+                      onClick={() => { const cpEl = document.getElementById("cover-picker-label"); cpEl?.scrollIntoView({ behavior: "smooth" }); setShowBannerMenu(false); }}>
+                      🎨 Choose Preset Cover
+                    </button>
+                    {cover && (
+                      <button className="hbtn hbtn--ghost hbtn--sm" style={{ width: "100%", textAlign: "left", justifyContent: "flex-start", padding: "8px 12px", color: "#e5484d", border: "none" }}
+                        onClick={() => { setCover(""); setShowBannerMenu(false); }}>
+                        🗑️ Remove Banner
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+              {bannerError && (
+                <div style={{ color: "#e5484d", fontSize: 12, marginTop: 4, marginBottom: 8, fontWeight: 500 }}>
+                  ⚠️ {bannerError}
+                </div>
+              )}
+              <div id="cover-picker-label" style={{ fontSize: 11, color: "var(--ink-3)", marginBottom: 12 }}>
+                Recommended ratio 16:9 (accepts JPG, PNG, WEBP)
+              </div>
+              <CoverPicker value={cover} onPick={setCover} />
             </div>
-          )}
 
-          <div className="cfield">
-            <label>Registration settings</label>
-            <div className="toggle-row"><div className="ti"><div className="t">Approval required</div><div className="d">Manually approve each registration</div></div><Toggle on={approval} onClick={()=>setApproval(v=>!v)} /></div>
-            {type==="paid" && <div className="toggle-row"><div className="ti"><div className="t">Accept cash / offline payment</div><div className="d">Hold capacity until you confirm receipt</div></div><Toggle on={cash} onClick={()=>setCash(v=>!v)} /></div>}
-            <div className="toggle-row"><div className="ti"><div className="t">Add to calendar (ICS)</div><div className="d">Attendees get a calendar file with their ticket</div></div><Toggle on={true} onClick={()=>{}} /></div>
+            {/* Right side – form fields */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div className="cfield" style={{ marginBottom: 0 }}>
+                <label>Group Name</label>
+                <input className="title-input" placeholder="Your group name" value={name} onChange={e => setName(e.target.value)} style={{ background: "var(--field)", border: "1px solid var(--border)", fontSize: 18, marginBottom: 8 }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--ink-3)" }}>
+                  <span>samaagum.co/</span>
+                  <input value={slug} onChange={e => setSlug(e.target.value)} style={{ background: "transparent", border: "none", color: "var(--ink-2)", fontSize: 12, outline: "none", width: "100%" }} placeholder="your-group-slug" />
+                </div>
+              </div>
+
+              <div className="cfield" style={{ marginBottom: 0 }}>
+                <label>Privacy</label>
+                <select className="cselect" value={privacy} onChange={e => setPrivacy(e.target.value)}>
+                  <option value="public">Public</option>
+                  <option value="private">Private</option>
+                  <option value="invite-only">Invite‑Only</option>
+                </select>
+              </div>
+
+              <div className="cfield" style={{ marginBottom: 0 }}>
+                <label>Group Description</label>
+                <div
+                  style={{ minHeight: 120, background: "var(--field)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "16px", color: desc ? "var(--ink)" : "var(--ink-3)", cursor: "pointer", fontSize: 14 }}
+                  onClick={() => setDesc("")} // placeholder for opening a rich editor
+                >
+                  {desc ? desc : "Click to add a description. Tell people what this community is about."}
+                </div>
+              </div>
+
+              <div className="cfield" style={{ marginBottom: 0 }}>
+                <label>Invite members</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+                  {members.map((m, i) => (
+                    <span key={i} style={{
+                      padding: "6px 12px",
+                      background: "var(--field)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 999,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      maxWidth: "100%",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap"
+                    }}>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m}</span>
+                      <I.x style={{ width: 12, height: 12, cursor: "pointer" }} onClick={() => removeMember(i)} />
+                    </span>
+                  ))}
+                </div>
+                <input className="cinput" placeholder="Enter member name and press Enter" value={memberInput} onChange={e => setMemberInput(e.target.value)} onKeyDown={addMember} style={{ width: "100%" }} />
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {!mobile && (
-        <div className="create-preview">
-          <div className="pv-label"><span className="d"/>Live preview</div>
-          <EventCard ev={previewEv} onOpen={()=>{}} saved={false} onSave={()=>{}} />
-          <div style={{ marginTop:22, padding:16, border:"1px solid var(--border)", borderRadius:"var(--r-md)", background:"var(--surface)" }}>
-            <div style={{ fontSize:12, fontWeight:700, letterSpacing:"0.08em", textTransform:"uppercase", color:"var(--ink-3)", marginBottom:12 }}>Summary</div>
-            <div className="side-stat"><span className="k">Type</span><span className="v" style={{ textTransform:"capitalize" }}>{type}</span></div>
-            <div className="side-stat"><span className="k">Category</span><span className="v">{cat}</span></div>
-            {type==="paid" && <div className="side-stat"><span className="k">From</span><span className="v">₹{tickets[0]?.price||"—"}</span></div>}
-            <div className="side-stat"><span className="k">Approval</span><span className="v">{approval?"On":"Auto"}</span></div>
+      {/* Live preview panel */}
+      <div className={mobile?"mobile-preview-stacked":"create-preview"} style={mobile ? {
+        padding: "24px 0",
+        display: "flex",
+        flexDirection: "column",
+        gap: "20px",
+        borderTop: "1px solid var(--border-2)",
+        marginTop: "32px"
+      } : {
+        position: "sticky",
+        top: 0,
+        height: "100vh",
+        padding: "32px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "24px",
+        overflowY: "auto",
+        borderLeft: "1px solid var(--border-2)",
+        background: "var(--bg-2)"
+      }}>
+        <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 8, color: "var(--ink-3)" }}>Live preview</div>
+        <div style={cardStyle}>
+          <div style={{ height: 100, background: previewGroup.cover || "var(--accent-soft)", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+            {previewGroup.cover && !previewGroup.cover.startsWith("linear-gradient") && <img src={previewGroup.cover} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="Banner" />}
+            {previewGroup.cover && previewGroup.cover.startsWith("linear-gradient") && <div style={{ position: "absolute", inset: 0, background: previewGroup.cover }}><Grain/></div>}
+          </div>
+          <div style={{ padding: 12 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: "var(--ink)" }}>{previewGroup.name}</h3>
+            <p style={{ fontSize: 11, color: "var(--ink-3)", margin: "4px 0 0" }}>slug: samaagum.co/{previewGroup.slug}</p>
+            <p style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 8 }}>Privacy: {previewGroup.privacy}</p>
+            <div style={{ marginTop: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)" }}>Members:</span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                {previewGroup.members.map((m, i) => (
+                  <span key={i} style={{ padding: "4px 8px", background: "var(--field)", borderRadius: 999, fontSize: 11 }}>{m}</span>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
-      )}
-
-      <div className="create-foot" style={ mobile?{ gridColumn:"1" }:{ gridColumn:"1 / -1" }}>
-        <button className="hbtn hbtn--ghost" onClick={()=>go("home")}>Cancel</button>
-        <div className="sp"/>
-        <button className="hbtn hbtn--ghost">Save draft</button>
-        <button className="hbtn hbtn--primary" onClick={()=>go("event", { ...previewEv, id:"new", host:ME.name, hostBy:ME.name, city:"Bengaluru", cap:180, desc })}><I.check/>Publish event</button>
       </div>
     </div>
   );
 }
 
-/* ---------------- Create Group ---------------- */
-function CreateGroup({ go, mobile }) {
-  const [name, setName] = useState("");
-  const [icon, setIcon] = useState("✺");
-  const [cover, setCover] = useState(COVERS.violet);
-  const [cat, setCat] = useState("Design");
-  const [desc, setDesc] = useState("");
-  const [join, setJoin] = useState("approval");
-  const [questionnaire, setQuestionnaire] = useState(true);
-  const icons = ["✺","🚀","🌅","◆","🎧","🍲","🎨","⚡","🌱","📚"];
-
-  const previewG = { name: name||"Your group name", icon, cover, cat,
-    desc: desc||"A short description of what your community is about and who it's for.",
-    members:1, online:1, memberNames:[ME.name] };
-
-  return (
-    <div className={`create ${mobile?"single":""}`}>
-      <div className="create-form">
-        <div className="cf-inner">
-          <div className="create-head">
-            <button className="hbtn hbtn--ghost hbtn--sm" onClick={()=>go("home")} style={{ padding:"7px 11px" }}><I.arrowL/></button>
-            <div><div className="ck">New group</div><h1>Create a group</h1></div>
-          </div>
-
-          <div className={`cover-up filled`} style={{ background:cover }}>
-            <Grain/>
-            <div style={{ position:"absolute", left:20, bottom:-26, width:64, height:64, borderRadius:18, background:cover, border:"3px solid var(--surface)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:30, boxShadow:"var(--sh-md)", zIndex:3 }}>{icon}</div>
-            <div className="up-hint" style={{ color:"#fff" }}><div className="uic" style={{ background:"rgba(255,255,255,0.2)", color:"#fff" }}><I.image/></div>Group cover</div>
-          </div>
-          <div style={{ marginTop:34 }}><CoverPicker value={cover} onPick={setCover} /></div>
-
-          <div className="cfield" style={{ marginTop:18 }}>
-            <label>Group icon</label>
-            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-              {icons.map(em => (
-                <button key={em} onClick={()=>setIcon(em)} style={{ width:42, height:42, borderRadius:12, fontSize:20, cursor:"pointer",
-                  border: icon===em?"2px solid var(--accent-2)":"1px solid var(--border)", background: icon===em?"var(--accent-soft)":"var(--field)" }}>{em}</button>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ marginTop:18 }}>
-            <input className="title-input" style={{ fontSize:26 }} placeholder="Group name" value={name} onChange={e=>setName(e.target.value)} />
-          </div>
-
-          <div className="cfield" style={{ marginTop:14 }}>
-            <label>Category</label>
-            <select className="cselect" value={cat} onChange={e=>setCat(e.target.value)}>
-              {CATS.filter(c=>c[0]!=="All").map(([c])=> <option key={c}>{c}</option>)}
-            </select>
-          </div>
-
-          <div className="cfield">
-            <label>Description</label>
-            <textarea className="ctext" placeholder="What is this community about? Who should join?" value={desc} onChange={e=>setDesc(e.target.value)} />
-          </div>
-
-          <div className="cfield">
-            <label>Join mode</label>
-            <div className="type-pills">
-              <button className={`type-pill ${join==="open"?"on":""}`} onClick={()=>setJoin("open")}><span className="tpic"><I.globe/></span><span className="tpt">Open</span><span className="tpd">Anyone can join</span></button>
-              <button className={`type-pill ${join==="approval"?"on":""}`} onClick={()=>setJoin("approval")}><span className="tpic"><I.check/></span><span className="tpt">Approval</span><span className="tpd">You review requests</span></button>
-            </div>
-          </div>
-
-          <div className="cfield">
-            <label>Membership</label>
-            <div className="toggle-row"><div className="ti"><div className="t">Join questionnaire</div><div className="d">Ask custom questions when people request to join</div></div><Toggle on={questionnaire} onClick={()=>setQuestionnaire(v=>!v)} /></div>
-            <div className="toggle-row"><div className="ti"><div className="t">Enable forums</div><div className="d">Posts, comments & media at group level</div></div><Toggle on={true} onClick={()=>{}} /></div>
-            <div className="toggle-row"><div className="ti"><div className="t">Media gallery</div><div className="d">Shared photo gallery for members</div></div><Toggle on={true} onClick={()=>{}} /></div>
-          </div>
-        </div>
-      </div>
-
-      {!mobile && (
-        <div className="create-preview">
-          <div className="pv-label"><span className="d"/>Live preview</div>
-          <GroupCard g={previewG} onOpen={()=>{}} joined={false} onJoin={()=>{}} />
-          <div style={{ marginTop:22, padding:16, border:"1px solid var(--border)", borderRadius:"var(--r-md)", background:"var(--surface)" }}>
-            <div style={{ fontSize:12, fontWeight:700, letterSpacing:"0.08em", textTransform:"uppercase", color:"var(--ink-3)", marginBottom:12 }}>Summary</div>
-            <div className="side-stat"><span className="k">Category</span><span className="v">{cat}</span></div>
-            <div className="side-stat"><span className="k">Join mode</span><span className="v" style={{ textTransform:"capitalize" }}>{join}</span></div>
-            <div className="side-stat"><span className="k">Forums</span><span className="v">Enabled</span></div>
-          </div>
-        </div>
-      )}
-
-      <div className="create-foot" style={ mobile?{ gridColumn:"1" }:{ gridColumn:"1 / -1" }}>
-        <button className="hbtn hbtn--ghost" onClick={()=>go("home")}>Cancel</button>
-        <div className="sp"/>
-        <button className="hbtn hbtn--primary" onClick={()=>go("group", { ...previewG, id:"newg", posts:0, members:1 })}><I.check/>Create group</button>
-      </div>
-    </div>
-  );
-}
-
-Object.assign(window, { CreateEvent, CreateGroup });
+Object.assign(window, { CreateGroup });

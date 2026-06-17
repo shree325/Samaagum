@@ -177,6 +177,11 @@ html, body {
   width: 100%;
   overflow: hidden;
   background: var(--bg);
+  transition: grid-template-columns 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.app.collapsed {
+  grid-template-columns: 72px 1fr;
 }
 
 .app.mobile {
@@ -206,6 +211,16 @@ html, body {
   flex-shrink: 0;
   height: 100%;
   box-sizing: border-box;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), padding 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar.collapsed {
+  width: 72px;
+  padding: 24px 8px;
+}
+
+.sidebar.collapsed .sb-brand span span {
+  display: none !important;
 }
 
 .sb-brand {
