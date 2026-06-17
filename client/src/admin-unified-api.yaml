@@ -1,0 +1,669 @@
+# Samaagum Admin Unified API Specifications & Configurations
+# This YAML describes the routes, data models, and mappings for the unified admin UI API client.
+
+openapi: 3.0.0
+info:
+  title: Samaagum Admin Unified API
+  version: 1.0.0
+  description: Unified interface for all administrative dashboard components including RBAC, Subscriptions, Coupons, Users, KYC, disputes, moderation, and tenants.
+
+servers:
+  - url: http://localhost:3000
+    description: Local development backend server
+
+paths:
+  # ── RBAC endpoints ──────────────────────────────────────────────────────────
+  /api/admin/rbac/roles:
+    get:
+      summary: Retrieve all roles
+      operationId: getRoles
+      responses:
+        '200':
+          description: A list of enriched roles
+    post:
+      summary: Create a role
+      operationId: createRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleInput'
+      responses:
+        '201':
+          description: Role created successfully
+
+  /api/admin/rbac/roles/{id}:
+    put:
+      summary: Update a role
+      operationId: updateRole
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleInput'
+      responses:
+        '200':
+          description: Role updated successfully
+    delete:
+      summary: Delete a role
+      operationId: deleteRole
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Role deleted successfully
+
+  /api/admin/rbac/responsibilities:
+    get:
+      summary: Retrieve all responsibilities
+      operationId: getResponsibilities
+      responses:
+        '200':
+          description: A list of responsibilities
+    post:
+      summary: Create a responsibility
+      operationId: createResponsibility
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResponsibilityInput'
+      responses:
+        '201':
+          description: Responsibility created successfully
+
+  /api/admin/rbac/responsibilities/{id}:
+    put:
+      summary: Update a responsibility
+      operationId: updateResponsibility
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResponsibilityInput'
+      responses:
+        '200':
+          description: Responsibility updated successfully
+    delete:
+      summary: Delete a responsibility
+      operationId: deleteResponsibility
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Responsibility deleted successfully
+
+  /api/admin/rbac/positions:
+    get:
+      summary: Retrieve all positions
+      operationId: getPositions
+      responses:
+        '200':
+          description: A list of positions
+    post:
+      summary: Create a position
+      operationId: createPosition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PositionInput'
+      responses:
+        '201':
+          description: Position created successfully
+
+  /api/admin/rbac/positions/{id}:
+    put:
+      summary: Update a position
+      operationId: updatePosition
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PositionInput'
+      responses:
+        '200':
+          description: Position updated successfully
+    delete:
+      summary: Delete a position
+      operationId: deletePosition
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Position deleted successfully
+
+  # ── Subscription Plans endpoints ──────────────────────────────────────────────
+  /api/admin/plans:
+    get:
+      summary: Retrieve all subscription plans
+      operationId: getPlans
+      responses:
+        '200':
+          description: A list of plans
+    post:
+      summary: Create a subscription plan
+      operationId: createPlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanInput'
+      responses:
+        '201':
+          description: Plan created successfully
+
+  /api/admin/plans/{id}:
+    put:
+      summary: Update a subscription plan
+      operationId: updatePlan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanInput'
+      responses:
+        '200':
+          description: Plan updated successfully
+    delete:
+      summary: Delete a subscription plan
+      operationId: deletePlan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Plan deleted successfully
+
+  # ── Coupons endpoints ─────────────────────────────────────────────────────────
+  /api/admin/coupons:
+    get:
+      summary: Retrieve all coupons
+      operationId: getCoupons
+      responses:
+        '200':
+          description: A list of coupons
+    post:
+      summary: Create a coupon
+      operationId: createCoupon
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CouponInput'
+      responses:
+        '201':
+          description: Coupon created successfully
+
+  /api/admin/coupons/{id}:
+    put:
+      summary: Update a coupon
+      operationId: updateCoupon
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CouponInput'
+      responses:
+        '200':
+          description: Coupon updated successfully
+    delete:
+      summary: Delete a coupon
+      operationId: deleteCoupon
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Coupon deleted successfully
+
+  # ── Users endpoints (Unified via fallback / storage) ─────────────────────────
+  /api/admin/users:
+    get:
+      summary: Retrieve all users
+      operationId: getUsers
+      responses:
+        '200':
+          description: A list of users
+    post:
+      summary: Save or invite a user
+      operationId: saveUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserInput'
+      responses:
+        '200':
+          description: User saved successfully
+
+  # ── KYC endpoints (Unified via fallback / storage) ───────────────────────────
+  /api/admin/kyc:
+    get:
+      summary: Retrieve KYC records
+      operationId: getKycRecords
+      responses:
+        '200':
+          description: A list of KYC verifications
+    post:
+      summary: Save or update KYC state
+      operationId: saveKyc
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycInput'
+      responses:
+        '200':
+          description: KYC state saved successfully
+
+  # ── Disputes endpoints (Unified via fallback / storage) ───────────────────────
+  /api/admin/disputes:
+    get:
+      summary: Retrieve dispute tickets
+      operationId: getDisputes
+      responses:
+        '200':
+          description: A list of dispute cases
+    post:
+      summary: Save or update dispute state
+      operationId: saveDispute
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisputeInput'
+      responses:
+        '200':
+          description: Dispute saved successfully
+
+  # ── Moderation endpoints (Unified via fallback / storage) ─────────────────────
+  /api/admin/moderation:
+    get:
+      summary: Retrieve flagged content
+      operationId: getModerationItems
+      responses:
+        '200':
+          description: A list of moderation items
+    post:
+      summary: Save or resolve content moderation flags
+      operationId: saveModeration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModerationInput'
+      responses:
+        '200':
+          description: Moderation action saved successfully
+
+  # ── Tenants endpoints (Unified via fallback / storage) ────────────────────────
+  /api/admin/tenants:
+    get:
+      summary: Retrieve white-label tenants
+      operationId: getTenants
+      responses:
+        '200':
+          description: A list of tenants
+    post:
+      summary: Save or provision a tenant
+      operationId: saveTenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantInput'
+      responses:
+        '200':
+          description: Tenant provisioned successfully
+
+  # ── Audit logs endpoints (Unified via fallback / storage) ─────────────────────
+  /api/admin/audit:
+    get:
+      summary: Retrieve system audit logs
+      operationId: getAuditLogs
+      responses:
+        '200':
+          description: A list of system logs
+    post:
+      summary: Add an audit log entry
+      operationId: addLog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                actor:
+                  type: string
+                action:
+                  type: string
+      responses:
+        '200':
+          description: Log added successfully
+
+  # ── Feature Flags endpoints (Unified via fallback / storage) ──────────────────
+  /api/admin/feature-flags:
+    get:
+      summary: Retrieve feature flags
+      operationId: getFeatureFlags
+      responses:
+        '200':
+          description: A list of feature flags
+    post:
+      summary: Update feature flags configuration
+      operationId: saveFeatureFlags
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/FeatureFlag'
+      responses:
+        '200':
+          description: Feature flags saved successfully
+
+components:
+  schemas:
+    RoleInput:
+      type: object
+      required:
+        - name
+        - displayName
+      properties:
+        name:
+          type: string
+        displayName:
+          type: string
+        description:
+          type: string
+        responsibilities:
+          type: array
+          items:
+            type: string
+        defaultPosition:
+          type: string
+        hierarchyLevel:
+          type: number
+        isActive:
+          type: boolean
+        isDefault:
+          type: boolean
+
+    ResponsibilityInput:
+      type: object
+      required:
+        - name
+        - displayName
+        - routePath
+        - componentName
+      properties:
+        name:
+          type: string
+        displayName:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        routePath:
+          type: string
+        componentName:
+          type: string
+        iconName:
+          type: string
+        requiredFeatures:
+          type: array
+          items:
+            type: string
+        sortOrder:
+          type: number
+        isActive:
+          type: boolean
+
+    PositionInput:
+      type: object
+      required:
+        - name
+        - displayName
+      properties:
+        name:
+          type: string
+        displayName:
+          type: string
+        description:
+          type: string
+        hierarchyLevel:
+          type: number
+        dataAccessLevel:
+          type: string
+        customConditions:
+          type: array
+          items:
+            type: string
+        dataAccessLimits:
+          type: object
+        isActive:
+          type: boolean
+
+    PlanInput:
+      type: object
+      required:
+        - name
+        - displayName
+      properties:
+        name:
+          type: string
+        displayName:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        planType:
+          type: string
+        isActive:
+          type: boolean
+        isPopular:
+          type: boolean
+        groupName:
+          type: string
+        pricing:
+          type: object
+          properties:
+            monthly:
+              type: object
+              properties:
+                amount:
+                  type: number
+                currency:
+                  type: string
+            yearly:
+              type: object
+              properties:
+                amount:
+                  type: number
+                currency:
+                  type: string
+                discount:
+                  type: number
+        metadata:
+          type: object
+        trial:
+          type: object
+        visibility:
+          type: object
+        rbac:
+          type: object
+
+    CouponInput:
+      type: object
+      required:
+        - code
+        - discountType
+        - amount
+      properties:
+        code:
+          type: string
+        description:
+          type: string
+        discountType:
+          type: string
+        amount:
+          type: number
+        dateExpires:
+          type: string
+        isActive:
+          type: boolean
+        freeShipping:
+          type: boolean
+        usageRestrictions:
+          type: object
+        usageLimits:
+          type: object
+        emailSettings:
+          type: object
+
+    UserInput:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        status:
+          type: string
+        organization:
+          type: string
+
+    KycInput:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+        notes:
+          type: string
+
+    DisputeInput:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+        maker:
+          type: string
+        checker:
+          type: string
+
+    ModerationInput:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+
+    TenantInput:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        plan:
+          type: string
+        entitlements:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+
+    FeatureFlag:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        desc:
+          type: string
+        active:
+          type: boolean

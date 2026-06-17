@@ -1,0 +1,45 @@
+version: "1.0"
+provider: database
+dataType: rbac
+canonical: Role
+
+fieldMappings:
+  id:
+    source: role_id
+    type: string
+    required: true
+
+  key:
+    source: key
+    type: string
+    required: true
+
+  name:
+    source: name
+    type: string
+    required: true
+
+  displayName:
+    source: display_name
+    type: string
+    required: false
+
+  description:
+    source: description
+    type: string
+    required: false
+
+  hierarchyLevel:
+    source: hierarchy_level
+    type: number
+    default: 0
+
+  isActive:
+    source: is_active
+    type: boolean
+    default: true
+
+  isDefault:
+    source: is_default
+    type: boolean
+    default: false

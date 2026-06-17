@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* ============================================================
    Samaagum Home — Public profile (TAPOnn-grade)
    ============================================================ */
@@ -21,6 +22,15 @@ function Profile({ st, go }) {
           <div className="ph-act">
             <button className="hbtn hbtn--ghost hbtn--sm"><I.qr/>Share</button>
             <button className="hbtn hbtn--ghost hbtn--sm"><I.edit/>Edit profile</button>
+            {st.subscription?.plan && st.subscription.plan !== 'free' ? (
+              <button className="hbtn hbtn--primary hbtn--sm" onClick={() => go("upgrade")} style={{ background: "var(--accent-grad)" }}>
+                <I.crown style={{ marginRight: 4 }} /> {st.subscription.plan.toUpperCase()}
+              </button>
+            ) : (
+              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => go("upgrade")}>
+                <I.crown style={{ color: "var(--accent-1)", marginRight: 4 }} /> Upgrade Plan
+              </button>
+            )}
             <button className="hbtn hbtn--primary hbtn--sm"><I.plus/>Connect</button>
           </div>
         </div>

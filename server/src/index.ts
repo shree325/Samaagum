@@ -5,6 +5,8 @@ import prisma from './config/prisma';
 import { createAdminRbacRouter } from './controllers/adminRbacRoutes';
 import { createSubscriptionPlanRouter } from './controllers/adminSubscriptionPlanRoutes';
 import { createAdminCouponRouter } from './controllers/adminCouponRoutes';
+import { createAdminSettingsRouter } from './controllers/adminSettingsRoutes';
+import { createUserSubscriptionRouter } from './controllers/userSubscriptionRoutes';
 import { seedAdminRBAC } from './services/adminRbacSeeder';
 
 dotenv.config();
@@ -75,6 +77,8 @@ const requireAdmin = (req: any, res: Response, next: NextFunction) => {
 app.use('/api/admin/rbac', createAdminRbacRouter(authenticate, requireAdmin));
 app.use('/api/admin', createSubscriptionPlanRouter(authenticate, requireAdmin));
 app.use('/api/admin', createAdminCouponRouter(authenticate, requireAdmin));
+app.use('/api/admin', createAdminSettingsRouter(authenticate, requireAdmin));
+app.use('/api/subscription', createUserSubscriptionRouter(authenticate));
 
 // Basic health check route
 app.get('/health', async (req, res) => {

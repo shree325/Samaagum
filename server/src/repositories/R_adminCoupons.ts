@@ -13,7 +13,7 @@ export class R_adminCoupons
     async findByCode(code: string, tenantId?: string | null): Promise<IAdminCoupon | null> {
         const rows = tenantId
             ? await prisma.$queryRawUnsafe<IAdminCoupon[]>(
-                `SELECT * FROM admin_coupons WHERE code = $1 AND tenant_id = $2 LIMIT 1`,
+                `SELECT * FROM admin_coupons WHERE code = $1 AND (tenant_id = $2 OR tenant_id IS NULL) ORDER BY tenant_id DESC NULLS LAST LIMIT 1`,
                 code.toUpperCase().trim(), tenantId
               )
             : await prisma.$queryRawUnsafe<IAdminCoupon[]>(

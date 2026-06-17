@@ -54,6 +54,27 @@ function App() {
   const [city, setCity] = useState("Bengaluru");
   const [cityOpen, setCityOpen] = useState(false);
 
+  const [subscription, setSubscription] = useState({ plan: 'free', status: 'active' });
+
+  const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+
+  useEffect(() => {
+    const token = localStorage.getItem('token') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMSIsInRlbmFudElkIjoiMDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAwIn0.mocksignature';
+    fetch(`${apiBase}/api/subscription/status`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.data.subscription) {
+          setSubscription(res.data.subscription);
+          if (res.data.role) {
+            ME.role = res.data.role.displayName || res.data.role.name;
+          }
+        }
+      })
+      .catch(err => console.error('Error fetching subscription status', err));
+  }, []);
+
   // navigation stack
   const [stack, setStack] = useState([{ view:"home", param:null }]);
   const cur = stack[stack.length-1];
@@ -161,7 +182,8 @@ function App() {
     saved, toggleSave, joined, toggleJoin, connected, toggleConnect, registered, register, city,
     myTickets, setMyTickets, waitlisted, toggleWaitlist, addClaimedTicket,
     createdEvents, setCreatedEvents, createdGroups, setCreatedGroups,
-    addCreatedEvent, addCreatedGroup
+    addCreatedEvent, addCreatedGroup,
+    subscription, setSubscription
   };
 
   // responsive window width check
@@ -203,6 +225,9 @@ function App() {
     if (v==="ticket") return <TicketDetail tkt={cur.param} st={st} go={go} />;
     if (v==="waitlist") return <Waitlist ev={cur.param} st={st} go={go} />;
     if (v==="claim") return <ClaimFlow st={st} go={go} />;
+    if (v==="upgrade") return <UpgradePage st={st} go={go} />;
+    if (v==="checkout") return <CheckoutPage param={cur.param} st={st} go={go} />;
+    if (v==="checkout-success") return <CheckoutSuccessPage param={cur.param} st={st} go={go} />;
     return <HomeFeed st={st} go={go} />;
   };
 

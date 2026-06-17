@@ -87,20 +87,249 @@ const FEATURE_FLAGS = [
   { id: "ff-4", name: "Maker-Checker Refunds", desc: "Enforces two-admin verification for any refund settlement.", active: true },
 ];
 
+// --- UNIFIED API CLIENT FOR ADMIN PANEL ---
+const apiClient = new window.AdminApiClient();
+
+const adminApi = {
+  // Provider settings from unified-admin-service.yaml configuration logic
+  activeProviders: {
+    rbac: "database",
+    plans: "database",
+    coupons: "database",
+    users: "localstorage",
+    kyc: "localstorage",
+    disputes: "localstorage",
+    moderation: "localstorage",
+    tenants: "localstorage",
+    audit: "localstorage",
+    featureFlags: "localstorage",
+  },
+
+  // Local storage cache key helper
+  _getLocalStorageKey(key) {
+    return `samaagum_admin_${key}`;
+  },
+
+  // Read local state from localStorage with fallback to initial mock data
+  _getLocalState(key, fallback) {
+    const cached = localStorage.getItem(this._getLocalStorageKey(key));
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {
+        console.error(`Error parsing localStorage key ${key}`, e);
+      }
+    }
+    return fallback;
+  },
+
+  // Save state to localStorage
+  _setLocalState(key, val) {
+    localStorage.setItem(this._getLocalStorageKey(key), JSON.stringify(val));
+  },
+
+  // Users Service
+  users: {
+    getUsers: async () => {
+      if (adminApi.activeProviders.users === "database") {
+        return apiClient.users.getUsers();
+      }
+      const users = adminApi._getLocalState("users", INITIAL_USERS);
+      return { success: true, data: users };
+    },
+    saveUser: async (userPayload) => {
+      if (adminApi.activeProviders.users === "database") {
+        return apiClient.users.saveUser(userPayload);
+      }
+      let users = adminApi._getLocalState("users", INITIAL_USERS);
+      if (users.find(u => u.id === userPayload.id)) {
+        users = users.map(u => u.id === userPayload.id ? { ...u, ...userPayload } : u);
+      } else {
+        users = [userPayload, ...users];
+      }
+      adminApi._setLocalState("users", users);
+      return { success: true, data: userPayload };
+    }
+  },
+
+  // KYC Service
+  kyc: {
+    getKyc: async () => {
+      if (adminApi.activeProviders.kyc === "database") {
+        return apiClient.kyc.getKycRecords();
+      }
+      const kyc = adminApi._getLocalState("kyc", INITIAL_KYC);
+      return { success: true, data: kyc };
+    },
+    saveKyc: async (kycPayload) => {
+      if (adminApi.activeProviders.kyc === "database") {
+        return apiClient.kyc.saveKyc(kycPayload);
+      }
+      let kyc = adminApi._getLocalState("kyc", INITIAL_KYC);
+      kyc = kyc.map(k => k.id === kycPayload.id ? { ...k, ...kycPayload } : k);
+      adminApi._setLocalState("kyc", kyc);
+      return { success: true, data: kycPayload };
+    }
+  },
+
+  // Disputes Service
+  disputes: {
+    getDisputes: async () => {
+      if (adminApi.activeProviders.disputes === "database") {
+        return apiClient.disputes.getDisputes();
+      }
+      const disputes = adminApi._getLocalState("disputes", INITIAL_DISPUTES);
+      return { success: true, data: disputes };
+    },
+    saveDispute: async (disputePayload) => {
+      if (adminApi.activeProviders.disputes === "database") {
+        return apiClient.disputes.saveDispute(disputePayload);
+      }
+      let disputes = adminApi._getLocalState("disputes", INITIAL_DISPUTES);
+      disputes = disputes.map(d => d.id === disputePayload.id ? { ...d, ...disputePayload } : d);
+      adminApi._setLocalState("disputes", disputes);
+      return { success: true, data: disputePayload };
+    }
+  },
+
+  // Moderation Service
+  moderation: {
+    getModeration: async () => {
+      if (adminApi.activeProviders.moderation === "database") {
+        return apiClient.moderation.getModerationItems();
+      }
+      const moderation = adminApi._getLocalState("moderation", INITIAL_MODERATION);
+      return { success: true, data: moderation };
+    },
+    saveModeration: async (modPayload) => {
+      if (adminApi.activeProviders.moderation === "database") {
+        return apiClient.moderation.saveModeration(modPayload);
+      }
+      let moderation = adminApi._getLocalState("moderation", INITIAL_MODERATION);
+      moderation = moderation.map(m => m.id === modPayload.id ? { ...m, ...modPayload } : m);
+      adminApi._setLocalState("moderation", moderation);
+      return { success: true, data: modPayload };
+    }
+  },
+
+  // Tenants Service
+  tenants: {
+    getTenants: async () => {
+      if (adminApi.activeProviders.tenants === "database") {
+        return apiClient.tenants.getTenants();
+      }
+      const tenants = adminApi._getLocalState("tenants", INITIAL_TENANTS);
+      return { success: true, data: tenants };
+    },
+    saveTenant: async (tenantPayload) => {
+      if (adminApi.activeProviders.tenants === "database") {
+        return apiClient.tenants.saveTenant(tenantPayload);
+      }
+      let tenants = adminApi._getLocalState("tenants", INITIAL_TENANTS);
+      if (tenants.find(t => t.id === tenantPayload.id)) {
+        tenants = tenants.map(t => t.id === tenantPayload.id ? { ...t, ...tenantPayload } : t);
+      } else {
+        tenants = [...tenants, tenantPayload];
+      }
+      adminApi._setLocalState("tenants", tenants);
+      return { success: true, data: tenantPayload };
+    }
+  },
+
+  // Audit Logs Service
+  audit: {
+    getLogs: async () => {
+      if (adminApi.activeProviders.audit === "database") {
+        return apiClient.audit.getAuditLogs();
+      }
+      const logs = adminApi._getLocalState("audit", INITIAL_AUDIT);
+      return { success: true, data: logs };
+    },
+    addLog: async (actor, action) => {
+      if (adminApi.activeProviders.audit === "database") {
+        return apiClient.audit.addLog({ actor, action });
+      }
+      const time = new Date().toISOString().replace('T', ' ').substring(0, 19);
+      const logObj = { time, actor, action };
+      const logs = [logObj, ...adminApi._getLocalState("audit", INITIAL_AUDIT)];
+      adminApi._setLocalState("audit", logs);
+      return { success: true, data: logObj };
+    }
+  },
+
+  // Feature Flags Service
+  featureFlags: {
+    getFlags: async () => {
+      if (adminApi.activeProviders.featureFlags === "database") {
+        return apiClient.featureFlags.getFeatureFlags();
+      }
+      const flags = adminApi._getLocalState("featureFlags", FEATURE_FLAGS);
+      return { success: true, data: flags };
+    },
+    saveFlags: async (flagsPayload) => {
+      if (adminApi.activeProviders.featureFlags === "database") {
+        return apiClient.featureFlags.saveFeatureFlags(flagsPayload);
+      }
+      adminApi._setLocalState("featureFlags", flagsPayload);
+      return { success: true, data: flagsPayload };
+    }
+  },
+
+  // RBAC Service (real backend integration via generated apiClient)
+  rbac: {
+    getRoles: () => apiClient.rbac.getRoles(),
+    getResponsibilities: () => apiClient.rbac.getResponsibilities(),
+    getPositions: () => apiClient.rbac.getPositions(),
+    saveRole: (payload, id) => apiClient.rbac.saveRole(payload, id),
+    saveResponsibility: (payload, id) => apiClient.rbac.saveResponsibility(payload, id),
+    savePosition: (payload, id) => apiClient.rbac.savePosition(payload, id),
+    deleteRole: (id) => apiClient.rbac.deleteRole(id),
+    deleteResponsibility: (id) => apiClient.rbac.deleteResponsibility(id),
+    deletePosition: (id) => apiClient.rbac.deletePosition(id),
+    getMatrix: async () => {
+      const matrix = adminApi._getLocalState("rbacMatrix", INITIAL_RBAC);
+      return { success: true, data: matrix };
+    },
+    saveMatrix: async (matrixPayload) => {
+      adminApi._setLocalState("rbacMatrix", matrixPayload);
+      return { success: true, data: matrixPayload };
+    }
+  },
+
+  // Subscription Plans Service (real backend integration via generated apiClient)
+  plans: {
+    getPlans: () => apiClient.plans.getPlans(),
+    getAvailableRoles: () => apiClient.plans.getAvailableRoles(),
+    getAvailablePositions: () => apiClient.plans.getAvailablePositions(),
+    savePlan: (payload, id) => apiClient.plans.savePlan(payload, id),
+    deletePlan: (id) => apiClient.plans.deletePlan(id)
+  },
+
+  // Coupons Service (real backend integration via generated apiClient)
+  coupons: {
+    getCoupons: () => apiClient.coupons.getCoupons(),
+    saveCoupon: (payload, id) => apiClient.coupons.saveCoupon(payload, id),
+    deleteCoupon: (id) => apiClient.coupons.deleteCoupon(id)
+  }
+};
+
+window.adminApi = adminApi;
+
 // --- APP COMPONENT ---
 function App() {
   const [user, setUser] = useState(null); // { email, role }
   const [activeTab, setActiveTab] = useState("dashboard");
   const [darkMode, setDarkMode] = useState(true);
 
-  // Lists
-  const [kycList, setKycList] = useState(INITIAL_KYC);
-  const [disputesList, setDisputesList] = useState(INITIAL_DISPUTES);
-  const [moderationList, setModerationList] = useState(INITIAL_MODERATION);
-  const [tenantsList, setTenantsList] = useState(INITIAL_TENANTS);
-  const [rbacMatrix, setRbacMatrix] = useState(INITIAL_RBAC);
-  const [auditLogs, setAuditLogs] = useState(INITIAL_AUDIT);
-  const [featureFlags, setFeatureFlags] = useState(FEATURE_FLAGS);
+  // Lists powered by the unified API / local storage fallback
+  const [kycList, setKycList] = useState(() => adminApi._getLocalState("kyc", INITIAL_KYC));
+  const [disputesList, setDisputesList] = useState(() => adminApi._getLocalState("disputes", INITIAL_DISPUTES));
+  const [moderationList, setModerationList] = useState(() => adminApi._getLocalState("moderation", INITIAL_MODERATION));
+  const [tenantsList, setTenantsList] = useState(() => adminApi._getLocalState("tenants", INITIAL_TENANTS));
+  const [rbacMatrix, setRbacMatrix] = useState(() => adminApi._getLocalState("rbacMatrix", INITIAL_RBAC));
+  const [auditLogs, setAuditLogs] = useState(() => adminApi._getLocalState("audit", INITIAL_AUDIT));
+  const [featureFlags, setFeatureFlags] = useState(() => adminApi._getLocalState("featureFlags", FEATURE_FLAGS));
+  const [usersList, setUsersList] = useState(() => adminApi._getLocalState("users", INITIAL_USERS));
 
   // Toasts
   const [toasts, setToasts] = useState([]);
@@ -115,31 +344,38 @@ function App() {
   // Logging utility
   const logAction = (actor, action) => {
     const time = new Date().toISOString().replace('T', ' ').substring(0, 19);
-    setAuditLogs(prev => [{ time, actor, action }, ...prev]);
+    setAuditLogs(prev => {
+      const next = [{ time, actor, action }, ...prev];
+      adminApi._setLocalState("audit", next);
+      return next;
+    });
   };
 
-  const [usersList, setUsersList] = useState(INITIAL_USERS);
-
   const handleUpdateUser = (id, updates) => {
-    setUsersList(prev => prev.map(u => {
-      if (u.id === id) {
-        const updated = { ...u, ...updates };
+    setUsersList(prev => {
+      const next = prev.map(u => u.id === id ? { ...u, ...updates } : u);
+      const updatedUser = next.find(u => u.id === id);
+      if (updatedUser) {
         if (updates.role) {
-          logAction(user?.email || "Admin", `Changed user ${u.name} role to ${updates.role}.`);
-          addToast(`Updated ${u.name}'s role to ${updates.role}.`);
+          logAction(user?.email || "Admin", `Changed user ${updatedUser.name} role to ${updates.role}.`);
+          addToast(`Updated ${updatedUser.name}'s role to ${updates.role}.`);
         }
         if (updates.status) {
-          logAction(user?.email || "Admin", `${updates.status === "Suspended" ? "Suspended" : "Activated"} user ${u.name}.`);
-          addToast(`User ${u.name} is now ${updates.status.toLowerCase()}.`);
+          logAction(user?.email || "Admin", `${updates.status === "Suspended" ? "Suspended" : "Activated"} user ${updatedUser.name}.`);
+          addToast(`User ${updatedUser.name} is now ${updates.status.toLowerCase()}.`);
         }
-        return updated;
+        adminApi.users.saveUser(updatedUser);
       }
-      return u;
-    }));
+      return next;
+    });
   };
 
   const handleAddUser = (newUser) => {
-    setUsersList(prev => [newUser, ...prev]);
+    setUsersList(prev => {
+      const next = [newUser, ...prev];
+      adminApi.users.saveUser(newUser);
+      return next;
+    });
     logAction(user?.email || "Admin", `Invited new user ${newUser.name} (${newUser.email}) with role ${newUser.role}.`);
     addToast(`Successfully invited ${newUser.name}.`);
   };
@@ -205,7 +441,12 @@ function App() {
   // KYC Actions
   const approveKyc = (id) => {
     const item = kycList.find(k => k.id === id);
-    setKycList(prev => prev.map(k => k.id === id ? { ...k, status: "Verified" } : k));
+    setKycList(prev => {
+      const next = prev.map(k => k.id === id ? { ...k, status: "Verified" } : k);
+      const updated = next.find(k => k.id === id);
+      adminApi.kyc.saveKyc(updated);
+      return next;
+    });
     addToast(`${item.name} has been verified successfully.`, "success");
     logAction(user.email, `Approved KYC credentials for '${item.name}'.`);
     setSelectedKyc(null);
@@ -217,7 +458,12 @@ function App() {
       return;
     }
     const item = kycList.find(k => k.id === id);
-    setKycList(prev => prev.map(k => k.id === id ? { ...k, status: "Rejected", notes: rejectionReason } : k));
+    setKycList(prev => {
+      const next = prev.map(k => k.id === id ? { ...k, status: "Rejected", notes: rejectionReason } : k);
+      const updated = next.find(k => k.id === id);
+      adminApi.kyc.saveKyc(updated);
+      return next;
+    });
     addToast(`${item.name} KYC has been rejected.`, "info");
     logAction(user.email, `Rejected KYC credentials for '${item.name}'. Reason: ${rejectionReason}`);
     setRejectionReason("");
@@ -227,7 +473,12 @@ function App() {
   // Dispute / Refund Actions (Maker-Checker Demo)
   const initiateRefund = (id) => {
     const item = disputesList.find(d => d.id === id);
-    setDisputesList(prev => prev.map(d => d.id === id ? { ...d, status: "Refund Requested", maker: user.email } : d));
+    setDisputesList(prev => {
+      const next = prev.map(d => d.id === id ? { ...d, status: "Refund Requested", maker: user.email } : d);
+      const updated = next.find(d => d.id === id);
+      adminApi.disputes.saveDispute(updated);
+      return next;
+    });
     addToast("Refund initiated. Awaiting Super Admin (Checker) approval.", "info");
     logAction(user.email, `Requested refund of ${item.amount} for user ${item.user} (Dispute ID: ${item.id}). Maker stage complete.`);
     setSelectedDispute(null);
@@ -235,7 +486,12 @@ function App() {
 
   const approveRefund = (id) => {
     const item = disputesList.find(d => d.id === id);
-    setDisputesList(prev => prev.map(d => d.id === id ? { ...d, status: "Closed", checker: user.email } : d));
+    setDisputesList(prev => {
+      const next = prev.map(d => d.id === id ? { ...d, status: "Closed", checker: user.email } : d);
+      const updated = next.find(d => d.id === id);
+      adminApi.disputes.saveDispute(updated);
+      return next;
+    });
     addToast("Refund approved & settled.", "success");
     logAction(user.email, `Approved and finalized refund of ${item.amount} for user ${item.user} (Dispute ID: ${item.id}). Checker stage complete.`);
     setSelectedDispute(null);
@@ -244,7 +500,12 @@ function App() {
   // Moderation Actions
   const handleModAction = (id, actionType) => {
     const item = moderationList.find(m => m.id === id);
-    setModerationList(prev => prev.map(m => m.id === id ? { ...m, status: actionType } : m));
+    setModerationList(prev => {
+      const next = prev.map(m => m.id === id ? { ...m, status: actionType } : m);
+      const updated = next.find(m => m.id === id);
+      adminApi.moderation.saveModeration(updated);
+      return next;
+    });
     addToast(`Content flag resolved: Marked as ${actionType}.`, "success");
     logAction(user.email, `Resolved content flag on ${item.entityType} by user ${item.reportedUser}. Action taken: ${actionType}`);
   };
@@ -276,7 +537,11 @@ function App() {
       entitlements: newTenant.entitlements,
       status: "Active"
     };
-    setTenantsList(prev => [...prev, tenantObj]);
+    setTenantsList(prev => {
+      const next = [...prev, tenantObj];
+      adminApi.tenants.saveTenant(tenantObj);
+      return next;
+    });
     addToast(`Tenant '${newTenant.name}' has been successfully provisioned.`, "success");
     logAction(user.email, `Provisioned new white-label tenant '${newTenant.name}' with entitlements: [${newTenant.entitlements.join(', ')}]`);
     setNewTenant({ name: "", slug: "", plan: "Standard", entitlements: [] });
@@ -285,26 +550,33 @@ function App() {
   // Feature Flag Toggle
   const toggleFeatureFlag = (id) => {
     const item = featureFlags.find(f => f.id === id);
-    setFeatureFlags(prev => prev.map(f => f.id === id ? { ...f, active: !f.active } : f));
+    setFeatureFlags(prev => {
+      const next = prev.map(f => f.id === id ? { ...f, active: !f.active } : f);
+      adminApi.featureFlags.saveFlags(next);
+      return next;
+    });
     addToast(`Feature flag '${item.name}' toggled to ${!item.active ? 'ENABLED' : 'DISABLED'}`, "info");
     logAction(user.email, `Toggled feature flag '${item.name}' to ${!item.active ? 'active' : 'inactive'}`);
   };
 
   // Toggle RBAC Permission Checkbox
   const toggleRbacPermission = (permissionName, roleName) => {
-    setRbacMatrix(prev => prev.map(item => {
-      if (item.permission === permissionName) {
-        const hasRole = item.roles.includes(roleName);
-        const updatedRoles = hasRole
-          ? item.roles.filter(r => r !== roleName)
-          : [...item.roles, roleName];
-        
-        logAction(user.email, `Updated RBAC: ${hasRole ? 'Removed' : 'Granted'} permission '${permissionName}' for role '${roleName}'`);
-        addToast(`Permission list updated.`, "info");
-        return { ...item, roles: updatedRoles };
-      }
-      return item;
-    }));
+    setRbacMatrix(prev => {
+      const next = prev.map(item => {
+        if (item.permission === permissionName) {
+          const hasRole = item.roles.includes(roleName);
+          const updatedRoles = hasRole
+            ? item.roles.filter(r => r !== roleName)
+            : [...item.roles, roleName];
+          return { ...item, roles: updatedRoles };
+        }
+        return item;
+      });
+      adminApi.rbac.saveMatrix(next);
+      return next;
+    });
+    logAction(user.email, `Updated RBAC: Granted/Removed permission '${permissionName}' for role '${roleName}'`);
+    addToast(`Permission list updated.`, "info");
   };
 
   // Login view component
@@ -1269,9 +1541,9 @@ function RbacView({ user }) {
     setError(null);
     try {
       const [rRes, respRes, pRes] = await Promise.all([
-        fetch(apiBase + "/api/admin/rbac/roles").then(res => res.json()),
-        fetch(apiBase + "/api/admin/rbac/responsibilities").then(res => res.json()),
-        fetch(apiBase + "/api/admin/rbac/positions").then(res => res.json())
+        adminApi.rbac.getRoles(),
+        adminApi.rbac.getResponsibilities(),
+        adminApi.rbac.getPositions()
       ]);
 
       if (rRes.success) setRoles(rRes.data.roles || rRes.data);
@@ -1295,8 +1567,6 @@ function RbacView({ user }) {
     if (!roleForm.name || !roleForm.displayName) return;
 
     try {
-      const url = editItem ? `${apiBase}/api/admin/rbac/roles/${editItem.id}` : `${apiBase}/api/admin/rbac/roles`;
-      const method = editItem ? "PUT" : "POST";
       const payload = {
         name: roleForm.name,
         displayName: roleForm.displayName,
@@ -1308,14 +1578,7 @@ function RbacView({ user }) {
         isDefault: roleForm.isDefault
       };
 
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to save role");
-
+      await adminApi.rbac.saveRole(payload, editItem?.id);
       setModalOpen(null);
       loadData();
     } catch (err) {
@@ -1336,8 +1599,6 @@ function RbacView({ user }) {
     }
 
     try {
-      const url = editItem ? `${apiBase}/api/admin/rbac/responsibilities/${editItem.id}` : `${apiBase}/api/admin/rbac/responsibilities`;
-      const method = editItem ? "PUT" : "POST";
       const payload = {
         name: respForm.name,
         displayName: respForm.displayName,
@@ -1351,14 +1612,7 @@ function RbacView({ user }) {
         isActive: respForm.isActive
       };
 
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to save responsibility");
-
+      await adminApi.rbac.saveResponsibility(payload, editItem?.id);
       setModalOpen(null);
       loadData();
     } catch (err) {
@@ -1386,8 +1640,6 @@ function RbacView({ user }) {
     }
 
     try {
-      const url = editItem ? `${apiBase}/api/admin/rbac/positions/${editItem.id}` : `${apiBase}/api/admin/rbac/positions`;
-      const method = editItem ? "PUT" : "POST";
       const payload = {
         name: posForm.name,
         displayName: posForm.displayName,
@@ -1399,14 +1651,7 @@ function RbacView({ user }) {
         isActive: posForm.isActive
       };
 
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to save position");
-
+      await adminApi.rbac.savePosition(payload, editItem?.id);
       setModalOpen(null);
       loadData();
     } catch (err) {
@@ -1417,9 +1662,9 @@ function RbacView({ user }) {
   const handleDelete = async (type, id) => {
     if (!confirm(`Are you sure you want to delete this ${type}?`)) return;
     try {
-      const res = await fetch(`${apiBase}/api/admin/rbac/${type}s/${id}`, { method: "DELETE" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || `Failed to delete ${type}`);
+      if (type === "role") await adminApi.rbac.deleteRole(id);
+      else if (type === "responsibility") await adminApi.rbac.deleteResponsibility(id);
+      else if (type === "position") await adminApi.rbac.deletePosition(id);
       loadData();
     } catch (err) {
       alert(err.message);
@@ -1440,15 +1685,7 @@ function RbacView({ user }) {
       : [...currentIds, respId];
 
     try {
-      const res = await fetch(`${apiBase}/api/admin/rbac/roles/${role.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ responsibilities: updatedIds })
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || "Failed to update permissions matrix");
-      }
+      await adminApi.rbac.saveRole({ responsibilities: updatedIds }, role.id);
       loadData();
     } catch (err) {
       alert(err.message);
@@ -1906,6 +2143,47 @@ function RbacView({ user }) {
                       <option key={p.id} value={p.id}>{p.display_name} (Level: {p.hierarchy_level})</option>
                     ))}
                   </select>
+                </div>
+
+                <div className="form-group">
+                  <label style={{ fontWeight: "600", marginBottom: "8px", display: "block" }}>Link Responsibilities</label>
+                  <div style={{
+                    maxHeight: "180px",
+                    overflowY: "auto",
+                    border: "1px solid var(--border)",
+                    borderRadius: "6px",
+                    padding: "10px",
+                    background: "var(--surface-2)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px"
+                  }}>
+                    {responsibilities.map(r => {
+                      const isChecked = roleForm.responsibilities.includes(r.id);
+                      return (
+                        <label key={r.id} style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "12px", color: "var(--ink)" }}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              const updated = e.target.checked
+                                ? [...roleForm.responsibilities, r.id]
+                                : roleForm.responsibilities.filter(id => id !== r.id);
+                              setRoleForm({ ...roleForm, responsibilities: updated });
+                            }}
+                            style={{ accentColor: "var(--accent-2)" }}
+                          />
+                          <div>
+                            <span style={{ fontWeight: "600" }}>{r.display_name}</span>
+                            <span style={{ fontSize: "10px", color: "var(--ink-3)", marginLeft: "6px" }}>({r.name})</span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                    {responsibilities.length === 0 && (
+                      <span style={{ fontSize: "12px", color: "var(--ink-3)", textAlign: "center" }}>No responsibilities found. Define some first.</span>
+                    )}
+                  </div>
                 </div>
                 
                 <div style={{ display: "flex", gap: "20px", marginTop: "8px" }}>
@@ -2382,7 +2660,8 @@ function SubscriptionPlansView({ user, apiBase }) {
     name: "", displayName: "", description: "", category: "individual",
     planType: "monthly", isActive: true, isPopular: false, groupName: "",
     pricing: { monthly: 0, yearly: 0, yearlyDiscount: 0 },
-    metadata: { maxUsers: 1, maxWatchlists: 5, maxAlerts: 10, apiCallsPerMonth: 1000, dataRetentionDays: 30, supportLevel: "basic", sla: "Best effort", customBranding: false, whiteLabel: false, dedicatedSupport: false },
+    metadata: { maxEvents: 5, maxAttendees: 100, maxGroups: 1, supportLevel: "basic", customBranding: false, whiteLabel: false },
+    features: [],
     trial: { enabled: false, duration: 14 },
     visibility: { availableForSignup: true, hideFromPricing: false },
     rbac: { assignedRole: "", assignedPosition: "", autoAssignRole: true }
@@ -2393,9 +2672,9 @@ function SubscriptionPlansView({ user, apiBase }) {
     setLoading(true); setError(null);
     try {
       const [pRes, rRes, posRes] = await Promise.all([
-        fetch(apiBase + "/api/admin/plans").then(r => r.json()),
-        fetch(apiBase + "/api/admin/plans/roles/available").then(r => r.json()),
-        fetch(apiBase + "/api/admin/plans/positions/available").then(r => r.json()),
+        adminApi.plans.getPlans(),
+        adminApi.plans.getAvailableRoles(),
+        adminApi.plans.getAvailablePositions(),
       ]);
       if (pRes.success) setPlans(pRes.data?.plans || []);
       if (rRes.success) setRoles(rRes.data?.roles || []);
@@ -2430,6 +2709,7 @@ function SubscriptionPlansView({ user, apiBase }) {
         yearlyDiscount: p.pricing?.yearly?.discount ?? 0
       },
       metadata: p.metadata || emptyForm.metadata,
+      features: Array.isArray(p.features) ? p.features.map(f => typeof f === 'object' ? (f.name || "") : f) : [],
       trial: p.trial || emptyForm.trial,
       visibility: p.visibility || emptyForm.visibility,
       rbac: { assignedRole: p.rbac_role_id || "", assignedPosition: p.rbac_position_id || "", autoAssignRole: p.rbac_auto_assign ?? true }
@@ -2445,23 +2725,23 @@ function SubscriptionPlansView({ user, apiBase }) {
         category: form.category, planType: form.planType, isActive: form.isActive, isPopular: form.isPopular,
         groupName: form.groupName,
         pricing: { monthly: { amount: Number(form.pricing.monthly), currency: "INR" }, yearly: { amount: Number(form.pricing.yearly), currency: "INR", discount: Number(form.pricing.yearlyDiscount) } },
-        metadata: form.metadata, trial: form.trial, visibility: form.visibility,
+        metadata: form.metadata,
+        features: (form.features || []).map(f => typeof f === 'object' ? f : { name: f }),
+        trial: form.trial,
+        visibility: form.visibility,
         rbac: { assignedRole: form.rbac.assignedRole || null, assignedPosition: form.rbac.assignedPosition || null, autoAssignRole: form.rbac.autoAssignRole }
       };
-      const url = editItem ? `${apiBase}/api/admin/plans/${editItem.id}` : `${apiBase}/api/admin/plans`;
-      const res = await fetch(url, { method: editItem ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
+      await adminApi.plans.savePlan(payload, editItem?.id);
       setModalOpen(false); load();
     } catch (err) { alert(err.message); }
   };
 
   const handleDelete = async (id) => {
     if (!confirm("Delete this plan?")) return;
-    const res = await fetch(`${apiBase}/api/admin/plans/${id}`, { method: "DELETE" });
-    const data = await res.json();
-    if (!res.ok) { alert(data.message); return; }
-    load();
+    try {
+      await adminApi.plans.deletePlan(id);
+      load();
+    } catch (err) { alert(err.message); }
   };
 
   const priceDisplay = (p) => {
@@ -2593,20 +2873,20 @@ function SubscriptionPlansView({ user, apiBase }) {
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
                   <div className="form-group">
-                    <label>Max Users</label>
-                    <input type="number" min="1" className="form-control" value={form.metadata.maxUsers} onChange={e => setF("metadata.maxUsers", Number(e.target.value))} />
+                    <label>Max Events</label>
+                    <input type="number" min="0" className="form-control" value={form.metadata.maxEvents} onChange={e => setF("metadata.maxEvents", Number(e.target.value))} />
                   </div>
                   <div className="form-group">
-                    <label>Max Watchlists</label>
-                    <input type="number" min="0" className="form-control" value={form.metadata.maxWatchlists} onChange={e => setF("metadata.maxWatchlists", Number(e.target.value))} />
+                    <label>Max Attendees/Event</label>
+                    <input type="number" min="0" className="form-control" value={form.metadata.maxAttendees} onChange={e => setF("metadata.maxAttendees", Number(e.target.value))} />
                   </div>
                   <div className="form-group">
-                    <label>API Calls/Month</label>
-                    <input type="number" min="0" className="form-control" value={form.metadata.apiCallsPerMonth} onChange={e => setF("metadata.apiCallsPerMonth", Number(e.target.value))} />
+                    <label>Max Groups</label>
+                    <input type="number" min="0" className="form-control" value={form.metadata.maxGroups} onChange={e => setF("metadata.maxGroups", Number(e.target.value))} />
                   </div>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "12px" }}>
                   <div className="form-group">
                     <label>Support Level</label>
                     <select className="form-control" value={form.metadata.supportLevel} onChange={e => setF("metadata.supportLevel", e.target.value)}>
@@ -2616,9 +2896,67 @@ function SubscriptionPlansView({ user, apiBase }) {
                       <option value="enterprise">Enterprise</option>
                     </select>
                   </div>
-                  <div className="form-group">
-                    <label>SLA</label>
-                    <input className="form-control" value={form.metadata.sla} onChange={e => setF("metadata.sla", e.target.value)} />
+                </div>
+
+                <div style={{ display: "flex", gap: "20px" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+                    <input type="checkbox" checked={form.metadata.customBranding} onChange={e => setF("metadata.customBranding", e.target.checked)} />
+                    Custom Branding
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+                    <input type="checkbox" checked={form.metadata.whiteLabel} onChange={e => setF("metadata.whiteLabel", e.target.checked)} />
+                    White Label Domain
+                  </label>
+                </div>
+
+                {/* Included Features */}
+                <div style={{ background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: "8px", padding: "16px" }}>
+                  <div style={{ fontSize: "13px", fontWeight: "600", marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>Included Features (Pricing Card Bullets)</span>
+                    <button type="button" className="btn-sm btn-sm-ghost" onClick={() => {
+                      const updated = [...(form.features || []), ""];
+                      setForm({ ...form, features: updated });
+                    }}>+ Add Feature</button>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {(form.features || []).map((feat, index) => (
+                      <div key={index} style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                        <input
+                          className="form-control"
+                          placeholder="e.g. Access to 10 active communities"
+                          value={feat}
+                          onChange={(e) => {
+                            const updated = [...form.features];
+                            updated[index] = e.target.value;
+                            setForm({ ...form, features: updated });
+                          }}
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = form.features.filter((_, idx) => idx !== index);
+                            setForm({ ...form, features: updated });
+                          }}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: "#ef4444",
+                            cursor: "pointer",
+                            padding: "4px",
+                            fontSize: "14px",
+                            fontWeight: "bold"
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                    {(form.features || []).length === 0 && (
+                      <div style={{ textAlign: "center", fontSize: "11px", color: "var(--ink-3)", padding: "10px" }}>
+                        No features added yet. Click "+ Add Feature".
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -2714,7 +3052,7 @@ function CouponsView({ user, apiBase }) {
   const load = async () => {
     setLoading(true); setError(null);
     try {
-      const res = await fetch(apiBase + "/api/admin/coupons").then(r => r.json());
+      const res = await adminApi.coupons.getCoupons();
       if (res.success) setCoupons(res.data?.coupons || []);
     } catch (e) { setError("Failed to load coupons."); }
     finally { setLoading(false); }
@@ -2747,20 +3085,17 @@ function CouponsView({ user, apiBase }) {
         usageLimits: { usageLimit: form.usageLimits.usageLimit ? Number(form.usageLimits.usageLimit) : undefined, usageLimitPerUser: Number(form.usageLimits.usageLimitPerUser) },
         emailSettings: form.emailSettings
       };
-      const url = editItem ? `${apiBase}/api/admin/coupons/${editItem.id}` : `${apiBase}/api/admin/coupons`;
-      const res = await fetch(url, { method: editItem ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
+      await adminApi.coupons.saveCoupon(payload, editItem?.id);
       setModalOpen(false); load();
     } catch (err) { alert(err.message); }
   };
 
   const handleDelete = async (id) => {
     if (!confirm("Delete this coupon?")) return;
-    const res = await fetch(`${apiBase}/api/admin/coupons/${id}`, { method: "DELETE" });
-    const data = await res.json();
-    if (!res.ok) { alert(data.message); return; }
-    load();
+    try {
+      await adminApi.coupons.deleteCoupon(id);
+      load();
+    } catch (err) { alert(err.message); }
   };
 
   const copyCode = (code) => {

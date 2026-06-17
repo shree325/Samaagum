@@ -1,0 +1,25 @@
+import { components } from './api-types';
+
+export type Role = components['schemas']['Role'];
+export type RoleInput = components['schemas']['RoleInput'];
+export type Responsibility = components['schemas']['Responsibility'];
+export type ResponsibilityInput = components['schemas']['ResponsibilityInput'];
+export type Position = components['schemas']['Position'];
+export type PositionInput = components['schemas']['PositionInput'];
+export type Plan = components['schemas']['Plan'];
+export type PlanInput = components['schemas']['PlanInput'];
+export type Coupon = components['schemas']['Coupon'];
+export type CouponInput = components['schemas']['CouponInput'];
+export type User = components['schemas']['User'];
+export type UserInput = components['schemas']['UserInput'];
+export type KycRecord = components['schemas']['KycRecord'];
+export type KycInput = components['schemas']['KycInput'];
+export type Dispute = components['schemas']['Dispute'];
+export type DisputeInput = components['schemas']['DisputeInput'];
+export type ModerationItem = components['schemas']['ModerationItem'];
+export type ModerationInput = components['schemas']['ModerationInput'];
+export type Tenant = components['schemas']['Tenant'];
+export type TenantInput = components['schemas']['TenantInput'];
+export type AuditLog = components['schemas']['AuditLog'];
+export type AuditLogInput = components['schemas']['AuditLogInput'];
+export type FeatureFlag = components['schemas']['FeatureFlag'];

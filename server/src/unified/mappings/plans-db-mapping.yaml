@@ -1,0 +1,40 @@
+version: "1.0"
+provider: database
+dataType: plans
+canonical: Plan
+
+fieldMappings:
+  id:
+    source: id
+    type: string
+    required: true
+
+  name:
+    source: name
+    type: string
+    required: true
+
+  displayName:
+    source: display_name
+    type: string
+    required: false
+
+  description:
+    source: description
+    type: string
+    required: false
+
+  planType:
+    source: plan_type
+    type: string
+    required: true
+
+  isActive:
+    source: is_active
+    type: boolean
+    default: true
+
+  isPopular:
+    source: is_popular
+    type: boolean
+    default: false
