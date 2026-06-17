@@ -6,7 +6,8 @@
     "generate:api": "npx openapi-typescript shared/openapi/admin.yaml -o client/src/generated/api-types.ts",
     "generate:api:watch": "npx openapi-typescript shared/openapi/admin.yaml -o client/src/generated/api-types.ts --watch",
     "dev:server": "npm --prefix server run dev",
-    "dev:client": "npm --prefix client run dev"
+    "dev:client": "npm --prefix client run dev",
+    "seed": "npm --prefix server run seed"
   },
   "devDependencies": {
     "openapi-typescript": "^7.13.0"
