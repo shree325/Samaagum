@@ -59,8 +59,9 @@ function App() {
   const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
 
   useEffect(() => {
-    const token = localStorage.getItem('token') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMSIsInRlbmFudElkIjoiMDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAwIn0.mocksignature';
-    
+    const token = localStorage.getItem('token');
+    if (!token) return; // Not logged in — skip profile/subscription fetch
+
     // Fetch subscription status
     fetch(`${apiBase}/api/subscription/status`, {
       headers: { 'Authorization': `Bearer ${token}` }
@@ -76,7 +77,7 @@ function App() {
       })
       .catch(err => console.error('Error fetching subscription status', err));
 
-    // Fetch user profile details
+    // Fetch user profile details using the token's user id
     fetch(`${apiBase}/api/admin/user/profile`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })

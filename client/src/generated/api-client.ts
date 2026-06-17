@@ -18,8 +18,10 @@ class AdminApiClient {
       'Content-Type': 'application/json',
     };
     if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('samaagum_admin_token') || 'mock-admin-jwt-token';
-      headers['Authorization'] = `Bearer ${token}`;
+      const token = localStorage.getItem('samaagum_admin_token');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
     }
     return headers;
   }
@@ -208,6 +210,17 @@ class AdminApiClient {
       body: JSON.stringify(payload),
     }),
   };
+
+  // ── Auth endpoint (public — no token required) ─────────────────────────────
+  public async adminLogin(email: string, accessKey: string): Promise<{ success: boolean; token?: string; user?: any; message?: string }> {
+    const url = `${this.apiBase}/api/admin/auth/login`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, accessKey }),
+    });
+    return response.json();
+  }
 }
 
 if (typeof window !== 'undefined') {

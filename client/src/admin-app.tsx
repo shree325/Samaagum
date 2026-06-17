@@ -404,26 +404,32 @@ function App() {
     };
   }, [setActiveTab]);
 
-  // Auth Handler
-  const handleLogin = (email, password) => {
-    if (email === "superadmin@samaagum.co") {
-      setUser({ email, role: "Super Admin", name: "Ishaan Mehta" });
-      addToast("Welcome back, Super Admin!", "success");
-      logAction("superadmin@samaagum.co", "Logged in successfully (Super Admin).");
-    } else if (email === "admin@samaagum.co") {
-      setUser({ email, role: "Platform Admin", name: "Aanya Reddy" });
-      addToast("Welcome back, Platform Admin!", "success");
-      logAction("admin@samaagum.co", "Logged in successfully (Platform Admin).");
-    } else {
-      addToast("Invalid credentials for administrative access.", "warning");
+  // Auth Handler — calls real backend, no OTP for admin
+  const handleLogin = async (email, accessKey) => {
+    try {
+      const result = await apiClient.adminLogin(email, accessKey);
+      if (result.success && result.token) {
+        localStorage.setItem('samaagum_admin_token', result.token);
+        const roleLabel = result.user?.role === 'super_admin' ? 'Super Admin' : 'Platform Admin';
+        setUser({ email: result.user.email, role: roleLabel, name: result.user.name || roleLabel });
+        addToast(`Welcome back, ${roleLabel}!`, 'success');
+        logAction(result.user.email, `Logged in successfully (${roleLabel}).`);
+      } else {
+        addToast(result.message || 'Invalid email or access key.', 'warning');
+      }
+    } catch (err) {
+      addToast('Login failed. Check server connection.', 'warning');
     }
   };
 
+
   const handleLogout = () => {
-    logAction(user?.email || "User", "Logged out.");
+    logAction(user?.email || 'User', 'Logged out.');
+    localStorage.removeItem('samaagum_admin_token');
     setUser(null);
-    setActiveTab("dashboard");
+    setActiveTab('dashboard');
   };
+
 
   // Helper for quick switching roles
   const handleQuickSwitch = (newRole) => {
@@ -610,23 +616,10 @@ function App() {
 
           <LoginForm onSubmit={handleLogin} />
 
-          <div className="demo-account-selector">
-            <div className="demo-account-title">Demo Credentials Quick Login</div>
-            <button className="demo-btn" onClick={() => handleLogin("admin@samaagum.co", "admin")}>
-              <div className="avatar admin">PA</div>
-              <div className="text">
-                <span className="role">Platform Admin</span>
-                <span className="email">admin@samaagum.co (pw: admin)</span>
-              </div>
-            </button>
-            <button className="demo-btn" onClick={() => handleLogin("superadmin@samaagum.co", "superadmin")}>
-              <div className="avatar super">SA</div>
-              <div className="text">
-                <span className="role">Super Admin</span>
-                <span className="email">superadmin@samaagum.co (pw: superadmin)</span>
-              </div>
-            </button>
-          </div>
+          <p style={{ fontSize: '12px', color: 'var(--ink-3)', textAlign: 'center', marginTop: '16px' }}>
+            Use your Samaagum admin email and access key to log in.<br/>
+            Keys are set during <code style={{ background: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: '4px' }}>npm run seed</code>.
+          </p>
         </div>
         
         {/* Toasts */}

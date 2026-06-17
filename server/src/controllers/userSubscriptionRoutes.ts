@@ -1,4 +1,4 @@
-import { Router, Response, NextFunction } from 'express';
+import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import crypto from 'crypto';
 import prisma from '../config/prisma';
 import { R_adminSubscriptionPlans } from '../repositories/R_adminSubscriptionPlans';
@@ -28,30 +28,26 @@ const getRazorpay = () => {
     }
 };
 
-type Middleware = (req: any, res: Response, next: NextFunction) => void;
-
-export function createUserSubscriptionRouter(authenticate: Middleware): Router {
-    const router = Router();
+export const userSubscriptionRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     const planRepo = new R_adminSubscriptionPlans();
     const couponRepo = new R_adminCoupons();
 
-    // 1. GET /subscription/plans/public — List all active public plans
-    router.get('/plans/public', async (_req, res: Response) => {
+    // 1. GET /plans/public — List all active public plans
+    fastify.get('/plans/public', async (request, reply) => {
         try {
             const plans = await planRepo.findPublic();
-            res.json({ success: true, data: plans });
+            return { success: true, data: plans };
         } catch (e: any) {
-            res.status(500).json({ success: false, message: e.message });
+            return reply.status(500).send({ success: false, message: e.message });
         }
     });
 
-    // 2. GET /subscription/status — Get active subscription status and details of the current logged-in user
-    router.get('/status', authenticate, async (req: any, res: Response) => {
+    // 2. GET /status — Get active subscription status and details of the current logged-in user
+    fastify.get('/status', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
         try {
-            const userId = req.user?.id;
-            const tenantId = req.user?.tenantId;
+            const userId = request.user?.id;
             if (!userId) {
-                return res.status(401).json({ success: false, message: 'Unauthorized' });
+                return reply.status(401).send({ success: false, message: 'Unauthorized' });
             }
 
             // Fetch user
@@ -60,7 +56,7 @@ export function createUserSubscriptionRouter(authenticate: Middleware): Router {
             });
 
             if (!user) {
-                return res.status(404).json({ success: false, message: 'User not found' });
+                return reply.status(404).send({ success: false, message: 'User not found' });
             }
 
             // Fetch current active order representing subscription details
@@ -115,7 +111,7 @@ export function createUserSubscriptionRouter(authenticate: Middleware): Router {
                 }
             }
 
-            res.json({
+            return {
                 success: true,
                 data: {
                     subscription: activeOrder ? {
@@ -137,43 +133,43 @@ export function createUserSubscriptionRouter(authenticate: Middleware): Router {
                         state: user.state
                     }
                 }
-            });
+            };
         } catch (e: any) {
-            res.status(500).json({ success: false, message: e.message });
+            return reply.status(500).send({ success: false, message: e.message });
         }
     });
 
-    // 3. POST /subscription/coupons/validate — Validate a coupon code
-    router.post('/coupons/validate', authenticate, async (req: any, res: Response) => {
+    // 3. POST /coupons/validate — Validate a coupon code
+    fastify.post('/coupons/validate', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
         try {
-            const { code, cartTotal, subscriptionPlanId } = req.body;
-            const tenantId = req.user?.tenantId || null;
-            const userEmail = req.user?.email || req.user?.primary_email || '';
+            const { code, cartTotal, subscriptionPlanId } = request.body as any;
+            const tenantId = request.user?.tenantId || null;
+            const userEmail = request.user?.email || request.user?.primary_email || '';
 
             if (!code) {
-                return res.status(400).json({ success: false, message: 'Coupon code is required' });
+                return reply.status(400).send({ success: false, message: 'Coupon code is required' });
             }
 
             const coupon = await couponRepo.findByCode(code, tenantId);
             if (!coupon || !coupon.is_active) {
-                return res.status(404).json({ success: false, message: 'Invalid or inactive coupon code' });
+                return reply.status(404).send({ success: false, message: 'Invalid or inactive coupon code' });
             }
 
             // Verify expiration
             if (coupon.date_expires && new Date(coupon.date_expires) < new Date()) {
-                return res.status(400).json({ success: false, message: 'This coupon has expired' });
+                return reply.status(400).send({ success: false, message: 'This coupon has expired' });
             }
 
             // Verify total usage limit
             const limits = coupon.usage_limits as any;
             if (limits?.usageLimit && coupon.usage_count >= limits.usageLimit) {
-                return res.status(400).json({ success: false, message: 'Coupon usage limit has been reached' });
+                return reply.status(400).send({ success: false, message: 'Coupon usage limit has been reached' });
             }
 
             // Verify minimum spend restriction
             const restrictions = coupon.usage_restrictions as any;
             if (restrictions?.minimumAmount && cartTotal < restrictions.minimumAmount) {
-                return res.status(400).json({
+                return reply.status(400).send({
                     success: false,
                     message: `Minimum purchase of ₹${restrictions.minimumAmount} required`
                 });
@@ -183,14 +179,14 @@ export function createUserSubscriptionRouter(authenticate: Middleware): Router {
             if (restrictions?.allowedEmails && Array.isArray(restrictions.allowedEmails) && restrictions.allowedEmails.length > 0) {
                 const emailMatch = restrictions.allowedEmails.map((e: string) => e.toLowerCase()).includes(userEmail.toLowerCase());
                 if (!emailMatch) {
-                    return res.status(400).json({ success: false, message: 'This coupon is not valid for your email address' });
+                    return reply.status(400).send({ success: false, message: 'This coupon is not valid for your email address' });
                 }
             }
 
             // Verify plan restriction
             const planIds = coupon.applicable_plan_ids as any;
             if (planIds && Array.isArray(planIds) && planIds.length > 0 && !planIds.includes(subscriptionPlanId)) {
-                return res.status(400).json({ success: false, message: 'This coupon is not applicable to the selected plan' });
+                return reply.status(400).send({ success: false, message: 'This coupon is not applicable to the selected plan' });
             }
 
             // Calculate discount amount
@@ -204,7 +200,7 @@ export function createUserSubscriptionRouter(authenticate: Middleware): Router {
 
             discountAmount = Math.min(discountAmount, cartTotal);
 
-            res.json({
+            return {
                 success: true,
                 data: {
                     coupon: {
@@ -216,33 +212,33 @@ export function createUserSubscriptionRouter(authenticate: Middleware): Router {
                     discountAmount,
                     finalTotal: Math.max(0, cartTotal - discountAmount)
                 }
-            });
+            };
         } catch (e: any) {
-            res.status(500).json({ success: false, message: e.message });
+            return reply.status(500).send({ success: false, message: e.message });
         }
     });
 
-    // 4. POST /subscription/orders — Create a subscription order
-    router.post('/orders', authenticate, async (req: any, res: Response) => {
+    // 4. POST /orders — Create a subscription order
+    fastify.post('/orders', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
         try {
-            const { planId, planType, shippingAddress = {}, billingAddress = {}, paymentMethod, customerNote, couponCode } = req.body;
-            const userId = req.user?.id;
-            const tenantId = req.user?.tenantId || null;
+            const { planId, planType, shippingAddress = {}, billingAddress = {}, paymentMethod, customerNote, couponCode } = request.body as any;
+            const userId = request.user?.id;
+            const tenantId = request.user?.tenantId || null;
 
             if (!userId) {
-                return res.status(401).json({ success: false, message: 'Unauthorized' });
+                return reply.status(401).send({ success: false, message: 'Unauthorized' });
             }
 
             // Fetch Plan
             const plan = await planRepo.getById(planId);
             if (!plan || !plan.is_active) {
-                return res.status(404).json({ success: false, message: 'Subscription plan not found or inactive' });
+                return reply.status(404).send({ success: false, message: 'Subscription plan not found or inactive' });
             }
 
             const pricingInfo = plan.pricing as any;
             const priceObj = planType === 'yearly' ? pricingInfo.yearly : pricingInfo.monthly;
             if (!priceObj) {
-                return res.status(400).json({ success: false, message: `Pricing details not found for plan type: ${planType}` });
+                return reply.status(400).send({ success: false, message: `Pricing details not found for plan type: ${planType}` });
             }
 
             const subtotal = Number(priceObj.amount || 0);
@@ -326,7 +322,7 @@ export function createUserSubscriptionRouter(authenticate: Middleware): Router {
                 await SubscriptionActivationService.activate(order.id);
             }
 
-            res.status(201).json({
+            return reply.status(201).send({
                 success: true,
                 data: {
                     orderId: order.id,
@@ -338,18 +334,18 @@ export function createUserSubscriptionRouter(authenticate: Middleware): Router {
                 }
             });
         } catch (e: any) {
-            res.status(500).json({ success: false, message: e.message });
+            return reply.status(500).send({ success: false, message: e.message });
         }
     });
 
-    // 5. POST /subscription/payment/create-intent — Create Razorpay order intent
-    router.post('/payment/create-intent', authenticate, async (req: any, res: Response) => {
+    // 5. POST /payment/create-intent — Create Razorpay order intent
+    fastify.post('/payment/create-intent', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
         try {
-            const { orderId } = req.body;
-            const userId = req.user?.id;
+            const { orderId } = request.body as any;
+            const userId = request.user?.id;
 
             if (!userId) {
-                return res.status(401).json({ success: false, message: 'Unauthorized' });
+                return reply.status(401).send({ success: false, message: 'Unauthorized' });
             }
 
             const order = await prisma.subscription_orders.findFirst({
@@ -357,7 +353,7 @@ export function createUserSubscriptionRouter(authenticate: Middleware): Router {
             });
 
             if (!order) {
-                return res.status(404).json({ success: false, message: 'Pending subscription order not found' });
+                return reply.status(404).send({ success: false, message: 'Pending subscription order not found' });
             }
 
             const razorpay = getRazorpay();
@@ -374,7 +370,7 @@ export function createUserSubscriptionRouter(authenticate: Middleware): Router {
                             updated_at: new Date()
                         }
                     });
-                    return res.json({
+                    return {
                         success: true,
                         sandbox: true,
                         data: {
@@ -383,9 +379,9 @@ export function createUserSubscriptionRouter(authenticate: Middleware): Router {
                             currency: order.currency,
                             key: 'mock_key_id'
                         }
-                    });
+                    };
                 }
-                return res.status(500).json({ success: false, message: 'Razorpay is not configured on this server' });
+                return reply.status(500).send({ success: false, message: 'Razorpay is not configured on this server' });
             }
 
             const razorpayOrder = await razorpay.orders.create({
@@ -408,7 +404,7 @@ export function createUserSubscriptionRouter(authenticate: Middleware): Router {
                 }
             });
 
-            res.json({
+            return {
                 success: true,
                 data: {
                     orderId: razorpayOrder.id,
@@ -416,20 +412,20 @@ export function createUserSubscriptionRouter(authenticate: Middleware): Router {
                     currency: razorpayOrder.currency,
                     key: process.env.RAZORPAY_KEY_ID
                 }
-            });
+            };
         } catch (e: any) {
-            res.status(500).json({ success: false, message: e.message });
+            return reply.status(500).send({ success: false, message: e.message });
         }
     });
 
-    // 6. POST /subscription/payment/confirm — Confirm Razorpay payment and activate
-    router.post('/payment/confirm', authenticate, async (req: any, res: Response) => {
+    // 6. POST /payment/confirm — Confirm Razorpay payment and activate
+    fastify.post('/payment/confirm', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
         try {
-            const { orderId, paymentIntentId, razorpayPaymentId, razorpaySignature } = req.body;
-            const userId = req.user?.id;
+            const { orderId, paymentIntentId, razorpayPaymentId, razorpaySignature } = request.body as any;
+            const userId = request.user?.id;
 
             if (!userId) {
-                return res.status(401).json({ success: false, message: 'Unauthorized' });
+                return reply.status(401).send({ success: false, message: 'Unauthorized' });
             }
 
             const order = await prisma.subscription_orders.findFirst({
@@ -441,7 +437,7 @@ export function createUserSubscriptionRouter(authenticate: Middleware): Router {
             });
 
             if (!order) {
-                return res.status(404).json({ success: false, message: 'Subscription order not found' });
+                return reply.status(404).send({ success: false, message: 'Subscription order not found' });
             }
 
             // Verify Signature
@@ -464,7 +460,7 @@ export function createUserSubscriptionRouter(authenticate: Middleware): Router {
                         updated_at: new Date()
                     }
                 });
-                return res.status(400).json({ success: false, message: 'Payment verification failed' });
+                return reply.status(400).send({ success: false, message: 'Payment verification failed' });
             }
 
             // Success
@@ -484,7 +480,7 @@ export function createUserSubscriptionRouter(authenticate: Middleware): Router {
             // Activate subscription benefits & role assignment
             await SubscriptionActivationService.activate(orderId);
 
-            res.json({
+            return {
                 success: true,
                 message: 'Payment confirmed and subscription activated successfully',
                 data: {
@@ -493,30 +489,28 @@ export function createUserSubscriptionRouter(authenticate: Middleware): Router {
                     status: 'completed',
                     subscriptionStatus: 'active'
                 }
-            });
+            };
         } catch (e: any) {
-            res.status(500).json({ success: false, message: e.message });
+            return reply.status(500).send({ success: false, message: e.message });
         }
     });
 
-    // 7. GET /subscription/orders — Retrieve user's order history
-    router.get('/orders', authenticate, async (req: any, res: Response) => {
+    // 7. GET /orders — Retrieve user's order history
+    fastify.get('/orders', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
         try {
-            const userId = req.user?.id;
+            const userId = request.user?.id;
             if (!userId) {
-                return res.status(401).json({ success: false, message: 'Unauthorized' });
+                return reply.status(401).send({ success: false, message: 'Unauthorized' });
             }
             const orders = await prisma.subscription_orders.findMany({
                 where: { user_id: userId },
                 orderBy: { created_at: 'desc' }
             });
-            res.json({ success: true, data: orders });
+            return { success: true, data: orders };
         } catch (e: any) {
-            res.status(500).json({ success: false, message: e.message });
+            return reply.status(500).send({ success: false, message: e.message });
         }
     });
+};
 
-    return router;
-}
-
-export default createUserSubscriptionRouter;
+export default userSubscriptionRoutes;

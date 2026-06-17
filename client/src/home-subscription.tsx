@@ -205,7 +205,11 @@ window.CheckoutPage = function CheckoutPage({ param, st, go }) {
     setCouponLoading(true);
     setErrorMessage(null);
     try {
-      const token = localStorage.getItem('token') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMSIsInRlbmFudElkIjoiMDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAwIn0.mocksignature';
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setErrorMessage('Please log in to apply a coupon.');
+        return;
+      }
       const response = await fetch(`${apiBase}/api/subscription/coupons/validate`, {
         method: 'POST',
         headers: {
@@ -239,7 +243,12 @@ window.CheckoutPage = function CheckoutPage({ param, st, go }) {
     setCheckoutLoading(true);
     setErrorMessage(null);
     try {
-      const token = localStorage.getItem('token') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMSIsInRlbmFudElkIjoiMDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAwIn0.mocksignature';
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setErrorMessage('Please log in to complete your purchase.');
+        setCheckoutLoading(false);
+        return;
+      }
       
       // 1. Create order on backend
       const orderRes = await fetch(`${apiBase}/api/subscription/orders`, {

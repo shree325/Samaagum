@@ -1,12 +1,15 @@
-import express, { Request, Response, NextFunction } from 'express';
+import Fastify from 'fastify';
+import cors from '@fastify/cors';
 import dotenv from 'dotenv';
 import pool from './config/database';
 import prisma from './config/prisma';
-import { createAdminRbacRouter } from './controllers/adminRbacRoutes';
-import { createSubscriptionPlanRouter } from './controllers/adminSubscriptionPlanRoutes';
-import { createAdminCouponRouter } from './controllers/adminCouponRoutes';
-import { createAdminSettingsRouter } from './controllers/adminSettingsRoutes';
-import { createUserSubscriptionRouter } from './controllers/userSubscriptionRoutes';
+import { adminRbacRoutes } from './controllers/adminRbacRoutes';
+import { subscriptionPlanRoutes } from './controllers/adminSubscriptionPlanRoutes';
+import { adminCouponRoutes } from './controllers/adminCouponRoutes';
+import { adminSettingsRoutes } from './controllers/adminSettingsRoutes';
+import { userSubscriptionRoutes } from './controllers/userSubscriptionRoutes';
+import { adminAuthRoutes } from './controllers/adminAuthRoutes';
+import { oauthRoutes } from './controllers/oauthRoutes';
 import { seedAdminRBAC } from './services/adminRbacSeeder';
 import { seedPlatformSettings } from './settings-library/settingsSeeder';
 
@@ -29,75 +32,78 @@ prisma.admin_roles.count()
         console.error('❌ Error during auto-seeding:', err.message || err);
     });
 
+const fastify = Fastify({ logger: true });
+const PORT = Number(process.env.PORT) || 3000;
 
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.use(express.json());
-
-// CORS middleware
-app.use((req: Request, res: Response, next: NextFunction) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    if (req.method === 'OPTIONS') {
-        res.sendStatus(200);
-        return;
-    }
-    next();
+// Register CORS
+fastify.register(cors, {
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 });
 
-// ── JWT auth and admin middlewares ───────────────────────────────────────
-const authenticate = (req: any, res: Response, next: NextFunction) => {
-    const authHeader = req.headers.authorization;
+// Decoupled types for typescript compiling
+declare module 'fastify' {
+  interface FastifyRequest {
+    user?: any;
+  }
+}
+
+// Register authentication decorator
+fastify.decorate('authenticate', async (request: any, reply: any) => {
+    const authHeader = request.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.substring(7);
         try {
             const parts = token.split('.');
             if (parts.length === 3) {
                 const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
-                req.user = payload;
+                request.user = payload;
             }
         } catch (err) {
             console.warn('⚠️ Warning: Failed to decode JWT payload from header.');
         }
     }
-    next();
-};
-const requireAdmin = (req: any, res: Response, next: NextFunction) => {
-    // If a authenticated user exists, make sure they are some form of admin
-    if (req.user) {
-        const role = String(req.user.role || '').toLowerCase();
-        const isAdmin = role.includes('admin') || role.includes('host') || role.includes('organizer');
-        if (!isAdmin) {
-            return res.status(403).json({
-                success: false,
-                message: 'Access Denied: Administrative privileges required'
-            });
-        }
+});
+
+// Register admin validation decorator
+fastify.decorate('requireAdmin', async (request: any, reply: any) => {
+    if (!request.user) {
+        return reply.status(401).send({
+            success: false,
+            message: 'Unauthorized: Authentication required'
+        });
     }
-    next();
-};
+    const role = String(request.user.role || '').toLowerCase();
+    const isAdmin = role.includes('admin') || role.includes('host') || role.includes('organizer') || role === 'super_admin';
+    if (!isAdmin) {
+        return reply.status(403).send({
+            success: false,
+            message: 'Access Denied: Administrative privileges required'
+        });
+    }
+});
 
-// ── Admin RBAC routes ─────────────────────────────────────────────────────
-app.use('/api/admin/rbac', createAdminRbacRouter(authenticate, requireAdmin));
-app.use('/api/admin', createSubscriptionPlanRouter(authenticate, requireAdmin));
-app.use('/api/admin', createAdminCouponRouter(authenticate, requireAdmin));
-app.use('/api/admin', createAdminSettingsRouter(authenticate, requireAdmin));
-app.use('/api/subscription', createUserSubscriptionRouter(authenticate));
+// Register routing plugins
+fastify.register(adminAuthRoutes, { prefix: '/api/admin' });
+fastify.register(oauthRoutes, { prefix: '/api/auth' });
+fastify.register(adminRbacRoutes, { prefix: '/api/admin/rbac' });
+fastify.register(subscriptionPlanRoutes, { prefix: '/api/admin' });
+fastify.register(adminCouponRoutes, { prefix: '/api/admin' });
+fastify.register(adminSettingsRoutes, { prefix: '/api/admin' });
+fastify.register(userSubscriptionRoutes, { prefix: '/api/subscription' });
 
-// Basic health check route
-app.get('/health', async (req, res) => {
+// Health check route
+fastify.get('/health', async (request, reply) => {
     try {
         const result = await pool.query('SELECT NOW()');
-        res.json({
+        return {
             status: 'OK',
             message: 'Samaagum Backend is running and database is connected.',
             dbTime: result.rows[0].now
-        });
+        };
     } catch (error: any) {
-        res.status(500).json({
+        return reply.status(500).send({
             status: 'ERROR',
             message: 'Database connection failed',
             error: error.message
@@ -105,7 +111,16 @@ app.get('/health', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`🚀 Server is running on port ${PORT}`);
-    console.log(`🔗 Health check available at http://localhost:${PORT}/health`);
-});
+// Start the server
+const start = async () => {
+    try {
+        await fastify.listen({ port: PORT, host: '0.0.0.0' });
+        console.log(`🚀 Server is running on port ${PORT}`);
+        console.log(`🔗 Health check available at http://localhost:${PORT}/health`);
+    } catch (err) {
+        fastify.log.error(err);
+        process.exit(1);
+    }
+};
+
+start();

@@ -1,8 +1,34 @@
+// @ts-nocheck
 /* ============================================================
    Samaagum — showcase app (desktop + mobile + tweaks)
    ============================================================ */
 
 const { useState, useEffect } = React;
+
+// ── Handle Google OAuth redirect ─────────────────────────────────────────────
+// After Google login, the backend redirects back here with ?token=...&auth=google
+// Read the token, save it, clean the URL, and go straight to the home page.
+(function handleOAuthRedirect() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('token');
+  const auth  = params.get('auth');
+  const authError = params.get('auth_error');
+
+  if (authError) {
+    console.error('OAuth error:', authError);
+    // Strip the param so the user sees the login page cleanly
+    window.history.replaceState({}, '', '/');
+    return;
+  }
+
+  if (token && auth === 'google') {
+    // Save the real JWT token from Google OAuth
+    localStorage.setItem('token', decodeURIComponent(token));
+    localStorage.setItem('samaagum_admin_token', decodeURIComponent(token));
+    // Navigate to the home app — same path as "Enter Samaagum" button
+    window.location.replace('pages/Samaagum Home.html');
+  }
+})();
 
 const Lock = (p) => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" {...p}><rect x="4.5" y="10.5" width="15" height="10" rx="2.5" stroke="currentColor" strokeWidth="1.8"/><path d="M7.5 10.5V8a4.5 4.5 0 019 0v2.5" stroke="currentColor" strokeWidth="1.8"/></svg>;
 

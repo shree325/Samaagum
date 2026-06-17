@@ -48,10 +48,10 @@ function ScreenMethod({ m }) {
 
   const google = () => {
     setGLoading(true);
-    setTimeout(() => {
-      m.set({ google: true, email: "you@gmail.com", name: m.mode === "signup" ? "Aanya Rao" : m.data.name });
-      m.goName(m.mode === "signup" ? "profile" : "done");
-    }, 1100);
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+    // Redirect to backend — it reads clientId from platform_settings and redirects to Google
+    window.location.href = `${apiBase}/api/auth/google?mode=${m.mode}`;
   };
   const cont = async () => {
     if (!valid) { setErr("Enter a valid email address"); return; }

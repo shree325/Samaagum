@@ -1,9 +1,7 @@
-import { Router, Response, NextFunction } from 'express';
+import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import prisma from '../config/prisma';
 import { AdminAuthSettings, CommunicationSettings, OtpSettings } from '../settings-library/settingsTypes';
 import { DEFAULT_AUTH_SETTINGS, DEFAULT_COMMUNICATION_SETTINGS, DEFAULT_OTP_SETTINGS } from '../settings-library/settingsSeeder';
-
-type Middleware = (req: any, res: Response, next: NextFunction) => void;
 
 /**
  * Utility to mask sensitive credentials
@@ -95,15 +93,11 @@ async function markOtpVerified(db: any, id: string) {
   }
 }
 
-export function createAdminSettingsRouter(
-  authenticate: Middleware,
-  requireAdmin: Middleware
-): Router {
-  const router = Router();
+export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
 
   // ── AUTH SETTINGS ──────────────────────────────────────────────────────────
   
-  router.get('/settings/auth', authenticate, requireAdmin, async (req: any, res: Response) => {
+  fastify.get('/settings/auth', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
     try {
       const row = await prisma.platform_settings.findFirst({
         where: {
@@ -130,17 +124,17 @@ export function createAdminSettingsRouter(
         }
       };
 
-      return res.json({ success: true, data: maskedSettings });
+      return { success: true, data: maskedSettings };
     } catch (error: any) {
-      return res.status(500).json({ success: false, message: error.message || 'Failed to fetch auth settings' });
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to fetch auth settings' });
     }
   });
 
-  router.post('/settings/auth', authenticate, requireAdmin, async (req: any, res: Response) => {
+  fastify.post('/settings/auth', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
     try {
-      const { google, linkedin } = req.body;
+      const { google, linkedin } = request.body as any;
       if (!google || !linkedin) {
-        return res.status(400).json({ success: false, message: 'Google and Linkedin settings are required' });
+        return reply.status(400).send({ success: false, message: 'Google and Linkedin settings are required' });
       }
 
       const row = await prisma.platform_settings.findFirst({
@@ -182,7 +176,7 @@ export function createAdminSettingsRouter(
           data: {
             value: newSettings as any,
             updated_at: new Date(),
-            updated_by: req.user?.id || null,
+            updated_by: request.user?.id || null,
           }
         });
       } else {
@@ -192,20 +186,20 @@ export function createAdminSettingsRouter(
             key: 'auth_settings',
             value: newSettings as any,
             updated_at: new Date(),
-            updated_by: req.user?.id || null,
+            updated_by: request.user?.id || null,
           }
         });
       }
 
-      return res.json({ success: true, message: 'Authentication settings updated successfully' });
+      return { success: true, message: 'Authentication settings updated successfully' };
     } catch (error: any) {
-      return res.status(500).json({ success: false, message: error.message || 'Failed to save auth settings' });
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to save auth settings' });
     }
   });
 
   // ── COMMUNICATION SETTINGS ──────────────────────────────────────────────────
   
-  router.get('/settings/communication', authenticate, requireAdmin, async (req: any, res: Response) => {
+  fastify.get('/settings/communication', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
     try {
       const row = await prisma.platform_settings.findFirst({
         where: {
@@ -225,17 +219,17 @@ export function createAdminSettingsRouter(
         smtpPass: maskSecret(settings.smtpPass),
       };
 
-      return res.json({ success: true, data: maskedSettings });
+      return { success: true, data: maskedSettings };
     } catch (error: any) {
-      return res.status(500).json({ success: false, message: error.message || 'Failed to fetch communication settings' });
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to fetch communication settings' });
     }
   });
 
-  router.post('/settings/communication', authenticate, requireAdmin, async (req: any, res: Response) => {
+  fastify.post('/settings/communication', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
     try {
-      const data = req.body as CommunicationSettings;
+      const data = request.body as CommunicationSettings;
       if (!data) {
-        return res.status(400).json({ success: false, message: 'Settings payload required' });
+        return reply.status(400).send({ success: false, message: 'Settings payload required' });
       }
 
       const row = await prisma.platform_settings.findFirst({
@@ -278,7 +272,7 @@ export function createAdminSettingsRouter(
           data: {
             value: newSettings as any,
             updated_at: new Date(),
-            updated_by: req.user?.id || null,
+            updated_by: request.user?.id || null,
           }
         });
       } else {
@@ -288,22 +282,22 @@ export function createAdminSettingsRouter(
             key: 'communication_settings',
             value: newSettings as any,
             updated_at: new Date(),
-            updated_by: req.user?.id || null,
+            updated_by: request.user?.id || null,
           }
         });
       }
 
-      return res.json({ success: true, message: 'Communication settings updated successfully' });
+      return { success: true, message: 'Communication settings updated successfully' };
     } catch (error: any) {
-      return res.status(500).json({ success: false, message: error.message || 'Failed to save communication settings' });
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to save communication settings' });
     }
   });
 
-  router.post('/settings/communication/test', authenticate, requireAdmin, async (req: any, res: Response) => {
+  fastify.post('/settings/communication/test', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
     try {
-      const { email } = req.body;
+      const { email } = request.body as any;
       if (!email) {
-        return res.status(400).json({ success: false, message: 'Recipient email is required' });
+        return reply.status(400).send({ success: false, message: 'Recipient email is required' });
       }
 
       const row = await prisma.platform_settings.findFirst({
@@ -314,13 +308,13 @@ export function createAdminSettingsRouter(
       });
 
       if (!row || !row.value) {
-        return res.status(400).json({ success: false, message: 'No communication credentials configured yet.' });
+        return reply.status(400).send({ success: false, message: 'No communication credentials configured yet.' });
       }
 
       const settings: CommunicationSettings = row.value as any;
 
       if (!settings.enabled) {
-        return res.status(400).json({ success: false, message: 'Communication settings are disabled.' });
+        return reply.status(400).send({ success: false, message: 'Communication settings are disabled.' });
       }
 
       if (settings.provider === 'brevo') {
@@ -350,10 +344,10 @@ export function createAdminSettingsRouter(
         }
 
         if (!apiKey || apiKey === 'mock-key' || apiKey.trim() === '' || apiKey.includes('••••')) {
-          return res.json({ 
+          return { 
             success: true, 
             message: `[MOCK] Test email successfully routed to ${email} (Mock Brevo flow). Configure a real Brevo API Key to send live emails.` 
-          });
+          };
         }
 
         try {
@@ -368,29 +362,29 @@ export function createAdminSettingsRouter(
           });
           const result = (await response.json()) as any;
           if (response.status >= 200 && response.status < 300) {
-            return res.json({ success: true, message: `Live test email sent successfully to ${email}! Message ID: ${result.messageId || 'N/A'}` });
+            return { success: true, message: `Live test email sent successfully to ${email}! Message ID: ${result.messageId || 'N/A'}` };
           } else {
-            return res.status(400).json({ success: false, message: `Brevo API Error: ${result.message || JSON.stringify(result)}` });
+            return reply.status(400).send({ success: false, message: `Brevo API Error: ${result.message || JSON.stringify(result)}` });
           }
         } catch (fetchErr: any) {
-          return res.status(500).json({ success: false, message: `Network request to Brevo failed: ${fetchErr.message}` });
+          return reply.status(500).send({ success: false, message: `Network request to Brevo failed: ${fetchErr.message}` });
         }
       } else if (settings.provider === 'smtp') {
-        return res.json({
+        return {
           success: true,
           message: `[MOCK] Test email successfully routed to ${email} via SMTP relay ${settings.smtpHost}:${settings.smtpPort}.`
-        });
+        };
       } else {
-        return res.status(400).json({ success: false, message: 'Invalid or unsupported provider.' });
+        return reply.status(400).send({ success: false, message: 'Invalid or unsupported provider.' });
       }
     } catch (error: any) {
-      return res.status(500).json({ success: false, message: error.message || 'Failed to execute connection test' });
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to execute connection test' });
     }
   });
 
   // ── OTP CONFIGURATION & DEMO SANDBOX ─────────────────────────────────────────
 
-  router.get('/settings/otp', authenticate, requireAdmin, async (req: any, res: Response) => {
+  fastify.get('/settings/otp', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
     try {
       const row = await prisma.platform_settings.findFirst({
         where: {
@@ -404,17 +398,17 @@ export function createAdminSettingsRouter(
         settings = { ...DEFAULT_OTP_SETTINGS, ...(row.value as any) };
       }
 
-      return res.json({ success: true, data: settings });
+      return { success: true, data: settings };
     } catch (error: any) {
-      return res.status(500).json({ success: false, message: error.message || 'Failed to fetch OTP settings' });
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to fetch OTP settings' });
     }
   });
 
-  router.post('/settings/otp', authenticate, requireAdmin, async (req: any, res: Response) => {
+  fastify.post('/settings/otp', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
     try {
-      const data = req.body as OtpSettings;
+      const data = request.body as OtpSettings;
       if (!data) {
-        return res.status(400).json({ success: false, message: 'OTP settings payload required' });
+        return reply.status(400).send({ success: false, message: 'OTP settings payload required' });
       }
 
       const row = await prisma.platform_settings.findFirst({
@@ -437,7 +431,7 @@ export function createAdminSettingsRouter(
           data: {
             value: newSettings as any,
             updated_at: new Date(),
-            updated_by: req.user?.id || null,
+            updated_by: request.user?.id || null,
           }
         });
       } else {
@@ -447,23 +441,23 @@ export function createAdminSettingsRouter(
             key: 'otp_settings',
             value: newSettings as any,
             updated_at: new Date(),
-            updated_by: req.user?.id || null,
+            updated_by: request.user?.id || null,
           }
         });
       }
 
-      return res.json({ success: true, message: 'OTP settings updated successfully' });
+      return { success: true, message: 'OTP settings updated successfully' };
     } catch (error: any) {
-      return res.status(500).json({ success: false, message: error.message || 'Failed to save OTP settings' });
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to save OTP settings' });
     }
   });
 
   // Generates and Sends an OTP
-  router.post('/otp/send', async (req: any, res: Response) => {
+  fastify.post('/otp/send', async (request: any, reply) => {
     try {
-      const { email, purpose } = req.body;
+      const { email, purpose } = request.body as any;
       if (!email || !purpose) {
-        return res.status(400).json({ success: false, message: 'Email and purpose are required parameters.' });
+        return reply.status(400).send({ success: false, message: 'Email and purpose are required parameters.' });
       }
 
       // Check if user already exists
@@ -473,14 +467,14 @@ export function createAdminSettingsRouter(
 
       if (purpose === 'Signup') {
         if (existingUser) {
-          return res.status(400).json({ 
+          return reply.status(400).send({ 
             success: false, 
             message: 'Account already exists with this email. Please log in instead.' 
           });
         }
       } else if (purpose === 'Login') {
         if (!existingUser) {
-          return res.status(400).json({ 
+          return reply.status(400).send({ 
             success: false, 
             message: 'Account does not exist. Please sign up/create a profile first.' 
           });
@@ -514,11 +508,11 @@ export function createAdminSettingsRouter(
 
       // Check if communication is disabled or if we are in mock mode
       if (otpSettings.mockMode || !commSettings.enabled || commSettings.provider === 'none') {
-        return res.json({ 
+        return { 
           success: true, 
           message: `[MOCK MODE] OTP sent to ${email}. Code is: ${otp}`, 
           code: otp 
-        });
+        };
       }
 
       // If provider is Brevo, send transactional email
@@ -563,40 +557,40 @@ export function createAdminSettingsRouter(
           });
           
           if (response.status >= 200 && response.status < 300) {
-            return res.json({ success: true, message: `OTP code sent successfully to ${email} (via Brevo).` });
+            return { success: true, message: `OTP code sent successfully to ${email} (via Brevo).` };
           } else {
             const errResult = await response.json() as any;
-            return res.status(400).json({ success: false, message: `Brevo SMTP API Error: ${errResult.message || JSON.stringify(errResult)}` });
+            return reply.status(400).send({ success: false, message: `Brevo SMTP API Error: ${errResult.message || JSON.stringify(errResult)}` });
           }
         }
       }
 
       // SMTP flow (mocked response for simplicity)
       if (commSettings.provider === 'smtp') {
-        return res.json({ 
+        return { 
           success: true, 
           message: `[SMTP MOCK] OTP code successfully routed via SMTP relay ${commSettings.smtpHost}:${commSettings.smtpPort} to ${email}. Code: ${otp}` 
-        });
+        };
       }
 
       // Fallback
-      return res.json({ 
+      return { 
         success: true, 
         message: `OTP sent to ${email} (communication fallback mock). Code: ${otp}`, 
         code: otp 
-      });
+      };
 
     } catch (error: any) {
-      return res.status(500).json({ success: false, message: error.message || 'Failed to send OTP code.' });
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to send OTP code.' });
     }
   });
 
   // Verifies an OTP
-  router.post('/otp/verify', async (req: any, res: Response) => {
+  fastify.post('/otp/verify', async (request: any, reply) => {
     try {
-      const { email, purpose, code } = req.body;
+      const { email, purpose, code } = request.body as any;
       if (!email || !purpose || !code) {
-        return res.status(400).json({ success: false, message: 'Email, purpose and verification code are required.' });
+        return reply.status(400).send({ success: false, message: 'Email, purpose and verification code are required.' });
       }
 
       // 1. Fetch OTP configuration
@@ -608,12 +602,12 @@ export function createAdminSettingsRouter(
       // 2. Fetch active OTP record
       const verification = await getOtpVerification(prisma, email, purpose);
       if (!verification) {
-        return res.status(400).json({ success: false, message: 'No active OTP verification code found. Please request a new one.' });
+        return reply.status(400).send({ success: false, message: 'No active OTP verification code found. Please request a new one.' });
       }
 
       // Check max attempts
       if (verification.attempts >= otpSettings.maxAttempts) {
-        return res.status(400).json({ success: false, message: 'Too many incorrect attempts. Please request a new code.' });
+        return reply.status(400).send({ success: false, message: 'Too many incorrect attempts. Please request a new code.' });
       }
 
       // 3. Compare OTP values (trimming whitespace)
@@ -637,7 +631,7 @@ export function createAdminSettingsRouter(
 
         if (purpose === 'Signup') {
           if (dbUser) {
-            return res.status(400).json({ success: false, message: 'Account already exists with this email. Please log in instead.' });
+            return reply.status(400).send({ success: false, message: 'Account already exists with this email. Please log in instead.' });
           }
           dbUser = await prisma.users.create({
             data: {
@@ -649,91 +643,129 @@ export function createAdminSettingsRouter(
           });
         } else {
           if (!dbUser) {
-            return res.status(400).json({ success: false, message: 'Account does not exist. Please sign up/create a profile first.' });
+            return reply.status(400).send({ success: false, message: 'Account does not exist. Please sign up/create a profile first.' });
           }
         }
 
-        const isAdminUser = email.toLowerCase().includes('admin') || email.toLowerCase() === 'shreesharma126@gmail.com';
+        // ── Determine real role from DB ─────────────────────────────────────
+        // 1. Check if this user is the seeded super-admin
+        let userRole = 'user';
+        let userRoleId: string | null = null;
 
-        // Generate mock JWT token
+        try {
+          const superAdminConfigRow = await prisma.platform_settings.findFirst({
+            where: { scope_tenant_id: null, key: 'super_admin_config' }
+          });
+
+          if (superAdminConfigRow?.value) {
+            const config = superAdminConfigRow.value as any;
+            if (config.adminEmail && config.adminEmail.toLowerCase() === email.toLowerCase()) {
+              userRole = 'super_admin';
+              userRoleId = config.superAdminRoleId || config.adminRoleId || null;
+            }
+          }
+
+          // 2. If not super-admin, look up an assigned role in admin_roles for this user
+          if (userRole === 'user') {
+            const userRoleRows = await prisma.$queryRawUnsafe<{ role_name: string; role_id: string }[]>(
+              `SELECT ar.name as role_name, ar.id as role_id
+               FROM admin_roles ar
+               WHERE ar.created_by = $1::uuid OR ar.id IN (
+                 SELECT (value->>'superAdminRoleId')::uuid FROM platform_settings WHERE key = 'super_admin_config' AND (value->>'adminUserId') = $1
+               )
+               LIMIT 1`,
+              dbUser.id
+            );
+
+            if (userRoleRows.length > 0) {
+              userRole = userRoleRows[0].role_name;
+              userRoleId = userRoleRows[0].role_id;
+            }
+          }
+        } catch (roleErr) {
+          console.warn('⚠️ Could not determine user role from DB, defaulting to user:', roleErr);
+        }
+
+        // Generate token with real role from DB
         const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-        const payload = Buffer.from(JSON.stringify({
+        const tokenPayload = Buffer.from(JSON.stringify({
           id: dbUser.id,
           tenantId: dbUser.tenant_id,
           email: dbUser.primary_email,
-          role: isAdminUser ? 'admin' : 'user'
+          role: userRole,
+          roleId: userRoleId
         })).toString('base64url');
-        const token = `${header}.${payload}.mocksignature`;
+        const token = `${header}.${tokenPayload}.mocksignature`;
 
-        return res.json({ 
+        return { 
           success: true, 
           message: 'OTP verified successfully!', 
           token,
           user: {
             id: dbUser.id,
             email: dbUser.primary_email,
-            role: isAdminUser ? 'admin' : 'user'
+            role: userRole
           }
-        });
+        };
       } else {
         await incrementOtpAttempts(prisma, verification.id);
         const remaining = otpSettings.maxAttempts - (verification.attempts + 1);
-        return res.status(400).json({ 
+        return reply.status(400).send({ 
           success: false, 
           message: `Incorrect code entered. ${remaining > 0 ? `${remaining} attempts remaining.` : 'Please request a new code.'}` 
         });
       }
 
     } catch (error: any) {
-      return res.status(500).json({ success: false, message: error.message || 'Failed to verify OTP code.' });
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to verify OTP code.' });
     }
   });
 
   // GET current user profile
-  router.get('/user/profile', authenticate, async (req: any, res: Response) => {
+  fastify.get('/user/profile', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
     try {
-      if (!req.user || !req.user.id) {
-        return res.status(401).json({ success: false, message: 'Unauthorized: No valid user token provided.' });
+      if (!request.user || !request.user.id) {
+        return reply.status(401).send({ success: false, message: 'Unauthorized: No valid user token provided.' });
       }
 
       const dbUser = await prisma.users.findUnique({
-        where: { id: req.user.id },
+        where: { id: request.user.id },
         include: {
           profiles: true
         }
       });
 
       if (!dbUser) {
-        return res.status(404).json({ success: false, message: 'User not found.' });
+        return reply.status(404).send({ success: false, message: 'User not found.' });
       }
 
-      return res.json({
+      return {
         success: true,
         data: {
           email: dbUser.primary_email,
           profile: dbUser.profiles || null
         }
-      });
+      };
     } catch (error: any) {
-      return res.status(500).json({ success: false, message: error.message || 'Failed to fetch profile.' });
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to fetch profile.' });
     }
   });
 
   // POST update or create current user profile
-  router.post('/user/profile', authenticate, async (req: any, res: Response) => {
+  fastify.post('/user/profile', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
     try {
-      if (!req.user || !req.user.id) {
-        return res.status(401).json({ success: false, message: 'Unauthorized: No valid user token provided.' });
+      if (!request.user || !request.user.id) {
+        return reply.status(401).send({ success: false, message: 'Unauthorized: No valid user token provided.' });
       }
 
-      const { displayName, bio, preferredLocation } = req.body;
+      const { displayName, bio, preferredLocation } = request.body as any;
 
       const dbUser = await prisma.users.findUnique({
-        where: { id: req.user.id }
+        where: { id: request.user.id }
       });
 
       if (!dbUser) {
-        return res.status(404).json({ success: false, message: 'User not found.' });
+        return reply.status(404).send({ success: false, message: 'User not found.' });
       }
 
       // Upsert profile
@@ -749,24 +781,22 @@ export function createAdminSettingsRouter(
           user_id: dbUser.id,
           tenant_id: dbUser.tenant_id,
           display_name: displayName,
-          bio: bio,
-          preferred_location: preferredLocation,
+          bio: bio || '',
+          preferred_location: preferredLocation || '',
           created_at: new Date(),
           updated_at: new Date()
         }
       });
 
-      return res.json({
+      return {
         success: true,
         message: 'Profile updated successfully!',
         data: profile
-      });
+      };
     } catch (error: any) {
-      return res.status(500).json({ success: false, message: error.message || 'Failed to update profile.' });
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to update profile.' });
     }
   });
+};
 
-  return router;
-}
-
-export default createAdminSettingsRouter;
+export default adminSettingsRoutes;

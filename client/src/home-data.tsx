@@ -4,11 +4,30 @@
    ============================================================ */
 
 const ME = {
-  name: "Aanya Reddy", handle: "@aanya", role: "Product Designer · Founder",
-  bio: "Designing calm products at the intersection of community & craft. Building Samaagum. Host of Design Systems Night. Coffee, type, and city walks.",
+  name: "", handle: "", role: "",
+  bio: "",
   location: "Bengaluru, India",
-  stats: { connections: 248, events: 36, groups: 7 },
+  stats: { connections: 0, events: 0, groups: 0 },
 };
+
+// Derive initial ME values from the JWT token stored in localStorage
+// so the profile shows the real user's email immediately on first render,
+// before the async profile fetch completes.
+(function seedMEFromToken() {
+  try {
+    const raw = localStorage.getItem('token');
+    if (!raw) return;
+    const parts = raw.split('.');
+    if (parts.length < 2) return;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    if (payload.email) {
+      const localPart = payload.email.split('@')[0];
+      // Capitalise each word: "shree.sharma" → "Shree Sharma"
+      ME.name = localPart.replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      ME.handle = `@${localPart}`;
+    }
+  } catch (e) { /* ignore token parse errors */ }
+})();
 
 const CATS = [
   ["All", "grid"], ["Startups", "spark"], ["Design", "edit"], ["Music", "fire"],

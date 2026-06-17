@@ -1,4 +1,11 @@
 import prisma from '../config/prisma';
+import crypto from 'crypto';
+import dotenv from 'dotenv';
+dotenv.config();
+
+function hashKey(plain: string): string {
+    return crypto.createHash('sha256').update(plain).digest('hex');
+}
 
 const responsibilities = [
     { name: 'dashboard_main', display_name: 'Main Dashboard', description: 'Access to the main dashboard', category: 'dashboard', route_path: '/dashboard', component_name: 'Dashboard', icon_name: 'LayoutDashboard', sort_order: 1 },
@@ -116,14 +123,105 @@ export async function seedAdminRBAC(): Promise<void> {
     );
     const enterpriseHostRoleId = enterpriseHostRoleRows[0]?.id;
 
-    await prisma.$executeRawUnsafe(
+    const adminRoleRows = await prisma.$queryRawUnsafe<{ id: string }[]>(
         `INSERT INTO admin_roles (name, display_name, description, responsibility_ids, default_position_id, hierarchy_level, is_system_role, is_active, is_default)
-         VALUES ($1, $2, $3, $4::jsonb, $5::uuid, $6, $7, $8, $9)`,
-        'admin', 'Administrator', 'Administrative access to manage system',
-        JSON.stringify(allRespIds), adminPosId, 100, true, true, false
+         VALUES ($1, $2, $3, $4::jsonb, $5::uuid, $6, $7, $8, $9) RETURNING id`,
+        'admin', 'Administrator', 'Full administrative access to manage the entire system',
+        JSON.stringify(allRespIds), adminPosId, 2, true, true, false
     );
+    const adminRoleId = adminRoleRows[0]?.id;
+
+    const superAdminRoleRows = await prisma.$queryRawUnsafe<{ id: string }[]>(
+        `INSERT INTO admin_roles (name, display_name, description, responsibility_ids, default_position_id, hierarchy_level, is_system_role, is_active, is_default)
+         VALUES ($1, $2, $3, $4::jsonb, $5::uuid, $6, $7, $8, $9) RETURNING id`,
+        'super_admin', 'Super Administrator', 'Unrestricted platform-wide super administrative access',
+        JSON.stringify(allRespIds), adminPosId, 1, true, true, false
+    );
+    const superAdminRoleId = superAdminRoleRows[0]?.id;
 
     console.log('Seeded roles');
+
+    // ── Seed 2 Admin Users with Access Keys ───────────────────────────────────
+    // Access keys come from env or are auto-generated (printed once to console)
+    const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || 'superadmin@samaagum.com';
+    const superAdminKey   = process.env.SUPER_ADMIN_KEY   || crypto.randomBytes(16).toString('hex');
+    const adminEmail2     = process.env.ADMIN_EMAIL        || 'admin@samaagum.com';
+    const adminKey        = process.env.ADMIN_KEY          || crypto.randomBytes(16).toString('hex');
+
+    // Upsert both users
+    const superAdminUserRows = await prisma.$queryRawUnsafe<{ id: string }[]>(
+        `INSERT INTO users (id, tenant_id, primary_email, email_verified, state, locale)
+         VALUES (gen_random_uuid(), $1, $2, true, 'active', 'en')
+         ON CONFLICT ON CONSTRAINT users_tenant_id_primary_email_key DO UPDATE SET email_verified = true, state = 'active'
+         RETURNING id`,
+        tenantId, superAdminEmail
+    );
+    const superAdminUserId = superAdminUserRows[0]?.id;
+
+    const adminUserRows = await prisma.$queryRawUnsafe<{ id: string }[]>(
+        `INSERT INTO users (id, tenant_id, primary_email, email_verified, state, locale)
+         VALUES (gen_random_uuid(), $1, $2, true, 'active', 'en')
+         ON CONFLICT ON CONSTRAINT users_tenant_id_primary_email_key DO UPDATE SET email_verified = true, state = 'active'
+         RETURNING id`,
+        tenantId, adminEmail2
+    );
+    const adminUserId2 = adminUserRows[0]?.id;
+
+    // Store hashed credentials in platform_settings
+    const credentialsPayload = {
+        admins: [
+            {
+                email: superAdminEmail,
+                name: 'Super Admin',
+                role: 'super_admin',
+                keyHash: hashKey(superAdminKey),
+                userId: superAdminUserId,
+                tenantId,
+                roleId: superAdminRoleId
+            },
+            {
+                email: adminEmail2,
+                name: 'Platform Admin',
+                role: 'admin',
+                keyHash: hashKey(adminKey),
+                userId: adminUserId2,
+                tenantId,
+                roleId: adminRoleId
+            }
+        ]
+    };
+
+    await prisma.$executeRawUnsafe(
+        `INSERT INTO platform_settings (scope_tenant_id, key, value, updated_at)
+         VALUES (null, 'admin_credentials', $1::jsonb, now())
+         ON CONFLICT ON CONSTRAINT platform_settings_scope_tenant_id_key_key DO UPDATE SET value = $1::jsonb, updated_at = now()`,
+        JSON.stringify(credentialsPayload)
+    );
+
+    // Also keep super_admin_config for OTP flow compatibility
+    await prisma.$executeRawUnsafe(
+        `INSERT INTO platform_settings (scope_tenant_id, key, value, updated_at)
+         VALUES (null, 'super_admin_config', $1::jsonb, now())
+         ON CONFLICT ON CONSTRAINT platform_settings_scope_tenant_id_key_key DO UPDATE SET value = $1::jsonb, updated_at = now()`,
+        JSON.stringify({ adminEmail: superAdminEmail, adminUserId: superAdminUserId, superAdminRoleId, adminRoleId })
+    );
+
+    console.log('');
+    console.log('╔══════════════════════════════════════════════════════╗');
+    console.log('║         SAMAAGUM ADMIN CREDENTIALS                  ║');
+    console.log('╠══════════════════════════════════════════════════════╣');
+    console.log(`║  Super Admin                                         ║`);
+    console.log(`║  Email : ${superAdminEmail.padEnd(42)}║`);
+    console.log(`║  Key   : ${superAdminKey.padEnd(42)}║`);
+    console.log('╠══════════════════════════════════════════════════════╣');
+    console.log(`║  Platform Admin                                      ║`);
+    console.log(`║  Email : ${adminEmail2.padEnd(42)}║`);
+    console.log(`║  Key   : ${adminKey.padEnd(42)}║`);
+    console.log('╠══════════════════════════════════════════════════════╣');
+    console.log('║  ⚠  Save these now — keys are hashed in DB          ║');
+    console.log('║     or set SUPER_ADMIN_KEY / ADMIN_KEY in .env      ║');
+    console.log('╚══════════════════════════════════════════════════════╝');
+    console.log('');
 
     // ── Seed Subscription Plans ──────────────────────────────────────────────
     const basicPricing = {

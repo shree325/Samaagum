@@ -1,22 +1,19 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import prisma from '../config/prisma';
 import { R_adminResponsibilities } from '../repositories/R_adminResponsibilities';
 import { R_adminPositions } from '../repositories/R_adminPositions';
 import { R_adminRoles } from '../repositories/R_adminRoles';
 
-type Middleware = (req: any, res: Response, next: NextFunction) => void;
-
-export function createAdminRbacRouter(authenticate: Middleware, requireAdmin: Middleware): Router {
-    const router = Router();
+export const adminRbacRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     const respRepo = new R_adminResponsibilities();
     const posRepo = new R_adminPositions();
     const roleRepo = new R_adminRoles();
 
     // ── ROLES ──────────────────────────────────────────────────────────────
 
-    router.get('/roles', authenticate, requireAdmin, async (req: any, res: Response) => {
+    fastify.get('/roles', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
         try {
-            const { search, isSystemRole, isActive, isDefault } = req.query;
+            const { search, isSystemRole, isActive, isDefault } = request.query as any;
             let sql = `SELECT * FROM admin_roles WHERE 1=1`;
             const params: any[] = [];
             let i = 1;
@@ -26,9 +23,9 @@ export function createAdminRbacRouter(authenticate: Middleware, requireAdmin: Mi
             if (isActive !== undefined) { sql += ` AND is_active = $${i}`; params.push(isActive === 'true'); i++; }
             if (isDefault !== undefined) { sql += ` AND is_default = $${i}`; params.push(isDefault === 'true'); i++; }
 
-            if (req.user?.role !== 'super_admin' && req.user?.tenantId) {
+            if (request.user?.role !== 'super_admin' && request.user?.tenantId) {
                 sql += ` AND (tenant_id = $${i} OR is_system_role = true)`;
-                params.push(req.user.tenantId); i++;
+                params.push(request.user.tenantId); i++;
             }
 
             sql += ` ORDER BY hierarchy_level ASC, created_at DESC`;
@@ -42,56 +39,56 @@ export function createAdminRbacRouter(authenticate: Middleware, requireAdmin: Mi
                 return { ...role, responsibilities, position };
             }));
 
-            res.json({ success: true, data: { roles: enriched, total: enriched.length } });
+            return { success: true, data: { roles: enriched, total: enriched.length } };
         } catch (error: any) {
-            res.status(500).json({ success: false, message: 'Internal server error' });
+            return reply.status(500).send({ success: false, message: 'Internal server error' });
         }
     });
 
-    router.get('/roles/:id', authenticate, requireAdmin, async (req: any, res: Response) => {
+    fastify.get('/roles/:id', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
         try {
-            const role = await roleRepo.getById(req.params.id);
-            if (!role) return res.status(404).json({ success: false, message: 'Role not found' });
+            const role = await roleRepo.getById(request.params.id);
+            if (!role) return reply.status(404).send({ success: false, message: 'Role not found' });
             const ids: string[] = Array.isArray(role.responsibility_ids) ? role.responsibility_ids : [];
             const responsibilities = ids.length > 0 ? await respRepo.findByIds(ids) : [];
             const position = role.default_position_id ? await posRepo.getById(role.default_position_id) : null;
-            res.json({ success: true, data: { ...role, responsibilities, position } });
+            return { success: true, data: { ...role, responsibilities, position } };
         } catch {
-            res.status(500).json({ success: false, message: 'Internal server error' });
+            return reply.status(500).send({ success: false, message: 'Internal server error' });
         }
     });
 
-    router.post('/roles', authenticate, requireAdmin, async (req: any, res: Response) => {
+    fastify.post('/roles', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
         try {
-            const { name, displayName, description, responsibilities = [], defaultPosition, hierarchyLevel = 100, isActive = true, isDefault = false } = req.body;
-            if (!name || !displayName) return res.status(400).json({ success: false, message: 'name and displayName required' });
+            const { name, displayName, description, responsibilities = [], defaultPosition, hierarchyLevel = 100, isActive = true, isDefault = false } = request.body as any;
+            if (!name || !displayName) return reply.status(400).send({ success: false, message: 'name and displayName required' });
 
-            const existing = await roleRepo.findOne({ name: name.toLowerCase(), tenant_id: req.user?.tenantId ?? null });
-            if (existing) return res.status(400).json({ success: false, message: 'Role name already exists' });
+            const existing = await roleRepo.findOne({ name: name.toLowerCase(), tenant_id: request.user?.tenantId ?? null });
+            if (existing) return reply.status(400).send({ success: false, message: 'Role name already exists' });
 
-            if (isDefault) await roleRepo.clearDefaultForTenant('00000000-0000-0000-0000-000000000000', req.user?.tenantId ?? null);
+            if (isDefault) await roleRepo.clearDefaultForTenant('00000000-0000-0000-0000-000000000000', request.user?.tenantId ?? null);
 
             const role = await roleRepo.create({
                 name: name.toLowerCase(), display_name: displayName, description,
-                tenant_id: req.user?.tenantId ?? null, is_system_role: false, is_active: isActive, is_default: isDefault,
+                tenant_id: request.user?.tenantId ?? null, is_system_role: false, is_active: isActive, is_default: isDefault,
                 hierarchy_level: hierarchyLevel, responsibility_ids: responsibilities,
-                default_position_id: defaultPosition || null, created_by: req.user?.id ?? null
+                default_position_id: defaultPosition || null, created_by: request.user?.id ?? null
             });
-            res.status(201).json({ success: true, data: role, message: 'Role created successfully' });
+            return reply.status(201).send({ success: true, data: role, message: 'Role created successfully' });
         } catch (error: any) {
-            res.status(500).json({ success: false, message: error.message || 'Internal server error' });
+            return reply.status(500).send({ success: false, message: error.message || 'Internal server error' });
         }
     });
 
-    router.put('/roles/:id', authenticate, requireAdmin, async (req: any, res: Response) => {
+    fastify.put('/roles/:id', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
         try {
-            const role = await roleRepo.getById(req.params.id);
-            if (!role) return res.status(404).json({ success: false, message: 'Role not found' });
-            if (role.is_system_role && req.user?.role !== 'super_admin') {
-                return res.status(403).json({ success: false, message: 'Cannot modify system roles' });
+            const role = await roleRepo.getById(request.params.id);
+            if (!role) return reply.status(404).send({ success: false, message: 'Role not found' });
+            if (role.is_system_role && request.user?.role !== 'super_admin') {
+                return reply.status(403).send({ success: false, message: 'Cannot modify system roles' });
             }
 
-            const { displayName, description, responsibilities, defaultPosition, hierarchyLevel, isActive, isDefault } = req.body;
+            const { displayName, description, responsibilities, defaultPosition, hierarchyLevel, isActive, isDefault } = request.body as any;
             const update: any = {};
             if (displayName !== undefined) update.display_name = displayName;
             if (description !== undefined) update.description = description;
@@ -101,39 +98,39 @@ export function createAdminRbacRouter(authenticate: Middleware, requireAdmin: Mi
             if (isActive !== undefined) update.is_active = isActive;
             if (isDefault !== undefined) {
                 update.is_default = isDefault;
-                if (isDefault) await roleRepo.clearDefaultForTenant(req.params.id, role.tenant_id ?? null);
+                if (isDefault) await roleRepo.clearDefaultForTenant(request.params.id, role.tenant_id ?? null);
             }
             update.updated_at = new Date();
 
-            const updated = await roleRepo.update(req.params.id, update);
-            res.json({ success: true, data: updated, message: 'Role updated successfully' });
+            const updated = await roleRepo.update(request.params.id, update);
+            return { success: true, data: updated, message: 'Role updated successfully' };
         } catch {
-            res.status(500).json({ success: false, message: 'Internal server error' });
+            return reply.status(500).send({ success: false, message: 'Internal server error' });
         }
     });
 
-    router.delete('/roles/:id', authenticate, requireAdmin, async (req: any, res: Response) => {
+    fastify.delete('/roles/:id', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
         try {
-            const role = await roleRepo.getById(req.params.id);
-            if (!role) return res.status(404).json({ success: false, message: 'Role not found' });
-            if (role.is_system_role) return res.status(400).json({ success: false, message: 'Cannot delete system roles' });
-            if (role.is_default) return res.status(400).json({ success: false, message: 'Cannot delete default role' });
+            const role = await roleRepo.getById(request.params.id);
+            if (!role) return reply.status(404).send({ success: false, message: 'Role not found' });
+            if (role.is_system_role) return reply.status(400).send({ success: false, message: 'Cannot delete system roles' });
+            if (role.is_default) return reply.status(400).send({ success: false, message: 'Cannot delete default role' });
 
-            const userCount = await roleRepo.countUsersWithRole(req.params.id);
-            if (userCount > 0) return res.status(400).json({ success: false, message: 'Role is assigned to active users' });
+            const userCount = await roleRepo.countUsersWithRole(request.params.id);
+            if (userCount > 0) return reply.status(400).send({ success: false, message: 'Role is assigned to active users' });
 
-            await roleRepo.delete(req.params.id);
-            res.json({ success: true, message: 'Role deleted successfully' });
+            await roleRepo.delete(request.params.id);
+            return { success: true, message: 'Role deleted successfully' };
         } catch {
-            res.status(500).json({ success: false, message: 'Internal server error' });
+            return reply.status(500).send({ success: false, message: 'Internal server error' });
         }
     });
 
     // ── RESPONSIBILITIES ───────────────────────────────────────────────────
 
-    router.get('/responsibilities', authenticate, requireAdmin, async (req: any, res: Response) => {
+    fastify.get('/responsibilities', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
         try {
-            const { search, category, isActive } = req.query;
+            const { search, category, isActive } = request.query as any;
             let sql = `SELECT * FROM admin_responsibilities WHERE 1=1`;
             const params: any[] = [];
             let i = 1;
@@ -142,36 +139,36 @@ export function createAdminRbacRouter(authenticate: Middleware, requireAdmin: Mi
             if (isActive !== undefined) { sql += ` AND is_active = $${i}`; params.push(isActive === 'true'); i++; }
             sql += ` ORDER BY category, sort_order`;
             const rows = await prisma.$queryRawUnsafe<any[]>(sql, ...params);
-            res.json({ success: true, data: rows });
+            return { success: true, data: rows };
         } catch {
-            res.status(500).json({ success: false, message: 'Internal server error' });
+            return reply.status(500).send({ success: false, message: 'Internal server error' });
         }
     });
 
-    router.post('/responsibilities', authenticate, requireAdmin, async (req: any, res: Response) => {
+    fastify.post('/responsibilities', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
         try {
-            const { name, displayName, description, category, routePath, componentName, iconName, requiredFeatures = [], sortOrder = 0 } = req.body;
-            if (!name || !displayName || !routePath || !componentName) return res.status(400).json({ success: false, message: 'Missing required fields' });
+            const { name, displayName, description, category, routePath, componentName, iconName, requiredFeatures = [], sortOrder = 0 } = request.body as any;
+            if (!name || !displayName || !routePath || !componentName) return reply.status(400).send({ success: false, message: 'Missing required fields' });
 
             const existing = await respRepo.findOne({ name: name.toLowerCase() });
-            if (existing) return res.status(400).json({ success: false, message: 'Responsibility name already exists' });
+            if (existing) return reply.status(400).send({ success: false, message: 'Responsibility name already exists' });
 
             const resp = await respRepo.create({
                 name: name.toLowerCase(), display_name: displayName, description, category,
                 route_path: routePath, component_name: componentName, icon_name: iconName || 'Circle',
                 required_features: requiredFeatures, sort_order: sortOrder, is_active: true
             });
-            res.status(201).json({ success: true, data: resp, message: 'Responsibility created successfully' });
+            return reply.status(201).send({ success: true, data: resp, message: 'Responsibility created successfully' });
         } catch (error: any) {
-            res.status(500).json({ success: false, message: error.message || 'Internal server error' });
+            return reply.status(500).send({ success: false, message: error.message || 'Internal server error' });
         }
     });
 
-    router.put('/responsibilities/:id', authenticate, requireAdmin, async (req: any, res: Response) => {
+    fastify.put('/responsibilities/:id', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
         try {
-            const resp = await respRepo.getById(req.params.id);
-            if (!resp) return res.status(404).json({ success: false, message: 'Responsibility not found' });
-            const { displayName, description, category, routePath, componentName, iconName, requiredFeatures, sortOrder, isActive } = req.body;
+            const resp = await respRepo.getById(request.params.id);
+            if (!resp) return reply.status(404).send({ success: false, message: 'Responsibility not found' });
+            const { displayName, description, category, routePath, componentName, iconName, requiredFeatures, sortOrder, isActive } = request.body as any;
             const update: any = {};
             if (displayName !== undefined) update.display_name = displayName;
             if (description !== undefined) update.description = description;
@@ -183,38 +180,38 @@ export function createAdminRbacRouter(authenticate: Middleware, requireAdmin: Mi
             if (sortOrder !== undefined) update.sort_order = sortOrder;
             if (isActive !== undefined) update.is_active = isActive;
             update.updated_at = new Date();
-            const updated = await respRepo.update(req.params.id, update);
-            res.json({ success: true, data: updated, message: 'Responsibility updated successfully' });
+            const updated = await respRepo.update(request.params.id, update);
+            return { success: true, data: updated, message: 'Responsibility updated successfully' };
         } catch (error: any) {
-            res.status(500).json({ success: false, message: error.message || 'Internal server error' });
+            return reply.status(500).send({ success: false, message: error.message || 'Internal server error' });
         }
     });
 
-    router.delete('/responsibilities/:id', authenticate, requireAdmin, async (req: any, res: Response) => {
+    fastify.delete('/responsibilities/:id', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
         try {
-            const resp = await respRepo.getById(req.params.id);
-            if (!resp) return res.status(404).json({ success: false, message: 'Responsibility not found' });
+            const resp = await respRepo.getById(request.params.id);
+            if (!resp) return reply.status(404).send({ success: false, message: 'Responsibility not found' });
 
             // Check if used in any role
             const rolesUsing = await prisma.$queryRawUnsafe<{ count: string }[]>(
                 `SELECT COUNT(*) as count FROM admin_roles WHERE responsibility_ids @> $1::jsonb`,
-                JSON.stringify([req.params.id])
+                JSON.stringify([request.params.id])
             );
             if (parseInt(rolesUsing[0]?.count || '0') > 0) {
-                return res.status(400).json({ success: false, message: 'Responsibility is linked to active roles' });
+                return reply.status(400).send({ success: false, message: 'Responsibility is linked to active roles' });
             }
-            await respRepo.delete(req.params.id);
-            res.json({ success: true, message: 'Responsibility deleted successfully' });
+            await respRepo.delete(request.params.id);
+            return { success: true, message: 'Responsibility deleted successfully' };
         } catch {
-            res.status(500).json({ success: false, message: 'Internal server error' });
+            return reply.status(500).send({ success: false, message: 'Internal server error' });
         }
     });
 
     // ── POSITIONS ──────────────────────────────────────────────────────────
 
-    router.get('/positions', authenticate, requireAdmin, async (req: any, res: Response) => {
+    fastify.get('/positions', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
         try {
-            const { search, isActive } = req.query;
+            const { search, isActive } = request.query as any;
             let sql = `SELECT * FROM admin_positions WHERE 1=1`;
             const params: any[] = [];
             let i = 1;
@@ -222,36 +219,36 @@ export function createAdminRbacRouter(authenticate: Middleware, requireAdmin: Mi
             if (isActive !== undefined) { sql += ` AND is_active = $${i}`; params.push(isActive === 'true'); i++; }
             sql += ` ORDER BY hierarchy_level ASC`;
             const rows = await prisma.$queryRawUnsafe<any[]>(sql, ...params);
-            res.json({ success: true, data: rows });
+            return { success: true, data: rows };
         } catch {
-            res.status(500).json({ success: false, message: 'Internal server error' });
+            return reply.status(500).send({ success: false, message: 'Internal server error' });
         }
     });
 
-    router.post('/positions', authenticate, requireAdmin, async (req: any, res: Response) => {
+    fastify.post('/positions', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
         try {
-            const { name, displayName, description, hierarchyLevel, dataAccessLevel, customConditions = [], dataAccessLimits = {} } = req.body;
-            if (!name || !displayName || !hierarchyLevel || !dataAccessLevel) return res.status(400).json({ success: false, message: 'Missing required fields' });
+            const { name, displayName, description, hierarchyLevel, dataAccessLevel, customConditions = [], dataAccessLimits = {} } = request.body as any;
+            if (!name || !displayName || !hierarchyLevel || !dataAccessLevel) return reply.status(400).send({ success: false, message: 'Missing required fields' });
 
             const existing = await posRepo.findOne({ name: name.toLowerCase() });
-            if (existing) return res.status(400).json({ success: false, message: 'Position name already exists' });
+            if (existing) return reply.status(400).send({ success: false, message: 'Position name already exists' });
 
             const position = await posRepo.create({
                 name: name.toLowerCase(), display_name: displayName, description,
                 hierarchy_level: hierarchyLevel, data_access_level: dataAccessLevel,
                 custom_conditions: customConditions, data_access_limits: dataAccessLimits, is_active: true
             });
-            res.status(201).json({ success: true, data: position, message: 'Position created successfully' });
+            return reply.status(201).send({ success: true, data: position, message: 'Position created successfully' });
         } catch (error: any) {
-            res.status(500).json({ success: false, message: error.message || 'Internal server error' });
+            return reply.status(500).send({ success: false, message: error.message || 'Internal server error' });
         }
     });
 
-    router.put('/positions/:id', authenticate, requireAdmin, async (req: any, res: Response) => {
+    fastify.put('/positions/:id', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
         try {
-            const position = await posRepo.getById(req.params.id);
-            if (!position) return res.status(404).json({ success: false, message: 'Position not found' });
-            const { displayName, description, hierarchyLevel, dataAccessLevel, customConditions, dataAccessLimits, isActive } = req.body;
+            const position = await posRepo.getById(request.params.id);
+            if (!position) return reply.status(404).send({ success: false, message: 'Position not found' });
+            const { displayName, description, hierarchyLevel, dataAccessLevel, customConditions, dataAccessLimits, isActive } = request.body as any;
             const update: any = {};
             if (displayName !== undefined) update.display_name = displayName;
             if (description !== undefined) update.description = description;
@@ -261,33 +258,31 @@ export function createAdminRbacRouter(authenticate: Middleware, requireAdmin: Mi
             if (dataAccessLimits !== undefined) update.data_access_limits = dataAccessLimits;
             if (isActive !== undefined) update.is_active = isActive;
             update.updated_at = new Date();
-            const updated = await posRepo.update(req.params.id, update);
-            res.json({ success: true, data: updated, message: 'Position updated successfully' });
+            const updated = await posRepo.update(request.params.id, update);
+            return { success: true, data: updated, message: 'Position updated successfully' };
         } catch {
-            res.status(500).json({ success: false, message: 'Internal server error' });
+            return reply.status(500).send({ success: false, message: 'Internal server error' });
         }
     });
 
-    router.delete('/positions/:id', authenticate, requireAdmin, async (req: any, res: Response) => {
+    fastify.delete('/positions/:id', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
         try {
-            const position = await posRepo.getById(req.params.id);
-            if (!position) return res.status(404).json({ success: false, message: 'Position not found' });
+            const position = await posRepo.getById(request.params.id);
+            if (!position) return reply.status(404).send({ success: false, message: 'Position not found' });
 
             const rolesUsing = await prisma.$queryRawUnsafe<{ count: string }[]>(
                 `SELECT COUNT(*) as count FROM admin_roles WHERE default_position_id = $1::uuid`,
-                req.params.id
+                request.params.id
             );
             if (parseInt(rolesUsing[0]?.count || '0') > 0) {
-                return res.status(400).json({ success: false, message: 'Position is assigned to active roles' });
+                return reply.status(400).send({ success: false, message: 'Position is assigned to active roles' });
             }
-            await posRepo.delete(req.params.id);
-            res.json({ success: true, message: 'Position deleted successfully' });
+            await posRepo.delete(request.params.id);
+            return { success: true, message: 'Position deleted successfully' };
         } catch {
-            res.status(500).json({ success: false, message: 'Internal server error' });
+            return reply.status(500).send({ success: false, message: 'Internal server error' });
         }
     });
+};
 
-    return router;
-}
-
-export default createAdminRbacRouter;
+export default adminRbacRoutes;
