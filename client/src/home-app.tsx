@@ -38,6 +38,7 @@ function MobileTop({ go, counts, city }) {
     <div className="m-top">
       <Mark size={26}/>
       <div className="m-search" onClick={()=>go("discover")}><I.search/> Search Samaagum</div>
+      <button className="tb-icon" style={{ width:38, height:38 }} onClick={()=>go("messages")}><I.chat/>{counts.messages?<span className="dot"/>:null}</button>
       <button className="tb-icon" style={{ width:38, height:38 }} onClick={()=>go("notifications")}><I.bell/>{counts.notifs?<span className="dot"/>:null}</button>
     </div>
   );
@@ -68,12 +69,21 @@ function App() {
   // engagement state
   const [saved, toggleSave] = useSet([]);
   const [joined, toggleJoin] = useSet(["g1","g2","g4"]);
+  const [pending, togglePending] = useSet([]);
   const [connected, toggleConnect] = useSet([]);
   const [registered, , registerAdd] = useSet(["e1","e2","e4"]);
   const register = useCallback((id)=>registerAdd(id), [registerAdd]);
 
+  const handleJoin = useCallback((g) => {
+    if (g.joinMode === "approval") {
+      togglePending(g.id);
+    } else {
+      toggleJoin(g.id);
+    }
+  }, [toggleJoin, togglePending]);
+
   const counts = { notifs: 3, messages: 2 };
-  const st = { saved, toggleSave, joined, toggleJoin, connected, toggleConnect, registered, register, city };
+  const st = { saved, toggleSave, joined, pending, toggleJoin: handleJoin, connected, toggleConnect, registered, register, city };
 
   // responsive window width check
   const [width, setWidth] = useState(window.innerWidth);

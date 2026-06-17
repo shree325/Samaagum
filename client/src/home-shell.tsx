@@ -108,6 +108,9 @@ function Topbar({ go, counts, dark, onToggleTheme, city, onCity }) {
         </Popover>
       </div>
       <button className="tb-icon" onClick={onToggleTheme} title="Toggle theme">{dark? <I.sun/> : <I.moon/>}</button>
+      <button className="tb-icon" onClick={()=>go("messages")} title="Messages">
+        <I.chat/>{counts.messages ? <span className="dot" /> : null}
+      </button>
       <button className="tb-icon" onClick={()=>go("notifications")} title="Notifications">
         <I.bell/>{counts.notifs ? <span className="dot" /> : null}
       </button>
@@ -139,7 +142,11 @@ function ProfileMenu({ go, dark, onToggleTheme }) {
         {items.map(it => <button key={it.k} className="pmenu-it" onClick={()=>go(it.k)}>{it.ic}{it.t}</button>)}
         <button className="pmenu-it" onClick={onToggleTheme}>{dark? <I.sun/> : <I.moon/>}{dark? "Light mode":"Dark mode"}</button>
       </div>
-      <div className="pmenu-foot"><button className="pmenu-it muted"><I.external/>Sign out</button></div>
+      <div className="pmenu-foot">
+        <button className="pmenu-it muted" onClick={() => window.location.href = "../index.html"}>
+          <I.external/>Sign out
+        </button>
+      </div>
     </div>
   );
 }
