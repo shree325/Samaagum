@@ -345,7 +345,6 @@
   background: #1a1330;
 }
 .mob-hero.tall { padding-bottom: 42px; }
-.mob-hero .lp-bg, .mob-hero .lp-mesh, .mob-hero .lp-blob, .mob-hero .lp-grain { }
 .mob-hero-content { position: relative; z-index: 2; }
 .mob-hero .wm { font-family: var(--font-display); font-weight: 600; font-size: 18px; display: flex; align-items: center; gap: 9px; }
 .mob-hero h2 { font-family: var(--font-display); font-weight: 600; font-size: 27px; line-height: 1.1; letter-spacing: -0.02em; margin-top: 20px; text-wrap: balance; }
