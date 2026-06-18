@@ -10,6 +10,7 @@ import { adminSettingsRoutes } from './controllers/adminSettingsRoutes';
 import { userSubscriptionRoutes } from './controllers/userSubscriptionRoutes';
 import { adminAuthRoutes } from './controllers/adminAuthRoutes';
 import { oauthRoutes } from './controllers/oauthRoutes';
+import { adminUserRoutes } from './controllers/adminUserRoutes';
 import { seedAdminRBAC } from './services/adminRbacSeeder';
 import { seedPlatformSettings } from './settings-library/settingsSeeder';
 
@@ -90,6 +91,7 @@ fastify.register(oauthRoutes, { prefix: '/api/auth' });
 fastify.register(adminRbacRoutes, { prefix: '/api/admin/rbac' });
 fastify.register(subscriptionPlanRoutes, { prefix: '/api/admin' });
 fastify.register(adminCouponRoutes, { prefix: '/api/admin' });
+fastify.register(adminUserRoutes, { prefix: '/api/admin' });
 fastify.register(adminSettingsRoutes, { prefix: '/api/admin' });
 fastify.register(userSubscriptionRoutes, { prefix: '/api/subscription' });
 

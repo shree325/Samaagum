@@ -96,7 +96,7 @@ const adminApi = {
     rbac: "database",
     plans: "database",
     coupons: "database",
-    users: "localstorage",
+    users: "database",
     kyc: "localstorage",
     disputes: "localstorage",
     moderation: "localstorage",
@@ -149,6 +149,21 @@ const adminApi = {
       }
       adminApi._setLocalState("users", users);
       return { success: true, data: userPayload };
+    },
+    deleteUser: async (id) => {
+      if (adminApi.activeProviders.users === "database") {
+        return apiClient.users.deleteUser(id);
+      }
+      let users = adminApi._getLocalState("users", INITIAL_USERS);
+      users = users.filter(u => u.id !== id);
+      adminApi._setLocalState("users", users);
+      return { success: true };
+    },
+    inviteUser: async (payload) => {
+      if (adminApi.activeProviders.users === "database") {
+        return apiClient.users.inviteUser(payload);
+      }
+      return { success: true };
     }
   },
 
@@ -317,7 +332,24 @@ window.adminApi = adminApi;
 
 // --- APP COMPONENT ---
 function App() {
-  const [user, setUser] = useState(null); // { email, role }
+  const [user, setUser] = useState(() => {
+    try {
+      const token = localStorage.getItem('samaagum_admin_token');
+      if (token) {
+        const parts = token.split('.');
+        if (parts.length >= 2) {
+          const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+          if (payload && payload.email) {
+            const roleLabel = payload.role === 'super_admin' ? 'Super Admin' : 'Platform Admin';
+            return { email: payload.email, role: roleLabel, name: payload.name || roleLabel };
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to restore session:", e);
+    }
+    return null;
+  }); // { email, role }
   const [activeTab, setActiveTab] = useState("dashboard");
   const [darkMode, setDarkMode] = useState(true);
 
@@ -331,10 +363,9 @@ function App() {
   const [featureFlags, setFeatureFlags] = useState(() => adminApi._getLocalState("featureFlags", FEATURE_FLAGS));
   const [usersList, setUsersList] = useState(() => adminApi._getLocalState("users", INITIAL_USERS));
 
-  // Toasts
   const [toasts, setToasts] = useState([]);
   const addToast = (message, type = "success") => {
-    const id = Date.now();
+    const id = Date.now() + "-" + Math.random();
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
@@ -351,7 +382,7 @@ function App() {
     });
   };
 
-  const handleUpdateUser = (id, updates) => {
+  const handleUpdateUser = async (id, updates) => {
     setUsersList(prev => {
       const next = prev.map(u => u.id === id ? { ...u, ...updates } : u);
       const updatedUser = next.find(u => u.id === id);
@@ -364,20 +395,56 @@ function App() {
           logAction(user?.email || "Admin", `${updates.status === "Suspended" ? "Suspended" : "Activated"} user ${updatedUser.name}.`);
           addToast(`User ${updatedUser.name} is now ${updates.status.toLowerCase()}.`);
         }
+        if (updates.name || updates.email) {
+          logAction(user?.email || "Admin", `Updated user details for ${updatedUser.name || updatedUser.email}.`);
+          addToast(`Successfully updated user details.`);
+        }
         adminApi.users.saveUser(updatedUser);
       }
       return next;
     });
   };
 
-  const handleAddUser = (newUser) => {
-    setUsersList(prev => {
-      const next = [newUser, ...prev];
-      adminApi.users.saveUser(newUser);
-      return next;
-    });
-    logAction(user?.email || "Admin", `Invited new user ${newUser.name} (${newUser.email}) with role ${newUser.role}.`);
-    addToast(`Successfully invited ${newUser.name}.`);
+  const handleAddUser = async (newUser) => {
+    // Optimistically add with a temporary mock ID
+    setUsersList(prev => [newUser, ...prev]);
+    
+    try {
+      const res = await adminApi.users.saveUser(newUser);
+      if (res.success && res.data) {
+        // Replace temporary mock ID with actual database UUID
+        setUsersList(prev => prev.map(u => u.email === newUser.email ? { ...u, id: res.data.id } : u));
+      }
+      await adminApi.users.inviteUser({ email: newUser.email, role: newUser.role });
+      logAction(user?.email || "Admin", `Invited new user ${newUser.name} (${newUser.email}) with role ${newUser.role}.`);
+      addToast(`Successfully invited ${newUser.name} and sent invitation email.`);
+    } catch (err: any) {
+      console.error(err);
+      addToast("Failed to complete invitation.");
+    }
+  };
+
+  const handleDeleteUser = async (id) => {
+    const userToDelete = usersList.find(u => u.id === id);
+    if (!userToDelete) return;
+    
+    // Optimistically remove from state
+    setUsersList(prev => prev.filter(u => u.id !== id));
+    
+    try {
+      await adminApi.users.deleteUser(id);
+      logAction(user?.email || "Admin", `Deleted user ${userToDelete.name || userToDelete.email}.`);
+      addToast(`User ${userToDelete.name || userToDelete.email} has been deleted.`);
+    } catch (err: any) {
+      console.error(err);
+      addToast("Failed to delete user from database.");
+      // Rollback to original state on error
+      adminApi.users.getUsers().then(res => {
+        if (res.success && res.data) {
+          setUsersList(res.data);
+        }
+      });
+    }
   };
 
   // Modals state
@@ -403,6 +470,18 @@ function App() {
       delete window.samaagum_admin_login;
     };
   }, [setActiveTab]);
+
+  useEffect(() => {
+    if (user && activeTab === "users") {
+      adminApi.users.getUsers().then(res => {
+        if (res.success && res.data) {
+          setUsersList(res.data);
+        }
+      }).catch(err => {
+        addToast("Failed to load users from database.", "warning");
+      });
+    }
+  }, [activeTab, user]);
 
   // Auth Handler — calls real backend, no OTP for admin
   const handleLogin = async (email, accessKey) => {
@@ -767,6 +846,7 @@ function App() {
               users={usersList} 
               onUpdateUser={handleUpdateUser} 
               onAddUser={handleAddUser} 
+              onDeleteUser={handleDeleteUser}
             />
           )}
 
@@ -1047,7 +1127,7 @@ function DashboardView({ kyc, disputes, moderation, tenants, user, setActiveTab 
     <div>
       <div style={{ marginBottom: "32px" }}>
         <h2 style={{ fontFamily: "var(--font-display)", fontWeight: "600", fontSize: "28px", margin: "0 0 8px 0" }}>
-          Welcome back, {user.name.split(" ")[0]}
+          Welcome back, {(user?.name || user?.email || "Admin").split("@")[0].split(" ")[0]}
         </h2>
         <p style={{ color: "var(--ink-2)", margin: 0, fontSize: "15px" }}>
           Here is the security and operational overview of Samaagum network.
@@ -2486,7 +2566,7 @@ function AuditView({ logs }) {
 }
 
 // User Management View
-function UsersView({ users, onUpdateUser, onAddUser }) {
+function UsersView({ users, onUpdateUser, onAddUser, onDeleteUser }) {
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("All");
   const [showAddModal, setShowAddModal] = useState(false);
@@ -2496,8 +2576,17 @@ function UsersView({ users, onUpdateUser, onAddUser }) {
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState("Participant");
 
+  // Edit User Form States
+  const [editingUser, setEditingUser] = useState(null);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editRole, setEditRole] = useState("Participant");
+  const [editStatus, setEditStatus] = useState("Active");
+
   const filtered = users.filter(u => {
-    const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase());
+    const name = u.name || "";
+    const email = u.email || "";
+    const matchSearch = name.toLowerCase().includes(search.toLowerCase()) || email.toLowerCase().includes(search.toLowerCase());
     const matchRole = filterRole === "All" || u.role === filterRole;
     return matchSearch && matchRole;
   });
@@ -2512,13 +2601,33 @@ function UsersView({ users, onUpdateUser, onAddUser }) {
       name: newName,
       email: newEmail,
       role: newRole,
-      status: "Active",
-      joined: "Just now"
+      status: "Invited",
+      joined: new Date().toLocaleDateString()
     });
     setNewName("");
     setNewEmail("");
     setNewRole("Participant");
     setShowAddModal(false);
+  };
+
+  const handleStartEdit = (u) => {
+    setEditingUser(u);
+    setEditName(u.name || "");
+    setEditEmail(u.email || "");
+    setEditRole(u.role || "Participant");
+    setEditStatus(u.status || "Active");
+  };
+
+  const handleSaveEdit = (e) => {
+    e.preventDefault();
+    if (!editName || !editEmail) return;
+    onUpdateUser(editingUser.id, {
+      name: editName,
+      email: editEmail,
+      role: editRole,
+      status: editStatus
+    });
+    setEditingUser(null);
   };
 
   return (
@@ -2578,18 +2687,36 @@ function UsersView({ users, onUpdateUser, onAddUser }) {
                   </select>
                 </td>
                 <td>
-                  <span className={`pill ${u.status === "Active" ? "green" : "red"}`} style={{ padding: "3px 8px", fontSize: "11px", fontWeight: "600", borderRadius: "12px" }}>
+                  <span className={`pill ${u.status === "Active" ? "green" : u.status === "Invited" ? "orange" : "red"}`} style={{ padding: "3px 8px", fontSize: "11px", fontWeight: "600", borderRadius: "12px", background: u.status === "Invited" ? "rgba(245, 158, 11, 0.15)" : undefined, color: u.status === "Invited" ? "#f59e0b" : undefined }}>
                     {u.status}
                   </span>
                 </td>
                 <td style={{ fontSize: "13px", color: "var(--ink-3)" }}>{u.joined}</td>
                 <td style={{ textAlign: "right" }}>
-                  <button 
-                    onClick={() => onUpdateUser(u.id, { status: u.status === "Active" ? "Suspended" : "Active" })}
-                    style={{ background: "transparent", border: "none", color: u.status === "Active" ? "#ef4444" : "#10b981", cursor: "pointer", fontSize: "12.5px", fontWeight: "600" }}
-                  >
-                    {u.status === "Active" ? "Suspend" : "Activate"}
-                  </button>
+                  <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                    <button 
+                      onClick={() => handleStartEdit(u)}
+                      style={{ background: "transparent", border: "none", color: "var(--accent-2)", cursor: "pointer", fontSize: "12.5px", fontWeight: "600" }}
+                    >
+                      Edit
+                    </button>
+                    <button 
+                      onClick={() => {
+                        if (window.confirm(`Are you sure you want to delete user ${u.name}?`)) {
+                          onDeleteUser(u.id);
+                        }
+                      }}
+                      style={{ background: "transparent", border: "none", color: "#f43f5e", cursor: "pointer", fontSize: "12.5px", fontWeight: "600" }}
+                    >
+                      Delete
+                    </button>
+                    <button 
+                      onClick={() => onUpdateUser(u.id, { status: u.status === "Active" ? "Suspended" : "Active" })}
+                      style={{ background: "transparent", border: "none", color: u.status === "Active" ? "#ef4444" : "#10b981", cursor: "pointer", fontSize: "12.5px", fontWeight: "600" }}
+                    >
+                      {u.status === "Active" ? "Suspend" : "Activate"}
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -2638,6 +2765,64 @@ function UsersView({ users, onUpdateUser, onAddUser }) {
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
                 <button type="button" className="hbtn hbtn--ghost" onClick={() => setShowAddModal(false)} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid var(--border)", background: "transparent", color: "var(--ink)", cursor: "pointer" }}>Cancel</button>
                 <button type="submit" className="hbtn hbtn--primary" style={{ background: "var(--accent-2)", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "6px", cursor: "pointer", fontWeight: "600" }}>Send Invitation</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editingUser && (
+        <div className="modal-overlay" style={{ zIndex: 1000 }}>
+          <div className="modal-card" style={{ maxWidth: "450px" }}>
+            <div className="modal-header">
+              <h3>Edit User Info</h3>
+              <button onClick={() => setEditingUser(null)} style={{ background: "transparent", border: "none", color: "var(--ink)", cursor: "pointer" }}><Icons.close /></button>
+            </div>
+            <form onSubmit={handleSaveEdit} className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12.5px", fontWeight: "600" }}>Name</label>
+                <input 
+                  type="text" 
+                  required 
+                  value={editName} 
+                  onChange={(e) => setEditName(e.target.value)} 
+                  style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)" }}
+                />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12.5px", fontWeight: "600" }}>Email Address</label>
+                <input 
+                  type="email" 
+                  required 
+                  value={editEmail} 
+                  onChange={(e) => setEditEmail(e.target.value)} 
+                  style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)" }}
+                />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12.5px", fontWeight: "600" }}>Role</label>
+                <select 
+                  value={editRole} 
+                  onChange={(e) => setEditRole(e.target.value)} 
+                  style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)" }}
+                >
+                  {allRoles.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12.5px", fontWeight: "600" }}>Status</label>
+                <select 
+                  value={editStatus} 
+                  onChange={(e) => setEditStatus(e.target.value)} 
+                  style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)" }}
+                >
+                  <option value="Active">Active</option>
+                  <option value="Suspended">Suspended</option>
+                </select>
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
+                <button type="button" className="hbtn hbtn--ghost" onClick={() => setEditingUser(null)} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid var(--border)", background: "transparent", color: "var(--ink)", cursor: "pointer" }}>Cancel</button>
+                <button type="submit" className="hbtn hbtn--primary" style={{ padding: "8px 16px", borderRadius: "6px", border: "none", background: "var(--accent-2)", color: "#fff", cursor: "pointer", fontWeight: "600" }}>Save Changes</button>
               </div>
             </form>
           </div>
