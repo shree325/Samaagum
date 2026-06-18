@@ -3476,6 +3476,55 @@ function SettingsView({ user, logAction, addToast }) {
     google: { enabled: false, clientId: '', clientSecret: '' },
     linkedin: { enabled: false, clientId: '', clientSecret: '' }
   });
+
+  const addCustomProvider = () => {
+    const key = `custom_${Date.now()}`;
+    setAuthSettings(prev => ({
+      ...prev,
+      [key]: {
+        enabled: false,
+        clientId: '',
+        clientSecret: '',
+        displayName: 'Custom Provider',
+        authorizationEndpoint: '',
+        tokenEndpoint: '',
+        userEndpoint: '',
+        scope: 'openid email profile',
+        emailField: 'email',
+        nameField: 'name',
+        isCustom: true
+      }
+    }));
+  };
+
+  const removeCustomProvider = (key) => {
+    setAuthSettings(prev => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const updateProviderField = (providerKey, field, value) => {
+    setAuthSettings(prev => ({
+      ...prev,
+      [providerKey]: {
+        ...prev[providerKey],
+        [field]: value
+      }
+    }));
+  };
+
+  const updateProviderKey = (oldKey, newKey) => {
+    if (!newKey) return;
+    setAuthSettings(prev => {
+      const next = { ...prev };
+      if (next[newKey]) return prev;
+      next[newKey] = next[oldKey];
+      delete next[oldKey];
+      return next;
+    });
+  };
   const [authLoading, setAuthLoading] = React.useState(true);
   const [authSaving, setAuthSaving] = React.useState(false);
   const [authError, setAuthError] = React.useState(null);
@@ -3724,6 +3773,189 @@ function SettingsView({ user, logAction, addToast }) {
                   </div>
                 </div>
               </div>
+
+              {/* DYNAMIC CUSTOM OAUTH PROVIDERS */}
+              {Object.keys(authSettings).filter(key => key !== 'google' && key !== 'linkedin').map(key => {
+                const provider = authSettings[key] || {};
+                return (
+                  <div key={key} style={{ padding: '16px', background: 'var(--bg-card, rgba(255,255,255,0.02))', borderRadius: '8px', border: '1px solid var(--border-color, rgba(255,255,255,0.04))', position: 'relative' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, color: 'var(--accent-2)' }}>
+                        Custom: {provider.displayName || key}
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <button 
+                          type="button" 
+                          onClick={() => removeCustomProvider(key)}
+                          style={{ background: 'none', border: 'none', color: '#ff4d4d', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }}
+                          title="Delete Provider"
+                        >
+                          <Icons.close style={{ width: '16px', height: '16px' }} />
+                        </button>
+                        <label style={{ position: 'relative', display: 'inline-block', width: '40px', height: '22px' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={provider.enabled || false} 
+                            onChange={(e) => updateProviderField(key, 'enabled', e.target.checked)}
+                            style={{ opacity: 0, width: 0, height: 0 }} 
+                          />
+                          <span className="slider round" style={{ position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: provider.enabled ? 'var(--accent-1)' : '#555', transition: '0.3s', borderRadius: '22px' }}>
+                            <span style={{ position: 'absolute', height: '16px', width: '16px', left: provider.enabled ? '20px' : '3px', bottom: '3px', backgroundColor: 'white', transition: '0.3s', borderRadius: '50%' }}></span>
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', opacity: provider.enabled ? 1 : 0.6 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                        <div className="form-group">
+                          <label style={{ fontSize: '12px', marginBottom: '4px' }}>Provider Key (ID)</label>
+                          <input 
+                            type="text" 
+                            className="form-control"
+                            defaultValue={key}
+                            onBlur={(e) => {
+                              const newKey = e.target.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+                              if (newKey && newKey !== key) {
+                                if (authSettings[newKey]) {
+                                  addToast('Provider key already exists', 'warning');
+                                  e.target.value = key;
+                                } else {
+                                  updateProviderKey(key, newKey);
+                                }
+                              }
+                            }}
+                            placeholder="e.g. github"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label style={{ fontSize: '12px', marginBottom: '4px' }}>Display Name</label>
+                          <input 
+                            type="text" 
+                            className="form-control"
+                            value={provider.displayName || ''}
+                            onChange={(e) => updateProviderField(key, 'displayName', e.target.value)}
+                            placeholder="e.g. GitHub"
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                        <div className="form-group">
+                          <label style={{ fontSize: '12px', marginBottom: '4px' }}>Client ID</label>
+                          <input 
+                            type="text" 
+                            className="form-control"
+                            value={provider.clientId || ''}
+                            onChange={(e) => updateProviderField(key, 'clientId', e.target.value)}
+                            placeholder="Enter Client ID"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label style={{ fontSize: '12px', marginBottom: '4px' }}>Client Secret</label>
+                          <input 
+                            type="password" 
+                            className="form-control"
+                            value={provider.clientSecret || ''}
+                            onChange={(e) => updateProviderField(key, 'clientSecret', e.target.value)}
+                            placeholder="Enter Client Secret"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label style={{ fontSize: '12px', marginBottom: '4px' }}>Authorization Endpoint</label>
+                        <input 
+                          type="text" 
+                          className="form-control"
+                          value={provider.authorizationEndpoint || ''}
+                          onChange={(e) => updateProviderField(key, 'authorizationEndpoint', e.target.value)}
+                          placeholder="e.g. https://github.com/login/oauth/authorize"
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label style={{ fontSize: '12px', marginBottom: '4px' }}>Token Endpoint</label>
+                        <input 
+                          type="text" 
+                          className="form-control"
+                          value={provider.tokenEndpoint || ''}
+                          onChange={(e) => updateProviderField(key, 'tokenEndpoint', e.target.value)}
+                          placeholder="e.g. https://github.com/login/oauth/access_token"
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label style={{ fontSize: '12px', marginBottom: '4px' }}>User Info Endpoint</label>
+                        <input 
+                          type="text" 
+                          className="form-control"
+                          value={provider.userEndpoint || ''}
+                          onChange={(e) => updateProviderField(key, 'userEndpoint', e.target.value)}
+                          placeholder="e.g. https://api.github.com/user"
+                        />
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '10px' }}>
+                        <div className="form-group">
+                          <label style={{ fontSize: '12px', marginBottom: '4px' }}>Scope</label>
+                          <input 
+                            type="text" 
+                            className="form-control"
+                            value={provider.scope || ''}
+                            onChange={(e) => updateProviderField(key, 'scope', e.target.value)}
+                            placeholder="e.g. read:user user:email"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label style={{ fontSize: '12px', marginBottom: '4px' }}>Email Field</label>
+                          <input 
+                            type="text" 
+                            className="form-control"
+                            value={provider.emailField || ''}
+                            onChange={(e) => updateProviderField(key, 'emailField', e.target.value)}
+                            placeholder="email"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label style={{ fontSize: '12px', marginBottom: '4px' }}>Name Field</label>
+                          <input 
+                            type="text" 
+                            className="form-control"
+                            value={provider.nameField || ''}
+                            onChange={(e) => updateProviderField(key, 'nameField', e.target.value)}
+                            placeholder="name"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              <button 
+                type="button" 
+                onClick={addCustomProvider}
+                className="btn-sm"
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  height: 'auto', 
+                  background: 'rgba(255,255,255,0.03)', 
+                  border: '1px dashed var(--border-color, rgba(255,255,255,0.15))', 
+                  color: 'var(--ink-1)', 
+                  borderRadius: '6px', 
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  transition: '0.2s'
+                }}
+              >
+                <Icons.plus style={{ width: '16px', height: '16px' }} />
+                Add Custom Login Method
+              </button>
 
               <button 
                 type="submit" 
