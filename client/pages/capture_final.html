@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<title>Capture Final</title>
+<link rel="stylesheet" href="../css/styles.css" />
+<link rel="stylesheet" href="../css/app.css" />
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f8f9fa; margin: 0; padding: 20px; }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+  
+  <script>
+    // Mock global objects
+    window.adminApi = {
+      cities: {
+        getCities: async (params) => {
+          const qs = new URLSearchParams();
+          if (params) Object.entries(params).forEach(([k,v]) => { if (v) qs.set(k, v) });
+          const res = await fetch(`http://localhost:3000/api/admin/cities?${qs.toString()}`);
+          return res.json();
+        },
+        getStats: async () => {
+          const res = await fetch('http://localhost:3000/api/admin/cities/stats');
+          return res.json();
+        },
+        getFilters: async () => ({ success: true, data: { countries: [], states: [] } }),
+        toggleCity: async (id, active) => ({ success: true })
+      }
+    };
+  </script>
+  
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/components.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/CitiesView.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-shell.tsx"></script>
+
+  <script type="text/babel" data-presets="env,react,typescript">
+    const { useState } = React;
+    function Capture() {
+      const [pickerOpen, setPickerOpen] = useState(true);
+      return (
+        <div style={{ display: 'flex', gap: '20px', flexDirection: 'column' }}>
+          <div style={{ padding: '20px', background: '#fff', borderRadius: '12px', border: '1px solid #ddd' }}>
+            <h2 style={{marginTop: 0}}>Admin City Management Table</h2>
+            <CitiesView user={{email: "admin"}} logAction={()=>{}} addToast={()=>{}} />
+          </div>
+          
+          <div style={{ position: 'relative', height: '600px', background: '#fff', borderRadius: '12px', border: '1px solid #ddd', padding: '20px' }}>
+            <h2 style={{marginTop: 0}}>User City Picker (Database Driven)</h2>
+            <CityPicker open={pickerOpen} onClose={() => {}} city="Kolkata" onPick={() => {}} />
+          </div>
+        </div>
+      );
+    }
+    ReactDOM.createRoot(document.getElementById("root")).render(<Capture />);
+  </script>
+</body>
+</html>

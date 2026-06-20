@@ -13,10 +13,11 @@ class AdminApiClient {
     }
   }
 
-  private getHeaders(): HeadersInit {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
+  private getHeaders(hasBody: boolean = true): HeadersInit {
+    const headers: Record<string, string> = {};
+    if (hasBody) {
+      headers['Content-Type'] = 'application/json';
+    }
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('samaagum_admin_token');
       if (token) {
@@ -28,10 +29,11 @@ class AdminApiClient {
 
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.apiBase}${path}`;
+    const hasBody = options.body !== undefined && options.body !== null;
     const response = await fetch(url, {
       ...options,
       headers: {
-        ...this.getHeaders(),
+        ...this.getHeaders(hasBody),
         ...options.headers,
       },
     });
@@ -130,6 +132,80 @@ class AdminApiClient {
     }),
   };
 
+  // ── Categories endpoints ──────────────────────────────────────────────────
+  public categories = {
+    getCategories: () => this.request<{ success: boolean; data: any[] }>('/api/admin/categories'),
+
+    saveCategory: (payload: any, id?: string) => {
+      const path = id ? `/api/admin/categories/${id}` : '/api/admin/categories';
+      const method = id ? 'PUT' : 'POST';
+      return this.request<{ success: boolean; data: any }>(path, {
+        method,
+        body: JSON.stringify(payload),
+      });
+    },
+
+    deleteCategory: (id: string) => this.request<{ success: boolean }>(`/api/admin/categories/${id}`, {
+      method: 'DELETE',
+    }),
+  };
+
+  // ── Tags endpoints ────────────────────────────────────────────────────────
+  public tags = {
+    getTags: () => this.request<{ success: boolean; data: any[] }>('/api/admin/tags'),
+
+    saveTag: (payload: any, id?: string) => {
+      const path = id ? `/api/admin/tags/${id}` : '/api/admin/tags';
+      const method = id ? 'PUT' : 'POST';
+      return this.request<{ success: boolean; data: any }>(path, {
+        method,
+        body: JSON.stringify(payload),
+      });
+    },
+
+    deleteTag: (id: string) => this.request<{ success: boolean }>(`/api/admin/tags/${id}`, {
+      method: 'DELETE',
+    }),
+  };
+
+  // ── Cities endpoints ───────────────────────────────────────────────────────
+  public cities = {
+    getCities: (params?: { page?: number; limit?: number; search?: string; status?: string; state?: string; country?: string; sort?: string; order?: string }) => {
+      const qs = new URLSearchParams();
+      if (params) {
+        Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== '') qs.set(k, String(v)); });
+      }
+      const queryStr = qs.toString();
+      return this.request<{ success: boolean; data: any[]; total: number; page: number; limit: number; totalPages: number }>(
+        `/api/admin/cities${queryStr ? '?' + queryStr : ''}`
+      );
+    },
+
+    getStats: () => this.request<{ success: boolean; data: { total: number; active: number; inactive: number; countries: number; states: number } }>('/api/admin/cities/stats'),
+
+    getFilters: (country?: string) => {
+      const qs = country ? `?country=${encodeURIComponent(country)}` : '';
+      return this.request<{ success: boolean; data: { countries: string[]; states: string[] } }>(`/api/admin/cities/filters${qs}`);
+    },
+
+    toggleCity: (geonameId: number, isActive: boolean) => this.request<{ success: boolean; data: any; message: string }>(`/api/admin/cities/${geonameId}/toggle`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive }),
+    }),
+
+    bulkToggle: (body: { geonameIds?: number[]; state?: string; country?: string; isActive: boolean }) =>
+      this.request<{ success: boolean; affected: number; message: string }>('/api/admin/cities/bulk-toggle', {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+
+    checkCity: (geonameId: number, entityType?: string) => {
+      const qs = entityType ? `?entityType=${entityType}` : '';
+      return this.request<{ success: boolean; allowed: boolean; message?: string }>(`/api/admin/cities/check/${geonameId}${qs}`);
+    },
+
+    detectLocation: () => this.request<{ success: boolean; data: any }>('/api/admin/cities/detect'),
+  };
   // ── Users endpoints ───────────────────────────────────────────────────────
   public users = {
     getUsers: () => this.request<{ success: boolean; data: any[] }>('/api/admin/users'),

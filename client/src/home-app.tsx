@@ -51,7 +51,8 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const [city, setCity] = useState("Bengaluru");
+  const { location, overrideLocation } = window.useLocation();
+  const city = location?.city || location?.state || location?.country || "Locating...";
   const [cityOpen, setCityOpen] = useState(false);
 
   const [subscription, setSubscription] = useState({ plan: 'free', status: 'active' });
@@ -268,10 +269,14 @@ function App() {
                 : <Topbar go={go} counts={counts} dark={t.dark} onToggleTheme={()=>setTweak("dark", !t.dark)} city={city} onCity={()=>setCityOpen(true)} />}
         {renderView()}
         {mobile && <TabBar view={cur.view} go={go} counts={counts} />}
-        <CityPicker open={cityOpen} onClose={()=>setCityOpen(false)} city={city} onPick={setCity} />
+        <CityPicker open={cityOpen} onClose={()=>setCityOpen(false)} city={city} onPick={(c) => overrideLocation({ city: c })} />
       </div>
     </div>
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <LocationProvider>
+    <App />
+  </LocationProvider>
+);

@@ -308,10 +308,31 @@ function ScreenInterests({ m }) {
 function ScreenLocation({ m }) {
   const [q, setQ] = useState("");
   const [city, setCity] = useState(m.data.city);
+  const { location } = window.useLocation ? window.useLocation() : { location: null };
   const [loading, setLoading] = useState(false);
-  const list = q
-    ? CITIES.filter(([c]) => c.toLowerCase().includes(q.toLowerCase()))
-    : CITIES.slice(0, 4);
+  const [list, setList] = useState([]);
+  const [searching, setSearching] = useState(false);
+
+  useEffect(() => {
+    const fetchCities = async () => {
+      setSearching(true);
+      try {
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+        const res = await fetch(`${apiBase}/api/location/cities?limit=6&search=${encodeURIComponent(q)}`);
+        const json = await res.json();
+        if (json.success) {
+          setList(json.data.map(c => [c.city_name, c.country_name, "📍"]));
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setSearching(false);
+      }
+    };
+    const timer = setTimeout(fetchCities, 300);
+    return () => clearTimeout(timer);
+  }, [q]);
   const finish = async () => {
     setLoading(true);
     try {
@@ -355,6 +376,19 @@ function ScreenLocation({ m }) {
       <h2 className="auth-h">Where should we look?</h2>
       <p className="auth-p">We'll surface events and people near you first.</p>
 
+      {location && location.city && !city && (
+        <div style={{ padding: '12px', background: 'var(--surface-2)', borderRadius: '8px', marginBottom: '16px', border: '1px solid var(--accent-2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Ic.pin style={{ color: "var(--accent-2)" }} />
+            <div>
+              <div style={{ fontSize: '13px', color: 'var(--ink-3)' }}>📍 Detected Location</div>
+              <div style={{ fontWeight: '600' }}>{location.city}, {location.state || location.country}</div>
+            </div>
+            <button className="sbtn sbtn--primary" style={{ marginLeft: 'auto', padding: '4px 12px', fontSize: '12px' }} onClick={() => setCity([location.city, location.country, "📍"])}>Use This</button>
+          </div>
+        </div>
+      )}
+
       <div className="loc-search">
         <Field icon={<Ic.search />} placeholder="Search your city" value={q}
           onChange={(e) => setQ(e.target.value)} />
@@ -362,12 +396,14 @@ function ScreenLocation({ m }) {
 
       <div className="popular-label">{q ? "Results" : "Popular near India & beyond"}</div>
       <div className="city-grid">
-        {list.map(([c, country, flag]) => (
-          <button key={c} className={`city ${city && city[0] === c ? "on" : ""}`} onClick={() => setCity([c, country, flag])}>
+        {list.map(([c, country, flag], idx) => (
+          <button key={`${c}-${idx}`} className={`city ${city && city[0] === c ? "on" : ""}`} onClick={() => setCity([c, country, flag])}>
             <span className="flag">{flag}</span>
             <span><span className="cn" style={{ display: "block" }}>{c}</span><span className="cc">{country}</span></span>
           </button>
         ))}
+        {searching && <div style={{ padding: "16px", color: "var(--ink-3)", fontSize: "14px" }}>Searching...</div>}
+        {!searching && list.length === 0 && <div style={{ padding: "16px", color: "var(--ink-3)", fontSize: "14px" }}>No cities found.</div>}
       </div>
 
       <div className={`map-reveal ${city ? "open" : ""}`}>

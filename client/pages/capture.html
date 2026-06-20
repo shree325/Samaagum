@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<title>Capture</title>
+<link rel="stylesheet" href="../css/styles.css" />
+<link rel="stylesheet" href="../css/app.css" />
+</head>
+<body>
+  <div id="root" style="padding: 20px; background: var(--bg-1);"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/contexts/LocationContext.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/components.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/auth-flow.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/CitiesView.tsx"></script>
+
+  <script type="text/babel" data-presets="env,react,typescript">
+    const { useEffect } = React;
+    function MockApp() {
+      // Mock window.useLocation
+      window.useLocation = () => ({
+        location: { city: "Kolkata", state: "West Bengal", country: "India" },
+        overrideLocation: () => {}
+      });
+
+      return (
+        <div style={{ display: 'flex', gap: '40px' }}>
+          <div style={{ flex: 1, border: '1px solid #ccc', padding: '20px', borderRadius: '8px', background: '#fff' }}>
+            <h3>Registration Flow - Location Screen</h3>
+            <ScreenLocation m={{ data: {}, set: () => {}, next: () => {} }} />
+          </div>
+          <div style={{ flex: 1, border: '1px solid #ccc', padding: '20px', borderRadius: '8px', background: '#fff' }}>
+            <h3>Admin - City Management (Detect Button Removed)</h3>
+            <CitiesView />
+          </div>
+        </div>
+      );
+    }
+    ReactDOM.createRoot(document.getElementById("root")).render(<MockApp />);
+  </script>
+</body>
+</html>
