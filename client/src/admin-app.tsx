@@ -1570,11 +1570,32 @@ function RbacView({ user }) {
   const [roles, setRoles] = React.useState([]);
   const [responsibilities, setResponsibilities] = React.useState([]);
   const [positions, setPositions] = React.useState([]);
+  const [makerCheckerRequests, setMakerCheckerRequests] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
 
   // Search filter
   const [search, setSearch] = React.useState("");
+
+  const handleMakerCheckerAction = async (requestId, action) => {
+    try {
+      const res = await fetch(`${apiBase}/api/admin/rbac/maker-checker/requests/${requestId}/${action}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('samaagum_admin_token')}`
+        }
+      }).then(r => r.json());
+      if (res.success) {
+        alert(res.message || `Request ${action}ed successfully`);
+        loadData();
+      } else {
+        alert(res.message || `Failed to ${action} request`);
+      }
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   // Modals & Form States
   const [modalOpen, setModalOpen] = React.useState(null); // 'role' | 'responsibility' | 'position' | null
@@ -1621,15 +1642,21 @@ function RbacView({ user }) {
     setLoading(true);
     setError(null);
     try {
-      const [rRes, respRes, pRes] = await Promise.all([
+      const [rRes, respRes, pRes, mcRes] = await Promise.all([
         adminApi.rbac.getRoles(),
         adminApi.rbac.getResponsibilities(),
-        adminApi.rbac.getPositions()
+        adminApi.rbac.getPositions(),
+        fetch(`${apiBase}/api/admin/rbac/maker-checker/requests`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('samaagum_admin_token')}`
+          }
+        }).then(r => r.json())
       ]);
 
       if (rRes.success) setRoles(rRes.data.roles || rRes.data);
       if (respRes.success) setResponsibilities(respRes.data);
       if (pRes.success) setPositions(pRes.data);
+      if (mcRes.success) setMakerCheckerRequests(mcRes.data);
     } catch (err) {
       console.error(err);
       setError("Failed to fetch RBAC configuration from backend API.");
@@ -1898,6 +1925,9 @@ function RbacView({ user }) {
         <button className={`btn-sm ${activeSubTab === "matrix" ? "btn-sm-primary" : "btn-sm-ghost"}`} onClick={() => { setActiveSubTab("matrix"); setSearch(""); }}>
           Permissions Matrix
         </button>
+        <button className={`btn-sm ${activeSubTab === "maker-checker" ? "btn-sm-primary" : "btn-sm-ghost"}`} onClick={() => { setActiveSubTab("maker-checker"); setSearch(""); }}>
+          Maker-Checker Requests ({makerCheckerRequests.length})
+        </button>
       </div>
 
       {loading && (
@@ -2150,6 +2180,58 @@ function RbacView({ user }) {
                       })}
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {activeSubTab === "maker-checker" && (
+            <div className="table-wrapper">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Request Info</th>
+                    <th>Maker</th>
+                    <th>Status</th>
+                    <th>Submitted</th>
+                    <th style={{ textAlign: "right" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {makerCheckerRequests.map(req => (
+                    <tr key={req.id}>
+                      <td>
+                        <div>
+                          <span style={{ fontWeight: "600", display: "block" }}>{req.action_type}</span>
+                          <span style={{ fontSize: "11px", color: "var(--ink-3)" }}>
+                            Payload: {JSON.stringify(req.payload)}
+                          </span>
+                        </div>
+                      </td>
+                      <td>{req.maker_email}</td>
+                      <td>
+                        <span className={`pill ${req.status === 'pending' ? 'yellow' : req.status === 'approved' ? 'green' : 'red'}`}>
+                          {req.status}
+                        </span>
+                      </td>
+                      <td>{new Date(req.created_at).toLocaleString()}</td>
+                      <td style={{ textAlign: "right" }}>
+                        {req.status === 'pending' && (
+                          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                            <button className="btn-sm btn-sm-ghost" onClick={() => handleMakerCheckerAction(req.id, 'reject')}>Reject</button>
+                            <button className="btn-sm btn-sm-primary" onClick={() => handleMakerCheckerAction(req.id, 'approve')}>Approve</button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {makerCheckerRequests.length === 0 && (
+                    <tr>
+                      <td colSpan="5" style={{ textAlign: "center", padding: "20px", color: "var(--ink-3)" }}>
+                        No pending maker-checker requests.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
