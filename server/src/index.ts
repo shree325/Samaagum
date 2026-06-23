@@ -11,11 +11,18 @@ import { adminSettingsRoutes } from './controllers/adminSettingsRoutes';
 import { userSubscriptionRoutes } from './controllers/userSubscriptionRoutes';
 import { adminAuthRoutes } from './controllers/adminAuthRoutes';
 import { oauthRoutes } from './controllers/oauthRoutes';
+import { adminCategoryRoutes } from './controllers/adminCategoryRoutes';
+import { adminTagRoutes } from './controllers/adminTagRoutes';
+import { adminCityRoutes } from './controllers/adminCityRoutes';
+import { adminGeoRoutes } from './controllers/adminGeoRoutes';
+
+import { adminUserRoutes } from './controllers/adminUserRoutes';
 import { seedAdminRBAC } from './services/adminRbacSeeder';
 import { seedPlatformSettings } from './settings-library/settingsSeeder';
 import { startMessaging, stopMessaging, getMessagingHealth } from './services/messagingSocket';
 import { messagingTestRoutes } from './controllers/messagingTestRoutes';
 import { messagingRoutes } from './controllers/messagingRoutes';
+
 
 dotenv.config();
 
@@ -42,15 +49,15 @@ const PORT = Number(process.env.PORT) || 3000;
 // Register CORS
 fastify.register(cors, {
     origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 });
 
 // Decoupled types for typescript compiling
 declare module 'fastify' {
-  interface FastifyRequest {
-    user?: any;
-  }
+    interface FastifyRequest {
+        user?: any;
+    }
 }
 
 // Register authentication decorator
@@ -94,7 +101,13 @@ fastify.register(oauthRoutes, { prefix: '/api/auth' });
 fastify.register(adminRbacRoutes, { prefix: '/api/admin/rbac' });
 fastify.register(subscriptionPlanRoutes, { prefix: '/api/admin' });
 fastify.register(adminCouponRoutes, { prefix: '/api/admin' });
+fastify.register(adminCategoryRoutes, { prefix: '/api/admin' });
+fastify.register(adminTagRoutes, { prefix: '/api/admin' });
+fastify.register(adminUserRoutes, { prefix: '/api/admin' });
 fastify.register(adminSettingsRoutes, { prefix: '/api/admin' });
+fastify.register(adminCityRoutes, { prefix: '/api/admin' });
+fastify.register(adminGeoRoutes, { prefix: '/api/admin' });
+
 fastify.register(userSubscriptionRoutes, { prefix: '/api/subscription' });
 fastify.register(messagingTestRoutes, { prefix: '/api/test' });
 fastify.register(messagingRoutes, { prefix: '/api/messaging' });
@@ -166,5 +179,31 @@ const start = async () => {
         process.exit(1);
     }
 };
+
+// Graceful shutdown handler
+const gracefulShutdown = async (signal: string) => {
+    console.log(`📡 Received ${signal}. Gracefully shutting down...`);
+    try {
+        await fastify.close();
+        console.log('🔌 Fastify server closed.');
+        await prisma.$disconnect();
+        console.log('📦 Database connection closed.');
+        
+        if (signal === 'SIGUSR2') {
+            // Signal nodemon that we are done cleaning up and ready to restart
+            process.kill(process.pid, 'SIGUSR2');
+        } else {
+            process.exit(0);
+        }
+    } catch (err) {
+        console.error('❌ Error during graceful shutdown:', err);
+        process.exit(1);
+    }
+};
+
+// Listen for termination signals
+process.once('SIGUSR2', () => gracefulShutdown('SIGUSR2'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 start();

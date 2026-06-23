@@ -43,16 +43,46 @@ function ScreenMethod({ m }) {
   const [email, setEmail] = useState(m.data.email);
   const [err, setErr] = useState("");
   const [gLoading, setGLoading] = useState(false);
+  const [lLoading, setLLoading] = useState(false);
+  const [ghLoading, setGHLoading] = useState(false);
   const [cLoading, setCLoading] = useState(false);
+  const [providers, setProviders] = useState<any[]>([]);
+  const [loadingProviders, setLoadingProviders] = useState(true);
+  const [loadingKeys, setLoadingKeys] = useState<Record<string, boolean>>({});
   const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-  const google = () => {
-    setGLoading(true);
+  useEffect(() => {
+    let active = true;
+    const fetchProviders = async () => {
+      try {
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+        const res = await fetch(`${apiBase}/api/auth/providers`);
+        const data = await res.json();
+        if (active && data.success && Array.isArray(data.providers)) {
+          setProviders(data.providers.filter((p: any) => p.enabled));
+        }
+      } catch (e) {
+        console.error("Failed to load auth providers", e);
+      } finally {
+        if (active) setLoadingProviders(false);
+      }
+    };
+    fetchProviders();
+    return () => { active = false; };
+  }, []);
+
+  const handleProviderLogin = (key: string, isCustom?: boolean) => {
+    setLoadingKeys(prev => ({ ...prev, [key]: true }));
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
-    // Redirect to backend — it reads clientId from platform_settings and redirects to Google
-    window.location.href = `${apiBase}/api/auth/google?mode=${m.mode}`;
+    if (isCustom) {
+      window.location.href = `${apiBase}/api/auth/custom/${key}?mode=${m.mode}`;
+    } else {
+      window.location.href = `${apiBase}/api/auth/${key}?mode=${m.mode}`;
+    }
   };
+
   const cont = async () => {
     if (!valid) { setErr("Enter a valid email address"); return; }
     setCLoading(true);
@@ -79,6 +109,8 @@ function ScreenMethod({ m }) {
     }
   };
 
+  const hasOauth = providers.length > 0;
+
   return (
     <div>
       <h2 className="auth-h">{m.mode === "signup" ? "Create your account" : "Welcome back"}</h2>
@@ -86,12 +118,27 @@ function ScreenMethod({ m }) {
         ? "Join Samaagum to discover events and meet your people."
         : "Sign in to continue to your community."}</p>
 
-      <div style={{ marginTop: 26 }}>
-        <SBtn variant="google" block loading={gLoading} leftIcon={<Ic.google />} onClick={google}>
-          Continue with Google
-        </SBtn>
-      </div>
-      <div className="divider">or continue with email</div>
+      {hasOauth && (
+        <div style={{ marginTop: 26, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {providers.map(p => {
+            const IconComponent = Ic[p.key] || Ic.spark;
+            const btnVariant = (p.key === 'google' || p.key === 'linkedin') ? p.key : 'ghost';
+            return (
+              <SBtn 
+                key={p.key} 
+                variant={btnVariant} 
+                block 
+                loading={loadingKeys[p.key] || false} 
+                leftIcon={<IconComponent />} 
+                onClick={() => handleProviderLogin(p.key, p.isCustom)}
+              >
+                Continue with {p.displayName || p.key}
+              </SBtn>
+            );
+          })}
+        </div>
+      )}
+      {hasOauth && <div className="divider">or continue with email</div>}
       <Field label="Email address" icon={<Ic.mail />} type="email" placeholder="you@email.com"
         value={email} error={err}
         onChange={(e) => { setEmail(e.target.value); setErr(""); }}
@@ -308,10 +355,31 @@ function ScreenInterests({ m }) {
 function ScreenLocation({ m }) {
   const [q, setQ] = useState("");
   const [city, setCity] = useState(m.data.city);
+  const { location } = window.useLocation ? window.useLocation() : { location: null };
   const [loading, setLoading] = useState(false);
-  const list = q
-    ? CITIES.filter(([c]) => c.toLowerCase().includes(q.toLowerCase()))
-    : CITIES.slice(0, 4);
+  const [list, setList] = useState([]);
+  const [searching, setSearching] = useState(false);
+
+  useEffect(() => {
+    const fetchCities = async () => {
+      setSearching(true);
+      try {
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+        const res = await fetch(`${apiBase}/api/location/cities?limit=6&search=${encodeURIComponent(q)}`);
+        const json = await res.json();
+        if (json.success) {
+          setList(json.data.map(c => [c.city_name, c.country_name, "📍"]));
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setSearching(false);
+      }
+    };
+    const timer = setTimeout(fetchCities, 300);
+    return () => clearTimeout(timer);
+  }, [q]);
   const finish = async () => {
     setLoading(true);
     try {
@@ -355,6 +423,19 @@ function ScreenLocation({ m }) {
       <h2 className="auth-h">Where should we look?</h2>
       <p className="auth-p">We'll surface events and people near you first.</p>
 
+      {location && location.city && !city && (
+        <div style={{ padding: '12px', background: 'var(--surface-2)', borderRadius: '8px', marginBottom: '16px', border: '1px solid var(--accent-2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Ic.pin style={{ color: "var(--accent-2)" }} />
+            <div>
+              <div style={{ fontSize: '13px', color: 'var(--ink-3)' }}>📍 Detected Location</div>
+              <div style={{ fontWeight: '600' }}>{location.city}, {location.state || location.country}</div>
+            </div>
+            <button className="sbtn sbtn--primary" style={{ marginLeft: 'auto', padding: '4px 12px', fontSize: '12px' }} onClick={() => setCity([location.city, location.country, "📍"])}>Use This</button>
+          </div>
+        </div>
+      )}
+
       <div className="loc-search">
         <Field icon={<Ic.search />} placeholder="Search your city" value={q}
           onChange={(e) => setQ(e.target.value)} />
@@ -362,12 +443,14 @@ function ScreenLocation({ m }) {
 
       <div className="popular-label">{q ? "Results" : "Popular near India & beyond"}</div>
       <div className="city-grid">
-        {list.map(([c, country, flag]) => (
-          <button key={c} className={`city ${city && city[0] === c ? "on" : ""}`} onClick={() => setCity([c, country, flag])}>
+        {list.map(([c, country, flag], idx) => (
+          <button key={`${c}-${idx}`} className={`city ${city && city[0] === c ? "on" : ""}`} onClick={() => setCity([c, country, flag])}>
             <span className="flag">{flag}</span>
             <span><span className="cn" style={{ display: "block" }}>{c}</span><span className="cc">{country}</span></span>
           </button>
         ))}
+        {searching && <div style={{ padding: "16px", color: "var(--ink-3)", fontSize: "14px" }}>Searching...</div>}
+        {!searching && list.length === 0 && <div style={{ padding: "16px", color: "var(--ink-3)", fontSize: "14px" }}>No cities found.</div>}
       </div>
 
       <div className={`map-reveal ${city ? "open" : ""}`}>

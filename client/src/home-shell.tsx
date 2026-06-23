@@ -201,21 +201,104 @@ function Empty({ icon, title, text, action }) {
 
 /* ---------------- City picker sheet ---------------- */
 function CityPicker({ open, onClose, city, onPick }) {
-  const cities = ["Bengaluru","Mumbai","Delhi NCR","Hyderabad","Pune","Chennai","Goa","Online"];
+  const [cities, setCities] = useState([]);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const fetchCities = async () => {
+      setLoading(true);
+      try {
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+        const res = await fetch(`${apiBase}/api/location/cities?page=${page}&limit=20&search=${encodeURIComponent(search)}`);
+        const json = await res.json();
+        if (json.success) {
+          if (page === 1) {
+            setCities(json.data);
+          } else {
+            setCities(prev => [...prev, ...json.data]);
+          }
+          setTotal(json.total || 0);
+          setHasMore(page < (json.totalPages || 1));
+        }
+      } catch (err) {
+        console.error("Failed to load cities", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    // debounce search
+    const timer = setTimeout(() => {
+      fetchCities();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [open, search, page]);
+
+  // Reset page when search changes
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
   if (!open) return null;
   return (
     <div className="overlay" onClick={onClose}>
       <div className="sheet" onClick={e=>e.stopPropagation()}>
-        <div className="sheet-head"><h3>Choose your city</h3><button className="sheet-x" onClick={onClose}><I.x/></button></div>
-        <p className="sheet-sub">Discovery is biased to events near you.</p>
-        <div className="city-list">
-          {cities.map(c => (
-            <button key={c} className={`city-opt ${c===city?"on":""}`} onClick={()=>{ onPick(c); onClose(); }}>
-              <I.pin style={{ color: c===city?"var(--accent-2)":"var(--ink-3)" }} />
-              <span>{c}</span>
-              {c===city && <I.check style={{ marginLeft:"auto", color:"var(--accent-2)" }} />}
+        <div className="sheet-head">
+          <h3>Choose your city</h3>
+          <button className="sheet-x" onClick={onClose}><I.x/></button>
+        </div>
+        <p className="sheet-sub">Discovery is biased to events near you. <span style={{color: "var(--ink-3)", fontSize: "12px", float: "right"}}>{total} cities available</span></p>
+        
+        <div style={{ padding: "0 24px 12px" }}>
+          <div style={{ display: "flex", alignItems: "center", background: "var(--surface-2)", borderRadius: "8px", padding: "8px 12px" }}>
+            <I.search style={{ color: "var(--ink-3)", marginRight: "8px" }} />
+            <input 
+              type="text" 
+              placeholder="Search cities..." 
+              value={search} 
+              onChange={e => setSearch(e.target.value)}
+              style={{ border: "none", background: "transparent", outline: "none", flex: 1, fontSize: "15px", color: "var(--ink-1)" }}
+            />
+          </div>
+        </div>
+
+        <div className="city-list" style={{ maxHeight: "300px", overflowY: "auto", padding: "0 24px 24px" }}>
+          {cities.map(c => {
+            const isMatch = city === c.city_name;
+            return (
+              <button key={c.geoname_id} className={`city-opt ${isMatch?"on":""}`} onClick={()=>{ onPick(c.city_name); onClose(); }} style={{ display: "flex", alignItems: "flex-start", padding: "12px", width: "100%", background: "transparent", border: "none", cursor: "pointer", borderBottom: "1px solid var(--border)", textAlign: "left" }}>
+                <I.pin style={{ color: isMatch?"var(--accent-2)":"var(--ink-3)", marginTop: "2px", flexShrink: 0 }} />
+                <div style={{ marginLeft: "12px", flex: 1 }}>
+                  <div style={{ fontWeight: isMatch ? "600" : "500", color: isMatch ? "var(--accent-2)" : "var(--ink-1)", fontSize: "15px" }}>{c.city_name}</div>
+                  <div style={{ fontSize: "13px", color: "var(--ink-3)", marginTop: "2px" }}>{c.state_name}, {c.country_name}</div>
+                </div>
+                {isMatch && <I.check style={{ color:"var(--accent-2)", flexShrink: 0, marginTop: "2px" }} />}
+              </button>
+            )
+          })}
+          
+          {loading && <div style={{ textAlign: "center", padding: "16px", color: "var(--ink-3)", fontSize: "14px" }}>Loading...</div>}
+          
+          {!loading && cities.length === 0 && (
+            <div style={{ textAlign: "center", padding: "32px 16px", color: "var(--ink-3)", fontSize: "14px" }}>
+              No cities found matching "{search}"
+            </div>
+          )}
+
+          {!loading && hasMore && (
+            <button 
+              onClick={() => setPage(p => p + 1)}
+              style={{ width: "100%", padding: "12px", background: "var(--surface-2)", border: "none", borderRadius: "8px", marginTop: "12px", color: "var(--ink-2)", cursor: "pointer", fontWeight: "500" }}
+            >
+              Load more cities
             </button>
-          ))}
+          )}
         </div>
       </div>
     </div>

@@ -55,7 +55,13 @@ export async function seedPlatformSettings(
     await dbExecutor(insertAuthQuery, ['auth_settings', JSON.stringify(DEFAULT_AUTH_SETTINGS)]);
     console.log('Seeded default auth settings (Google, LinkedIn)');
   } else {
-    console.log('Auth settings already exist, skipping...');
+    const cleanGithubQuery = `
+      UPDATE platform_settings 
+      SET value = (value::jsonb - 'github')::json 
+      WHERE key = $1
+    `;
+    await dbExecutor(cleanGithubQuery, ['auth_settings']);
+    console.log('Auth settings already exist. Cleaned up legacy GitHub configurations.');
   }
 
   // Insert Communication Settings if not exists

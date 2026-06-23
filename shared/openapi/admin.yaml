@@ -854,6 +854,451 @@ paths:
                   message:
                     type: string
 
+
+  # ------------------------------------------------------------------------
+  # Geo Management APIs
+  # Unified CRUD endpoints for Geo Locations, IPv4 Blocks and IPv6 Blocks.
+  #
+  # dataset values:
+  # - locations
+  # - ipv4
+  # - ipv6
+  #
+  # Active/Inactive status is managed through city_controls and is shared
+  # across Geo Locations, IPv4 and IPv6 management screens.
+  # ------------------------------------------------------------------------
+  /api/admin/geo/filters:
+    get:
+      summary: Retrieve unique countries and states for filters
+      operationId: getGeoFilters
+      parameters:
+        - in: query
+          name: country
+          schema:
+            type: string
+          description: Optional country name to filter subdivision states
+      responses:
+        '200':
+          description: Success response with filter values
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [countries, states]
+                    properties:
+                      countries:
+                        type: array
+                        items:
+                          type: string
+                      states:
+                        type: array
+                        items:
+                          type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+
+  /api/admin/geo/{dataset}:
+    get:
+      summary: Retrieve a paginated list of Geo data
+      operationId: getGeoData
+      parameters:
+        - in: path
+          name: dataset
+          required: true
+          schema:
+            type: string
+            enum: [locations, ipv4, ipv6]
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [all, active, inactive]
+        - in: query
+          name: country
+          schema:
+            type: string
+        - in: query
+          name: state
+          schema:
+            type: string
+        - in: query
+          name: sortBy
+          schema:
+            type: string
+        - in: query
+          name: sortOrder
+          schema:
+            type: string
+            enum: [asc, desc]
+      responses:
+        '200':
+          description: A list of geo data items
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      oneOf:
+                        - $ref: '#/components/schemas/GeoLocation'
+                        - $ref: '#/components/schemas/GeoIpBlock'
+                  meta:
+                    type: object
+                    required: [total, page, limit, totalPages]
+                    properties:
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      totalPages:
+                        type: integer
+        '400':
+          description: Invalid dataset
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+    post:
+      summary: Create a new Geo data item
+      operationId: createGeoData
+      parameters:
+        - in: path
+          name: dataset
+          required: true
+          schema:
+            type: string
+            enum: [locations, ipv4, ipv6]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/GeoLocationInput'
+                - $ref: '#/components/schemas/GeoIpBlockInput'
+      responses:
+        '200':
+          description: Success response
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+        '400':
+          description: Invalid dataset
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+    put:
+      summary: Update a Geo data item
+      operationId: updateGeoData
+      parameters:
+        - in: path
+          name: dataset
+          required: true
+          schema:
+            type: string
+            enum: [locations, ipv4, ipv6]
+        - in: query
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/GeoLocationInput'
+                - $ref: '#/components/schemas/GeoIpBlockInput'
+      responses:
+        '200':
+          description: Success response
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+        '400':
+          description: Invalid dataset
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+    delete:
+      summary: Delete a Geo data item
+      operationId: deleteGeoData
+      parameters:
+        - in: path
+          name: dataset
+          required: true
+          schema:
+            type: string
+            enum: [locations, ipv4, ipv6]
+        - in: query
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success response
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+        '400':
+          description: Invalid dataset
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+
+  /api/admin/geo/{dataset}/export:
+    get:
+      summary: Export Geo data to CSV file
+      operationId: exportGeoData
+      parameters:
+        - in: path
+          name: dataset
+          required: true
+          schema:
+            type: string
+            enum: [locations, ipv4, ipv6]
+        - in: query
+          name: visibleCols
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [all, active, inactive]
+        - in: query
+          name: country
+          schema:
+            type: string
+        - in: query
+          name: state
+          schema:
+            type: string
+        - in: query
+          name: sortBy
+          schema:
+            type: string
+        - in: query
+          name: sortOrder
+          schema:
+            type: string
+            enum: [asc, desc]
+      responses:
+        '200':
+          description: Exported CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid dataset
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+
+  /api/admin/geo/{dataset}/detail:
+    get:
+      summary: Get details of a single Geo data item
+      operationId: getGeoDataDetail
+      parameters:
+        - in: path
+          name: dataset
+          required: true
+          schema:
+            type: string
+            enum: [locations, ipv4, ipv6]
+        - in: query
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Item details
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/GeoLocation'
+                  - $ref: '#/components/schemas/GeoIpBlock'
+        '400':
+          description: Invalid dataset
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '404':
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+
 components:
   schemas:
     Role:
@@ -1380,3 +1825,131 @@ components:
           type: string
         active:
           type: boolean
+
+    GeoLocation:
+      type: object
+      properties:
+        geoname_id:
+          type: integer
+        locale_code:
+          type: string
+        continent_code:
+          type: string
+        continent_name:
+          type: string
+        country_iso_code:
+          type: string
+        country_name:
+          type: string
+        subdivision_1_iso_code:
+          type: string
+        subdivision_1_name:
+          type: string
+        subdivision_2_iso_code:
+          type: string
+        subdivision_2_name:
+          type: string
+        city_name:
+          type: string
+        metro_code:
+          type: integer
+        time_zone:
+          type: string
+        utc_offset:
+          type: string
+        is_in_european_union:
+          type: integer
+        status:
+          type: boolean
+          nullable: true
+
+    GeoLocationInput:
+      type: object
+      properties:
+        geoname_id:
+          type: integer
+        locale_code:
+          type: string
+        continent_code:
+          type: string
+        continent_name:
+          type: string
+        country_iso_code:
+          type: string
+        country_name:
+          type: string
+        subdivision_1_iso_code:
+          type: string
+        subdivision_1_name:
+          type: string
+        subdivision_2_iso_code:
+          type: string
+        subdivision_2_name:
+          type: string
+        city_name:
+          type: string
+        metro_code:
+          type: integer
+        time_zone:
+          type: string
+        is_in_european_union:
+          type: integer
+
+    GeoIpBlock:
+      type: object
+      properties:
+        network:
+          type: string
+        geoname_id:
+          type: integer
+        registered_country_geoname_id:
+          type: integer
+        represented_country_geoname_id:
+          type: integer
+        is_anonymous_proxy:
+          type: integer
+        is_satellite_provider:
+          type: integer
+        postal_code:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        accuracy_radius:
+          type: integer
+        is_anycast:
+          type: integer
+        country_name:
+          type: string
+        state_name:
+          type: string
+        status:
+          type: boolean
+          nullable: true
+
+    GeoIpBlockInput:
+      type: object
+      properties:
+        network:
+          type: string
+        geoname_id:
+          type: integer
+        registered_country_geoname_id:
+          type: integer
+        represented_country_geoname_id:
+          type: integer
+        is_anonymous_proxy:
+          type: integer
+        is_satellite_provider:
+          type: integer
+        postal_code:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        accuracy_radius:
+          type: integer
+        is_anycast:
+          type: integer
