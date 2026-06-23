@@ -46,6 +46,12 @@ const I = {
   crown:   (p) => <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" {...p}><path d="M3 8l3.5 3L12 5l5.5 6L21 8l-1.5 9h-15L3 8z"/></svg>,
   external:(p) => <svg viewBox="0 0 24 24" fill="none" width="14" height="14" {...p}><path d="M14 5h5v5M19 5l-8 8M11 5H6a1 1 0 00-1 1v12a1 1 0 001 1h12a1 1 0 001-1v-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   more:    (p) => <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" {...p}><circle cx="6" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18" cy="12" r="1.7"/></svg>,
+  moreV:   (p) => <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" {...p}><circle cx="12" cy="6" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="18" r="1.7"/></svg>,
+  reply:   (p) => <svg viewBox="0 0 24 24" fill="none" width="18" height="18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v.5"/></svg>,
+  react:   (p) => <svg viewBox="0 0 24 24" fill="none" width="18" height="18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>,
+  copy:    (p) => <svg viewBox="0 0 24 24" fill="none" width="18" height="18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>,
+  forward: (p) => <svg viewBox="0 0 24 24" fill="none" width="18" height="18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>,
+  unsend:  (p) => <svg viewBox="0 0 24 24" fill="none" width="18" height="18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>,
   phone:   (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><rect x="7" y="3" width="10" height="18" rx="2.5" stroke="currentColor" strokeWidth="1.8"/><path d="M11 18h2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
   online:  (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><rect x="3" y="5" width="18" height="11" rx="2" stroke="currentColor" strokeWidth="1.8"/><path d="M8 20h8M12 16v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
   trophy:  (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M7 4h10v4a5 5 0 01-10 0V4zM7 6H4v1a3 3 0 003 3M17 6h3v1a3 3 0 01-3 3M9 14h6M10 18h4M9 20h6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>,
@@ -99,7 +105,7 @@ function Avatar({ name, size = 40, img, className = "", style = {} }) {
   return (
     <div className={`avatar av ${className}`} style={{
       width: size, height: size, fontSize: size * 0.36,
-      background: img ? `url(${img})` : gradFor(name), backgroundSize: "cover", ...style,
+      backgroundImage: img ? `url(${img})` : gradFor(name), backgroundSize: "cover", ...style,
     }}>{!img && initials(name)}</div>
   );
 }

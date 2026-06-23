@@ -55,8 +55,42 @@ function App() {
   const [cityOpen, setCityOpen] = useState(false);
 
   const [subscription, setSubscription] = useState({ plan: 'free', status: 'active' });
+  const [socket, setSocket] = useState(null);
 
   const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    
+    let userId = null;
+    try {
+      const parts = token.split('.');
+      if (parts.length >= 2) {
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+        userId = payload.id;
+      }
+    } catch (e) {
+      console.error('Error parsing token for socket:', e);
+    }
+
+    if (userId && window.io) {
+      const chatSocket = window.io(apiBase ? `${apiBase}/chat` : "/chat", {
+        auth: { token: userId },
+        transports: ["websocket", "polling"]
+      });
+
+      chatSocket.on("connect", () => {
+        console.log("🔌 Connected to chat socket as:", userId);
+      });
+
+      setSocket(chatSocket);
+
+      return () => {
+        chatSocket.disconnect();
+      };
+    }
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -238,7 +272,7 @@ function App() {
     if (v==="group") return <GroupDetail group={cur.param} st={st} go={go} />;
     if (v==="profile") return <Profile st={st} go={go} />;
     if (v==="notifications") return <Notifications st={st} go={go} />;
-    if (v==="messages") return <Messages st={st} go={go} mobile={mobile} />;
+    if (v==="messages") return <Messages st={st} go={go} mobile={mobile} socket={socket} />;
     if (v==="create-event") return <CreateEvent go={go} mobile={mobile} st={st} />;
     if (v==="edit-event") return <CreateEvent editEv={cur.param} go={go} mobile={mobile} st={st} />;
     if (v==="create-group") return <CreateGroup go={go} mobile={mobile} st={st} />;

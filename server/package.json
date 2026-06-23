@@ -9,7 +9,8 @@
     "dev": "nodemon src/index.ts",
     "migrate": "ts-node src/db/migrate.ts",
     "migrate:status": "ts-node src/db/migrate.ts status",
-    "seed": "ts-node src/db/seed.ts"
+    "seed": "ts-node src/db/seed.ts",
+    "validate:i35": "ts-node src/i35-validation.ts"
   },
   "keywords": [],
   "author": "",
@@ -21,7 +22,9 @@
     "dotenv": "^16.4.5",
     "fastify": "^5.8.5",
     "pg": "^8.11.5",
-    "razorpay": "^2.9.6"
+    "razorpay": "^2.9.6",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
     "@types/node": "^20.12.12",
