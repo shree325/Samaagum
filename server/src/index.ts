@@ -15,6 +15,7 @@ import { adminTagRoutes } from './controllers/adminTagRoutes';
 import { adminCityRoutes } from './controllers/adminCityRoutes';
 import { adminGeoRoutes } from './controllers/adminGeoRoutes';
 
+import { adminUserRoutes } from './controllers/adminUserRoutes';
 import { seedAdminRBAC } from './services/adminRbacSeeder';
 import { seedPlatformSettings } from './settings-library/settingsSeeder';
 
@@ -98,6 +99,7 @@ fastify.register(subscriptionPlanRoutes, { prefix: '/api/admin' });
 fastify.register(adminCouponRoutes, { prefix: '/api/admin' });
 fastify.register(adminCategoryRoutes, { prefix: '/api/admin' });
 fastify.register(adminTagRoutes, { prefix: '/api/admin' });
+fastify.register(adminUserRoutes, { prefix: '/api/admin' });
 fastify.register(adminSettingsRoutes, { prefix: '/api/admin' });
 fastify.register(adminCityRoutes, { prefix: '/api/admin' });
 fastify.register(adminGeoRoutes, { prefix: '/api/admin' });

@@ -43,16 +43,46 @@ function ScreenMethod({ m }) {
   const [email, setEmail] = useState(m.data.email);
   const [err, setErr] = useState("");
   const [gLoading, setGLoading] = useState(false);
+  const [lLoading, setLLoading] = useState(false);
+  const [ghLoading, setGHLoading] = useState(false);
   const [cLoading, setCLoading] = useState(false);
+  const [providers, setProviders] = useState<any[]>([]);
+  const [loadingProviders, setLoadingProviders] = useState(true);
+  const [loadingKeys, setLoadingKeys] = useState<Record<string, boolean>>({});
   const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-  const google = () => {
-    setGLoading(true);
+  useEffect(() => {
+    let active = true;
+    const fetchProviders = async () => {
+      try {
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+        const res = await fetch(`${apiBase}/api/auth/providers`);
+        const data = await res.json();
+        if (active && data.success && Array.isArray(data.providers)) {
+          setProviders(data.providers.filter((p: any) => p.enabled));
+        }
+      } catch (e) {
+        console.error("Failed to load auth providers", e);
+      } finally {
+        if (active) setLoadingProviders(false);
+      }
+    };
+    fetchProviders();
+    return () => { active = false; };
+  }, []);
+
+  const handleProviderLogin = (key: string, isCustom?: boolean) => {
+    setLoadingKeys(prev => ({ ...prev, [key]: true }));
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
-    // Redirect to backend — it reads clientId from platform_settings and redirects to Google
-    window.location.href = `${apiBase}/api/auth/google?mode=${m.mode}`;
+    if (isCustom) {
+      window.location.href = `${apiBase}/api/auth/custom/${key}?mode=${m.mode}`;
+    } else {
+      window.location.href = `${apiBase}/api/auth/${key}?mode=${m.mode}`;
+    }
   };
+
   const cont = async () => {
     if (!valid) { setErr("Enter a valid email address"); return; }
     setCLoading(true);
@@ -79,6 +109,8 @@ function ScreenMethod({ m }) {
     }
   };
 
+  const hasOauth = providers.length > 0;
+
   return (
     <div>
       <h2 className="auth-h">{m.mode === "signup" ? "Create your account" : "Welcome back"}</h2>
@@ -86,12 +118,27 @@ function ScreenMethod({ m }) {
         ? "Join Samaagum to discover events and meet your people."
         : "Sign in to continue to your community."}</p>
 
-      <div style={{ marginTop: 26 }}>
-        <SBtn variant="google" block loading={gLoading} leftIcon={<Ic.google />} onClick={google}>
-          Continue with Google
-        </SBtn>
-      </div>
-      <div className="divider">or continue with email</div>
+      {hasOauth && (
+        <div style={{ marginTop: 26, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {providers.map(p => {
+            const IconComponent = Ic[p.key] || Ic.spark;
+            const btnVariant = (p.key === 'google' || p.key === 'linkedin') ? p.key : 'ghost';
+            return (
+              <SBtn 
+                key={p.key} 
+                variant={btnVariant} 
+                block 
+                loading={loadingKeys[p.key] || false} 
+                leftIcon={<IconComponent />} 
+                onClick={() => handleProviderLogin(p.key, p.isCustom)}
+              >
+                Continue with {p.displayName || p.key}
+              </SBtn>
+            );
+          })}
+        </div>
+      )}
+      {hasOauth && <div className="divider">or continue with email</div>}
       <Field label="Email address" icon={<Ic.mail />} type="email" placeholder="you@email.com"
         value={email} error={err}
         onChange={(e) => { setEmail(e.target.value); setErr(""); }}

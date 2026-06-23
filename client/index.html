@@ -20,7 +20,7 @@
         window.history.replaceState({}, '', '/');
         return;
       }
-      if (token && auth === 'google') {
+      if (token && auth) {
         localStorage.setItem('token', decodeURIComponent(token));
         localStorage.setItem('samaagum_admin_token', decodeURIComponent(token));
         // Redirect to home app

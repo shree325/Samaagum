@@ -21,8 +21,8 @@ const { useState, useEffect } = React;
     return;
   }
 
-  if (token && auth === 'google') {
-    // Save the real JWT token from Google OAuth
+  if (token && auth) {
+    // Save the real JWT token from OAuth login
     localStorage.setItem('token', decodeURIComponent(token));
     localStorage.setItem('samaagum_admin_token', decodeURIComponent(token));
     // Navigate to the home app — same path as "Enter Samaagum" button

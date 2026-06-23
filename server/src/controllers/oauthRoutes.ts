@@ -178,6 +178,430 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             return reply.redirect(`${frontendBase}/?auth_error=server_error`);
         }
     });
+
+    // GET /auth/providers — Public endpoint to check which providers are enabled
+    fastify.get('/providers', async (request: any, reply) => {
+        try {
+            const authRow = await prisma.platform_settings.findFirst({
+                where: { scope_tenant_id: null, key: 'auth_settings' }
+            });
+
+            const settings = authRow?.value as any || {};
+            const providersList = [];
+
+            // Add Google
+            providersList.push({
+                key: 'google',
+                displayName: 'Google',
+                enabled: !!settings.google?.enabled
+            });
+
+            // Add LinkedIn
+            providersList.push({
+                key: 'linkedin',
+                displayName: 'LinkedIn',
+                enabled: !!settings.linkedin?.enabled
+            });
+
+            // Add all other keys that are custom
+            for (const key of Object.keys(settings)) {
+                if (key !== 'google' && key !== 'linkedin') {
+                    const provider = settings[key];
+                    providersList.push({
+                        key,
+                        displayName: provider.displayName || key,
+                        enabled: !!provider.enabled,
+                        isCustom: true
+                    });
+                }
+            }
+
+            return {
+                success: true,
+                providers: providersList
+            };
+        } catch (err: any) {
+            return {
+                success: true,
+                providers: [
+                    { key: 'google', displayName: 'Google', enabled: false },
+                    { key: 'linkedin', displayName: 'LinkedIn', enabled: false }
+                ]
+            };
+        }
+    });
+
+    // GET /auth/linkedin — Redirect to LinkedIn consent screen
+    fastify.get('/linkedin', async (request: any, reply) => {
+        try {
+            const authRow = await prisma.platform_settings.findFirst({
+                where: { scope_tenant_id: null, key: 'auth_settings' }
+            });
+
+            const settings = authRow?.value as any;
+            const clientId = settings?.linkedin?.clientId;
+
+            if (!settings?.linkedin?.enabled || !clientId) {
+                return reply.status(503).send({
+                    success: false,
+                    message: 'LinkedIn OAuth is not enabled. Configure it in Admin → System Settings → Auth.'
+                });
+            }
+
+            const serverBase = getBaseUrl(request);
+            const redirectUri = `${serverBase}/api/auth/linkedin/callback`;
+
+            const referer = request.headers['referer'] || request.headers['origin'] || '';
+            let frontendOrigin = 'http://localhost:8080';
+            try {
+                if (referer) {
+                    const u = new URL(referer);
+                    frontendOrigin = `${u.protocol}//${u.host}`;
+                }
+            } catch {}
+
+            const state = Buffer.from(JSON.stringify({
+                mode: (request.query as any).mode || 'login',
+                frontendOrigin,
+                ts: Date.now()
+            })).toString('base64url');
+
+            const params = new URLSearchParams({
+                response_type: 'code',
+                client_id: clientId,
+                redirect_uri: redirectUri,
+                state,
+                scope: 'openid email profile',
+            });
+
+            return reply.redirect(`https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`);
+
+        } catch (err: any) {
+            return reply.status(500).send({ success: false, message: err.message || 'LinkedIn OAuth initiation failed.' });
+        }
+    });
+
+    // GET /auth/linkedin/callback — Handle LinkedIn OAuth callback
+    fastify.get('/linkedin/callback', async (request: any, reply) => {
+        let frontendBase = 'http://localhost:8080';
+        try {
+            const rawState = (request.query as any).state;
+            if (rawState) {
+                const stateData = JSON.parse(Buffer.from(rawState, 'base64url').toString('utf8'));
+                if (stateData.frontendOrigin) frontendBase = stateData.frontendOrigin;
+            }
+        } catch {}
+
+        try {
+            const { code, error } = request.query as any;
+
+            if (error || !code) {
+                return reply.redirect(`${frontendBase}/?auth_error=${encodeURIComponent(error || 'oauth_cancelled')}`);
+            }
+
+            const authRow = await prisma.platform_settings.findFirst({
+                where: { scope_tenant_id: null, key: 'auth_settings' }
+            });
+            const settings = authRow?.value as any;
+            const { clientId, clientSecret } = settings?.linkedin || {};
+
+            if (!clientId || !clientSecret) {
+                return reply.redirect(`${frontendBase}/?auth_error=oauth_not_configured`);
+            }
+
+            const redirectUri = `${getBaseUrl(request)}/api/auth/linkedin/callback`;
+
+            const tokenRes = await fetch('https://www.linkedin.com/oauth/v2/accessToken', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    grant_type: 'authorization_code',
+                    code,
+                    client_id: clientId,
+                    client_secret: clientSecret,
+                    redirect_uri: redirectUri
+                }).toString()
+            });
+
+            const tokenData: any = await tokenRes.json();
+            if (!tokenRes.ok || tokenData.error) {
+                console.error('LinkedIn token exchange failed:', tokenData);
+                return reply.redirect(`${frontendBase}/?auth_error=token_exchange_failed`);
+            }
+
+            const userInfoRes = await fetch('https://api.linkedin.com/v2/userinfo', {
+                headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
+            });
+
+            const linkedinUser = await userInfoRes.json() as any;
+            if (!userInfoRes.ok || !linkedinUser.email) {
+                console.error('LinkedIn user info fetch failed:', linkedinUser);
+                return reply.redirect(`${frontendBase}/?auth_error=user_info_failed`);
+            }
+
+            const email = linkedinUser.email;
+            const name = linkedinUser.name || `${linkedinUser.given_name || ''} ${linkedinUser.family_name || ''}`.trim() || email.split('@')[0];
+
+            const tenant = await prisma.tenants.findFirst();
+            const tenantId = tenant?.id || '00000000-0000-0000-0000-000000000000';
+
+            let dbUser = await prisma.users.findFirst({ where: { primary_email: email } });
+
+            if (!dbUser) {
+                dbUser = await prisma.users.create({
+                    data: {
+                        tenant_id: tenantId,
+                        primary_email: email,
+                        email_verified: true,
+                        state: 'active' as any,
+                    }
+                });
+                await prisma.profiles.upsert({
+                    where: { user_id: dbUser.id },
+                    update: { display_name: name, updated_at: new Date() },
+                    create: {
+                        user_id: dbUser.id,
+                        tenant_id: tenantId,
+                        display_name: name,
+                        updated_at: new Date(),
+                        created_at: new Date()
+                    }
+                });
+            }
+
+            const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+            const payload = Buffer.from(JSON.stringify({
+                id: dbUser.id,
+                tenantId: dbUser.tenant_id,
+                email: dbUser.primary_email,
+                name,
+                role: 'user',
+                provider: 'linkedin'
+            })).toString('base64url');
+            const token = `${header}.${payload}.mocksignature`;
+
+            console.log(`✅ LinkedIn OAuth login: ${email} → ${frontendBase}`);
+
+            return reply.redirect(`${frontendBase}/?token=${encodeURIComponent(token)}&auth=linkedin`);
+
+        } catch (err: any) {
+            console.error('LinkedIn OAuth callback error:', err);
+            return reply.redirect(`${frontendBase}/?auth_error=server_error`);
+        }
+    });
+
+    // GET /auth/custom/:providerKey — Redirect to custom provider's authorization endpoint
+    fastify.get('/custom/:providerKey', async (request: any, reply) => {
+        try {
+            const { providerKey } = request.params as any;
+            const authRow = await prisma.platform_settings.findFirst({
+                where: { scope_tenant_id: null, key: 'auth_settings' }
+            });
+
+            const settings = authRow?.value as any;
+            const provider = settings?.[providerKey];
+
+            if (!provider || !provider.enabled || !provider.clientId || !provider.authorizationEndpoint) {
+                return reply.status(503).send({
+                    success: false,
+                    message: `Custom provider '${providerKey}' is not fully configured or enabled.`
+                });
+            }
+
+            const serverBase = getBaseUrl(request);
+            const redirectUri = `${serverBase}/api/auth/custom/${providerKey}/callback`;
+
+            const referer = request.headers['referer'] || request.headers['origin'] || '';
+            let frontendOrigin = 'http://localhost:8080';
+            try {
+                if (referer) {
+                    const u = new URL(referer);
+                    frontendOrigin = `${u.protocol}//${u.host}`;
+                }
+            } catch {}
+
+            const state = Buffer.from(JSON.stringify({
+                mode: (request.query as any).mode || 'login',
+                frontendOrigin,
+                ts: Date.now()
+            })).toString('base64url');
+
+            const params = new URLSearchParams({
+                response_type: 'code',
+                client_id: provider.clientId,
+                redirect_uri: redirectUri,
+                state,
+                scope: provider.scope || 'openid email profile',
+            });
+
+            const authorizationUrl = provider.authorizationEndpoint.includes('?')
+                ? `${provider.authorizationEndpoint}&${params.toString()}`
+                : `${provider.authorizationEndpoint}?${params.toString()}`;
+
+            return reply.redirect(authorizationUrl);
+        } catch (err: any) {
+            return reply.status(500).send({ success: false, message: err.message || 'Custom OAuth initiation failed.' });
+        }
+    });
+
+    // GET /auth/custom/:providerKey/callback — Handle custom OAuth callback
+    fastify.get('/custom/:providerKey/callback', async (request: any, reply) => {
+        const { providerKey } = request.params as any;
+        let frontendBase = 'http://localhost:8080';
+        try {
+            const rawState = (request.query as any).state;
+            if (rawState) {
+                const stateData = JSON.parse(Buffer.from(rawState, 'base64url').toString('utf8'));
+                if (stateData.frontendOrigin) frontendBase = stateData.frontendOrigin;
+            }
+        } catch {}
+
+        try {
+            const { code, error } = request.query as any;
+
+            if (error || !code) {
+                return reply.redirect(`${frontendBase}/?auth_error=${encodeURIComponent(error || 'oauth_cancelled')}`);
+            }
+
+            const authRow = await prisma.platform_settings.findFirst({
+                where: { scope_tenant_id: null, key: 'auth_settings' }
+            });
+            const settings = authRow?.value as any;
+            const provider = settings?.[providerKey];
+
+            if (!provider || !provider.clientId || !provider.clientSecret || !provider.tokenEndpoint || !provider.userEndpoint) {
+                return reply.redirect(`${frontendBase}/?auth_error=oauth_not_configured`);
+            }
+
+            const redirectUri = `${getBaseUrl(request)}/api/auth/custom/${providerKey}/callback`;
+
+            const tokenRes = await fetch(provider.tokenEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Accept': 'application/json',
+                    'User-Agent': 'Samaagum-App'
+                },
+                body: new URLSearchParams({
+                    grant_type: 'authorization_code',
+                    code,
+                    client_id: provider.clientId,
+                    client_secret: provider.clientSecret,
+                    redirect_uri: redirectUri
+                }).toString()
+            });
+
+            let tokenData: any;
+            const tokenResponseText = await tokenRes.text();
+            try {
+                tokenData = JSON.parse(tokenResponseText);
+            } catch (jsonErr) {
+                const parsed = new URLSearchParams(tokenResponseText);
+                if (parsed.has('access_token')) {
+                    tokenData = {
+                        access_token: parsed.get('access_token'),
+                        token_type: parsed.get('token_type'),
+                        scope: parsed.get('scope')
+                    };
+                } else {
+                    console.error('Failed to parse token response:', tokenResponseText);
+                    return reply.redirect(`${frontendBase}/?auth_error=token_parse_failed`);
+                }
+            }
+
+            if (!tokenRes.ok || !tokenData || tokenData.error || !tokenData.access_token) {
+                console.error('Custom token exchange failed:', tokenData || tokenResponseText);
+                return reply.redirect(`${frontendBase}/?auth_error=token_exchange_failed`);
+            }
+
+            const accessToken = tokenData.access_token;
+
+            const profileRes = await fetch(provider.userEndpoint, {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Accept': 'application/json',
+                    'User-Agent': 'Samaagum-App'
+                }
+            });
+
+            const userProfile = await profileRes.json() as any;
+            if (!profileRes.ok || !userProfile) {
+                console.error('Custom profile fetch failed:', userProfile);
+                return reply.redirect(`${frontendBase}/?auth_error=profile_fetch_failed`);
+            }
+
+            const emailFieldKey = provider.emailField || 'email';
+            const nameFieldKey = provider.nameField || 'name';
+
+            let email = userProfile[emailFieldKey];
+            let name = userProfile[nameFieldKey];
+
+
+
+            if (!email) {
+                for (const key of Object.keys(userProfile)) {
+                    if (key.toLowerCase().includes('email') && typeof userProfile[key] === 'string') {
+                        email = userProfile[key];
+                        break;
+                    }
+                }
+            }
+
+            if (!email) {
+                return reply.redirect(`${frontendBase}/?auth_error=no_email`);
+            }
+
+            if (!name) {
+                name = userProfile.name || userProfile.login || userProfile.username || userProfile.display_name || email.split('@')[0];
+            }
+
+            const tenant = await prisma.tenants.findFirst();
+            const tenantId = tenant?.id || '00000000-0000-0000-0000-000000000000';
+
+            let dbUser = await prisma.users.findFirst({ where: { primary_email: email } });
+
+            if (!dbUser) {
+                dbUser = await prisma.users.create({
+                    data: {
+                        tenant_id: tenantId,
+                        primary_email: email,
+                        email_verified: true,
+                        state: 'active' as any,
+                    }
+                });
+                await prisma.profiles.upsert({
+                    where: { user_id: dbUser.id },
+                    update: { display_name: name, updated_at: new Date() },
+                    create: {
+                        user_id: dbUser.id,
+                        tenant_id: tenantId,
+                        display_name: name,
+                        updated_at: new Date(),
+                        created_at: new Date()
+                    }
+                });
+            }
+
+            const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+            const payload = Buffer.from(JSON.stringify({
+                id: dbUser.id,
+                tenantId: dbUser.tenant_id,
+                email: dbUser.primary_email,
+                name,
+                role: 'user',
+                provider: providerKey
+            })).toString('base64url');
+            const token = `${header}.${payload}.mocksignature`;
+
+            console.log(`✅ Custom OAuth login (${providerKey}): ${email} → ${frontendBase}`);
+
+            return reply.redirect(`${frontendBase}/?token=${encodeURIComponent(token)}&auth=${providerKey}`);
+
+        } catch (err: any) {
+            console.error(`Custom OAuth callback error for ${providerKey}:`, err);
+            return reply.redirect(`${frontendBase}/?auth_error=server_error`);
+        }
+    });
 };
 
 function getBaseUrl(request: any): string {

@@ -36,6 +36,16 @@ class AdminApiClient {
         ...this.getHeaders(hasBody),
         ...options.headers,
       },
+    const headers = {
+      ...this.getHeaders(),
+      ...options.headers,
+    };
+    if (!options.body) {
+      delete headers['Content-Type'];
+    }
+    const response = await fetch(url, {
+      ...options,
+      headers,
     });
 
     const data = await response.json();
@@ -210,6 +220,13 @@ class AdminApiClient {
   public users = {
     getUsers: () => this.request<{ success: boolean; data: any[] }>('/api/admin/users'),
     saveUser: (payload: any) => this.request<{ success: boolean }>('/api/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+    deleteUser: (id: string) => this.request<{ success: boolean }>(`/api/admin/users/${id}`, {
+      method: 'DELETE',
+    }),
+    inviteUser: (payload: { email: string; role: string }) => this.request<{ success: boolean }>('/api/admin/users/invite', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),

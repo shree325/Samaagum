@@ -2,6 +2,14 @@ export interface OAuthProviderSettings {
   enabled: boolean;
   clientId: string;
   clientSecret: string;
+  displayName?: string;
+  authorizationEndpoint?: string;
+  tokenEndpoint?: string;
+  userEndpoint?: string;
+  scope?: string;
+  emailField?: string;
+  nameField?: string;
+  isCustom?: boolean;
 }
 
 export interface AdminAuthSettings {
