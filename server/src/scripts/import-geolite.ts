@@ -4,8 +4,9 @@ import { Pool } from 'pg';
 import { from as copyFrom } from 'pg-copy-streams';
 import { pipeline } from 'stream/promises';
 import dotenv from 'dotenv';
+import readline from 'readline';
 
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -40,16 +41,32 @@ function validateFiles() {
   console.log('✅ All GeoLite CSV files found.');
 }
 
+async function getCSVHeader(filePath: string): Promise<string> {
+  const fileStream = fs.createReadStream(filePath);
+  const rl = readline.createInterface({
+    input: fileStream,
+    crlfDelay: Infinity
+  });
+  for await (const line of rl) {
+    rl.close();
+    fileStream.destroy();
+    return line.trim();
+  }
+  throw new Error(`CSV file ${filePath} is empty`);
+}
+
 async function importCSV(filePath: string, tableName: string) {
   const startTime = Date.now();
   console.log(`Starting fast COPY import for ${tableName} from ${filePath}...`);
   const client = await pool.connect();
   try {
+    const columns = await getCSVHeader(filePath);
+
     // Option A: Truncate table before import to ensure idempotency and avoid primary key conflicts
     await client.query(`TRUNCATE TABLE ${tableName} CASCADE`);
     console.log(`Cleared existing data in ${tableName}.`);
 
-    const stream = client.query(copyFrom(`COPY ${tableName} FROM STDIN WITH (FORMAT csv, HEADER true)`));
+    const stream = client.query(copyFrom(`COPY ${tableName} (${columns}) FROM STDIN WITH (FORMAT csv, HEADER true)`));
     const fileStream = fs.createReadStream(filePath);
     await pipeline(fileStream, stream);
 
@@ -121,6 +138,12 @@ async function main() {
 
     // Import IPv6 Blocks
     const ipv6Count = await importCSV(IPV6_CSV, 'geolite_blocks_ipv6');
+
+    // Create indexes to optimize the populating query
+    console.log('Creating index on geolite_blocks_ipv4(geoname_id)...');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_geolite_blocks_ipv4_geoname_id ON geolite_blocks_ipv4(geoname_id)');
+    console.log('Creating index on geolite_blocks_ipv6(geoname_id)...');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_geolite_blocks_ipv6_geoname_id ON geolite_blocks_ipv6(geoname_id)');
 
     // Populate the application city_controls
     const cityControlsCount = await populateCityControls();

@@ -1080,10 +1080,6 @@ function App() {
           )}
 
           {activeTab === "users" && (
-            <UsersView
-              users={usersList}
-              onUpdateUser={handleUpdateUser}
-              onAddUser={handleAddUser}
             <UsersView 
               users={usersList} 
               onUpdateUser={handleUpdateUser} 
@@ -4118,8 +4114,6 @@ function SettingsView({ user, logAction, addToast }) {
                 </div>
               </div>
 
-              <button
-                type="submit"
               {/* DYNAMIC CUSTOM OAUTH PROVIDERS */}
               {Object.keys(authSettings).filter(key => key !== 'google' && key !== 'linkedin').map(key => {
                 const provider = authSettings[key] || {};

@@ -1592,73 +1592,75 @@ model user_interests {
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model users {
-  id                                                                  String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id                                                           String                       @db.Uuid
-  primary_email                                                       String?                      @db.Citext
-  email_verified                                                      Boolean                      @default(false)
-  state                                                               user_state                   @default(provisional)
-  locale                                                              String                       @default("en")
-  preferred_currency                                                  String?                      @db.Char(3)
-  gender                                                              String?
-  dob                                                                 DateTime?                    @db.Date
-  phone_e164                                                          String?
-  profile_completed                                                   Boolean                      @default(false)
-  activated_at                                                        DateTime?                    @db.Timestamptz(6)
-  deleted_at                                                          DateTime?                    @db.Timestamptz(6)
-  created_at                                                          DateTime                     @default(now()) @db.Timestamptz(6)
-  updated_at                                                          DateTime                     @default(now()) @db.Timestamptz(6)
-  admin_roles                                                         admin_roles[]
-  affiliates                                                          affiliates[]
-  auth_identities                                                     auth_identities[]
-  bookings                                                            bookings[]
-  checkins                                                            checkins[]
-  connections_connections_addressee_user_idTousers                    connections[]                @relation("connections_addressee_user_idTousers")
-  connections_connections_requester_user_idTousers                    connections[]                @relation("connections_requester_user_idTousers")
-  conversation_participants                                           conversation_participants[]
-  conversations                                                       conversations[]
-  coupon_redemptions                                                  coupon_redemptions[]
-  disputes                                                            disputes[]
-  entities                                                            entities[]
-  event_team_assignments_event_team_assignments_granted_byTousers     event_team_assignments[]     @relation("event_team_assignments_granted_byTousers")
-  event_team_assignments_event_team_assignments_user_idTousers        event_team_assignments[]     @relation("event_team_assignments_user_idTousers")
-  follows                                                             follows[]
-  form_responses                                                      form_responses[]
-  forum_comments                                                      forum_comments[]
-  forum_posts                                                         forum_posts[]
-  group_memberships                                                   group_memberships[]
-  impersonation_sessions_impersonation_sessions_admin_user_idTousers  impersonation_sessions[]     @relation("impersonation_sessions_admin_user_idTousers")
-  impersonation_sessions_impersonation_sessions_target_user_idTousers impersonation_sessions[]     @relation("impersonation_sessions_target_user_idTousers")
-  kyc_reviews                                                         kyc_reviews[]
-  kyc_submissions                                                     kyc_submissions[]
-  marketplace_bids                                                    marketplace_bids[]
-  marketplace_listings                                                marketplace_listings[]
-  media_assets                                                        media_assets[]
-  membership_subscriptions                                            membership_subscriptions[]
-  messages                                                            messages[]
-  moderation_reports_moderation_reports_handled_byTousers             moderation_reports[]         @relation("moderation_reports_handled_byTousers")
-  moderation_reports_moderation_reports_reporter_user_idTousers       moderation_reports[]         @relation("moderation_reports_reporter_user_idTousers")
-  notification_log                                                    notification_log[]
-  platform_settings                                                   platform_settings[]
-  profile_links                                                       profile_links[]
-  profile_requirement_status                                          profile_requirement_status[]
-  profiles                                                            profiles?
-  ratings                                                             ratings[]
-  refunds_refunds_checker_user_idTousers                              refunds[]                    @relation("refunds_checker_user_idTousers")
-  refunds_refunds_maker_user_idTousers                                refunds[]                    @relation("refunds_maker_user_idTousers")
-  reviews                                                             reviews[]
-  role_assignments_role_assignments_granted_byTousers                 role_assignments[]           @relation("role_assignments_granted_byTousers")
-  role_assignments_role_assignments_user_idTousers                    role_assignments[]           @relation("role_assignments_user_idTousers")
-  subscription_orders                                                 subscription_orders[]
-  support_cases_support_cases_assigned_toTousers                      support_cases[]              @relation("support_cases_assigned_toTousers")
-  support_cases_support_cases_raised_by_user_idTousers                support_cases[]              @relation("support_cases_raised_by_user_idTousers")
-  takeover_requests                                                   takeover_requests[]
-  tickets                                                             tickets[]
-  user_badges                                                         user_badges[]
-  user_consents                                                       user_consents[]
-  user_interests                                                      user_interests[]
-  tenants                                                             tenants                      @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  waitlist_entries                                                    waitlist_entries[]
-  wishlists                                                           wishlists[]
+  id                                                                   String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                                                            String                       @db.Uuid
+  primary_email                                                        String?                      @db.Citext
+  email_verified                                                       Boolean                      @default(false)
+  state                                                                user_state                   @default(provisional)
+  locale                                                               String                       @default("en")
+  preferred_currency                                                   String?                      @db.Char(3)
+  gender                                                               String?
+  dob                                                                  DateTime?                    @db.Date
+  phone_e164                                                           String?
+  profile_completed                                                    Boolean                      @default(false)
+  activated_at                                                         DateTime?                    @db.Timestamptz(6)
+  deleted_at                                                           DateTime?                    @db.Timestamptz(6)
+  created_at                                                           DateTime                     @default(now()) @db.Timestamptz(6)
+  updated_at                                                           DateTime                     @default(now()) @db.Timestamptz(6)
+  admin_roles                                                          admin_roles[]
+  affiliates                                                           affiliates[]
+  auth_identities                                                      auth_identities[]
+  bookings                                                             bookings[]
+  checkins                                                             checkins[]
+  connections_connections_addressee_user_idTousers                     connections[]                @relation("connections_addressee_user_idTousers")
+  connections_connections_requester_user_idTousers                     connections[]                @relation("connections_requester_user_idTousers")
+  conversation_participants                                            conversation_participants[]
+  conversations                                                        conversations[]
+  coupon_redemptions                                                   coupon_redemptions[]
+  disputes                                                             disputes[]
+  entities                                                             entities[]
+  event_team_assignments_event_team_assignments_granted_byTousers      event_team_assignments[]     @relation("event_team_assignments_granted_byTousers")
+  event_team_assignments_event_team_assignments_user_idTousers         event_team_assignments[]     @relation("event_team_assignments_user_idTousers")
+  follows                                                              follows[]
+  form_responses                                                       form_responses[]
+  forum_comments                                                       forum_comments[]
+  forum_posts                                                          forum_posts[]
+  group_memberships                                                    group_memberships[]
+  impersonation_sessions_impersonation_sessions_admin_user_idTousers   impersonation_sessions[]     @relation("impersonation_sessions_admin_user_idTousers")
+  impersonation_sessions_impersonation_sessions_target_user_idTousers  impersonation_sessions[]     @relation("impersonation_sessions_target_user_idTousers")
+  kyc_reviews                                                          kyc_reviews[]
+  kyc_submissions                                                      kyc_submissions[]
+  maker_checker_requests_maker_checker_requests_checker_user_idTousers maker_checker_requests[]     @relation("maker_checker_requests_checker_user_idTousers")
+  maker_checker_requests_maker_checker_requests_maker_user_idTousers   maker_checker_requests[]     @relation("maker_checker_requests_maker_user_idTousers")
+  marketplace_bids                                                     marketplace_bids[]
+  marketplace_listings                                                 marketplace_listings[]
+  media_assets                                                         media_assets[]
+  membership_subscriptions                                             membership_subscriptions[]
+  messages                                                             messages[]
+  moderation_reports_moderation_reports_handled_byTousers              moderation_reports[]         @relation("moderation_reports_handled_byTousers")
+  moderation_reports_moderation_reports_reporter_user_idTousers        moderation_reports[]         @relation("moderation_reports_reporter_user_idTousers")
+  notification_log                                                     notification_log[]
+  platform_settings                                                    platform_settings[]
+  profile_links                                                        profile_links[]
+  profile_requirement_status                                           profile_requirement_status[]
+  profiles                                                             profiles?
+  ratings                                                              ratings[]
+  refunds_refunds_checker_user_idTousers                               refunds[]                    @relation("refunds_checker_user_idTousers")
+  refunds_refunds_maker_user_idTousers                                 refunds[]                    @relation("refunds_maker_user_idTousers")
+  reviews                                                              reviews[]
+  role_assignments_role_assignments_granted_byTousers                  role_assignments[]           @relation("role_assignments_granted_byTousers")
+  role_assignments_role_assignments_user_idTousers                     role_assignments[]           @relation("role_assignments_user_idTousers")
+  subscription_orders                                                  subscription_orders[]
+  support_cases_support_cases_assigned_toTousers                       support_cases[]              @relation("support_cases_assigned_toTousers")
+  support_cases_support_cases_raised_by_user_idTousers                 support_cases[]              @relation("support_cases_raised_by_user_idTousers")
+  takeover_requests                                                    takeover_requests[]
+  tickets                                                              tickets[]
+  user_badges                                                          user_badges[]
+  user_consents                                                        user_consents[]
+  user_interests                                                       user_interests[]
+  tenants                                                              tenants                      @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  waitlist_entries                                                     waitlist_entries[]
+  wishlists                                                            wishlists[]
 
   @@unique([tenant_id, primary_email])
   @@index([tenant_id], map: "idx_users_tenant_id")
@@ -1887,58 +1889,92 @@ model tags {
   categories  categories @relation(fields: [category_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 }
 
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model city_controls {
+  geoname_id       BigInt   @id
+  city_name        String   @db.VarChar(150)
+  state_name       String?  @db.VarChar(150)
+  country_name     String?  @db.VarChar(150)
+  is_active        Boolean  @default(true)
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  created_by       String?
+  updated_at       DateTime @default(now()) @db.Timestamptz(6)
+  updated_by       String?
+  modification_num Int      @default(0)
+  latitude         Decimal? @db.Decimal(10, 6)
+  longitude        Decimal? @db.Decimal(10, 6)
+  timezone         String?  @db.VarChar(100)
+
+  @@index([city_name], map: "idx_city_controls_city_name")
+  @@index([country_name], map: "idx_city_controls_country_name")
+  @@index([is_active], map: "idx_city_controls_is_active")
+  @@index([city_name, state_name, country_name], map: "idx_city_controls_search")
+  @@index([state_name], map: "idx_city_controls_state_name")
+}
+
+model maker_checker_requests {
+  id                                                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  action_type                                         String   @db.VarChar(100)
+  payload                                             Json
+  status                                              String   @default("pending") @db.VarChar(50)
+  maker_user_id                                       String   @db.Uuid
+  checker_user_id                                     String?  @db.Uuid
+  created_at                                          DateTime @default(now()) @db.Timestamptz(6)
+  updated_at                                          DateTime @default(now()) @db.Timestamptz(6)
+  users_maker_checker_requests_checker_user_idTousers users?   @relation("maker_checker_requests_checker_user_idTousers", fields: [checker_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_maker_checker_requests_maker_user_idTousers   users    @relation("maker_checker_requests_maker_user_idTousers", fields: [maker_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
 /// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
-model geolite_ipv4_blocks {
-  network                        Unsupported("cidr")?
+model geolite_blocks_ipv4 {
+  network                        Unsupported("cidr") @id
   geoname_id                     BigInt?
   registered_country_geoname_id  BigInt?
   represented_country_geoname_id BigInt?
   is_anonymous_proxy             Boolean?
   is_satellite_provider          Boolean?
-  postal_code                    String?              @db.VarChar(20)
-  latitude                       Float?
-  longitude                      Float?
+  postal_code                    String?             @db.VarChar(30)
+  latitude                       Decimal?            @db.Decimal(10, 6)
+  longitude                      Decimal?            @db.Decimal(10, 6)
   accuracy_radius                Int?
-  is_anycast                     Int?
+  is_anycast                     Boolean?
 
   @@ignore
 }
 
 /// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
-model geolite_ipv6_blocks {
-  network                        Unsupported("cidr")?
+model geolite_blocks_ipv6 {
+  network                        Unsupported("cidr") @id
   geoname_id                     BigInt?
   registered_country_geoname_id  BigInt?
   represented_country_geoname_id BigInt?
   is_anonymous_proxy             Boolean?
   is_satellite_provider          Boolean?
-  postal_code                    String?              @db.VarChar(20)
-  latitude                       Float?
-  longitude                      Float?
+  postal_code                    String?             @db.VarChar(30)
+  latitude                       Decimal?            @db.Decimal(10, 6)
+  longitude                      Decimal?            @db.Decimal(10, 6)
   accuracy_radius                Int?
-  is_anycast                     Int?
+  is_anycast                     Boolean?
 
   @@ignore
 }
 
-/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 model geolite_locations {
-  geoname_id             BigInt?
-  locale_code            String? @db.VarChar(10)
-  continent_code         String? @db.VarChar(10)
-  continent_name         String? @db.VarChar(100)
-  country_iso_code       String? @db.VarChar(10)
-  country_name           String? @db.VarChar(100)
-  subdivision_1_iso_code String? @db.VarChar(20)
-  subdivision_1_name     String? @db.VarChar(100)
-  subdivision_2_iso_code String? @db.VarChar(20)
-  subdivision_2_name     String? @db.VarChar(100)
-  city_name              String? @db.VarChar(100)
-  metro_code             String? @db.VarChar(20)
-  time_zone              String? @db.VarChar(100)
-  is_in_european_union   Int?
-
-  @@ignore
+  geoname_id             BigInt   @id
+  locale_code            String?  @db.VarChar(10)
+  continent_code         String?  @db.VarChar(10)
+  continent_name         String?  @db.VarChar(100)
+  country_iso_code       String?  @db.VarChar(10)
+  country_name           String?  @db.VarChar(255)
+  subdivision_1_iso_code String?  @db.VarChar(20)
+  subdivision_1_name     String?  @db.VarChar(255)
+  subdivision_2_iso_code String?  @db.VarChar(20)
+  subdivision_2_name     String?  @db.VarChar(255)
+  city_name              String?  @db.VarChar(255)
+  metro_code             String?  @db.VarChar(50)
+  time_zone              String?  @db.VarChar(100)
+  is_in_european_union   Boolean?
+  utc_offset             String?  @db.VarChar(10)
 }
 
 enum assignment_state {

@@ -127,7 +127,6 @@ fastify.get('/health', async (request, reply) => {
 // Start the server
 const start = async () => {
     try {
-
         await fastify.listen({ port: PORT, host: '0.0.0.0' });
         console.log(`🚀 Server is running on port ${PORT}`);
         console.log(`🔗 Health check available at http://localhost:${PORT}/health`);
@@ -136,5 +135,31 @@ const start = async () => {
         process.exit(1);
     }
 };
+
+// Graceful shutdown handler
+const gracefulShutdown = async (signal: string) => {
+    console.log(`📡 Received ${signal}. Gracefully shutting down...`);
+    try {
+        await fastify.close();
+        console.log('🔌 Fastify server closed.');
+        await prisma.$disconnect();
+        console.log('📦 Database connection closed.');
+        
+        if (signal === 'SIGUSR2') {
+            // Signal nodemon that we are done cleaning up and ready to restart
+            process.kill(process.pid, 'SIGUSR2');
+        } else {
+            process.exit(0);
+        }
+    } catch (err) {
+        console.error('❌ Error during graceful shutdown:', err);
+        process.exit(1);
+    }
+};
+
+// Listen for termination signals
+process.once('SIGUSR2', () => gracefulShutdown('SIGUSR2'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 start();

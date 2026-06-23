@@ -30,14 +30,8 @@ class AdminApiClient {
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.apiBase}${path}`;
     const hasBody = options.body !== undefined && options.body !== null;
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        ...this.getHeaders(hasBody),
-        ...options.headers,
-      },
     const headers = {
-      ...this.getHeaders(),
+      ...this.getHeaders(hasBody),
       ...options.headers,
     };
     if (!options.body) {
