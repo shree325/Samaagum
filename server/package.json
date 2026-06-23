@@ -10,7 +10,7 @@
     "migrate": "ts-node src/db/migrate.ts",
     "migrate:status": "ts-node src/db/migrate.ts status",
     "seed": "ts-node src/db/seed.ts",
-    "validate:i35": "ts-node src/i35-validation.ts"
+    "validate:i35": "ts-node src/i35-validation.ts",
     "import-geolite": "ts-node src/scripts/import-geolite.ts"
   },
   "keywords": [],
@@ -29,9 +29,8 @@
     "pg": "^8.11.5",
     "razorpay": "^2.9.6",
     "socket.io": "^4.8.3",
-    "socket.io-client": "^4.8.3"
-    "pg-copy-streams": "^7.0.0",
-    "razorpay": "^2.9.6"
+    "socket.io-client": "^4.8.3",
+    "pg-copy-streams": "^7.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.12.12",
