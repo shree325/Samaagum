@@ -48,14 +48,14 @@ async function importCSV(filePath: string, tableName: string) {
     // Option A: Truncate table before import to ensure idempotency and avoid primary key conflicts
     await client.query(`TRUNCATE TABLE ${tableName} CASCADE`);
     console.log(`Cleared existing data in ${tableName}.`);
-    
+
     const stream = client.query(copyFrom(`COPY ${tableName} FROM STDIN WITH (FORMAT csv, HEADER true)`));
     const fileStream = fs.createReadStream(filePath);
     await pipeline(fileStream, stream);
-    
+
     const countRes = await client.query(`SELECT COUNT(*) as count FROM ${tableName}`);
     const rowCount = countRes.rows[0].count;
-    
+
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log(`✅ Completed import for ${tableName} in ${duration}s. Verified rows: ${rowCount}`);
     return rowCount;
@@ -86,17 +86,16 @@ async function populateCityControls() {
       b.latitude,
       b.longitude,
       'system-seed'
-    FROM geolite2_locations l
+    FROM geolite_locations l
     LEFT JOIN LATERAL (
       SELECT latitude, longitude 
-      FROM geolite2_ipv4_blocks 
+      FROM geolite_blocks_ipv4 
       WHERE geoname_id = l.geoname_id 
         AND latitude IS NOT NULL 
       LIMIT 1
     ) b ON true
     WHERE l.city_name IS NOT NULL
       AND l.geoname_id IS NOT NULL
-      AND l.locale_code = 'en'
     ORDER BY l.geoname_id
     ON CONFLICT (geoname_id) DO UPDATE SET
       latitude = EXCLUDED.latitude,
@@ -115,13 +114,13 @@ async function main() {
     validateFiles();
 
     // Import Locations
-    const locCount = await importCSV(LOCATIONS_CSV, 'geolite2_locations');
+    const locCount = await importCSV(LOCATIONS_CSV, 'geolite_locations');
 
     // Import IPv4 Blocks
-    const ipv4Count = await importCSV(IPV4_CSV, 'geolite2_ipv4_blocks');
+    const ipv4Count = await importCSV(IPV4_CSV, 'geolite_blocks_ipv4');
 
     // Import IPv6 Blocks
-    const ipv6Count = await importCSV(IPV6_CSV, 'geolite2_ipv6_blocks');
+    const ipv6Count = await importCSV(IPV6_CSV, 'geolite_blocks_ipv6');
 
     // Populate the application city_controls
     const cityControlsCount = await populateCityControls();
@@ -129,9 +128,9 @@ async function main() {
     console.log('\\n=========================================');
     console.log('📊 FINAL IMPORT SUMMARY');
     console.log('=========================================');
-    console.log(`- geolite2_locations:   ${locCount} rows`);
-    console.log(`- geolite2_ipv4_blocks: ${ipv4Count} rows`);
-    console.log(`- geolite2_ipv6_blocks: ${ipv6Count} rows`);
+    console.log(`- geolite_locations:   ${locCount} rows`);
+    console.log(`- geolite_blocks_ipv4: ${ipv4Count} rows`);
+    console.log(`- geolite_blocks_ipv6: ${ipv6Count} rows`);
     console.log(`- city_controls:        ${cityControlsCount} rows updated/inserted`);
     console.log('=========================================\\n');
 

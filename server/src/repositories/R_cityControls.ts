@@ -112,11 +112,11 @@ export class R_cityControls {
       rows = await prisma.$queryRawUnsafe<ICityControl[]>(
         `INSERT INTO city_controls (geoname_id, city_name, state_name, country_name, timezone, is_active, created_by, updated_by)
          SELECT l.geoname_id, COALESCE(l.city_name, 'Unknown'), l.subdivision_1_name, l.country_name, l.time_zone, $1, $2, $2
-         FROM geolite2_locations l
-         WHERE l.geoname_id = $3 AND l.locale_code = 'en'
+         FROM geolite_locations l
+         WHERE l.geoname_id = $3
          LIMIT 1
          RETURNING *`,
-         isActive, updatedBy, geonameId
+        isActive, updatedBy, geonameId
       );
     }
     return rows[0] || null;

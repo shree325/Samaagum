@@ -1,5 +1,5 @@
 -- =====================================================================
--- Samaagum | Seed: city_controls from geolite2_locations
+-- Samaagum | Seed: city_controls from geolite_locations
 -- Populates ALL countries — SAMAGAM is a global platform
 -- =====================================================================
 
@@ -24,17 +24,16 @@ SELECT DISTINCT ON (l.geoname_id)
     b.latitude,
     b.longitude,
     'system-seed'
-FROM geolite2_locations l
+FROM geolite_locations l
 LEFT JOIN LATERAL (
     SELECT latitude, longitude 
-    FROM geolite2_ipv4_blocks 
+    FROM geolite_blocks_ipv4 
     WHERE geoname_id = l.geoname_id 
       AND latitude IS NOT NULL 
     LIMIT 1
 ) b ON true
 WHERE l.city_name IS NOT NULL
   AND l.geoname_id IS NOT NULL
-  AND l.locale_code = 'en'
 ORDER BY l.geoname_id
 ON CONFLICT (geoname_id) DO UPDATE SET
     latitude = EXCLUDED.latitude,

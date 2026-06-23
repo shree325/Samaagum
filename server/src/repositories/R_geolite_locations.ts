@@ -11,7 +11,7 @@ export class R_geolite_locations
     implements IR_geolite_locations {
 
     constructor() {
-        super('geolite2_locations', 'geoname_id');
+        super('geolite_locations', 'geoname_id');
     }
 
     async findByGeonameId(
@@ -22,7 +22,7 @@ export class R_geolite_locations
             await prisma.$queryRawUnsafe<IGeoliteLocation[]>(
                 `
                 SELECT *
-                FROM geolite2_locations
+                FROM geolite_locations
                 WHERE geoname_id = $1
                 LIMIT 1
                 `,
@@ -39,7 +39,7 @@ export class R_geolite_locations
         return prisma.$queryRawUnsafe<IGeoliteLocation[]>(
             `
             SELECT *
-            FROM geolite2_locations
+            FROM geolite_locations
             WHERE city_name = $1
             ORDER BY city_name
             `,

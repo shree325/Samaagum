@@ -14,10 +14,10 @@ import { adminCategoryRoutes } from './controllers/adminCategoryRoutes';
 import { adminTagRoutes } from './controllers/adminTagRoutes';
 import { adminCityRoutes } from './controllers/adminCityRoutes';
 import { adminGeoRoutes } from './controllers/adminGeoRoutes';
-import { locationRoutes } from './controllers/locationRoutes';
+
 import { seedAdminRBAC } from './services/adminRbacSeeder';
 import { seedPlatformSettings } from './settings-library/settingsSeeder';
-import { initGeoIP } from './services/geoip.service';
+
 
 dotenv.config();
 
@@ -101,7 +101,7 @@ fastify.register(adminTagRoutes, { prefix: '/api/admin' });
 fastify.register(adminSettingsRoutes, { prefix: '/api/admin' });
 fastify.register(adminCityRoutes, { prefix: '/api/admin' });
 fastify.register(adminGeoRoutes, { prefix: '/api/admin' });
-fastify.register(locationRoutes, { prefix: '/api/location' });
+
 fastify.register(userSubscriptionRoutes, { prefix: '/api/subscription' });
 
 // Health check route
@@ -125,7 +125,7 @@ fastify.get('/health', async (request, reply) => {
 // Start the server
 const start = async () => {
     try {
-        await initGeoIP();
+
         await fastify.listen({ port: PORT, host: '0.0.0.0' });
         console.log(`🚀 Server is running on port ${PORT}`);
         console.log(`🔗 Health check available at http://localhost:${PORT}/health`);

@@ -12,7 +12,7 @@ export class R_geolite_blocks_ipv4
     implements IR_geolite_blocks_ipv4 {
 
     constructor() {
-        super('geolite2_blocks_ipv4', 'network');
+        super('geolite_blocks_ipv4', 'network');
     }
 
     async findByGeonameId(
@@ -24,7 +24,7 @@ export class R_geolite_blocks_ipv4
         >(
             `
             SELECT *
-            FROM geolite2_blocks_ipv4
+            FROM geolite_blocks_ipv4
             WHERE geoname_id = $1
             `,
             geonameId
@@ -41,7 +41,7 @@ export class R_geolite_blocks_ipv4
             >(
                 `
                 SELECT *
-                FROM geolite2_blocks_ipv4
+                FROM geolite_blocks_ipv4
                 WHERE network = $1
                 LIMIT 1
                 `,

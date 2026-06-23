@@ -5,8 +5,6 @@
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { R_cityControls } from '../repositories/R_cityControls';
 import { ICityControlListOptions } from '../repositories/ICityControl';
-import { getLocationFromIP } from '../services/LocationService';
-import { validateCityForCreation, EntityType } from '../services/CityValidationService';
 import { R_geolite_locations } from '../repositories/R_geolite_locations';
 
 export const adminCityRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
@@ -160,28 +158,6 @@ export const adminCityRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                 affected,
                 message: `${affected} cities ${isActive ? 'enabled' : 'disabled'} successfully`,
             };
-        } catch (e: any) {
-            return reply.status(500).send({ success: false, message: e.message });
-        }
-    });
-
-    // ──────────────────────────────────────────────────────────────────
-    // GET /cities/check/:geonameId — Check if city is active
-    // Used by frontend before creation forms
-    // ──────────────────────────────────────────────────────────────────
-    fastify.get('/cities/check/:geonameId', {
-        preHandler: [(fastify as any).authenticate]
-    }, async (request: any, reply) => {
-        try {
-            const geonameId = Number(request.params.geonameId);
-            if (isNaN(geonameId)) {
-                return reply.status(400).send({ success: false, message: 'Invalid geoname ID' });
-            }
-
-            const entityType: EntityType = (request.query?.entityType as EntityType) || 'event';
-            const result = await validateCityForCreation(geonameId, entityType);
-
-            return { success: true, ...result };
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });
         }

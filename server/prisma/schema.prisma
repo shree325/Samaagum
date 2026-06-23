@@ -1888,7 +1888,7 @@ model tags {
 }
 
 /// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
-model geolite2_ipv4_blocks {
+model geolite_ipv4_blocks {
   network                        Unsupported("cidr")?
   geoname_id                     BigInt?
   registered_country_geoname_id  BigInt?
@@ -1905,7 +1905,7 @@ model geolite2_ipv4_blocks {
 }
 
 /// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
-model geolite2_ipv6_blocks {
+model geolite_ipv6_blocks {
   network                        Unsupported("cidr")?
   geoname_id                     BigInt?
   registered_country_geoname_id  BigInt?
@@ -1922,7 +1922,7 @@ model geolite2_ipv6_blocks {
 }
 
 /// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
-model geolite2_locations {
+model geolite_locations {
   geoname_id             BigInt?
   locale_code            String? @db.VarChar(10)
   continent_code         String? @db.VarChar(10)

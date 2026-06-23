@@ -51,8 +51,8 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const { location, overrideLocation } = window.useLocation();
-  const city = location?.city || location?.state || location?.country || "Locating...";
+  const overrideLocation = () => {};
+  const city = "Global";
   const [cityOpen, setCityOpen] = useState(false);
 
   const [subscription, setSubscription] = useState({ plan: 'free', status: 'active' });
@@ -276,7 +276,5 @@ function App() {
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(
-  <LocationProvider>
-    <App />
-  </LocationProvider>
+  <App />
 );

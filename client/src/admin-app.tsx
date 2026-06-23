@@ -480,7 +480,7 @@ const adminApi = {
 
 window.adminApi = adminApi;
 
-const CitiesView = window.CitiesView;
+
 const GeoLocationsView = window.GeoLocationsView;
 const GeoIpv4View = window.GeoIpv4View;
 const GeoIpv6View = window.GeoIpv6View;
@@ -913,9 +913,7 @@ function App() {
             <Icons.terminal /> System Audit Logs
           </button>
 
-          <button className={`sidebar-item ${activeTab === "cities" ? "active" : ""}`} onClick={() => setActiveTab("cities")}>
-            {Icons.globe({ className: "icon" })} Cities & Zones
-          </button>
+
           <button className={`sidebar-item ${activeTab === "geo-locations" ? "active" : ""}`} onClick={() => setActiveTab("geo-locations")}>
             {Icons.globe({ className: "icon" })} Geo Locations
           </button>
@@ -1070,9 +1068,7 @@ function App() {
             <SettingsView user={user} logAction={logAction} addToast={addToast} />
           )}
 
-          {activeTab === "cities" && (
-            <CitiesView user={user} logAction={logAction} addToast={addToast} />
-          )}
+
 
           {activeTab === "geo-locations" && GeoLocationsView && (
             <GeoLocationsView user={user} logAction={logAction} addToast={addToast} />

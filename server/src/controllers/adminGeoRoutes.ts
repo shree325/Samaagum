@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
+import { Readable } from 'stream';
 
 dotenv.config();
 
@@ -12,7 +13,7 @@ export const adminGeoRoutes: FastifyPluginAsync = async (fastify: FastifyInstanc
   // Common preHandlers can be applied when registering this route in index.ts
   // e.g. { preHandler: [fastify.authenticate, fastify.requireAdmin] }
 
-  const LOCATIONS_COLS = ['geoname_id', 'locale_code', 'continent_code', 'continent_name', 'country_iso_code', 'country_name', 'subdivision_1_iso_code', 'subdivision_1_name', 'subdivision_2_iso_code', 'subdivision_2_name', 'city_name', 'metro_code', 'time_zone', 'is_in_european_union'];
+  const LOCATIONS_COLS = ['geoname_id', 'locale_code', 'continent_code', 'continent_name', 'country_iso_code', 'country_name', 'subdivision_1_iso_code', 'subdivision_1_name', 'subdivision_2_iso_code', 'subdivision_2_name', 'city_name', 'metro_code', 'time_zone', 'utc_offset', 'is_in_european_union'];
   const IP_COLS = ['network', 'geoname_id', 'registered_country_geoname_id', 'represented_country_geoname_id', 'is_anonymous_proxy', 'is_satellite_provider', 'postal_code', 'latitude', 'longitude', 'accuracy_radius', 'is_anycast'];
 
   const filterBody = (body: any, validCols: string[]) => {
@@ -26,6 +27,7 @@ export const adminGeoRoutes: FastifyPluginAsync = async (fastify: FastifyInstanc
   /**
    * Helper to execute a paginated search query
    */
+
   async function fetchPaginated(
     table: string,
     searchCols: string[],
@@ -39,13 +41,13 @@ export const adminGeoRoutes: FastifyPluginAsync = async (fastify: FastifyInstanc
     const statusFilter = reqQuery.status as string || 'all';
     const countryFilter = reqQuery.country as string || '';
     const stateFilter = reqQuery.state as string || '';
-    
+
     const sortBy = typeof reqQuery.sortBy === 'string' && /^[a-zA-Z0-9_]+$/.test(reqQuery.sortBy) ? reqQuery.sortBy : null;
     const sortOrder = reqQuery.sortOrder === 'desc' ? 'DESC' : 'ASC';
 
     let whereClause = 'WHERE 1=1';
     const queryParams: any[] = [];
-    
+
     if (search && searchCols.length > 0) {
       const conditions = searchCols.map((col, idx) => `CAST(base.${col} AS TEXT) ILIKE $${idx + 1}`);
       whereClause += ` AND (${conditions.join(' OR ')})`;
@@ -53,6 +55,9 @@ export const adminGeoRoutes: FastifyPluginAsync = async (fastify: FastifyInstanc
         queryParams.push(`%${search}%`);
       }
     }
+
+    const needsCcJoin = statusFilter !== 'all';
+    const needsLocJoin = !!countryFilter || !!stateFilter;
 
     if (statusFilter === 'active') {
       whereClause += ` AND cc.is_active = true`;
@@ -70,24 +75,40 @@ export const adminGeoRoutes: FastifyPluginAsync = async (fastify: FastifyInstanc
       whereClause += ` AND loc.subdivision_1_name = $${queryParams.length}`;
     }
 
-    let fromClause = '';
+    let dataFromClause = '';
+    let countFromClause = '';
     let selectClause = 'base.*';
-    
-    if (table === 'geolite2_locations') {
+
+    if (table === 'geolite_locations') {
       selectClause = `base.*, cc.is_active as status`;
-      fromClause = `
+
+      dataFromClause = `
         FROM ${table} base
         LEFT JOIN city_controls cc ON base.geoname_id = cc.geoname_id
       `;
+
+      countFromClause = `FROM ${table} base`;
+      if (needsCcJoin) {
+        countFromClause += ` LEFT JOIN city_controls cc ON base.geoname_id = cc.geoname_id`;
+      }
+
       whereClause = whereClause.replace(/loc\./g, 'base.');
-      whereClause += ` AND base.locale_code = 'en'`;
     } else {
       selectClause = `base.*, loc.country_name, loc.subdivision_1_name as state_name, cc.is_active as status`;
-      fromClause = `
+
+      dataFromClause = `
         FROM ${table} base
-        LEFT JOIN geolite2_locations loc ON base.geoname_id = loc.geoname_id AND loc.locale_code = 'en'
+        LEFT JOIN geolite_locations loc ON base.geoname_id = loc.geoname_id
         LEFT JOIN city_controls cc ON base.geoname_id = cc.geoname_id
       `;
+
+      countFromClause = `FROM ${table} base`;
+      if (needsLocJoin) {
+        countFromClause += ` LEFT JOIN geolite_locations loc ON base.geoname_id = loc.geoname_id`;
+      }
+      if (needsCcJoin) {
+        countFromClause += ` LEFT JOIN city_controls cc ON base.geoname_id = cc.geoname_id`;
+      }
     }
 
     let orderClause = '';
@@ -95,28 +116,30 @@ export const adminGeoRoutes: FastifyPluginAsync = async (fastify: FastifyInstanc
       orderClause = `ORDER BY base.${sortBy} ${sortOrder}`;
     }
 
-    const dataQuery = `SELECT ${selectClause} ${fromClause} ${whereClause} ${orderClause} LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
+    const dataQuery = `SELECT ${selectClause} ${dataFromClause} ${whereClause} ${orderClause} LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
     const dataParams = [...queryParams, limit, offset];
-    
-    console.log('[DEBUG fetchPaginated] QUERY:', dataQuery);
-    console.log('[DEBUG fetchPaginated] PARAMS:', dataParams);
 
     const countQuery = `
       SELECT COUNT(*) AS total 
-      ${fromClause}
+      ${countFromClause}
       ${whereClause}
     `;
 
     const client = await pool.connect();
     try {
+      // Small optimization: If no filters/searches, we can use a super fast count estimate or exact count
+      // but exact count without joins is already much faster.
       const [dataResult, countResult] = await Promise.all([
-        client.query(dataQuery, [...queryParams, limit, offset]),
+        client.query(dataQuery, dataParams),
         client.query(countQuery, queryParams)
       ]);
       const total = parseInt(countResult.rows[0].total, 10);
+      const rows = dataResult.rows;
+
+      // No longer calculating UTC offset dynamically; it is now pulled directly from the DB as utc_offset.
 
       return {
-        data: dataResult.rows,
+        data: rows,
         meta: {
           total,
           page,
@@ -129,33 +152,40 @@ export const adminGeoRoutes: FastifyPluginAsync = async (fastify: FastifyInstanc
     }
   }
 
-  fastify.get('/geo/locations', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request, reply) => {
-    try {
-      const result = await fetchPaginated(
-        'geolite2_locations',
-        ['geoname_id', 'city_name', 'country_name', 'subdivision_1_name'],
-        request.query
-      );
-      reply.send(result);
-    } catch (err) {
-      request.log.error(err);
-      reply.status(500).send({ error: 'Failed to fetch locations' });
-    }
-  });
 
-  // Filter options from the actual geolite2_locations table
+  const DATASET_MAP: Record<string, { table: string, pk: string, cols: string[], searchCols: string[] }> = {
+    locations: {
+      table: 'geolite_locations',
+      pk: 'geoname_id',
+      cols: LOCATIONS_COLS,
+      searchCols: ['geoname_id', 'locale_code', 'continent_code', 'continent_name', 'country_iso_code', 'country_name', 'subdivision_1_iso_code', 'subdivision_1_name', 'subdivision_2_iso_code', 'subdivision_2_name', 'city_name', 'time_zone']
+    },
+    ipv4: {
+      table: 'geolite_blocks_ipv4',
+      pk: 'network',
+      cols: IP_COLS,
+      searchCols: ['network', 'geoname_id']
+    },
+    ipv6: {
+      table: 'geolite_blocks_ipv6',
+      pk: 'network',
+      cols: IP_COLS,
+      searchCols: ['network', 'geoname_id']
+    }
+  };
+
   fastify.get('/geo/filters', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
     try {
       const country = request.query.country as string || '';
       const client = await pool.connect();
       try {
         const countriesResult = await client.query(
-          `SELECT DISTINCT country_name FROM geolite2_locations WHERE locale_code = 'en' AND country_name IS NOT NULL ORDER BY country_name ASC`
+          `SELECT DISTINCT country_name FROM geolite_locations WHERE country_name IS NOT NULL ORDER BY country_name ASC`
         );
         let statesResult = { rows: [] as any[] };
         if (country) {
           statesResult = await client.query(
-            `SELECT DISTINCT subdivision_1_name FROM geolite2_locations WHERE locale_code = 'en' AND country_name = $1 AND subdivision_1_name IS NOT NULL ORDER BY subdivision_1_name ASC`,
+            `SELECT DISTINCT subdivision_1_name FROM geolite_locations WHERE country_name = $1 AND subdivision_1_name IS NOT NULL ORDER BY subdivision_1_name ASC`,
             [country]
           );
         }
@@ -175,163 +205,150 @@ export const adminGeoRoutes: FastifyPluginAsync = async (fastify: FastifyInstanc
     }
   });
 
-  fastify.get('/geo/locations/:id', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
+  fastify.get('/geo/:dataset', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
     try {
-      const result = await pool.query('SELECT * FROM geolite2_locations WHERE geoname_id = $1', [request.params.id]);
-      if (result.rows.length === 0) return reply.status(404).send({ error: 'Not found' });
-      reply.send(result.rows[0]);
-    } catch (err) {
-      reply.status(500).send({ error: 'Failed to fetch' });
-    }
-  });
+      const config = DATASET_MAP[request.params.dataset];
+      if (!config) return reply.status(400).send({ success: false, message: "Invalid dataset" });
 
-  fastify.post('/geo/locations', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
-    try {
-      const filteredBody = filterBody(request.body, LOCATIONS_COLS);
-      const keys = Object.keys(filteredBody);
-      const values = Object.values(filteredBody);
-      const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
-      await pool.query(`INSERT INTO geolite2_locations (${keys.join(', ')}) VALUES (${placeholders})`, values);
-      reply.send({ success: true });
-    } catch (err: any) {
-      reply.status(500).send({ error: err.message });
-    }
-  });
-
-  fastify.put('/geo/locations/:id', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
-    try {
-      const filteredBody = filterBody(request.body, LOCATIONS_COLS);
-      const keys = Object.keys(filteredBody);
-      const values = Object.values(filteredBody);
-      const setClause = keys.map((k, i) => `${k} = $${i + 2}`).join(', ');
-      await pool.query(`UPDATE geolite2_locations SET ${setClause} WHERE geoname_id = $1`, [request.params.id, ...values]);
-      reply.send({ success: true });
-    } catch (err: any) {
-      reply.status(500).send({ error: err.message });
-    }
-  });
-
-  fastify.delete('/geo/locations/:id', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
-    try {
-      await pool.query('DELETE FROM geolite2_locations WHERE geoname_id = $1', [request.params.id]);
-      reply.send({ success: true });
-    } catch (err: any) {
-      reply.status(500).send({ error: err.message });
-    }
-  });
-
-  fastify.get('/geo/ipv4', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request, reply) => {
-    try {
-      const result = await fetchPaginated(
-        'geolite2_ipv4_blocks',
-        ['network', 'geoname_id'],
-        request.query
-      );
+      const result = await fetchPaginated(config.table, config.searchCols, request.query);
       reply.send(result);
     } catch (err) {
       request.log.error(err);
-      reply.status(500).send({ error: 'Failed to fetch IPv4 blocks' });
-    }
-  });
-
-  fastify.get('/geo/ipv4/detail', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
-    try {
-      const result = await pool.query('SELECT * FROM geolite2_ipv4_blocks WHERE network = $1', [request.query.network]);
-      if (result.rows.length === 0) return reply.status(404).send({ error: 'Not found' });
-      reply.send(result.rows[0]);
-    } catch (err) {
       reply.status(500).send({ error: 'Failed to fetch' });
     }
   });
 
-  fastify.post('/geo/ipv4', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
+  fastify.get('/geo/:dataset/export', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
     try {
-      const filteredBody = filterBody(request.body, IP_COLS);
-      const keys = Object.keys(filteredBody);
-      const values = Object.values(filteredBody);
-      const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
-      await pool.query(`INSERT INTO geolite2_ipv4_blocks (${keys.join(', ')}) VALUES (${placeholders})`, values);
-      reply.send({ success: true });
-    } catch (err: any) {
-      reply.status(500).send({ error: err.message });
-    }
-  });
+      const dataset = request.params.dataset;
+      const config = DATASET_MAP[dataset];
+      if (!config) return reply.status(400).send({ success: false, message: "Invalid dataset" });
 
-  fastify.put('/geo/ipv4/update', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
-    try {
-      const filteredBody = filterBody(request.body, IP_COLS);
-      const keys = Object.keys(filteredBody);
-      const values = Object.values(filteredBody);
-      const setClause = keys.map((k, i) => `${k} = $${i + 2}`).join(', ');
-      await pool.query(`UPDATE geolite2_ipv4_blocks SET ${setClause} WHERE network = $1`, [request.query.network, ...values]);
-      reply.send({ success: true });
-    } catch (err: any) {
-      reply.status(500).send({ error: err.message });
-    }
-  });
+      const visibleColsStr = request.query.visibleCols as string;
+      let visibleCols = visibleColsStr ? visibleColsStr.split(',') : null;
 
-  fastify.delete('/geo/ipv4', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
-    try {
-      await pool.query('DELETE FROM geolite2_ipv4_blocks WHERE network = $1', [request.query.network]);
-      reply.send({ success: true });
-    } catch (err: any) {
-      reply.status(500).send({ error: err.message });
-    }
-  });
+      reply.header('Content-Type', 'text/csv');
+      const filename = `geolite_${dataset}_${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.csv`;
+      reply.header('Content-Disposition', `attachment; filename="${filename}"`);
 
-  fastify.get('/geo/ipv6', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request, reply) => {
-    try {
-      const result = await fetchPaginated(
-        'geolite2_ipv6_blocks',
-        ['network', 'geoname_id'],
-        request.query
-      );
-      reply.send(result);
+      const stream = Readable.from((async function* () {
+        let page = 1;
+        const limit = 5000;
+        let isFirst = true;
+
+        while (true) {
+          const result = await fetchPaginated(config.table, config.searchCols, { ...request.query, page, limit });
+          const rows = result.data;
+          
+          if (rows.length === 0) break;
+
+          if (isFirst) {
+            let headers = visibleCols || Object.keys(rows[0]);
+            if (visibleCols && headers.includes('time_zone') && !headers.includes('utc_offset')) {
+              headers = [...headers, 'utc_offset'];
+            }
+            // Prepend UTF-8 BOM (\uFEFF) so Excel reads international characters correctly
+            yield '\uFEFF' + headers.map(h => `"${h}"`).join(',') + '\n';
+            isFirst = false;
+          }
+
+          const chunk = rows.map((row: any) => {
+            let keys = visibleCols || Object.keys(row);
+            if (visibleCols && keys.includes('time_zone') && !keys.includes('utc_offset')) {
+              keys = [...keys, 'utc_offset'];
+            }
+            return keys.map(k => {
+              let v = row[k];
+              if (v === null || v === undefined) return '';
+              let str = String(v);
+              if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                return `"${str.replace(/"/g, '""')}"`;
+              }
+              return str;
+            }).join(',');
+          }).join('\n') + '\n';
+
+          yield chunk;
+
+          if (rows.length < limit) break;
+          page++;
+        }
+      })());
+
+      return reply.send(stream);
     } catch (err) {
       request.log.error(err);
-      reply.status(500).send({ error: 'Failed to fetch IPv6 blocks' });
+      reply.status(500).send({ error: 'Failed to export' });
     }
   });
 
-  fastify.get('/geo/ipv6/detail', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
+  fastify.get('/geo/:dataset/detail', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
     try {
-      const result = await pool.query('SELECT * FROM geolite2_ipv6_blocks WHERE network = $1', [request.query.network]);
+      const config = DATASET_MAP[request.params.dataset];
+      if (!config) return reply.status(400).send({ success: false, message: "Invalid dataset" });
+
+      const result = await pool.query(`SELECT * FROM ${config.table} WHERE ${config.pk} = $1`, [request.query.id]);
       if (result.rows.length === 0) return reply.status(404).send({ error: 'Not found' });
       reply.send(result.rows[0]);
     } catch (err) {
-      reply.status(500).send({ error: 'Failed to fetch' });
+      reply.status(500).send({ error: 'Failed to fetch detail' });
     }
   });
 
-  fastify.post('/geo/ipv6', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
+  fastify.post('/geo/:dataset', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
     try {
-      const filteredBody = filterBody(request.body, IP_COLS);
+      const config = DATASET_MAP[request.params.dataset];
+      if (!config) return reply.status(400).send({ success: false, message: "Invalid dataset" });
+
+      if (request.body.time_zone) {
+        try {
+          const formatter = new Intl.DateTimeFormat('en-US', { timeZone: request.body.time_zone, timeZoneName: 'longOffset' });
+          const str = formatter.format(new Date());
+          const match = str.match(/GMT([+-]\d{2}:\d{2})/);
+          request.body.utc_offset = match ? `UTC${match[1]}` : (str.includes('GMT') ? 'UTC+00:00' : null);
+        } catch(e) {}
+      }
+      const filteredBody = filterBody(request.body, config.cols);
       const keys = Object.keys(filteredBody);
       const values = Object.values(filteredBody);
       const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
-      await pool.query(`INSERT INTO geolite2_ipv6_blocks (${keys.join(', ')}) VALUES (${placeholders})`, values);
+      await pool.query(`INSERT INTO ${config.table} (${keys.join(', ')}) VALUES (${placeholders})`, values);
       reply.send({ success: true });
     } catch (err: any) {
       reply.status(500).send({ error: err.message });
     }
   });
 
-  fastify.put('/geo/ipv6/update', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
+  fastify.put('/geo/:dataset', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
     try {
-      const filteredBody = filterBody(request.body, IP_COLS);
+      const config = DATASET_MAP[request.params.dataset];
+      if (!config) return reply.status(400).send({ success: false, message: "Invalid dataset" });
+
+      if (request.body.time_zone) {
+        try {
+          const formatter = new Intl.DateTimeFormat('en-US', { timeZone: request.body.time_zone, timeZoneName: 'longOffset' });
+          const str = formatter.format(new Date());
+          const match = str.match(/GMT([+-]\d{2}:\d{2})/);
+          request.body.utc_offset = match ? `UTC${match[1]}` : (str.includes('GMT') ? 'UTC+00:00' : null);
+        } catch(e) {}
+      }
+      const filteredBody = filterBody(request.body, config.cols);
       const keys = Object.keys(filteredBody);
       const values = Object.values(filteredBody);
       const setClause = keys.map((k, i) => `${k} = $${i + 2}`).join(', ');
-      await pool.query(`UPDATE geolite2_ipv6_blocks SET ${setClause} WHERE network = $1`, [request.query.network, ...values]);
+      await pool.query(`UPDATE ${config.table} SET ${setClause} WHERE ${config.pk} = $1`, [request.query.id, ...values]);
       reply.send({ success: true });
     } catch (err: any) {
       reply.status(500).send({ error: err.message });
     }
   });
 
-  fastify.delete('/geo/ipv6', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
+  fastify.delete('/geo/:dataset', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
     try {
-      await pool.query('DELETE FROM geolite2_ipv6_blocks WHERE network = $1', [request.query.network]);
+      const config = DATASET_MAP[request.params.dataset];
+      if (!config) return reply.status(400).send({ success: false, message: "Invalid dataset" });
+
+      await pool.query(`DELETE FROM ${config.table} WHERE ${config.pk} = $1`, [request.query.id]);
       reply.send({ success: true });
     } catch (err: any) {
       reply.status(500).send({ error: err.message });
