@@ -6,6 +6,20 @@ let chatNamespace: any = null;
 export async function startMessaging(io: Server): Promise<void> {
   console.log("🔄 Starting Messaging Socket Gateway...");
 
+  // Reset all active connections to 0 on startup to clear stale states
+  try {
+    await prisma.$executeRawUnsafe(
+      `UPDATE presences 
+       SET active_connections = 0, 
+           status = 'OFFLINE', 
+           last_seen_at = COALESCE(last_seen_at, now()), 
+           updated_at = now()`
+    );
+    console.log("✅ Reset active connections and status for all users on startup.");
+  } catch (err) {
+    console.error("❌ Error resetting presences on startup:", err);
+  }
+
   chatNamespace = io.of("/chat");
 
   chatNamespace.on("connection", async (socket: Socket) => {

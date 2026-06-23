@@ -101,19 +101,16 @@ function Messages({ st, go, mobile, socket }) {
     fetch(`${apiBase}/api/messaging/conversations`, { headers })
       .then(res => res.json())
       .then(res => {
-        if (res.success && res.data && res.data.length > 0) {
+        if (res.success && res.data) {
           setThreads(res.data);
-          setActiveId(res.data[0].id);
-        } else {
-          // Fallback to static mockup threads
-          setThreads(THREADS);
-          if (THREADS.length > 0) setActiveId(THREADS[0].id);
+          if (res.data.length > 0) {
+            setActiveId(res.data[0].id);
+          }
         }
       })
       .catch(err => {
         console.error("Error fetching conversations:", err);
-        setThreads(THREADS);
-        if (THREADS.length > 0) setActiveId(THREADS[0].id);
+        setThreads([]);
       });
   }, [apiBase]);
 
@@ -495,29 +492,35 @@ function Messages({ st, go, mobile, socket }) {
               </div>
             );
           })() : (
-            seg==="messages" ? threads.map(t => {
-              const other = t.participants?.find(p => p.userId !== currentUserId);
-              const displayName = t.type === "GROUP" ? (t.title || "Group Chat") : (other?.name || "Chat Room");
-              const timeStr = t.updatedAt ? new Date(t.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (t.time || "");
-              const presenceStatus = other ? (presenceMap[other.userId] || "OFFLINE") : "OFFLINE";
-              return (
-                <div key={t.id} className={`thread ${t.id===activeId && !mobile?"on":""}`} onClick={()=>openThread(t.id)}>
-                  <div className="av" style={{ background:"transparent" }}>
-                    <Avatar name={displayName} size={46}/>
-                    <span className={presenceStatus === "ONLINE" ? "online" : "offline"}/>
-                  </div>
-                  <div className="ti">
-                    <div className="tr1">
-                      <span className="nm">{displayName}</span>
-                      <span className="tm">{timeStr}</span>
+            seg==="messages" ? (
+              threads.length > 0 ? threads.map(t => {
+                const other = t.participants?.find(p => p.userId !== currentUserId);
+                const displayName = t.type === "GROUP" ? (t.title || "Group Chat") : (other?.name || "Chat Room");
+                const timeStr = t.updatedAt ? new Date(t.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (t.time || "");
+                const presenceStatus = other ? (presenceMap[other.userId] || "OFFLINE") : "OFFLINE";
+                return (
+                  <div key={t.id} className={`thread ${t.id===activeId && !mobile?"on":""}`} onClick={()=>openThread(t.id)}>
+                    <div className="av" style={{ background:"transparent" }}>
+                      <Avatar name={displayName} size={46}/>
+                      <span className={presenceStatus === "ONLINE" ? "online" : "offline"}/>
                     </div>
-                    <div className="pv">{t.preview}</div>
-                    {t.connected === false && <div style={{ fontSize:11, color:"var(--accent-2)", marginTop:3, display:"flex", alignItems:"center", gap:4 }}><I.users style={{width:11,height:11}}/>via {t.context}</div>}
+                    <div className="ti">
+                      <div className="tr1">
+                        <span className="nm">{displayName}</span>
+                        <span className="tm">{timeStr}</span>
+                      </div>
+                      <div className="pv">{t.preview}</div>
+                      {t.connected === false && <div style={{ fontSize:11, color:"var(--accent-2)", marginTop:3, display:"flex", alignItems:"center", gap:4 }}><I.users style={{width:11,height:11}}/>via {t.context}</div>}
+                    </div>
+                    {t.unread>0 && <span className="unreadc">{t.unread}</span>}
                   </div>
-                  {t.unread>0 && <span className="unreadc">{t.unread}</span>}
+                );
+              }) : (
+                <div style={{ textAlign: "center", color: "var(--ink-3)", padding: "40px 20px", fontSize: "13.5px", lineHeight: "1.5" }}>
+                  No chats yet.<br />Search for people above to start a conversation!
                 </div>
-              );
-            }) : (
+              )
+            ) : (
               <div style={{ display:"flex", flexDirection:"column", gap:10, padding:"4px" }}>
                 {REQUESTS.map(r => (
                   <div key={r.name} className="req-card">
