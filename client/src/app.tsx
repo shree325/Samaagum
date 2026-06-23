@@ -163,4 +163,8 @@ function App() {
     : <DesktopAuth gradient={t.gradient} />;
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <LocationProvider>
+    <App />
+  </LocationProvider>
+);

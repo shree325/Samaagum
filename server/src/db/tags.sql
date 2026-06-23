@@ -1,27 +1,20 @@
 -- =====================================================================
--- Samaagum | Table: categories
+-- Samaagum | Table: tags
 -- =====================================================================
 
-DROP TABLE IF EXISTS categories CASCADE;
+DROP TABLE IF EXISTS tags CASCADE;
 
-CREATE TABLE categories (
+CREATE TABLE tags (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    -- Hierarchy
-    parent_id UUID REFERENCES categories(id) ON DELETE CASCADE,
+    -- Parent Category
+    category_id UUID NOT NULL
+        REFERENCES categories(id)
+        ON DELETE CASCADE,
 
     -- Basic Info
     slug TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
-    description TEXT,
-
-    -- Category Type
-    kind TEXT DEFAULT 'event',
-
-    -- Display
-    icon_type TEXT DEFAULT 'emoji',      -- emoji | library | upload
-    icon_value TEXT,
-    display_order INTEGER NOT NULL DEFAULT 999,
 
     -- Status
     status TEXT NOT NULL DEFAULT 'active'
@@ -35,5 +28,5 @@ CREATE TABLE categories (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-COMMENT ON TABLE categories
-IS 'phase:MVP-0 | Event category taxonomy';
+COMMENT ON TABLE tags
+IS 'phase:MVP-0 | Event tags under categories';

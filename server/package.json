@@ -9,25 +9,30 @@
     "dev": "nodemon src/index.ts",
     "migrate": "ts-node src/db/migrate.ts",
     "migrate:status": "ts-node src/db/migrate.ts status",
-    "seed": "ts-node src/db/seed.ts"
+    "seed": "ts-node src/db/seed.ts",
+    "import-geolite": "ts-node src/scripts/import-geolite.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@fastify/cors": "^11.2.0",
+    "@maxmind/geoip2-node": "^6.3.4",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "csv-parser": "^3.2.1",
     "@types/nodemailer": "^8.0.1",
     "dotenv": "^16.4.5",
     "fastify": "^5.8.5",
     "nodemailer": "^9.0.1",
     "pg": "^8.11.5",
+    "pg-copy-streams": "^7.0.0",
     "razorpay": "^2.9.6"
   },
   "devDependencies": {
     "@types/node": "^20.12.12",
     "@types/pg": "^8.11.6",
+    "@types/pg-copy-streams": "^1.2.5",
     "nodemon": "^3.1.0",
     "prisma": "^7.8.0",
     "ts-node": "^10.9.2",

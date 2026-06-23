@@ -231,8 +231,17 @@ model categories {
   slug             String           @unique
   name             String
   kind             String?
+  description      String?
+  icon_type        String?          @default("emoji")
+  icon_value       String?
+  display_order    Int              @default(999)
+  status           String           @default("active")
+  is_deleted       Boolean          @default(false)
+  created_at       DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime         @default(now()) @db.Timestamptz(6)
   categories       categories?      @relation("categoriesTocategories", fields: [parent_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   other_categories categories[]     @relation("categoriesTocategories")
+  tags             tags[]
   user_interests   user_interests[]
 }
 
@@ -1854,6 +1863,84 @@ model subscription_orders {
   @@index([user_id], map: "idx_sub_orders_user")
 }
 
+model otp_verifications {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email      String    @db.VarChar(255)
+  otp_hash   String    @db.VarChar(255)
+  purpose    String    @db.VarChar(100)
+  attempts   Int?      @default(0)
+  verified   Boolean?  @default(false)
+  expires_at DateTime  @db.Timestamptz(6)
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model tags {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category_id String     @db.Uuid
+  slug        String     @unique
+  name        String
+  status      String     @default("active")
+  is_deleted  Boolean    @default(false)
+  created_at  DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime   @default(now()) @db.Timestamptz(6)
+  categories  categories @relation(fields: [category_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model geolite_ipv4_blocks {
+  network                        Unsupported("cidr")?
+  geoname_id                     BigInt?
+  registered_country_geoname_id  BigInt?
+  represented_country_geoname_id BigInt?
+  is_anonymous_proxy             Boolean?
+  is_satellite_provider          Boolean?
+  postal_code                    String?              @db.VarChar(20)
+  latitude                       Float?
+  longitude                      Float?
+  accuracy_radius                Int?
+  is_anycast                     Int?
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model geolite_ipv6_blocks {
+  network                        Unsupported("cidr")?
+  geoname_id                     BigInt?
+  registered_country_geoname_id  BigInt?
+  represented_country_geoname_id BigInt?
+  is_anonymous_proxy             Boolean?
+  is_satellite_provider          Boolean?
+  postal_code                    String?              @db.VarChar(20)
+  latitude                       Float?
+  longitude                      Float?
+  accuracy_radius                Int?
+  is_anycast                     Int?
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model geolite_locations {
+  geoname_id             BigInt?
+  locale_code            String? @db.VarChar(10)
+  continent_code         String? @db.VarChar(10)
+  continent_name         String? @db.VarChar(100)
+  country_iso_code       String? @db.VarChar(10)
+  country_name           String? @db.VarChar(100)
+  subdivision_1_iso_code String? @db.VarChar(20)
+  subdivision_1_name     String? @db.VarChar(100)
+  subdivision_2_iso_code String? @db.VarChar(20)
+  subdivision_2_name     String? @db.VarChar(100)
+  city_name              String? @db.VarChar(100)
+  metro_code             String? @db.VarChar(20)
+  time_zone              String? @db.VarChar(100)
+  is_in_european_union   Int?
+
+  @@ignore
+}
+
 enum assignment_state {
   invited
   active
@@ -2118,15 +2205,3 @@ enum waitlist_state {
   converted
   lapsed
 }
-
-model otp_verifications {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email      String   @db.VarChar(255)
-  otp_hash   String   @db.VarChar(255)
-  purpose    String   @db.VarChar(100)
-  attempts   Int      @default(0)
-  verified   Boolean  @default(false)
-  expires_at DateTime @db.Timestamptz(6)
-  created_at DateTime @default(now()) @db.Timestamptz(6)
-}
-
