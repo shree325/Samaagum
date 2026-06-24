@@ -1,0 +1,53 @@
+version: "1.0"
+
+# 1. Active Providers Configuration for Admin Domain Services
+# Defines whether a service resolves from 'database' (direct PostgreSQL integration) or 'localstorage' (local caching / mock context fallback)
+providers:
+  activeProviders:
+    rbac: database
+    plans: database
+    coupons: database
+    users: localstorage
+    kyc: localstorage
+    disputes: localstorage
+    moderation: localstorage
+    tenants: localstorage
+    audit: localstorage
+    featureFlags: localstorage
+
+  definitions:
+    database:
+      id: database
+      name: PostgreSQL Database
+      enabled: true
+      priority: 1
+      timeout: 5000
+    localstorage:
+      id: localstorage
+      name: Browser LocalStorage Cache Fallback
+      enabled: true
+      priority: 2
+      timeout: 1000
+
+# 2. Redis Cache & Data Sync Configurations
+cache:
+  enabled: true
+  persistent: true
+  keyPatterns:
+    rbac: "uds:admin:rbac:{tenantId}:{key}"
+    plans: "uds:admin:plans:{planId}"
+    coupons: "uds:admin:coupons:{code}"
+
+# 3. Dynamic Attribute Mapping Registry
+mappings:
+  basePath: ../mappings
+  hotReload:
+    enabled: true
+    watchInterval: 5000
+  files:
+    rbac:
+      database: rbac-db-mapping.yaml
+    plans:
+      database: plans-db-mapping.yaml
+    coupons:
+      database: coupons-db-mapping.yaml

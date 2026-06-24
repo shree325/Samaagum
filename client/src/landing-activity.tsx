@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* ============================================================
    Samaagum landing — Discussions, Activity, CTA, Footer
    ============================================================ */
@@ -152,7 +153,9 @@ function Footer() {
           {cols.map(([h, links]) => (
             <div key={h}>
               <h5>{h}</h5>
-              {links.map(l => <a key={l} href={AUTH}>{l}</a>)}
+              {links.map(l => (
+                <a key={l} href={AUTH}>{l}</a>
+              ))}
             </div>
           ))}
         </div>

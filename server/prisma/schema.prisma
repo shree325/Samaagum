@@ -184,6 +184,7 @@ model bookings {
   created_at            DateTime                @default(now()) @db.Timestamptz(6)
   updated_at            DateTime                @default(now()) @db.Timestamptz(6)
   affiliate_commissions affiliate_commissions[]
+  attendees             attendees[]
   booking_line_items    booking_line_items[]
   users                 users                   @relation(fields: [booker_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   events                events                  @relation(fields: [event_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -231,8 +232,17 @@ model categories {
   slug             String           @unique
   name             String
   kind             String?
+  description      String?
+  icon_type        String?          @default("emoji")
+  icon_value       String?
+  display_order    Int              @default(999)
+  status           String           @default("active")
+  is_deleted       Boolean          @default(false)
+  created_at       DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime         @default(now()) @db.Timestamptz(6)
   categories       categories?      @relation("categoriesTocategories", fields: [parent_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   other_categories categories[]     @relation("categoriesTocategories")
+  tags             tags[]
   user_interests   user_interests[]
 }
 
@@ -308,14 +318,21 @@ model connections {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model conversation_participants {
-  conversation_id String        @db.Uuid
-  user_id         String        @db.Uuid
-  role            String        @default("member")
-  last_read_at    DateTime?     @db.Timestamptz(6)
-  conversations   conversations @relation(fields: [conversation_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users           users         @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  conversation_id String                        @db.Uuid
+  user_id         String                        @db.Uuid
+  role            String                        @default("member")
+  last_read_at    DateTime?                     @db.Timestamptz(6)
+  left_at         DateTime?                     @db.Timestamptz(6)
+  archived_at     DateTime?                     @db.Timestamptz(6)
+  muted_until     DateTime?                     @db.Timestamptz(6)
+  status          ConversationParticipantStatus @default(ACCEPTED)
+  pinned_at       DateTime?                     @db.Timestamptz(6)
+  conversations   conversations                 @relation(fields: [conversation_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users           users                         @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@id([conversation_id, user_id])
+  @@index([conversation_id])
+  @@index([user_id])
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -328,11 +345,19 @@ model conversations {
   created_by                String?                     @db.Uuid
   created_at                DateTime                    @default(now()) @db.Timestamptz(6)
   updated_at                DateTime                    @default(now()) @db.Timestamptz(6)
+  title                     String?
+  archived_at               DateTime?                   @db.Timestamptz(6)
+  last_activity_at          DateTime?                   @default(now()) @db.Timestamptz(6)
+  dm_key                    String?                     @unique @db.VarChar(100)
+  last_message_id           String?                     @db.Uuid
+  request_expires_at        DateTime?                   @db.Timestamptz(6)
   conversation_participants conversation_participants[]
   users                     users?                      @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   events                    events?                     @relation(fields: [event_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenants                   tenants                     @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   messages                  messages[]
+
+  @@index([last_activity_at], map: "idx_conversations_last_activity_at")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -456,10 +481,13 @@ model entities {
   marketplace_listings                                                   marketplace_listings[]
   media_assets                                                           media_assets[]
   membership_tiers                                                       membership_tiers[]
+  org_domains                                                            org_domains[]
   orgs                                                                   orgs?
   role_assignments                                                       role_assignments[]
   settlements                                                            settlements[]
   sponsors                                                               sponsors[]
+  sub_communities_sub_communities_community_entity_idToentities          sub_communities[]       @relation("sub_communities_community_entity_idToentities")
+  sub_communities_sub_communities_entity_idToentities                    sub_communities?        @relation("sub_communities_entity_idToentities")
   subscriptions                                                          subscriptions[]
   takeover_requests                                                      takeover_requests[]
 
@@ -531,9 +559,11 @@ model events {
   addons                 addons[]
   bookings               bookings[]
   bundles                bundles[]
+  checkin_gates          checkin_gates[]
   collaborations         collaborations[]
   conversations          conversations[]
   coupons                coupons[]
+  event_media            event_media[]
   event_team_assignments event_team_assignments[]
   entities               entities                 @relation(fields: [hosted_by_entity_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   events                 events?                  @relation("eventsToevents", fields: [parent_event_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -882,22 +912,24 @@ model marketplace_listings {
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model media_assets {
-  id                                             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id                                      String           @db.Uuid
-  owner_entity_id                                String?          @db.Uuid
-  owner_user_id                                  String?          @db.Uuid
+  id                                             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                                      String            @db.Uuid
+  owner_entity_id                                String?           @db.Uuid
+  owner_user_id                                  String?           @db.Uuid
   storage_key                                    String
   mime                                           String?
-  visibility                                     visibility_level @default(public)
-  created_at                                     DateTime         @default(now()) @db.Timestamptz(6)
-  updated_at                                     DateTime         @default(now()) @db.Timestamptz(6)
+  visibility                                     visibility_level  @default(public)
+  created_at                                     DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at                                     DateTime          @default(now()) @db.Timestamptz(6)
+  event_media                                    event_media[]
   gallery_media                                  gallery_media[]
-  entities                                       entities?        @relation(fields: [owner_entity_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users                                          users?           @relation(fields: [owner_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tenants                                        tenants          @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  entities                                       entities?         @relation(fields: [owner_entity_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                                          users?            @relation(fields: [owner_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenants                                        tenants           @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   payments                                       payments[]
-  profiles_profiles_cover_asset_idTomedia_assets profiles[]       @relation("profiles_cover_asset_idTomedia_assets")
-  profiles_profiles_photo_asset_idTomedia_assets profiles[]       @relation("profiles_photo_asset_idTomedia_assets")
+  profiles_profiles_cover_asset_idTomedia_assets profiles[]        @relation("profiles_cover_asset_idTomedia_assets")
+  profiles_profiles_photo_asset_idTomedia_assets profiles[]        @relation("profiles_photo_asset_idTomedia_assets")
+  sub_communities                                sub_communities[]
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -936,17 +968,36 @@ model membership_tiers {
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model messages {
-  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id       String        @db.Uuid
-  conversation_id String        @db.Uuid
-  sender_user_id  String        @db.Uuid
-  body            String?
-  created_at      DateTime      @default(now()) @db.Timestamptz(6)
-  conversations   conversations @relation(fields: [conversation_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users           users         @relation(fields: [sender_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tenants         tenants       @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                   String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id            String                 @db.Uuid
+  conversation_id      String                 @db.Uuid
+  sender_user_id       String                 @db.Uuid
+  body                 String?
+  created_at           DateTime               @default(now()) @db.Timestamptz(6)
+  edited_at            DateTime?              @db.Timestamptz(6)
+  deleted_at           DateTime?              @db.Timestamptz(6)
+  reply_to_message_id  String?                @db.Uuid
+  attachments_count    Int?                   @default(0)
+  deleted_for_everyone Boolean                @default(false)
+  status               MessageStatus          @default(ACTIVE)
+  type                 MessageType            @default(TEXT)
+  version              Int                    @default(1)
+  is_edited            Boolean?               @default(false)
+  is_deleted           Boolean?               @default(false)
+  updated_at           DateTime?              @default(now()) @db.Timestamptz(6)
+  attachments          attachments[]
+  message_receipts     message_receipts[]
+  message_versions     message_versions[]
+  message_visibilities message_visibilities[]
+  conversations        conversations          @relation(fields: [conversation_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  messages             messages?              @relation("messagesTomessages", fields: [reply_to_message_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_messages       messages[]             @relation("messagesTomessages")
+  users                users                  @relation(fields: [sender_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenants              tenants                @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reactions            reactions[]
 
   @@index([conversation_id], map: "idx_messages_conversation_id")
+  @@index([conversation_id, created_at])
 }
 
 model migrations {
@@ -1114,6 +1165,16 @@ model profiles {
   template_key                                       String?
   created_at                                         DateTime      @default(now()) @db.Timestamptz(6)
   updated_at                                         DateTime      @default(now()) @db.Timestamptz(6)
+  skills                                             Json?         @default("[]")
+  gender                                             String?       @db.VarChar(20)
+  dob                                                DateTime?     @db.Date
+  cover_image_data                                   Bytes?
+  profile_image_data                                 Bytes?
+  first_name                                         String?
+  last_name                                          String?
+  phone_number                                       String?       @db.VarChar(20)
+  user_name                                          String?
+  headline                                           String?
   media_assets_profiles_cover_asset_idTomedia_assets media_assets? @relation("profiles_cover_asset_idTomedia_assets", fields: [cover_asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_profiles_cover")
   media_assets_profiles_photo_asset_idTomedia_assets media_assets? @relation("profiles_photo_asset_idTomedia_assets", fields: [photo_asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_profiles_photo")
   tenants                                            tenants       @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -1405,15 +1466,20 @@ model tenants {
   created_at               DateTime                   @default(now()) @db.Timestamptz(6)
   updated_at               DateTime                   @default(now()) @db.Timestamptz(6)
   addons                   addons[]
+  admin_coupons            admin_coupons[]
+  admin_roles              admin_roles[]
+  admin_subscription_plans admin_subscription_plans[]
   affiliate_commissions    affiliate_commissions[]
   affiliate_payouts        affiliate_payouts[]
   affiliates               affiliates[]
   api_clients              api_clients[]
+  attendees                attendees[]
   audit_log                audit_log[]
   auth_identities          auth_identities[]
   booking_line_items       booking_line_items[]
   bookings                 bookings[]
   bundles                  bundles[]
+  checkin_gates            checkin_gates[]
   checkins                 checkins[]
   collaboration_members    collaboration_members[]
   connections              connections[]
@@ -1424,6 +1490,8 @@ model tenants {
   domain_events            domain_events[]
   entities                 entities[]
   entity_pages             entity_pages[]
+  event_categories         event_categories[]
+  event_media              event_media[]
   event_team_assignments   event_team_assignments[]
   events                   events[]
   follows                  follows[]
@@ -1432,6 +1500,7 @@ model tenants {
   forum_comments           forum_comments[]
   forum_posts              forum_posts[]
   galleries                galleries[]
+  gamification             gamification[]
   group_memberships        group_memberships[]
   idempotency_keys         idempotency_keys[]
   impersonation_sessions   impersonation_sessions[]
@@ -1445,8 +1514,10 @@ model tenants {
   membership_subscriptions membership_subscriptions[]
   membership_tiers         membership_tiers[]
   messages                 messages[]
+  ml_feature_store         ml_feature_store[]
   moderation_reports       moderation_reports[]
   notification_log         notification_log[]
+  org_domains              org_domains[]
   payments                 payments[]
   platform_settings        platform_settings[]
   profile_links            profile_links[]
@@ -1462,6 +1533,8 @@ model tenants {
   sponsors                 sponsors[]
   sponsorship_orders       sponsorship_orders[]
   sponsorship_packages     sponsorship_packages[]
+  sub_communities          sub_communities[]
+  subscription_orders      subscription_orders[]
   subscriptions            subscriptions[]
   support_cases            support_cases[]
   takeover_requests        takeover_requests[]
@@ -1532,6 +1605,7 @@ model tickets {
   claimed_by_user_id String?            @db.Uuid
   created_at         DateTime           @default(now()) @db.Timestamptz(6)
   updated_at         DateTime           @default(now()) @db.Timestamptz(6)
+  attendees          attendees[]
   checkins           checkins[]
   ticket_claims      ticket_claims[]
   users              users?             @relation(fields: [claimed_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -1594,9 +1668,23 @@ model users {
   deleted_at                                                          DateTime?                    @db.Timestamptz(6)
   created_at                                                          DateTime                     @default(now()) @db.Timestamptz(6)
   updated_at                                                          DateTime                     @default(now()) @db.Timestamptz(6)
+  profile_image_data                                                  Bytes?
+  first_name                                                          String?
+  last_name                                                           String?
+  location                                                            String?
+  phone_number                                                        String?                      @db.VarChar(20)
+  last_seen_at                                                        DateTime?                    @db.Timestamptz(6)
+  admin_roles                                                         admin_roles[]
   affiliates                                                          affiliates[]
+  attendees_attendees_created_byTousers                               attendees[]                  @relation("attendees_created_byTousers")
+  attendees_attendees_updated_byTousers                               attendees[]                  @relation("attendees_updated_byTousers")
+  attendees_attendees_user_idTousers                                  attendees[]                  @relation("attendees_user_idTousers")
   auth_identities                                                     auth_identities[]
+  blocked_users_blocked_users_blocked_idTousers                       blocked_users[]              @relation("blocked_users_blocked_idTousers")
+  blocked_users_blocked_users_blocker_idTousers                       blocked_users[]              @relation("blocked_users_blocker_idTousers")
   bookings                                                            bookings[]
+  checkin_gates_checkin_gates_created_byTousers                       checkin_gates[]              @relation("checkin_gates_created_byTousers")
+  checkin_gates_checkin_gates_updated_byTousers                       checkin_gates[]              @relation("checkin_gates_updated_byTousers")
   checkins                                                            checkins[]
   connections_connections_addressee_user_idTousers                    connections[]                @relation("connections_addressee_user_idTousers")
   connections_connections_requester_user_idTousers                    connections[]                @relation("connections_requester_user_idTousers")
@@ -1605,37 +1693,65 @@ model users {
   coupon_redemptions                                                  coupon_redemptions[]
   disputes                                                            disputes[]
   entities                                                            entities[]
+  event_categories_event_categories_created_byTousers                 event_categories[]           @relation("event_categories_created_byTousers")
+  event_categories_event_categories_updated_byTousers                 event_categories[]           @relation("event_categories_updated_byTousers")
+  event_media_event_media_created_byTousers                           event_media[]                @relation("event_media_created_byTousers")
+  event_media_event_media_updated_byTousers                           event_media[]                @relation("event_media_updated_byTousers")
   event_team_assignments_event_team_assignments_granted_byTousers     event_team_assignments[]     @relation("event_team_assignments_granted_byTousers")
   event_team_assignments_event_team_assignments_user_idTousers        event_team_assignments[]     @relation("event_team_assignments_user_idTousers")
   follows                                                             follows[]
   form_responses                                                      form_responses[]
   forum_comments                                                      forum_comments[]
   forum_posts                                                         forum_posts[]
+  gamification_gamification_created_byTousers                         gamification[]               @relation("gamification_created_byTousers")
+  gamification_gamification_last_upd_byTousers                        gamification[]               @relation("gamification_last_upd_byTousers")
+  gamification_gamification_user_idTousers                            gamification?                @relation("gamification_user_idTousers")
   group_memberships                                                   group_memberships[]
   impersonation_sessions_impersonation_sessions_admin_user_idTousers  impersonation_sessions[]     @relation("impersonation_sessions_admin_user_idTousers")
   impersonation_sessions_impersonation_sessions_target_user_idTousers impersonation_sessions[]     @relation("impersonation_sessions_target_user_idTousers")
   kyc_reviews                                                         kyc_reviews[]
   kyc_submissions                                                     kyc_submissions[]
+  maker_checker_requests_maker_checker_requests_checker_user_idTousers maker_checker_requests[]     @relation("maker_checker_requests_checker_user_idTousers")
+  maker_checker_requests_maker_checker_requests_maker_user_idTousers   maker_checker_requests[]     @relation("maker_checker_requests_maker_user_idTousers")
   marketplace_bids                                                    marketplace_bids[]
   marketplace_listings                                                marketplace_listings[]
   media_assets                                                        media_assets[]
   membership_subscriptions                                            membership_subscriptions[]
+  message_receipts                                                    message_receipts[]
+  message_versions                                                    message_versions[]
+  message_visibilities                                                message_visibilities[]
   messages                                                            messages[]
+  ml_feature_store_ml_feature_store_created_byTousers                 ml_feature_store[]           @relation("ml_feature_store_created_byTousers")
+  ml_feature_store_ml_feature_store_last_upd_byTousers                ml_feature_store[]           @relation("ml_feature_store_last_upd_byTousers")
+  moderation_actions                                                  moderation_actions[]
+  moderation_audit_logs                                               moderation_audit_logs[]
   moderation_reports_moderation_reports_handled_byTousers             moderation_reports[]         @relation("moderation_reports_handled_byTousers")
   moderation_reports_moderation_reports_reporter_user_idTousers       moderation_reports[]         @relation("moderation_reports_reporter_user_idTousers")
   notification_log                                                    notification_log[]
+  notification_preferences                                            notification_preferences[]
+  notification_recipients                                             notification_recipients[]
+  org_domains_org_domains_created_byTousers                           org_domains[]                @relation("org_domains_created_byTousers")
+  org_domains_org_domains_updated_byTousers                           org_domains[]                @relation("org_domains_updated_byTousers")
   platform_settings                                                   platform_settings[]
+  presences                                                           presences?
   profile_links                                                       profile_links[]
   profile_requirement_status                                          profile_requirement_status[]
   profiles                                                            profiles?
   ratings                                                             ratings[]
+  reactions                                                           reactions[]
   refunds_refunds_checker_user_idTousers                              refunds[]                    @relation("refunds_checker_user_idTousers")
   refunds_refunds_maker_user_idTousers                                refunds[]                    @relation("refunds_maker_user_idTousers")
+  reports_reports_assigned_moderator_idTousers                        reports[]                    @relation("reports_assigned_moderator_idTousers")
+  reports_reports_reporter_idTousers                                  reports[]                    @relation("reports_reporter_idTousers")
+  reports_reports_resolved_by_idTousers                               reports[]                    @relation("reports_resolved_by_idTousers")
   reviews                                                             reviews[]
   role_assignments_role_assignments_granted_byTousers                 role_assignments[]           @relation("role_assignments_granted_byTousers")
   role_assignments_role_assignments_user_idTousers                    role_assignments[]           @relation("role_assignments_user_idTousers")
+  sub_communities_sub_communities_created_byTousers                   sub_communities[]            @relation("sub_communities_created_byTousers")
+  sub_communities_sub_communities_updated_byTousers                   sub_communities[]            @relation("sub_communities_updated_byTousers")
+  subscription_orders                                                 subscription_orders[]
   support_cases_support_cases_assigned_toTousers                      support_cases[]              @relation("support_cases_assigned_toTousers")
-  support_cases_support_cases_raised_by_user_idTousers                support_cases[]              @relation("support_cases_raised_by_user_idTousers")
+  support_cases_support_cases_raised_by_user_idTousers                 support_cases[]              @relation("support_cases_raised_by_user_idTousers")
   takeover_requests                                                   takeover_requests[]
   tickets                                                             tickets[]
   user_badges                                                         user_badges[]
@@ -1682,6 +1798,674 @@ model wishlists {
 
   @@id([user_id, event_id])
   @@index([event_id], map: "idx_wishlists_event_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model admin_positions {
+  id                       String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                     String                     @unique
+  display_name             String
+  description              String?
+  hierarchy_level          Int
+  data_access_level        String
+  custom_conditions        Json                       @default("[]")
+  is_active                Boolean                    @default(true)
+  data_access_limits       Json                       @default("{}")
+  created_at               DateTime                   @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime                   @default(now()) @db.Timestamptz(6)
+  admin_roles              admin_roles[]
+  admin_subscription_plans admin_subscription_plans[]
+
+  @@index([hierarchy_level], map: "idx_admin_positions_hierarchy")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model admin_responsibilities {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name              String   @unique
+  display_name      String
+  description       String?
+  category          String
+  route_path        String
+  component_name    String
+  icon_name         String   @default("Circle")
+  is_active         Boolean  @default(true)
+  required_features Json     @default("[]")
+  sort_order        Int      @default(0)
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([is_active], map: "idx_admin_responsibilities_active")
+  @@index([category, sort_order], map: "idx_admin_responsibilities_category")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model admin_roles {
+  id                       String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                     String
+  display_name             String
+  description              String?
+  tenant_id                String?                    @db.Uuid
+  is_system_role           Boolean                    @default(false)
+  is_active                Boolean                    @default(true)
+  is_default               Boolean                    @default(false)
+  hierarchy_level          Int                        @default(100)
+  responsibility_ids       Json                       @default("[]")
+  default_position_id      String?                    @db.Uuid
+  created_by               String?                    @db.Uuid
+  created_at               DateTime                   @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime                   @default(now()) @db.Timestamptz(6)
+  users                    users?                     @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  admin_positions          admin_positions?           @relation(fields: [default_position_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenants                  tenants?                   @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  admin_subscription_plans admin_subscription_plans[]
+
+  @@unique([name, tenant_id])
+  @@index([hierarchy_level], map: "idx_admin_roles_hierarchy")
+  @@index([tenant_id, is_active], map: "idx_admin_roles_tenant")
+}
+
+model admin_subscription_plans {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                String                @unique
+  display_name        String
+  description         String?
+  category            String                @default("individual")
+  plan_type           String                @default("monthly")
+  is_active           Boolean               @default(true)
+  is_popular          Boolean               @default(false)
+  group_name          String?
+  pricing             Json                  @default("{}")
+  features            Json                  @default("[]")
+  limits              Json                  @default("[]")
+  metadata            Json                  @default("{}")
+  trial               Json?
+  visibility          Json                  @default("{}")
+  rbac_role_id        String?               @db.Uuid
+  rbac_position_id    String?               @db.Uuid
+  rbac_auto_assign    Boolean               @default(false)
+  tenant_id           String?               @db.Uuid
+  created_at          DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime              @default(now()) @db.Timestamptz(6)
+  admin_positions     admin_positions?      @relation(fields: [rbac_position_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  admin_roles         admin_roles?          @relation(fields: [rbac_role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenants             tenants?              @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  subscription_orders subscription_orders[]
+
+  @@index([is_active], map: "idx_admin_plans_active")
+  @@index([tenant_id], map: "idx_admin_plans_tenant")
+}
+
+model admin_coupons {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                String
+  description         String?
+  discount_type       String    @default("percent")
+  amount              Decimal   @default(0) @db.Decimal(10, 2)
+  date_expires        DateTime? @db.Timestamptz(6)
+  usage_count         Int       @default(0)
+  is_active           Boolean   @default(true)
+  free_shipping       Boolean   @default(false)
+  usage_restrictions  Json      @default("{}")
+  usage_limits        Json      @default("{}")
+  email_settings      Json      @default("{}")
+  applicable_plan_ids Json      @default("[]")
+  meta_data           Json      @default("[]")
+  tenant_id           String?   @db.Uuid
+  created_at          DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime  @default(now()) @db.Timestamptz(6)
+  tenants             tenants?  @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([code, tenant_id])
+  @@index([code], map: "idx_admin_coupons_code")
+  @@index([is_active, date_expires], map: "idx_admin_coupons_active")
+  @@index([tenant_id], map: "idx_admin_coupons_tenant")
+}
+
+model subscription_orders {
+  id                       String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  order_number             String                   @unique
+  user_id                  String                   @db.Uuid
+  tenant_id                String?                  @db.Uuid
+  status                   String                   @default("pending")
+  plan_id                  String                   @db.Uuid
+  plan_type                String
+  shipping_address         Json                     @default("{}")
+  billing_address          Json                     @default("{}")
+  subtotal                 Decimal                  @default(0) @db.Decimal(10, 2)
+  tax_total                Decimal                  @default(0) @db.Decimal(10, 2)
+  total                    Decimal                  @default(0) @db.Decimal(10, 2)
+  currency                 String                   @default("INR")
+  taxes                    Json                     @default("[]")
+  coupon_code              String?
+  discount_amount          Decimal                  @default(0) @db.Decimal(10, 2)
+  payment_method           String
+  payment_method_title     String
+  payment_transaction_id   String?
+  payment_intent_id        String?
+  payment_status           String                   @default("pending")
+  payment_paid_date        DateTime?                @db.Timestamptz(6)
+  payment_gateway_response Json                     @default("{}")
+  subscription_start_date  DateTime?                @db.Timestamptz(6)
+  subscription_end_date    DateTime?                @db.Timestamptz(6)
+  subscription_status      String                   @default("pending")
+  customer_note            String?
+  admin_notes              Json                     @default("[]")
+  metadata                 Json                     @default("{}")
+  completed_at             DateTime?                @db.Timestamptz(6)
+  created_at               DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime                 @default(now()) @db.Timestamptz(6)
+  admin_subscription_plans admin_subscription_plans @relation(fields: [plan_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenants                  tenants?                 @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                    users                    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([status], map: "idx_sub_orders_status")
+  @@index([tenant_id], map: "idx_sub_orders_tenant")
+  @@index([user_id], map: "idx_sub_orders_user")
+}
+
+model otp_verifications {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email      String    @db.VarChar(255)
+  otp_hash   String    @db.VarChar(255)
+  purpose    String    @db.VarChar(100)
+  attempts   Int?      @default(0)
+  verified   Boolean?  @default(false)
+  expires_at DateTime  @db.Timestamptz(6)
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+model attachments {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  message_id         String    @db.Uuid
+  file_name          String    @db.VarChar(512)
+  original_file_name String    @db.VarChar(512)
+  file_size          BigInt
+  mime_type          String    @db.VarChar(128)
+  type               String    @default("OTHER") @db.VarChar(32)
+  status             String    @default("UPLOADING") @db.VarChar(32)
+  url                String
+  storage_key        String
+  created_at         DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime? @default(now()) @db.Timestamptz(6)
+  messages           messages  @relation(fields: [message_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([message_id], map: "idx_attachments_message_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model attendees {
+  id                                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                         String    @db.Uuid
+  booking_id                        String    @db.Uuid
+  ticket_id                         String?   @db.Uuid
+  user_id                           String?   @db.Uuid
+  name                              String    @db.VarChar(255)
+  email                             String?   @db.VarChar(255)
+  gender                            String?   @db.VarChar(20)
+  phone                             String?   @db.VarChar(20)
+  dob                               DateTime? @db.Date
+  claimed_at                        DateTime? @db.Timestamptz(6)
+  checkin_status                    String?   @default("not_checked_in") @db.VarChar(50)
+  notes                             String?
+  created_at                        DateTime? @default(now()) @db.Timestamptz(6)
+  created_by                        String?   @db.Uuid
+  updated_at                        DateTime? @default(now()) @db.Timestamptz(6)
+  updated_by                        String?   @db.Uuid
+  bookings                          bookings  @relation(fields: [booking_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_attendees_created_byTousers users?    @relation("attendees_created_byTousers", fields: [created_by], references: [id], onUpdate: NoAction)
+  tenants                           tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tickets                           tickets?  @relation(fields: [ticket_id], references: [id], onUpdate: NoAction)
+  users_attendees_updated_byTousers users?    @relation("attendees_updated_byTousers", fields: [updated_by], references: [id], onUpdate: NoAction)
+  users_attendees_user_idTousers    users?    @relation("attendees_user_idTousers", fields: [user_id], references: [id], onUpdate: NoAction)
+
+  @@index([booking_id], map: "idx_attendees_booking")
+  @@index([email], map: "idx_attendees_email")
+  @@index([tenant_id], map: "idx_attendees_tenant")
+  @@index([user_id], map: "idx_attendees_user")
+}
+
+model blocked_users {
+  blocker_id                            String   @db.Uuid
+  blocked_id                            String   @db.Uuid
+  created_at                            DateTime @default(now()) @db.Timestamptz(6)
+  users_blocked_users_blocked_idTousers users    @relation("blocked_users_blocked_idTousers", fields: [blocked_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_blocked_users_blocker_idTousers users    @relation("blocked_users_blocker_idTousers", fields: [blocker_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([blocker_id, blocked_id])
+  @@index([blocked_id])
+  @@index([blocker_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model checkin_gates {
+  id                                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                             String    @db.Uuid
+  event_id                              String    @db.Uuid
+  name                                  String    @db.VarChar(255)
+  gate_code                             String    @db.VarChar(50)
+  gate_type                             String?   @default("entry") @db.VarChar(50)
+  location_note                         String?
+  device_binding_id                     String?   @db.Uuid
+  is_active                             Boolean?  @default(true)
+  created_at                            DateTime? @default(now()) @db.Timestamptz(6)
+  created_by                            String?   @db.Uuid
+  updated_at                            DateTime? @default(now()) @db.Timestamptz(6)
+  updated_by                            String?   @db.Uuid
+  users_checkin_gates_created_byTousers users?    @relation("checkin_gates_created_byTousers", fields: [created_by], references: [id], onUpdate: NoAction)
+  events                                events    @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants                               tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_checkin_gates_updated_byTousers users?    @relation("checkin_gates_updated_byTousers", fields: [updated_by], references: [id], onUpdate: NoAction)
+
+  @@unique([tenant_id, event_id, gate_code], map: "uq_checkin_gates_tenant_code")
+  @@index([event_id], map: "idx_checkin_gates_event")
+  @@index([tenant_id], map: "idx_checkin_gates_tenant")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model event_categories {
+  id                                       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                                String    @db.Uuid
+  name                                     String    @db.VarChar(100)
+  description                              String?
+  icon_url                                 String?
+  status                                   String?   @default("active") @db.VarChar(20)
+  display_order                            Int?      @default(0)
+  created_at                               DateTime? @default(now()) @db.Timestamptz(6)
+  created_by                               String?   @db.Uuid
+  updated_at                               DateTime? @default(now()) @db.Timestamptz(6)
+  updated_by                               String?   @db.Uuid
+  users_event_categories_created_byTousers users?    @relation("event_categories_created_byTousers", fields: [created_by], references: [id], onUpdate: NoAction)
+  tenants                                  tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_event_categories_updated_byTousers users?    @relation("event_categories_updated_byTousers", fields: [updated_by], references: [id], onUpdate: NoAction)
+
+  @@unique([tenant_id, name], map: "uq_event_categories_tenant_name")
+  @@index([tenant_id], map: "idx_event_categories_tenant")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model event_media {
+  id                                  String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                           String       @db.Uuid
+  event_id                            String       @db.Uuid
+  asset_id                            String       @db.Uuid
+  media_type                          String       @default("image") @db.VarChar(50)
+  caption                             String?
+  alt_text                            String?      @db.VarChar(500)
+  sort_order                          Int?         @default(0)
+  visibility                          String?      @default("public") @db.VarChar(50)
+  is_primary                          Boolean?     @default(false)
+  created_at                          DateTime?    @default(now()) @db.Timestamptz(6)
+  created_by                          String?      @db.Uuid
+  updated_at                          DateTime?    @default(now()) @db.Timestamptz(6)
+  updated_by                          String?      @db.Uuid
+  media_assets                        media_assets @relation(fields: [asset_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_event_media_created_byTousers users?       @relation("event_media_created_byTousers", fields: [created_by], references: [id], onUpdate: NoAction)
+  events                              events       @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants                             tenants      @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_event_media_updated_byTousers users?       @relation("event_media_updated_byTousers", fields: [updated_by], references: [id], onUpdate: NoAction)
+
+  @@index([event_id], map: "idx_event_media_event")
+  @@index([tenant_id], map: "idx_event_media_tenant")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model gamification {
+  row_id                                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bu_id                                 String    @db.Uuid
+  user_id                               String    @unique @db.Uuid
+  points                                Int       @default(0)
+  level                                 Int       @default(1)
+  badge_count                           Int       @default(0)
+  x_data                                Json?
+  created                               DateTime? @default(now()) @db.Timestamptz(6)
+  created_by                            String?   @db.Uuid
+  last_upd                              DateTime? @default(now()) @db.Timestamptz(6)
+  last_upd_by                           String?   @db.Uuid
+  modification_num                      Int?      @default(0)
+  conflict_id                           String?   @default("0") @db.VarChar(15)
+  db_last_upd                           DateTime? @default(now()) @db.Timestamptz(6)
+  db_last_upd_src                       String?   @default("App") @db.VarChar(50)
+  tenants                               tenants   @relation(fields: [bu_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_gamification_created_byTousers  users?    @relation("gamification_created_byTousers", fields: [created_by], references: [id], onUpdate: NoAction)
+  users_gamification_last_upd_byTousers users?    @relation("gamification_last_upd_byTousers", fields: [last_upd_by], references: [id], onUpdate: NoAction)
+  users_gamification_user_idTousers     users     @relation("gamification_user_idTousers", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([bu_id], map: "idx_gamification_bu_id")
+  @@index([user_id], map: "idx_gamification_user_id")
+}
+
+model message_receipts {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  message_id   String    @db.Uuid
+  user_id      String    @db.Uuid
+  delivered_at DateTime? @db.Timestamptz(6)
+  seen_at      DateTime? @db.Timestamptz(6)
+  failed_at    DateTime? @db.Timestamptz(6)
+  messages     messages  @relation(fields: [message_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users        users     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([message_id, user_id])
+  @@index([message_id])
+  @@index([user_id])
+}
+
+model message_versions {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  message_id String   @db.Uuid
+  version    Int
+  body       String
+  edited_by  String   @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  usersId    String?  @db.Uuid
+  messages   messages @relation(fields: [message_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users      users?   @relation(fields: [usersId], references: [id])
+}
+
+model message_visibilities {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  message_id String   @db.Uuid
+  user_id    String   @db.Uuid
+  deleted_at DateTime @default(now()) @db.Timestamptz(6)
+  messages   messages @relation(fields: [message_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users      users    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model ml_feature_store {
+  row_id                                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bu_id                                     String    @db.Uuid
+  entity_type                               String    @db.VarChar(50)
+  entity_id                                 String    @db.Uuid
+  feature_name                              String    @db.VarChar(255)
+  feature_value                             Json
+  created                                   DateTime? @default(now()) @db.Timestamptz(6)
+  created_by                                String?   @db.Uuid
+  last_upd                                  DateTime? @default(now()) @db.Timestamptz(6)
+  last_upd_by                               String?   @db.Uuid
+  modification_num                          Int?      @default(0)
+  conflict_id                               String?   @default("0") @db.VarChar(15)
+  db_last_upd                               DateTime? @default(now()) @db.Timestamptz(6)
+  db_last_upd_src                           String?   @default("App") @db.VarChar(50)
+  tenants                                   tenants   @relation(fields: [bu_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_ml_feature_store_created_byTousers  users?    @relation("ml_feature_store_created_byTousers", fields: [created_by], references: [id], onUpdate: NoAction)
+  users_ml_feature_store_last_upd_byTousers users?    @relation("ml_feature_store_last_upd_byTousers", fields: [last_upd_by], references: [id], onUpdate: NoAction)
+
+  @@unique([entity_type, entity_id, feature_name], map: "uq_ml_feature_store_entity_feature")
+  @@index([bu_id], map: "idx_ml_feature_store_bu_id")
+  @@index([entity_type, entity_id], map: "idx_ml_feature_store_entity")
+}
+
+model moderation_actions {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  report_id       String    @db.Uuid
+  moderator_id    String    @db.Uuid
+  action          String    @db.VarChar(32)
+  notes           String?
+  suspended_until DateTime? @db.Timestamptz(6)
+  created_at      DateTime? @default(now()) @db.Timestamptz(6)
+  users           users     @relation(fields: [moderator_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  reports         reports   @relation(fields: [report_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([report_id], map: "idx_mod_actions_report_id")
+}
+
+model moderation_audit_logs {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  report_id  String?   @db.Uuid
+  actor_id   String    @db.Uuid
+  action     String    @db.VarChar(64)
+  metadata   Json?
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  users      users     @relation(fields: [actor_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  reports    reports?  @relation(fields: [report_id], references: [id], onUpdate: NoAction)
+
+  @@index([actor_id], map: "idx_audit_logs_actor_id")
+  @@index([report_id], map: "idx_audit_logs_report_id")
+}
+
+model notification_preferences {
+  id      String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id String  @db.Uuid
+  type    String  @db.VarChar(64)
+  channel String  @db.VarChar(32)
+  enabled Boolean @default(true)
+  users   users   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, type, channel])
+}
+
+model notification_recipients {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  notification_id String        @db.Uuid
+  user_id         String        @db.Uuid
+  channel         String        @db.VarChar(32)
+  status          String        @default("PENDING") @db.VarChar(32)
+  read_at         DateTime?     @db.Timestamptz(6)
+  delivered_at    DateTime?     @db.Timestamptz(6)
+  created_at      DateTime?     @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime?     @default(now()) @db.Timestamptz(6)
+  notifications   notifications @relation(fields: [notification_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users           users         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id], map: "idx_notif_recipients_user_id")
+}
+
+model notifications {
+  id                      String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type                    String                    @db.VarChar(64)
+  source_type             String                    @db.VarChar(64)
+  source_id               String?                   @db.Uuid
+  payload                 Json                      @default("{}")
+  created_at              DateTime?                 @default(now()) @db.Timestamptz(6)
+  notification_recipients notification_recipients[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model org_domains {
+  id                                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                           String    @db.Uuid
+  org_entity_id                       String    @db.Uuid
+  domain_name                         String    @unique(map: "uq_org_domains_domain") @db.VarChar(255)
+  verification_status                 String?   @default("pending") @db.VarChar(50)
+  verified_at                         DateTime? @db.Timestamptz(6)
+  is_primary                          Boolean?  @default(false)
+  dns_record                          Json?
+  created_at                          DateTime? @default(now()) @db.Timestamptz(6)
+  created_by                          String?   @db.Uuid
+  updated_at                          DateTime? @default(now()) @db.Timestamptz(6)
+  updated_by                          String?   @db.Uuid
+  users_org_domains_created_byTousers users?    @relation("org_domains_created_byTousers", fields: [created_by], references: [id], onUpdate: NoAction)
+  entities                            entities  @relation(fields: [org_entity_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants                             tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_org_domains_updated_byTousers users?    @relation("org_domains_updated_byTousers", fields: [updated_by], references: [id], onUpdate: NoAction)
+
+  @@index([domain_name], map: "idx_org_domains_domain")
+  @@index([org_entity_id], map: "idx_org_domains_org")
+  @@index([tenant_id], map: "idx_org_domains_tenant")
+}
+
+model presences {
+  user_id            String    @id @db.Uuid
+  status             String    @default("OFFLINE") @db.VarChar(32)
+  active_connections Int       @default(0)
+  last_seen_at       DateTime? @db.Timestamptz(6)
+  updated_at         DateTime? @default(now()) @db.Timestamptz(6)
+  users              users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model reactions {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  message_id String    @db.Uuid
+  user_id    String    @db.Uuid
+  emoji      String    @db.VarChar(32)
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  messages   messages  @relation(fields: [message_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users      users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([message_id, user_id, emoji])
+  @@index([message_id], map: "idx_reactions_message_id")
+}
+
+model reports {
+  id                                         String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  target_type                                String                  @db.VarChar(32)
+  target_id                                  String                  @db.Uuid
+  reporter_id                                String                  @db.Uuid
+  reason                                     String                  @db.VarChar(64)
+  severity                                   String                  @default("LOW") @db.VarChar(32)
+  description                                String?
+  detected_by                                String?                 @default("USER") @db.VarChar(16)
+  target_snapshot                            Json?
+  status                                     String                  @default("OPEN") @db.VarChar(32)
+  assigned_moderator_id                      String?                 @db.Uuid
+  assigned_at                                DateTime?               @db.Timestamptz(6)
+  resolved_by_id                             String?                 @db.Uuid
+  resolved_at                                DateTime?               @db.Timestamptz(6)
+  resolution_notes                           String?
+  created_at                                 DateTime?               @default(now()) @db.Timestamptz(6)
+  updated_at                                 DateTime?               @default(now()) @db.Timestamptz(6)
+  moderation_actions                         moderation_actions[]
+  moderation_audit_logs                      moderation_audit_logs[]
+  users_reports_assigned_moderator_idTousers users?                  @relation("reports_assigned_moderator_idTousers", fields: [assigned_moderator_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_reports_reporter_idTousers           users                   @relation("reports_reporter_idTousers", fields: [reporter_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_reports_resolved_by_idTousers        users?                  @relation("reports_resolved_by_idTousers", fields: [resolved_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([reporter_id], map: "idx_reports_reporter")
+  @@index([status], map: "idx_reports_status")
+  @@index([target_id, target_type], map: "idx_reports_target")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model sub_communities {
+  id                                                     String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                                              String        @db.Uuid
+  entity_id                                              String        @unique @db.Uuid
+  community_entity_id                                    String        @db.Uuid
+  name                                                   String        @db.VarChar(255)
+  slug                                                   String        @db.VarChar(255)
+  description                                            String?
+  cover_asset_id                                         String?       @db.Uuid
+  visibility                                             String?       @default("public") @db.VarChar(50)
+  status                                                 String?       @default("active") @db.VarChar(50)
+  member_count                                           Int?          @default(0)
+  x_data                                                 Json?
+  created_at                                             DateTime?     @default(now()) @db.Timestamptz(6)
+  created_by                                             String?       @db.Uuid
+  updated_at                                             DateTime?     @default(now()) @db.Timestamptz(6)
+  updated_by                                             String?       @db.Uuid
+  entities_sub_communities_community_entity_idToentities entities      @relation("sub_communities_community_entity_idToentities", fields: [community_entity_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  media_assets                                           media_assets? @relation(fields: [cover_asset_id], references: [id], onUpdate: NoAction)
+  users_sub_communities_created_byTousers                users?        @relation("sub_communities_created_byTousers", fields: [created_by], references: [id], onUpdate: NoAction)
+  entities_sub_communities_entity_idToentities           entities      @relation("sub_communities_entity_idToentities", fields: [entity_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenants                                                tenants       @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_sub_communities_updated_byTousers                users?        @relation("sub_communities_updated_byTousers", fields: [updated_by], references: [id], onUpdate: NoAction)
+
+  @@unique([tenant_id, slug], map: "uq_sub_communities_tenant_slug")
+  @@index([community_entity_id], map: "idx_sub_communities_community")
+  @@index([tenant_id], map: "idx_sub_communities_tenant")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model tags {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category_id String     @db.Uuid
+  slug        String     @unique
+  name        String
+  status      String     @default("active")
+  is_deleted  Boolean    @default(false)
+  created_at  DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime   @default(now()) @db.Timestamptz(6)
+  categories  categories @relation(fields: [category_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model city_controls {
+  geoname_id       BigInt   @id
+  city_name        String   @db.VarChar(150)
+  state_name       String?  @db.VarChar(150)
+  country_name     String?  @db.VarChar(150)
+  is_active        Boolean  @default(true)
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  created_by       String?
+  updated_at       DateTime @default(now()) @db.Timestamptz(6)
+  updated_by       String?
+  modification_num Int      @default(0)
+  latitude         Decimal? @db.Decimal(10, 6)
+  longitude        Decimal? @db.Decimal(10, 6)
+  timezone         String?  @db.VarChar(100)
+
+  @@index([city_name], map: "idx_city_controls_city_name")
+  @@index([country_name], map: "idx_city_controls_country_name")
+  @@index([is_active], map: "idx_city_controls_is_active")
+  @@index([city_name, state_name, country_name], map: "idx_city_controls_search")
+  @@index([state_name], map: "idx_city_controls_state_name")
+}
+
+model maker_checker_requests {
+  id                                                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  action_type                                         String   @db.VarChar(100)
+  payload                                             Json
+  status                                              String   @default("pending") @db.VarChar(50)
+  maker_user_id                                       String   @db.Uuid
+  checker_user_id                                     String?  @db.Uuid
+  created_at                                          DateTime @default(now()) @db.Timestamptz(6)
+  updated_at                                          DateTime @default(now()) @db.Timestamptz(6)
+  users_maker_checker_requests_checker_user_idTousers users?   @relation("maker_checker_requests_checker_user_idTousers", fields: [checker_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_maker_checker_requests_maker_user_idTousers   users    @relation("maker_checker_requests_maker_user_idTousers", fields: [maker_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model geolite_blocks_ipv4 {
+  network                        Unsupported("cidr") @id
+  geoname_id                     BigInt?
+  registered_country_geoname_id  BigInt?
+  represented_country_geoname_id BigInt?
+  is_anonymous_proxy             Boolean?
+  is_satellite_provider          Boolean?
+  postal_code                    String?             @db.VarChar(30)
+  latitude                       Decimal?            @db.Decimal(10, 6)
+  longitude                      Decimal?            @db.Decimal(10, 6)
+  accuracy_radius                Int?
+  is_anycast                     Boolean?
+
+  @@ignore
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model geolite_blocks_ipv6 {
+  network                        Unsupported("cidr") @id
+  geoname_id                     BigInt?
+  registered_country_geoname_id  BigInt?
+  represented_country_geoname_id BigInt?
+  is_anonymous_proxy             Boolean?
+  is_satellite_provider          Boolean?
+  postal_code                    String?             @db.VarChar(30)
+  latitude                       Decimal?            @db.Decimal(10, 6)
+  longitude                      Decimal?            @db.Decimal(10, 6)
+  accuracy_radius                Int?
+  is_anycast                     Boolean?
+
+  @@ignore
+}
+
+model geolite_locations {
+  geoname_id             BigInt   @id
+  locale_code            String?  @db.VarChar(10)
+  continent_code         String?  @db.VarChar(10)
+  continent_name         String?  @db.VarChar(100)
+  country_iso_code       String?  @db.VarChar(10)
+  country_name           String?  @db.VarChar(255)
+  subdivision_1_iso_code String?  @db.VarChar(20)
+  subdivision_1_name     String?  @db.VarChar(255)
+  subdivision_2_iso_code String?  @db.VarChar(20)
+  subdivision_2_name     String?  @db.VarChar(255)
+  city_name              String?  @db.VarChar(255)
+  metro_code             String?  @db.VarChar(50)
+  time_zone              String?  @db.VarChar(100)
+  is_in_european_union   Boolean?
+  utc_offset             String?  @db.VarChar(10)
 }
 
 enum assignment_state {
@@ -1737,6 +2521,7 @@ enum content_status {
 
 enum conversation_type {
   dm
+  group
   organizer_inbox
 }
 
@@ -1947,4 +2732,25 @@ enum waitlist_state {
   offered
   converted
   lapsed
+}
+
+enum ConversationParticipantStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  BLOCKED
+  LEFT
+  EXPIRED
+}
+
+enum MessageStatus {
+  ACTIVE
+  DELETED
+  MODERATED
+  HIDDEN
+}
+
+enum MessageType {
+  TEXT
+  SYSTEM
 }

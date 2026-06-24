@@ -26,8 +26,8 @@ function Nav() {
           <a href="#activity">Activity</a>
         </div>
         <div className="nav-actions">
-          <a href={AUTH} className="nav-login">Log in</a>
-          <a href={AUTH} className="btn btn-primary btn-sm">Get started{I.arrow({ width: 15, height: 15 })}</a>
+          <a href={`${AUTH}#login`} className="nav-login">Log in</a>
+          <a href={`${AUTH}#signup`} className="btn btn-primary btn-sm">Get started{I.arrow({ width: 15, height: 15 })}</a>
           <button className="btn-ghost btn btn-sm nav-burger" aria-label="Menu" onClick={() => setOpen(o => !o)} style={{ padding: 9 }}>{I.menu()}</button>
         </div>
       </div>
@@ -88,7 +88,7 @@ function Hero() {
       <div className="hero-noise" />
 
       {/* floating chips */}
-      <HeroFloat pos={{ top: "21%", left: "5%" }} speed={-150} delay={0.6}>
+      <HeroFloat pos={{ top: "21%", left: "5%" }} speed={-150} delay={0.6} children={undefined}>
         <div className="glass-card" style={{ padding: 14, width: 224 }}>
           <div style={{ display: "flex", gap: 11, alignItems: "center" }}>
             <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg,#6d5efc,#2a7fff)", flexShrink: 0 }} />
@@ -104,7 +104,7 @@ function Hero() {
         </div>
       </HeroFloat>
 
-      <HeroFloat pos={{ top: "15%", right: "7%" }} speed={140} delay={1.2}>
+      <HeroFloat pos={{ top: "15%", right: "7%" }} speed={140} delay={1.2} children={undefined}>
         <div className="glass-card" style={{ padding: "11px 16px", display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ width: 9, height: 9, borderRadius: "50%", background: "var(--accent-grad)" }} />
           <span style={{ fontSize: 13.5, fontWeight: 600 }}>Founders Club</span>
@@ -112,7 +112,7 @@ function Hero() {
         </div>
       </HeroFloat>
 
-      <HeroFloat pos={{ top: "55%", right: "4%" }} speed={-110} delay={0.3}>
+      <HeroFloat pos={{ top: "55%", right: "4%" }} speed={-110} delay={0.3} children={undefined}>
         <div className="glass-card" style={{ padding: 14, width: 200, display: "flex", gap: 11, alignItems: "center" }}>
           <div style={{ width: 42, height: 42, borderRadius: "50%", background: gradFor("Aanya Rao"), display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 14 }}>AR</div>
           <div>
@@ -122,14 +122,14 @@ function Hero() {
         </div>
       </HeroFloat>
 
-      <HeroFloat pos={{ bottom: "17%", left: "7%" }} speed={120} delay={0.9}>
+      <HeroFloat pos={{ bottom: "17%", left: "7%" }} speed={120} delay={0.9} children={undefined}>
         <div className="glass-card" style={{ padding: "12px 16px", display: "flex", gap: 10, alignItems: "center", maxWidth: 230 }}>
           <div style={{ width: 30, height: 30, borderRadius: "50%", background: gradFor("Dev Kapoor"), flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 11 }}>DK</div>
           <span style={{ fontSize: 13, color: "var(--ink)" }}>Count me in — see you Saturday!</span>
         </div>
       </HeroFloat>
 
-      <HeroFloat pos={{ bottom: "22%", right: "13%" }} speed={-90} delay={1.5}>
+      <HeroFloat pos={{ bottom: "22%", right: "13%" }} speed={-90} delay={1.5} children={undefined}>
         <div className="glass-card" style={{ padding: "12px 18px" }}>
           <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 22 }}>+128</div>
           <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>going this week</div>
@@ -144,8 +144,8 @@ function Hero() {
           <Reveal y={20} delay={160}><p className="hero-sub">Samaagum is the home for communities, events, networking and rich profiles — one elegant place to find your people and what's happening around you.</p></Reveal>
           <Reveal y={20} delay={240}>
             <div className="hero-cta">
-              <a href={AUTH} className="btn btn-primary">Get started — it's free {I.arrow()}</a>
-              <a href="#communities" className="btn btn-ghost">Take a tour</a>
+              <a href={`${AUTH}#signup`} className="btn btn-primary">Get started — it's free {I.arrow()}</a>
+              <a href={`${AUTH}#login`} className="btn btn-ghost">Log in</a>
             </div>
           </Reveal>
         </div>

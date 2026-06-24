@@ -1,14 +1,16 @@
 import { IBaseRepository } from './IBaseRepository';
 
 export interface ICategory {
-  category_id?: string;
+  id?: string;
   parent_id?: string | null;
   slug: string;
   name: string;
+  description?: string | null;
+  icon_type?: string;
+  icon_value?: string | null;
+  display_order?: number;
   status?: string;
-  created_by_user_id?: string | null;
-  updated_by_user_id?: string | null;
-  modification_num?: number;
+  is_deleted?: boolean;
   created_at?: Date;
   updated_at?: Date;
 }

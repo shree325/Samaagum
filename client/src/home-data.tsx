@@ -4,8 +4,8 @@
    ============================================================ */
 
 const ME = {
-  name: "Aanya Reddy", handle: "@aanya", role: "Product Designer · Founder",
-  bio: "Designing calm products at the intersection of community & craft. Building Samaagum. Host of Design Systems Night. Coffee, type, and city walks.",
+  name: "", handle: "", role: "",
+  bio: "",
   location: "Bengaluru, India",
   plan: "free", // "free", "pro", "enterprise"
   stats: { connections: 248, events: 36, groups: 7 },
@@ -16,6 +16,27 @@ const PLAN_CONFIG = {
   pro: { maxGroups: 999, paid: true, customQuestions: true, advancedForums: true, premiumCovers: true },
   enterprise: { maxGroups: 999, paid: true, customQuestions: true, advancedForums: true, premiumCovers: true, analytics: true }
 };
+  stats: { connections: 0, events: 0, groups: 0 },
+};
+
+// Derive initial ME values from the JWT token stored in localStorage
+// so the profile shows the real user's email immediately on first render,
+// before the async profile fetch completes.
+(function seedMEFromToken() {
+  try {
+    const raw = localStorage.getItem('token');
+    if (!raw) return;
+    const parts = raw.split('.');
+    if (parts.length < 2) return;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    if (payload.email) {
+      const localPart = payload.email.split('@')[0];
+      // Capitalise each word: "shree.sharma" → "Shree Sharma"
+      ME.name = localPart.replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      ME.handle = `@${localPart}`;
+    }
+  } catch (e) { /* ignore token parse errors */ }
+})();
 
 const CATS = [
   ["All", "grid"], ["Startups", "spark"], ["Design", "edit"], ["Music", "fire"],
@@ -268,7 +289,30 @@ const JOIN_REQUESTS = [
   { id: "r3", groupId: "g1", user: { name: "Sam K", role: "Founder" }, date: "Oct 21", status: "pending", answers: { "Startup stage?": "Pre-seed" } }
 ];
 
+const MY_TICKETS = [
+  { id: "BL-2291", ev: "Founders & Funders Mixer — Summer Edition", cover: COVERS.sunset, tier: "VIP · Front tables", date: "Thu, Jun 18", time: "6:30 PM", venue: "Skydeck, Indiranagar", online: false, paid: "₹1,099", qty: 1, attendee: "Aanya Reddy", status: "confirmed" },
+  { id: "BL-2244", ev: "Design Systems Night #12", cover: COVERS.violet, tier: "General RSVP", date: "Sat, Jun 21", time: "5:00 PM", venue: "WeWork Galaxy", online: false, paid: "Free", qty: 1, attendee: "Aanya Reddy", status: "confirmed" },
+  { id: "BL-2102", ev: "AI Builders Demo Day", cover: COVERS.dusk, tier: "General RSVP", date: "Wed, Jun 25", time: "6:00 PM", venue: "Online", online: true, paid: "Free", qty: 1, attendee: "Aanya Reddy", status: "confirmed" },
+  { id: "BL-1998", ev: "Typography & Lettering Workshop", cover: COVERS.plum, tier: "General RSVP", date: "Wed, Jul 2", time: "11:00 AM", venue: "Rangoli Metro Art", online: false, paid: "₹1,200", qty: 1, attendee: "Aanya Reddy", status: "used" },
+];
+
+const WAITLIST_ME = {
+  ev: "Founders & Funders Mixer — Summer Edition",
+  cover: COVERS.sunset,
+  date: "Thu, Jun 18",
+  time: "6:30 PM",
+  venue: "Skydeck, Indiranagar",
+  position: 42,
+  total: 180,
+  boostPerRef: 5,
+  boostCap: 20,
+  claimWindowMins: 15,
+};
+
 Object.assign(window, {
   ME, PLAN_CONFIG, CATS, COVERS, FEATURED, EVENTS, UPCOMING, GROUPS, NEAR, TRENDING,
   PEOPLE, DISCUSSIONS, NOTIFS, THREADS, REQUESTS, JOIN_REQUESTS, INTERESTS_ME, LINKS_ME, SOCIALS,
+  ME, CATS, COVERS, FEATURED, EVENTS, UPCOMING, GROUPS, NEAR, TRENDING,
+  PEOPLE, DISCUSSIONS, NOTIFS, THREADS, REQUESTS, INTERESTS_ME, LINKS_ME, SOCIALS,
+  MY_TICKETS, WAITLIST_ME,
 });

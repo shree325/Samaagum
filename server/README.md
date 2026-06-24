@@ -63,7 +63,17 @@ DATABASE_URL=postgresql://shree@localhost:5432/samaagum
    npm install
    ```
 
-3. **Start the Development Server (with Live Reload)**:
+3. **Migrate Database**:
+   ```bash
+   npm run migrate
+   ```
+
+4. **Import GeoLite Data**:
+   ```bash
+   npm run import-geolite
+   ```
+
+5. **Start the Development Server (with Live Reload)**:
    ```bash
    npm run dev
    ```

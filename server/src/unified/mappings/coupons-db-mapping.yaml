@@ -1,0 +1,35 @@
+version: "1.0"
+provider: database
+dataType: coupons
+canonical: Coupon
+
+fieldMappings:
+  id:
+    source: id
+    type: string
+    required: true
+
+  code:
+    source: code
+    type: string
+    required: true
+
+  discountType:
+    source: discount_type
+    type: string
+    required: true
+
+  amount:
+    source: amount
+    type: number
+    required: true
+
+  dateExpires:
+    source: date_expires
+    type: string
+    required: false
+
+  isActive:
+    source: is_active
+    type: boolean
+    default: true

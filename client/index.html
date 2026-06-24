@@ -8,6 +8,27 @@
 <link rel="stylesheet" href="css/landing.css" />
 </head>
 <body class="landing">
+  <!-- Handle Google OAuth redirect: ?token=...&auth=google → save token → go to home -->
+  <script>
+    (function() {
+      var params = new URLSearchParams(window.location.search);
+      var token = params.get('token');
+      var auth  = params.get('auth');
+      var err   = params.get('auth_error');
+      if (err) {
+        // Strip error param and stay on landing so user sees the page
+        window.history.replaceState({}, '', '/');
+        return;
+      }
+      if (token && auth) {
+        localStorage.setItem('token', decodeURIComponent(token));
+        localStorage.setItem('samaagum_admin_token', decodeURIComponent(token));
+        // Redirect to home app
+        window.location.replace('pages/Samaagum Home.html');
+      }
+    })();
+  </script>
+
   <div id="root"></div>
 
   <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* ============================================================
    Samaagum Home — Group detail (forum, events, members, gallery)
    ============================================================ */
@@ -135,6 +136,17 @@ function GroupDetail({ group, st, go }) {
                           <button className="tool"><I.link /></button>
                           <button className="hbtn hbtn--primary hbtn--sm" style={{ marginLeft: "auto" }} disabled={!draft.trim()} onClick={() => setDraft("")}>Post</button>
                         </div>
+            <div style={{ minWidth:0 }}>
+              {tab==="discussion" && (
+                <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+                  <div className="composer">
+                    <Avatar name={ME.name} img={ME.img} size={40}/>
+                    <div className="ci">
+                      <textarea placeholder={`Share something with ${g.name}…`} value={draft} onChange={e=>setDraft(e.target.value)} rows={draft?3:1}/>
+                      <div className="cbar">
+                        <button className="tool"><I.image/></button>
+                        <button className="tool"><I.link/></button>
+                        <button className="hbtn hbtn--primary hbtn--sm" style={{ marginLeft:"auto" }} disabled={!draft.trim()} onClick={()=>setDraft("")}>Post</button>
                       </div>
                     </div>
                   ) : (
@@ -253,4 +265,158 @@ function GroupDetail({ group, st, go }) {
   );
 }
 
-Object.assign(window, { GroupDetail });
+function MyGroups({ st, go }) {
+  const [tab, setTab] = useState("joined");
+  const joinedIds = Array.from(st.joined || []);
+  const joinedList = GROUPS.filter(g => joinedIds.includes(g.id));
+  const createdList = st.createdGroups || [];
+
+  const list = tab === "joined" ? joinedList : createdList;
+
+  return (
+    <div className="scroll">
+      <div className="page view-enter">
+        <div className="sec-bar" style={{ marginBottom: 18 }}>
+          <h2 style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            My Groups
+            <span style={{ fontSize: 18, color: "var(--ink-3)", fontWeight: 500 }}>{joinedList.length + createdList.length}</span>
+          </h2>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
+            <div className="seg-tabs">
+              <button className={tab === "joined" ? "on" : ""} onClick={() => setTab("joined")}>Joined · {joinedList.length}</button>
+              <button className={tab === "created" ? "on" : ""} onClick={() => setTab("created")}>Created · {createdList.length}</button>
+            </div>
+            <button className="hbtn hbtn--primary hbtn--sm" onClick={() => go("create-group")}>
+              <I.plus style={{ width: 14, height: 14 }} /> Create Group
+            </button>
+          </div>
+        </div>
+
+        {list.length === 0 ? (
+          <Empty icon={<I.groups />} title="No groups found" text="Join or create a community to see them here." action={<button className="hbtn hbtn--primary" onClick={() => go("discover")}>Explore groups</button>} />
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+            {list.map(g => (
+              <div key={g.id} className="fcard" style={{ overflow: "hidden", display: "flex", flexDirection: "column", cursor: "pointer" }} onClick={() => tab === "created" ? go("group-dashboard", g) : go("group", g)}>
+                <div style={{ height: 80, background: g.cover, position: "relative" }}>
+                  <Grain />
+                  <div style={{ position: "absolute", left: 16, bottom: -20, width: 48, height: 48, borderRadius: 12, background: g.cover, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, boxShadow: "var(--sh-sm)", border: "2px solid var(--surface)" }}>{g.icon}</div>
+                </div>
+                <div style={{ padding: "30px 16px 16px", flex: 1, display: "flex", flexDirection: "column" }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>{g.name}</h3>
+                  <p style={{ fontSize: 12.5, color: "var(--ink-2)", margin: "8px 0 16px", flex: 1, lineBreak: "anywhere" }}>{g.desc}</p>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "var(--ink-3)", borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+                    <span>{g.members?.toLocaleString() || 1} members</span>
+                    {tab === "created" ? (
+                      <span style={{ color: "var(--accent-2)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+                        Manage <I.arrowR style={{ width: 12, height: 12 }} />
+                      </span>
+                    ) : (
+                      <span style={{ color: "var(--ink-3)" }}>Joined</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GroupDashboard({ group, st, go }) {
+  const g = group || st.createdGroups[0];
+  const [members, setMembers] = useState(g.memberNames || ["Aanya Reddy", "Mira Shah", "Leo Patel", "Zoya Nair"]);
+  const [requests, setRequests] = useState(["Kabir Anand", "Mira Shah", "Riya Thomas"]);
+
+  const handleApprove = (name) => {
+    setRequests(prev => prev.filter(r => r !== name));
+    setMembers(prev => [...prev, name]);
+  };
+  const handleDecline = (name) => {
+    setRequests(prev => prev.filter(r => r !== name));
+  };
+
+  return (
+    <div className="scroll">
+      <div className="flow view-enter" style={{ padding: "26px 24px 80px" }}>
+        <div className="flow-head" style={{ marginBottom: 20 }}>
+          <button className="back" onClick={() => go("groups")}><I.arrowL /></button>
+          <div>
+            <div className="flow-title">Group Dashboard</div>
+            <div className="flow-sub">{g.name}</div>
+          </div>
+        </div>
+
+        <div className="fcard" style={{ padding: 20 }}>
+          <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 20 }}>
+            <div style={{ width: 64, height: 64, borderRadius: 16, background: g.cover, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, flexShrink: 0 }}>{g.icon}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 600, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}</h3>
+              <div style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 4 }}>{g.cat} · {members.length} members</div>
+            </div>
+            <button className="hbtn hbtn--primary hbtn--sm" style={{ marginLeft: "auto" }} onClick={() => go("edit-group", g)}>
+              <I.edit style={{ width: 14, height: 14 }} /> Edit Group
+            </button>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 24 }}>
+            <div style={{ background: "var(--field)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Total Members</div>
+              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>{members.length}</div>
+            </div>
+            <div style={{ background: "var(--field)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Forums Posts</div>
+              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>{g.posts || 0}</div>
+            </div>
+            <div style={{ background: "var(--field)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Pending Join Requests</div>
+              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: requests.length > 0 ? "var(--accent-2)" : "var(--ink)" }}>{requests.length}</div>
+            </div>
+          </div>
+
+          {requests.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10, display: "flex", gap: 6, alignItems: "center" }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent-2)" }} />
+                Pending Approvals ({requests.length})
+              </h4>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {requests.map(r => (
+                  <div key={r} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: 10, border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <Avatar name={r} size={32} />
+                      <span style={{ fontSize: 13.5, fontWeight: 600 }}>{r}</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button className="hbtn hbtn--soft hbtn--sm" onClick={() => handleDecline(r)} style={{ color: "#ef4444" }}>Decline</button>
+                      <button className="hbtn hbtn--primary hbtn--sm" onClick={() => handleApprove(r)}>Approve</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Members ({members.length})</h4>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {members.map((m, idx) => (
+                <div key={m} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <Avatar name={m} size={28} />
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>{m}</span>
+                  </div>
+                  <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{idx === 0 ? "Owner" : "Member"}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { GroupDetail, MyGroups, GroupDashboard });

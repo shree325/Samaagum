@@ -69,6 +69,9 @@ export * from './IR_outbound_webhooks';
 export * from './IR_platform_settings';
 export * from './IR_support_cases';
 export * from './IR_user_badges';
+export * from './IR_adminResponsibilities';
+export * from './IR_adminPositions';
+export * from './IR_adminRoles';
 
 // ─── Implementations (R_) ───────────────────────────────────────────
 export * from './R_users';
@@ -138,3 +141,14 @@ export * from './R_outbound_webhooks';
 export * from './R_platform_settings';
 export * from './R_support_cases';
 export * from './R_user_badges';
+export * from './R_adminResponsibilities';
+export * from './R_adminPositions';
+export * from './R_adminRoles';
+export * from './IR_adminSubscriptionPlans';
+export * from './IR_adminCoupons';
+export * from './R_adminSubscriptionPlans';
+export * from './R_adminCoupons';
+export * from './IR_tags';
+export * from './R_tags';
+export * from './ICityControl';
+export * from './R_cityControls';

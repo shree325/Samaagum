@@ -19,6 +19,7 @@ const Ic = {
   mic: (p) => <svg width="17" height="17" viewBox="0 0 24 24" fill="none" {...p}><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="1.7"/><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>,
   compass: (p) => <svg width="17" height="17" viewBox="0 0 24 24" fill="none" {...p}><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7"/><path d="M15.5 8.5l-2 5-5 2 2-5z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"/></svg>,
   google: (p) => <svg width="19" height="19" viewBox="0 0 24 24" {...p}><path fill="#EA4335" d="M12 10.2v3.9h5.5c-.24 1.4-1.7 4.1-5.5 4.1-3.3 0-6-2.7-6-6.1s2.7-6.1 6-6.1c1.9 0 3.1.8 3.9 1.5l2.6-2.6C17.1 2.6 14.8 1.6 12 1.6 6.7 1.6 2.4 5.9 2.4 12s4.3 10.4 9.6 10.4c5.5 0 9.2-3.9 9.2-9.4 0-.6-.1-1.1-.2-1.6H12z"/><path fill="#34A853" d="M3.9 7.3l3.2 2.3C8 7.7 9.8 6.4 12 6.4c1.9 0 3.1.8 3.9 1.5l2.6-2.6C17.1 3.4 14.8 2.4 12 2.4 8 2.4 4.6 4.7 3.9 7.3z" opacity="0"/></svg>,
+  linkedin: (p) => <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.779-1.75-1.75s.784-1.75 1.75-1.75 1.75.779 1.75 1.75-.784 1.75-1.75 1.75zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>,
 };
 
 /* ---------------- Logo ---------------- */
