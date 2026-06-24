@@ -51,8 +51,7 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const overrideLocation = () => {};
-  const city = "Global";
+  const [city, setCity] = useState("Global");
   const [cityOpen, setCityOpen] = useState(false);
   const [meSync, setMeSync] = useState(0); // Add a tick to force re-render when ME updates asynchronously
 
@@ -303,7 +302,7 @@ function App() {
     if (v === "profile") return <Profile st={st} go={go} />;
     if (v === "public-profile") return <PublicProfile profile={cur.param} go={go} />;
     if (v === "notifications") return <Notifications st={st} go={go} />;
-    if (v === "messages") return <Messages st={st} go={go} mobile={mobile} />;
+    if (v === "messages") return <Messages st={st} go={go} mobile={mobile} socket={socket} />;
     if (v === "create-event") return <CreateEvent go={go} mobile={mobile} st={st} />;
     if (v === "edit-event") return <CreateEvent editEv={cur.param} go={go} mobile={mobile} st={st} />;
     if (v === "create-group") return <CreateGroup go={go} mobile={mobile} st={st} />;

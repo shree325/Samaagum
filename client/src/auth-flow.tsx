@@ -229,8 +229,6 @@ function ScreenLogin({ m }) {
     }
   };
 
-  const hasOauth = providers.length > 0;
-
   return (
     <div>
       <h2 className="auth-h">Welcome Back</h2>
