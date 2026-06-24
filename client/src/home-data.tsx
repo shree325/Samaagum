@@ -16,8 +16,6 @@ const PLAN_CONFIG = {
   pro: { maxGroups: 999, paid: true, customQuestions: true, advancedForums: true, premiumCovers: true },
   enterprise: { maxGroups: 999, paid: true, customQuestions: true, advancedForums: true, premiumCovers: true, analytics: true }
 };
-  stats: { connections: 0, events: 0, groups: 0 },
-};
 
 // Derive initial ME values from the JWT token stored in localStorage
 // so the profile shows the real user's email immediately on first render,

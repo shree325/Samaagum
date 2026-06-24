@@ -128,7 +128,7 @@ function GroupDetail({ group, st, go }) {
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   {canPost ? (
                     <div className="composer">
-                      <Avatar name={ME.name} size={40} />
+                      <Avatar name={ME.name} img={ME.img} size={40} />
                       <div className="ci">
                         <textarea placeholder={`Share something with ${g.name}…`} value={draft} onChange={e => setDraft(e.target.value)} rows={draft ? 3 : 1} />
                         <div className="cbar">
@@ -136,17 +136,6 @@ function GroupDetail({ group, st, go }) {
                           <button className="tool"><I.link /></button>
                           <button className="hbtn hbtn--primary hbtn--sm" style={{ marginLeft: "auto" }} disabled={!draft.trim()} onClick={() => setDraft("")}>Post</button>
                         </div>
-            <div style={{ minWidth:0 }}>
-              {tab==="discussion" && (
-                <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-                  <div className="composer">
-                    <Avatar name={ME.name} img={ME.img} size={40}/>
-                    <div className="ci">
-                      <textarea placeholder={`Share something with ${g.name}…`} value={draft} onChange={e=>setDraft(e.target.value)} rows={draft?3:1}/>
-                      <div className="cbar">
-                        <button className="tool"><I.image/></button>
-                        <button className="tool"><I.link/></button>
-                        <button className="hbtn hbtn--primary hbtn--sm" style={{ marginLeft:"auto" }} disabled={!draft.trim()} onClick={()=>setDraft("")}>Post</button>
                       </div>
                     </div>
                   ) : (

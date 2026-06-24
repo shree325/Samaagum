@@ -157,7 +157,6 @@ function ProfileMenu({ go, dark, onToggleTheme }) {
         <button className="pmenu-it" onClick={onToggleTheme}>{dark? <I.sun/> : <I.moon/>}{dark? "Light mode":"Dark mode"}</button>
       </div>
       <div className="pmenu-foot">
-        <button className="pmenu-it muted" onClick={() => window.location.href = "../index.html"}>
         <button 
           className="pmenu-it muted" 
           onClick={() => {
