@@ -28,6 +28,9 @@ const getRazorpay = () => {
     }
 };
 
+// In-memory cache for subscription previews (15 mins TTL)
+const previewCache = new Map<string, any>();
+
 export const userSubscriptionRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     const planRepo = new R_adminSubscriptionPlans();
     const couponRepo = new R_adminCoupons();
@@ -59,20 +62,49 @@ export const userSubscriptionRoutes: FastifyPluginAsync = async (fastify: Fastif
                 return reply.status(404).send({ success: false, message: 'User not found' });
             }
 
-            // Fetch current active order representing subscription details
-            const activeOrder = await prisma.subscription_orders.findFirst({
+            // Fetch ALL completed orders for this user
+            const allOrders = await prisma.subscription_orders.findMany({
                 where: {
                     user_id: userId,
-                    status: 'completed',
-                    subscription_status: 'active',
-                    subscription_end_date: {
-                        gt: new Date()
-                    }
+                    status: 'completed'
                 },
-                orderBy: {
-                    completed_at: 'desc'
-                }
+                orderBy: { completed_at: 'desc' }
             });
+
+            const activeOrder = allOrders.find(o => o.subscription_status === 'active' && o.subscription_end_date && o.subscription_end_date > new Date());
+            
+            // We need the plan names for the active and previous plans
+            const planIdsToFetch = Array.from(new Set(allOrders.map(o => o.plan_id)));
+            const planRecords = await prisma.admin_subscription_plans.findMany({
+                where: { id: { in: planIdsToFetch } },
+                select: { id: true, name: true }
+            });
+            const planMap = new Map(planRecords.map(p => [p.id, p.name.toLowerCase()]));
+
+            // Collect all previously purchased plans, separating switchable (unexpired) from expired
+            const switchablePlans: { plan: string, planId: string, billingCycle: string, orderId: string }[] = [];
+            const previousPlans: { plan: string, planId: string, billingCycle: string }[] = [];
+            
+            for (const order of allOrders) {
+                if (order.id === activeOrder?.id) continue;
+                const planName = planMap.get(order.plan_id);
+                if (planName) {
+                    const cycle = order.plan_type;
+                    const isExpired = !order.subscription_end_date || order.subscription_end_date <= new Date();
+
+                    if (!isExpired) {
+                        if (!switchablePlans.find(p => p.planId === order.plan_id && p.billingCycle === cycle)) {
+                            switchablePlans.push({ plan: planName, planId: order.plan_id, billingCycle: cycle, orderId: order.id });
+                        }
+                    } else {
+                        if (!switchablePlans.find(p => p.planId === order.plan_id && p.billingCycle === cycle)) {
+                            if (!previousPlans.find(p => p.planId === order.plan_id && p.billingCycle === cycle)) {
+                                previousPlans.push({ plan: planName, planId: order.plan_id, billingCycle: cycle });
+                            }
+                        }
+                    }
+                }
+            }
 
             // Fetch user access profile (role, position, responsibilities)
             const roleAssignment = await prisma.$queryRawUnsafe<any[]>(
@@ -111,19 +143,26 @@ export const userSubscriptionRoutes: FastifyPluginAsync = async (fastify: Fastif
                 }
             }
 
+            let actualPlanName = activeOrder ? (planMap.get(activeOrder.plan_id) || 'free') : null;
+
             return {
                 success: true,
                 data: {
                     subscription: activeOrder ? {
-                        plan: activeOrder.plan_type,
+                        plan: actualPlanName,
+                        billingCycle: activeOrder.plan_type,
                         status: 'active',
                         startDate: activeOrder.subscription_start_date,
                         endDate: activeOrder.subscription_end_date,
                         planId: activeOrder.plan_id,
-                        orderNumber: activeOrder.order_number
+                        orderNumber: activeOrder.order_number,
+                        switchablePlans,
+                        previousPlans
                     } : {
-                        plan: 'free',
-                        status: 'active'
+                        plan: null,
+                        status: 'inactive',
+                        switchablePlans,
+                        previousPlans
                     },
                     role: roleDetails,
                     position: positionDetails,
@@ -134,6 +173,41 @@ export const userSubscriptionRoutes: FastifyPluginAsync = async (fastify: Fastif
                     }
                 }
             };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // 2.5 POST /switch - Switch active plan freely
+    fastify.post('/switch', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            const userId = request.user.id;
+            const { orderId } = request.body as { orderId: string };
+
+            if (!orderId) {
+                return reply.status(400).send({ success: false, message: 'Missing orderId' });
+            }
+
+            const targetOrder = await prisma.subscription_orders.findUnique({
+                where: { id: orderId }
+            });
+
+            if (!targetOrder || targetOrder.user_id !== userId || targetOrder.status !== 'completed') {
+                return reply.status(400).send({ success: false, message: 'Invalid order for switching' });
+            }
+
+            if (!targetOrder.subscription_end_date || targetOrder.subscription_end_date <= new Date()) {
+                return reply.status(400).send({ success: false, message: 'Order has expired' });
+            }
+
+            const { SubscriptionActivationService } = await import('../services/SubscriptionActivationService');
+            const success = await SubscriptionActivationService.switchPlan(orderId);
+
+            if (success) {
+                return { success: true, message: 'Successfully switched active plan' };
+            } else {
+                return reply.status(500).send({ success: false, message: 'Failed to switch plan' });
+            }
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });
         }
@@ -507,6 +581,372 @@ export const userSubscriptionRoutes: FastifyPluginAsync = async (fastify: Fastif
                 orderBy: { created_at: 'desc' }
             });
             return { success: true, data: orders };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // 7.5 POST /payment/preview — Generate a preview for subscription
+    fastify.post('/payment/preview', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            const { planId, billingCycle, shippingAddress = {}, billingAddress = {}, couponCode } = request.body as any;
+            const tenantId = request.user?.tenantId || null;
+            const userEmail = request.user?.email || request.user?.primary_email || '';
+
+            const plan = await planRepo.getById(planId);
+            if (!plan || !plan.is_active) {
+                return reply.status(404).send({ success: false, message: 'Subscription plan not found or inactive' });
+            }
+
+            const pricingInfo = plan.pricing as any;
+            const priceObj = billingCycle === 'yearly' ? pricingInfo.yearly : pricingInfo.monthly;
+            if (!priceObj) {
+                return reply.status(400).send({ success: false, message: `Pricing details not found for cycle: ${billingCycle}` });
+            }
+
+            const subtotal = Number(priceObj.amount || 0);
+
+            // Validate Coupon
+            let discountAmount = 0;
+            if (couponCode) {
+                const coupon = await couponRepo.findByCode(couponCode, tenantId);
+                let couponValid = false;
+
+                if (coupon && coupon.is_active) {
+                    const isExpired = coupon.date_expires && new Date(coupon.date_expires) < new Date();
+                    const limits = coupon.usage_limits as any;
+                    const limitReached = limits?.usageLimit && coupon.usage_count >= limits.usageLimit;
+                    const restrictions = coupon.usage_restrictions as any;
+                    const meetsMinSpend = !restrictions?.minimumAmount || subtotal >= restrictions.minimumAmount;
+
+                    let emailAllowed = true;
+                    if (restrictions?.allowedEmails && Array.isArray(restrictions.allowedEmails) && restrictions.allowedEmails.length > 0) {
+                        emailAllowed = restrictions.allowedEmails.map((e: string) => e.toLowerCase()).includes(userEmail.toLowerCase());
+                    }
+
+                    if (!isExpired && !limitReached && meetsMinSpend && emailAllowed) {
+                        couponValid = true;
+                        const couponAmount = Number(coupon.amount);
+                        if (coupon.discount_type === 'percent') {
+                            discountAmount = (subtotal * couponAmount) / 100;
+                        } else {
+                            discountAmount = couponAmount;
+                        }
+                        discountAmount = Math.min(discountAmount, subtotal);
+                    }
+                }
+
+                if (!couponValid) {
+                    return reply.status(400).send({
+                        success: false,
+                        code: 'COUPON_INVALID',
+                        message: 'Coupon is no longer valid.'
+                    });
+                }
+            }
+
+            const discountedSubtotal = Math.max(0, subtotal - discountAmount);
+            let taxTotal = 0;
+            if (billingAddress?.country === 'IN') {
+                const gstAmount = discountedSubtotal * 0.18;
+                taxTotal = Number(gstAmount.toFixed(2));
+            }
+
+            const totalAmount = Number((discountedSubtotal + taxTotal).toFixed(2));
+
+            // Generate previewId and cache
+            const previewId = `prev_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+            const previewData = {
+                previewId,
+                planName: plan.display_name,
+                billingCycle,
+                currency: priceObj.currency || 'INR',
+                baseAmount: subtotal,
+                discountAmount: discountAmount,
+                gstAmount: taxTotal,
+                totalAmount: totalAmount,
+                expiresAt: Date.now() + 15 * 60 * 1000 // 15 mins
+            };
+
+            previewCache.set(previewId, previewData);
+
+            // Auto cleanup after 15 mins
+            setTimeout(() => {
+                previewCache.delete(previewId);
+            }, 15 * 60 * 1000);
+
+            return { success: true, data: previewData };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // 8. POST /payment/create-order — Create local order and Razorpay order intent
+    fastify.post('/payment/create-order', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            const { planId, billingCycle, shippingAddress = {}, billingAddress = {}, couponCode, previewId } = request.body as any;
+            const userId = request.user?.id;
+            const tenantId = request.user?.tenantId || null;
+            const userEmail = request.user?.email || request.user?.primary_email || '';
+
+            if (!userId) {
+                return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            }
+
+            // Preview Validation
+            if (!previewId || !previewCache.has(previewId)) {
+                return reply.status(400).send({
+                    success: false,
+                    code: 'PREVIEW_EXPIRED',
+                    message: 'Pricing has expired. Please review your order again.'
+                });
+            }
+
+            const plan = await planRepo.getById(planId);
+            if (!plan || !plan.is_active) {
+                return reply.status(404).send({ success: false, message: 'Subscription plan not found or inactive' });
+            }
+
+            const pricingInfo = plan.pricing as any;
+            const priceObj = billingCycle === 'yearly' ? pricingInfo.yearly : pricingInfo.monthly;
+            if (!priceObj) {
+                return reply.status(400).send({ success: false, message: `Pricing details not found for cycle: ${billingCycle}` });
+            }
+
+            const subtotal = Number(priceObj.amount || 0);
+
+            // Validate Coupon (Revalidation)
+            let discountAmount = 0;
+            let finalCouponCode = null;
+            if (couponCode) {
+                const coupon = await couponRepo.findByCode(couponCode, tenantId);
+                let couponValid = false;
+
+                if (coupon && coupon.is_active) {
+                    const isExpired = coupon.date_expires && new Date(coupon.date_expires) < new Date();
+                    const limits = coupon.usage_limits as any;
+                    const limitReached = limits?.usageLimit && coupon.usage_count >= limits.usageLimit;
+                    const restrictions = coupon.usage_restrictions as any;
+                    const meetsMinSpend = !restrictions?.minimumAmount || subtotal >= restrictions.minimumAmount;
+
+                    // Check email restriction
+                    let emailAllowed = true;
+                    if (restrictions?.allowedEmails && Array.isArray(restrictions.allowedEmails) && restrictions.allowedEmails.length > 0) {
+                        emailAllowed = restrictions.allowedEmails.map((e: string) => e.toLowerCase()).includes(userEmail.toLowerCase());
+                    }
+
+                    if (!isExpired && !limitReached && meetsMinSpend && emailAllowed) {
+                        couponValid = true;
+                        const couponAmount = Number(coupon.amount);
+                        if (coupon.discount_type === 'percent') {
+                            discountAmount = (subtotal * couponAmount) / 100;
+                        } else {
+                            discountAmount = couponAmount;
+                        }
+                        discountAmount = Math.min(discountAmount, subtotal);
+                        finalCouponCode = coupon.code;
+                        await couponRepo.incrementUsage(coupon.id!);
+                    }
+                }
+
+                if (!couponValid) {
+                    return reply.status(400).send({
+                        success: false,
+                        code: 'COUPON_INVALID',
+                        message: 'Coupon is no longer valid.'
+                    });
+                }
+            }
+
+            const discountedSubtotal = Math.max(0, subtotal - discountAmount);
+            let taxTotal = 0;
+            const taxes: any[] = [];
+            if (billingAddress?.country === 'IN') {
+                const gstAmount = discountedSubtotal * 0.18;
+                taxes.push({ name: 'GST', rate: 18, amount: Number(gstAmount.toFixed(2)), compound: false });
+                taxTotal = Number(gstAmount.toFixed(2));
+            }
+
+            const total = Number((discountedSubtotal + taxTotal).toFixed(2));
+
+            // Generate unique order number
+            const orderCount = await prisma.subscription_orders.count();
+            const orderNumber = `SUB-${String(orderCount + 1).padStart(6, '0')}`;
+
+            // Create local pending order record
+            const order = await prisma.subscription_orders.create({
+                data: {
+                    order_number: orderNumber,
+                    user_id: userId,
+                    tenant_id: tenantId,
+                    status: 'pending',
+                    plan_id: plan.id!,
+                    plan_type: billingCycle,
+                    shipping_address: shippingAddress,
+                    billing_address: billingAddress,
+                    subtotal,
+                    tax_total: taxTotal,
+                    total,
+                    currency: priceObj.currency || 'INR',
+                    taxes,
+                    coupon_code: finalCouponCode,
+                    discount_amount: discountAmount,
+                    payment_method: 'razorpay',
+                    payment_method_title: 'Razorpay',
+                    payment_status: 'pending',
+                    subscription_status: 'pending',
+                    completed_at: null
+                }
+            });
+
+            // Initialize Razorpay
+            const razorpay = getRazorpay();
+            if (!razorpay) {
+                // Sandbox/Mock payment mode activated due to missing Razorpay keys
+                console.log('Sandbox/Mock payment mode activated due to missing Razorpay keys');
+                const mockPaymentIntentId = `pay_mock_${crypto.randomBytes(8).toString('hex')}`;
+                await prisma.subscription_orders.update({
+                    where: { id: order.id },
+                    data: {
+                        payment_intent_id: mockPaymentIntentId,
+                        payment_status: 'processing',
+                        updated_at: new Date()
+                    }
+                });
+                return {
+                    success: true,
+                    sandbox: true,
+                    data: {
+                        orderId: mockPaymentIntentId,
+                        amount: Math.round(total * 100),
+                        currency: order.currency,
+                        key: 'mock_key_id',
+                        localOrderId: order.id
+                    }
+                };
+            }
+
+            const razorpayOrder = await razorpay.orders.create({
+                amount: Math.round(total * 100), // paise
+                currency: order.currency || 'INR',
+                receipt: order.order_number,
+                notes: {
+                    orderId: order.id,
+                    orderNumber: order.order_number,
+                    userId
+                }
+            });
+
+            await prisma.subscription_orders.update({
+                where: { id: order.id },
+                data: {
+                    payment_intent_id: razorpayOrder.id,
+                    payment_status: 'processing',
+                    updated_at: new Date()
+                }
+            });
+
+            return {
+                success: true,
+                sandbox: false,
+                data: {
+                    orderId: razorpayOrder.id,
+                    amount: razorpayOrder.amount,
+                    currency: razorpayOrder.currency,
+                    key: process.env.RAZORPAY_KEY_ID,
+                    localOrderId: order.id
+                }
+            };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // 9. POST /payment/verify — Verify Razorpay payment and activate subscription
+    fastify.post('/payment/verify', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            const { localOrderId, razorpayOrderId, razorpayPaymentId, razorpaySignature } = request.body as any;
+            const userId = request.user?.id;
+
+            if (!userId) {
+                return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            }
+
+            const order = await prisma.subscription_orders.findFirst({
+                where: {
+                    id: localOrderId,
+                    user_id: userId,
+                    payment_intent_id: razorpayOrderId
+                }
+            });
+
+            if (!order) {
+                return reply.status(404).send({ success: false, message: 'Subscription order not found' });
+            }
+
+            // Verify Signature
+            const isMockBypass = razorpayOrderId.startsWith('pay_mock_') && razorpayPaymentId === 'mock_payment_id';
+
+            if (!isMockBypass) {
+                const secret = process.env.RAZORPAY_KEY_SECRET || '';
+                const text = `${razorpayOrderId}|${razorpayPaymentId}`;
+                const expectedSignature = crypto
+                    .createHmac('sha256', secret)
+                    .update(text)
+                    .digest('hex');
+
+                if (expectedSignature !== razorpaySignature) {
+                    await prisma.subscription_orders.update({
+                        where: { id: localOrderId },
+                        data: {
+                            payment_status: 'failed',
+                            status: 'failed',
+                            updated_at: new Date()
+                        }
+                    });
+                    return reply.status(400).send({ success: false, message: 'Payment verification signature mismatch' });
+                }
+            }
+
+            // Success
+            await prisma.subscription_orders.update({
+                where: { id: localOrderId },
+                data: {
+                    payment_transaction_id: razorpayPaymentId,
+                    payment_status: 'completed',
+                    payment_paid_date: new Date(),
+                    payment_gateway_response: { signatureVerified: true, isMock: isMockBypass },
+                    status: 'completed',
+                    completed_at: new Date(),
+                    updated_at: new Date()
+                }
+            });
+
+            // Activate subscription benefits & role assignment
+            await SubscriptionActivationService.activate(localOrderId);
+
+            // Fetch Plan details to get plan display name
+            const plan = await planRepo.getById(order.plan_id);
+
+            // Fetch updated order to get recalculated dates from activation service
+            const updatedOrder = await prisma.subscription_orders.findUnique({
+                where: { id: localOrderId }
+            });
+
+            return {
+                success: true,
+                message: 'Payment verified and subscription activated successfully',
+                data: {
+                    order_number: order.order_number,
+                    plan_name: plan?.display_name || 'Samaagum Subscription',
+                    billing_cycle: order.plan_type,
+                    activated_at: updatedOrder?.subscription_start_date?.toISOString() || new Date().toISOString(),
+                    next_billing_at: updatedOrder?.subscription_end_date?.toISOString() || new Date().toISOString(),
+                    subscription_status: 'active',
+                    total: Number(order.total)
+                }
+            };
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });
         }

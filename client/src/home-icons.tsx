@@ -99,7 +99,7 @@ function Avatar({ name, size = 40, img, className = "", style = {} }) {
   return (
     <div className={`avatar av ${className}`} style={{
       width: size, height: size, fontSize: size * 0.36,
-      background: img ? `url(${img})` : gradFor(name), backgroundSize: "cover", ...style,
+      backgroundImage: img ? `url(${img})` : gradFor(name), backgroundSize: "cover", ...style,
     }}>{!img && initials(name)}</div>
   );
 }

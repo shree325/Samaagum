@@ -61,196 +61,196 @@ const positions = [
 
 
 const rolesToSeed = [
-  {
-    key: 'super_admin',
-    name: 'Super Admin',
-    level: 'platform',
-    phase: 'MVP-0',
-    reserved: true,
-    baseline_capabilities: [
-      'rbac.manage', 'platform.settings', 'tenant.manage', 'user.manage',
-      'event.cancel', 'refund.approve', 'checkin.bulk', 'checkin.gate_staff', 'checkin.view'
-    ]
-  },
-  {
-    key: 'platform_admin',
-    name: 'Platform Admin',
-    level: 'platform',
-    phase: 'MVP-0',
-    reserved: false,
-    baseline_capabilities: [
-      'platform.settings', 'tenant.manage', 'user.manage',
-      'event.cancel', 'refund.approve', 'checkin.bulk', 'checkin.gate_staff', 'checkin.view'
-    ]
-  },
-  {
-    key: 'support_admin',
-    name: 'Support Admin',
-    level: 'platform',
-    phase: 'Phase-1.5',
-    reserved: false,
-    baseline_capabilities: ['support.view', 'user.view', 'checkin.view']
-  },
-  {
-    key: 'org_owner',
-    name: 'Organization Owner',
-    level: 'org',
-    phase: 'Phase-1.5',
-    reserved: true,
-    baseline_capabilities: ['org.manage', 'org.finance', 'org.settings']
-  },
-  {
-    key: 'org_admin',
-    name: 'Organization Admin',
-    level: 'org',
-    phase: 'Phase-1.5',
-    reserved: true,
-    baseline_capabilities: ['org.manage', 'org.settings']
-  },
-  {
-    key: 'community_owner',
-    name: 'Community Owner',
-    level: 'community',
-    phase: 'MVP-1',
-    reserved: true,
-    baseline_capabilities: ['community.manage', 'community.settings']
-  },
-  {
-    key: 'community_admin',
-    name: 'Community Admin',
-    level: 'community',
-    phase: 'MVP-1',
-    reserved: true,
-    baseline_capabilities: ['community.manage']
-  },
-  {
-    key: 'community_moderator',
-    name: 'Community Moderator',
-    level: 'community',
-    phase: 'MVP-1',
-    reserved: true,
-    baseline_capabilities: ['community.moderate']
-  },
-  {
-    key: 'group_owner',
-    name: 'Group Owner',
-    level: 'group',
-    phase: 'MVP',
-    reserved: false,
-    baseline_capabilities: ['group.manage', 'group.settings']
-  },
-  {
-    key: 'group_admin',
-    name: 'Group Admin',
-    level: 'group',
-    phase: 'MVP',
-    reserved: false,
-    baseline_capabilities: ['group.manage']
-  },
-  {
-    key: 'group_member',
-    name: 'Group Member',
-    level: 'group',
-    phase: 'MVP',
-    reserved: false,
-    baseline_capabilities: ['group.view']
-  },
-  {
-    key: 'event_owner',
-    name: 'Event Owner',
-    level: 'event',
-    phase: 'MVP',
-    reserved: true,
-    baseline_capabilities: [
-      'checkin.gate_staff', 'checkin.bulk', 'checkin.view',
-      'event.configure_tickets', 'refund.approve', 'event.cancel', 'event.manage'
-    ]
-  },
-  {
-    key: 'ticket_scanner',
-    name: 'Ticket Scanner',
-    level: 'event',
-    phase: 'MVP',
-    reserved: false,
-    baseline_capabilities: ['checkin.gate_staff', 'checkin.view']
-  },
-  {
-    key: 'event_manager',
-    name: 'Event Manager',
-    level: 'event',
-    phase: 'MVP',
-    reserved: false,
-    baseline_capabilities: [
-      'checkin.gate_staff', 'checkin.bulk', 'checkin.view',
-      'event.configure_tickets', 'refund.approve', 'event.cancel'
-    ]
-  },
-  {
-    key: 'co_host',
-    name: 'Co-Host',
-    level: 'event',
-    phase: 'MVP',
-    reserved: false,
-    baseline_capabilities: [
-      'checkin.gate_staff', 'checkin.bulk', 'checkin.view', 'event.configure_tickets'
-    ]
-  },
-  {
-    key: 'checkin_lead',
-    name: 'Checkin Lead',
-    level: 'event',
-    phase: 'MVP',
-    reserved: false,
-    baseline_capabilities: ['checkin.gate_staff', 'checkin.bulk', 'checkin.view']
-  },
-  {
-    key: 'gate_staff',
-    name: 'Gate Staff',
-    level: 'event',
-    phase: 'MVP',
-    reserved: false,
-    baseline_capabilities: ['checkin.gate_staff', 'checkin.view']
-  },
-  {
-    key: 'session_gate_staff',
-    name: 'Session Gate Staff',
-    level: 'event',
-    phase: 'MVP',
-    reserved: false,
-    baseline_capabilities: ['checkin.gate_staff']
-  },
-  {
-    key: 'finance_viewer',
-    name: 'Finance Viewer',
-    level: 'event',
-    phase: 'MVP',
-    reserved: false,
-    baseline_capabilities: ['finance.view']
-  },
-  {
-    key: 'registered_user',
-    name: 'Registered User',
-    level: 'participation',
-    phase: 'MVP',
-    reserved: false,
-    baseline_capabilities: ['event.view', 'community.view']
-  },
-  {
-    key: 'guest',
-    name: 'Guest',
-    level: 'participation',
-    phase: 'MVP',
-    reserved: false,
-    baseline_capabilities: ['event.view']
-  },
-  {
-    key: 'member',
-    name: 'Member',
-    level: 'participation',
-    phase: 'MVP',
-    reserved: false,
-    baseline_capabilities: ['event.view', 'community.view', 'group.view']
-  }
+    {
+        key: 'super_admin',
+        name: 'Super Admin',
+        level: 'platform',
+        phase: 'MVP-0',
+        reserved: true,
+        baseline_capabilities: [
+            'rbac.manage', 'platform.settings', 'tenant.manage', 'user.manage',
+            'event.cancel', 'refund.approve', 'checkin.bulk', 'checkin.gate_staff', 'checkin.view'
+        ]
+    },
+    {
+        key: 'platform_admin',
+        name: 'Platform Admin',
+        level: 'platform',
+        phase: 'MVP-0',
+        reserved: false,
+        baseline_capabilities: [
+            'platform.settings', 'tenant.manage', 'user.manage',
+            'event.cancel', 'refund.approve', 'checkin.bulk', 'checkin.gate_staff', 'checkin.view'
+        ]
+    },
+    {
+        key: 'support_admin',
+        name: 'Support Admin',
+        level: 'platform',
+        phase: 'Phase-1.5',
+        reserved: false,
+        baseline_capabilities: ['support.view', 'user.view', 'checkin.view']
+    },
+    {
+        key: 'org_owner',
+        name: 'Organization Owner',
+        level: 'org',
+        phase: 'Phase-1.5',
+        reserved: true,
+        baseline_capabilities: ['org.manage', 'org.finance', 'org.settings']
+    },
+    {
+        key: 'org_admin',
+        name: 'Organization Admin',
+        level: 'org',
+        phase: 'Phase-1.5',
+        reserved: true,
+        baseline_capabilities: ['org.manage', 'org.settings']
+    },
+    {
+        key: 'community_owner',
+        name: 'Community Owner',
+        level: 'community',
+        phase: 'MVP-1',
+        reserved: true,
+        baseline_capabilities: ['community.manage', 'community.settings']
+    },
+    {
+        key: 'community_admin',
+        name: 'Community Admin',
+        level: 'community',
+        phase: 'MVP-1',
+        reserved: true,
+        baseline_capabilities: ['community.manage']
+    },
+    {
+        key: 'community_moderator',
+        name: 'Community Moderator',
+        level: 'community',
+        phase: 'MVP-1',
+        reserved: true,
+        baseline_capabilities: ['community.moderate']
+    },
+    {
+        key: 'group_owner',
+        name: 'Group Owner',
+        level: 'group',
+        phase: 'MVP',
+        reserved: false,
+        baseline_capabilities: ['group.manage', 'group.settings']
+    },
+    {
+        key: 'group_admin',
+        name: 'Group Admin',
+        level: 'group',
+        phase: 'MVP',
+        reserved: false,
+        baseline_capabilities: ['group.manage']
+    },
+    {
+        key: 'group_member',
+        name: 'Group Member',
+        level: 'group',
+        phase: 'MVP',
+        reserved: false,
+        baseline_capabilities: ['group.view']
+    },
+    {
+        key: 'event_owner',
+        name: 'Event Owner',
+        level: 'event',
+        phase: 'MVP',
+        reserved: true,
+        baseline_capabilities: [
+            'checkin.gate_staff', 'checkin.bulk', 'checkin.view',
+            'event.configure_tickets', 'refund.approve', 'event.cancel', 'event.manage'
+        ]
+    },
+    {
+        key: 'ticket_scanner',
+        name: 'Ticket Scanner',
+        level: 'event',
+        phase: 'MVP',
+        reserved: false,
+        baseline_capabilities: ['checkin.gate_staff', 'checkin.view']
+    },
+    {
+        key: 'event_manager',
+        name: 'Event Manager',
+        level: 'event',
+        phase: 'MVP',
+        reserved: false,
+        baseline_capabilities: [
+            'checkin.gate_staff', 'checkin.bulk', 'checkin.view',
+            'event.configure_tickets', 'refund.approve', 'event.cancel'
+        ]
+    },
+    {
+        key: 'co_host',
+        name: 'Co-Host',
+        level: 'event',
+        phase: 'MVP',
+        reserved: false,
+        baseline_capabilities: [
+            'checkin.gate_staff', 'checkin.bulk', 'checkin.view', 'event.configure_tickets'
+        ]
+    },
+    {
+        key: 'checkin_lead',
+        name: 'Checkin Lead',
+        level: 'event',
+        phase: 'MVP',
+        reserved: false,
+        baseline_capabilities: ['checkin.gate_staff', 'checkin.bulk', 'checkin.view']
+    },
+    {
+        key: 'gate_staff',
+        name: 'Gate Staff',
+        level: 'event',
+        phase: 'MVP',
+        reserved: false,
+        baseline_capabilities: ['checkin.gate_staff', 'checkin.view']
+    },
+    {
+        key: 'session_gate_staff',
+        name: 'Session Gate Staff',
+        level: 'event',
+        phase: 'MVP',
+        reserved: false,
+        baseline_capabilities: ['checkin.gate_staff']
+    },
+    {
+        key: 'finance_viewer',
+        name: 'Finance Viewer',
+        level: 'event',
+        phase: 'MVP',
+        reserved: false,
+        baseline_capabilities: ['finance.view']
+    },
+    {
+        key: 'registered_user',
+        name: 'Registered User',
+        level: 'participation',
+        phase: 'MVP',
+        reserved: false,
+        baseline_capabilities: ['event.view', 'community.view']
+    },
+    {
+        key: 'guest',
+        name: 'Guest',
+        level: 'participation',
+        phase: 'MVP',
+        reserved: false,
+        baseline_capabilities: ['event.view']
+    },
+    {
+        key: 'member',
+        name: 'Member',
+        level: 'participation',
+        phase: 'MVP',
+        reserved: false,
+        baseline_capabilities: ['event.view', 'community.view', 'group.view']
+    }
 ];
 
 export async function seedAdminRBAC(): Promise<void> {
@@ -298,8 +298,23 @@ export async function seedAdminRBAC(): Promise<void> {
         )
     `);
 
+    // Include other legacy roles in rolesToSeed if not already present
+    const rolesToSeedList = [...rolesToSeed];
+    const legacyRoles = [
+        { key: 'free_user', name: 'Free User', level: 'participation', phase: 'MVP', reserved: true, baseline_capabilities: ['event.view'] },
+        { key: 'basic_host', name: 'Basic Host', level: 'event', phase: 'MVP', reserved: true, baseline_capabilities: ['event.view', 'checkin.view'] },
+        { key: 'pro_host', name: 'Pro Host', level: 'event', phase: 'MVP', reserved: true, baseline_capabilities: ['event.view', 'checkin.view'] },
+        { key: 'enterprise_host', name: 'Enterprise Host', level: 'event', phase: 'MVP', reserved: true, baseline_capabilities: ['event.view', 'checkin.view'] },
+        { key: 'admin', name: 'Administrator', level: 'platform', phase: 'MVP', reserved: true, baseline_capabilities: ['platform.settings', 'tenant.manage', 'user.manage'] }
+    ];
+    for (const lr of legacyRoles) {
+        if (!rolesToSeedList.some(r => r.key === lr.key)) {
+            rolesToSeedList.push(lr);
+        }
+    }
+
     // Seed Authoritative Roles
-    for (const r of rolesToSeed) {
+    for (const r of rolesToSeedList) {
         await prisma.$executeRawUnsafe(
             `INSERT INTO roles (id, key, level, phase, reserved, baseline_capabilities)
              VALUES (gen_random_uuid(), $1, $2::role_level, $3, $4, $5::jsonb)
@@ -308,7 +323,7 @@ export async function seedAdminRBAC(): Promise<void> {
             r.key, r.level, r.phase, r.reserved, JSON.stringify(r.baseline_capabilities)
         );
     }
-    console.log(`Seeded ${rolesToSeed.length} authoritative roles`);
+    console.log(`Seeded ${rolesToSeedList.length} authoritative roles`);
 
     // Insert responsibilities
     for (const r of responsibilities) {
@@ -428,7 +443,7 @@ export async function seedAdminRBAC(): Promise<void> {
         const matched = new Set<string>();
         // Add default dashboard access for all logged in roles
         matched.add('dashboard_main');
-        
+
         for (const cap of caps) {
             if (cap.startsWith('rbac.') || cap.startsWith('platform.') || cap.startsWith('tenant.')) {
                 matched.add('role_management');
@@ -473,20 +488,7 @@ export async function seedAdminRBAC(): Promise<void> {
             .map(r => r.id);
     };
 
-    // Include other legacy roles in rolesToSeed if not already present
-    const rolesToSeedList = [...rolesToSeed];
-    const legacyRoles = [
-        { key: 'free_user', name: 'Free User', level: 'participation', phase: 'MVP', reserved: true, baseline_capabilities: ['event.view'] },
-        { key: 'basic_host', name: 'Basic Host', level: 'event', phase: 'MVP', reserved: true, baseline_capabilities: ['event.view', 'checkin.view'] },
-        { key: 'pro_host', name: 'Pro Host', level: 'event', phase: 'MVP', reserved: true, baseline_capabilities: ['event.view', 'checkin.view'] },
-        { key: 'enterprise_host', name: 'Enterprise Host', level: 'event', phase: 'MVP', reserved: true, baseline_capabilities: ['event.view', 'checkin.view'] },
-        { key: 'admin', name: 'Administrator', level: 'platform', phase: 'MVP', reserved: true, baseline_capabilities: ['platform.settings', 'tenant.manage', 'user.manage'] }
-    ];
-    for (const lr of legacyRoles) {
-        if (!rolesToSeedList.some(r => r.key === lr.key)) {
-            rolesToSeedList.push(lr);
-        }
-    }
+
 
     let superAdminRoleId = '';
     let adminRoleId = '';
@@ -498,7 +500,7 @@ export async function seedAdminRBAC(): Promise<void> {
         const posId = defaultPositionIdForLevel(r.level);
         const hLevel = hierarchyLevelForRole(r.key, r.level);
         const isDefault = r.key === 'member' || r.key === 'free_user';
-        
+
         const roleId = await upsertRole(
             r.key,
             r.name,
@@ -527,9 +529,9 @@ export async function seedAdminRBAC(): Promise<void> {
     // ── Seed 2 Admin Users with Access Keys ───────────────────────────────────
     // Access keys come from env or are auto-generated (printed once to console)
     const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || 'superadmin@samaagum.com';
-    const superAdminKey   = process.env.SUPER_ADMIN_KEY   || crypto.randomBytes(16).toString('hex');
-    const adminEmail2     = process.env.ADMIN_EMAIL        || 'admin@samaagum.com';
-    const adminKey        = process.env.ADMIN_KEY          || crypto.randomBytes(16).toString('hex');
+    const superAdminKey = process.env.SUPER_ADMIN_KEY || crypto.randomBytes(16).toString('hex');
+    const adminEmail2 = process.env.ADMIN_EMAIL || 'admin@samaagum.com';
+    const adminKey = process.env.ADMIN_KEY || crypto.randomBytes(16).toString('hex');
 
     // Upsert both users
     const superAdminUserRows = await prisma.$queryRawUnsafe<{ id: string }[]>(
@@ -549,7 +551,7 @@ export async function seedAdminRBAC(): Promise<void> {
         tenantId, adminEmail2
     );
     const adminUserId2 = adminUserRows[0]?.id;
-    
+
     // Seed role assignments in the roles/role_assignments table
     const superAdminRoleRow = await prisma.$queryRawUnsafe<{ id: string }[]>(
         `SELECT id FROM roles WHERE key = 'super_admin' LIMIT 1`
