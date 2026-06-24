@@ -148,3 +148,7 @@ export * from './IR_adminSubscriptionPlans';
 export * from './IR_adminCoupons';
 export * from './R_adminSubscriptionPlans';
 export * from './R_adminCoupons';
+export * from './IR_tags';
+export * from './R_tags';
+export * from './ICityControl';
+export * from './R_cityControls';

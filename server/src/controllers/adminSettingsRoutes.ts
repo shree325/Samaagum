@@ -111,18 +111,16 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
         settings = { ...DEFAULT_AUTH_SETTINGS, ...(row.value as any) };
       }
 
-      const maskedSettings = {
-        google: {
-          enabled: settings.google.enabled,
-          clientId: settings.google.clientId,
-          clientSecret: maskSecret(settings.google.clientSecret),
-        },
-        linkedin: {
-          enabled: settings.linkedin.enabled,
-          clientId: settings.linkedin.clientId,
-          clientSecret: maskSecret(settings.linkedin.clientSecret),
-        }
-      };
+      const maskedSettings: any = {};
+      for (const key of Object.keys(settings)) {
+        const provider = settings[key];
+        maskedSettings[key] = {
+          ...provider,
+          enabled: !!provider.enabled,
+          clientId: provider.clientId ?? '',
+          clientSecret: maskSecret(provider.clientSecret),
+        };
+      }
 
       return { success: true, data: maskedSettings };
     } catch (error: any) {
@@ -132,9 +130,13 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
 
   fastify.post('/settings/auth', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
     try {
-      const { google, linkedin } = request.body as any;
-      if (!google || !linkedin) {
-        return reply.status(400).send({ success: false, message: 'Google and Linkedin settings are required' });
+      const bodySettings = request.body as any;
+      if (!bodySettings || typeof bodySettings !== 'object') {
+        return reply.status(400).send({ success: false, message: 'Invalid payload' });
+      }
+
+      if (!bodySettings.google || !bodySettings.linkedin) {
+        return reply.status(400).send({ success: false, message: 'Google and LinkedIn settings are required defaults' });
       }
 
       const row = await prisma.platform_settings.findFirst({
@@ -149,26 +151,21 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
         existing = row.value as any;
       }
 
-      const googleSecret = isMasked(google.clientSecret)
-        ? existing.google.clientSecret
-        : (google.clientSecret || '');
+      const newSettings: any = {};
+      for (const key of Object.keys(bodySettings)) {
+        const provider = bodySettings[key];
+        const existingProvider = existing[key] || {};
+        const secret = isMasked(provider.clientSecret)
+          ? (existingProvider.clientSecret || '')
+          : (provider.clientSecret || '');
 
-      const linkedinSecret = isMasked(linkedin.clientSecret)
-        ? existing.linkedin.clientSecret
-        : (linkedin.clientSecret || '');
-
-      const newSettings: AdminAuthSettings = {
-        google: {
-          enabled: !!google.enabled,
-          clientId: google.clientId || '',
-          clientSecret: googleSecret,
-        },
-        linkedin: {
-          enabled: !!linkedin.enabled,
-          clientId: linkedin.clientId || '',
-          clientSecret: linkedinSecret,
-        }
-      };
+        newSettings[key] = {
+          ...provider,
+          enabled: !!provider.enabled,
+          clientId: provider.clientId || '',
+          clientSecret: secret,
+        };
+      }
 
       if (row) {
         await prisma.platform_settings.update({

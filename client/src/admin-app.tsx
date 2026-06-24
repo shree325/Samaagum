@@ -8,24 +8,27 @@ const { useState, useEffect, useRef } = React;
 
 // --- INLINE SVG ICONS ---
 const Icons = {
-  shield: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
-  users: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
-  alert: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
-  dispute: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
-  terminal: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>,
-  key: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>,
-  tag: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
-  credit: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>,
-  tag: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
-  credit: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>,
-  settings: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
-  dashboard: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>,
-  tenant: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>,
-  logout: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
-  doc: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>,
-  check: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="20 6 9 17 4 12"/></svg>,
-  close: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
-  plus: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+  shield: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>,
+  users: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>,
+  alert: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>,
+  dispute: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>,
+  terminal: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></svg>,
+  key: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" /></svg>,
+  chevronUp: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="18 15 12 9 6 15" /></svg>,
+  chevronDown: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="6 9 12 15 18 9" /></svg>,
+  tag: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>,
+  credit: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="1" y="4" width="22" height="16" rx="2" ry="2" /><line x1="1" y1="10" x2="23" y2="10" /></svg>,
+  tag: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>,
+  credit: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="1" y="4" width="22" height="16" rx="2" ry="2" /><line x1="1" y1="10" x2="23" y2="10" /></svg>,
+  settings: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>,
+  dashboard: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="3" y="3" width="7" height="9" /><rect x="14" y="3" width="7" height="5" /><rect x="14" y="12" width="7" height="9" /><rect x="3" y="16" width="7" height="5" /></svg>,
+  tenant: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="2" y="2" width="20" height="8" rx="2" ry="2" /><rect x="2" y="14" width="20" height="8" rx="2" ry="2" /><line x1="6" y1="6" x2="6.01" y2="6" /><line x1="6" y1="18" x2="6.01" y2="18" /></svg>,
+  logout: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>,
+  doc: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>,
+  check: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="20 6 9 17 4 12" /></svg>,
+  close: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>,
+  plus: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>,
+  globe: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>,
 };
 
 // --- INITIAL MOCK DATA ---
@@ -36,6 +39,43 @@ const INITIAL_USERS = [
   { id: "usr-4", name: "Leo Patel", email: "leo@gmail.com", role: "Participant", status: "Active", joined: "1 week ago" },
   { id: "usr-5", name: "SpamBot99", email: "spambot99@scam.org", role: "Participant", status: "Suspended", joined: "3 days ago" },
 ];
+
+const INITIAL_CATEGORIES = [
+  { id: 'cat-1', name: 'Technology', slug: 'technology', description: 'Software, AI, hardware, and digital innovation events', iconType: 'emoji', iconValue: '💻', displayOrder: 1, status: 'active', subcategoryCount: 6, eventCount: 142, isDeleted: false, createdAt: '2025-12-01T10:00:00Z' },
+  { id: 'cat-2', name: 'Sports & Fitness', slug: 'sports-fitness', description: 'Cricket, football, gym, running, and outdoor sports', iconType: 'emoji', iconValue: '🏏', displayOrder: 2, status: 'active', subcategoryCount: 5, eventCount: 89, isDeleted: false, createdAt: '2025-12-01T10:01:00Z' },
+  { id: 'cat-3', name: 'Education', slug: 'education', description: 'Workshops, seminars, training, and learning events', iconType: 'emoji', iconValue: '🎓', displayOrder: 3, status: 'active', subcategoryCount: 4, eventCount: 67, isDeleted: false, createdAt: '2025-12-01T10:02:00Z' },
+  { id: 'cat-4', name: 'Business & Startup', slug: 'business-startup', description: 'Entrepreneurship, marketing, finance, and leadership', iconType: 'emoji', iconValue: '🚀', displayOrder: 4, status: 'active', subcategoryCount: 4, eventCount: 54, isDeleted: false, createdAt: '2025-12-01T10:03:00Z' },
+  { id: 'cat-5', name: 'Arts & Culture', slug: 'arts-culture', description: 'Theatre, painting, photography, and cultural events', iconType: 'emoji', iconValue: '🎨', displayOrder: 5, status: 'active', subcategoryCount: 0, eventCount: 28, isDeleted: false, createdAt: '2025-12-01T10:04:00Z' },
+  { id: 'cat-6', name: 'Music & Entertainment', slug: 'music-entertainment', description: 'Live music, concerts, DJ nights, and performances', iconType: 'emoji', iconValue: '🎵', displayOrder: 6, status: 'inactive', subcategoryCount: 4, eventCount: 34, isDeleted: false, createdAt: '2025-12-01T10:05:00Z' },
+  { id: 'cat-7', name: 'Travel & Adventure', slug: 'travel-adventure', description: 'Trekking, road trips, and adventure meetups', iconType: 'emoji', iconValue: '✈️', displayOrder: 7, status: 'active', subcategoryCount: 0, eventCount: 12, isDeleted: false, createdAt: '2025-12-01T10:06:00Z' },
+  { id: 'cat-8', name: 'Food & Dining', slug: 'food-dining', description: 'Food festivals, cooking workshops, and dining events', iconType: 'emoji', iconValue: '🍕', displayOrder: 8, status: 'active', subcategoryCount: 0, eventCount: 19, isDeleted: false, createdAt: '2025-12-01T10:07:00Z' },
+  { id: 'cat-9', name: 'Social & Networking', slug: 'social-networking', description: 'Professional meetups, mixers, and community gatherings', iconType: 'emoji', iconValue: '🤝', displayOrder: 9, status: 'active', subcategoryCount: 0, eventCount: 45, isDeleted: false, createdAt: '2025-12-01T10:08:00Z' },
+  { id: 'cat-10', name: 'Health & Wellness', slug: 'health-wellness', description: 'Yoga, meditation, mental health, and wellness sessions', iconType: 'emoji', iconValue: '🧘', displayOrder: 10, status: 'active', subcategoryCount: 0, eventCount: 23, isDeleted: false, createdAt: '2025-12-01T10:09:00Z' },
+];
+
+const INITIAL_TAGS = [
+  { id: 'tag-1', name: 'Web3 & Crypto', slug: 'web3-crypto', category: 'Technology', status: 'active', eventCount: 24, isDeleted: false, createdAt: '2026-01-01T10:00:00Z' },
+  { id: 'tag-2', name: 'Yoga Flow', slug: 'yoga-flow', category: 'Health & Wellness', status: 'active', eventCount: 15, isDeleted: false, createdAt: '2026-01-01T10:01:00Z' },
+  { id: 'tag-3', name: 'SaaS & AI Startups', slug: 'saas-ai-startups', category: 'Business & Startup', status: 'active', eventCount: 42, isDeleted: false, createdAt: '2026-01-01T10:02:00Z' },
+  { id: 'tag-4', name: 'Generative AI', slug: 'generative-ai', category: 'Technology', status: 'active', eventCount: 31, isDeleted: false, createdAt: '2026-01-01T10:03:00Z' },
+  { id: 'tag-5', name: 'Indie Rock Concerts', slug: 'indie-rock-concerts', category: 'Music & Entertainment', status: 'active', eventCount: 19, isDeleted: false, createdAt: '2026-01-01T10:04:00Z' },
+  { id: 'tag-6', name: 'Trekking & Hiking', slug: 'trekking-hiking', category: 'Travel & Adventure', status: 'active', eventCount: 8, isDeleted: false, createdAt: '2026-01-01T10:05:00Z' },
+  { id: 'tag-7', name: 'UI/UX Design', slug: 'ui-ux-design', category: 'Arts & Culture', status: 'active', eventCount: 12, isDeleted: false, createdAt: '2026-01-01T10:06:00Z' },
+  { id: 'tag-8', name: 'Fitness & Running', slug: 'fitness-running', category: 'Sports & Fitness', status: 'inactive', eventCount: 5, isDeleted: false, createdAt: '2026-01-01T10:07:00Z' }
+];
+
+const EMOJI_SETS = {
+  'Tech': ['💻', '🤖', '🔧', '⚡', '📱', '🌐', '🔬', '💡'],
+  'Sports': ['🏏', '⚽', '🏀', '🎾', '🏃', '🏋️', '🚴', '⛳'],
+  'Education': ['🎓', '📚', '✏️', '🏫', '📖', '🧪', '📐', '🎒'],
+  'Business': ['🚀', '💼', '📊', '💰', '🏢', '📈', '🤝', '💎'],
+  'Arts': ['🎨', '🎭', '📷', '🖌️', '🎪', '🎬', '✨', '🌈'],
+  'Music': ['🎵', '🎶', '🎸', '🎤', '🎹', '🥁', '🎷', '🎻'],
+  'Travel': ['✈️', '🗺️', '🏔️', '🏖️', '🧳', '🚗', '⛺', '🌍'],
+  'Food': ['🍕', '🍔', '🍣', '☕', '🍰', '🥗', '🍳', '🌮'],
+  'Social': ['🤝', '💬', '❤️', '🎉', '🥂', '🌟', '👥', '🎈'],
+  'Health': ['🧘', '💪', '🏥', '💊', '🧠', '🌿', '🍎', '😌'],
+};
 
 const INITIAL_KYC = [
   { id: "kyc-1", name: "Echo Collective", type: "Event Host", email: "echo@collective.in", submitted: "2 hours ago", docName: "Certificate of Incorporation & PAN", docNumber: "AAACE9912A", status: "Pending", notes: "" },
@@ -93,10 +133,13 @@ const apiClient = new window.AdminApiClient();
 const adminApi = {
   // Provider settings from unified-admin-service.yaml configuration logic
   activeProviders: {
+    categories: "database",
+    tags: "database",
+    cities: "database",
     rbac: "database",
     plans: "database",
     coupons: "database",
-    users: "localstorage",
+    users: "database",
     kyc: "localstorage",
     disputes: "localstorage",
     moderation: "localstorage",
@@ -149,6 +192,21 @@ const adminApi = {
       }
       adminApi._setLocalState("users", users);
       return { success: true, data: userPayload };
+    },
+    deleteUser: async (id) => {
+      if (adminApi.activeProviders.users === "database") {
+        return apiClient.users.deleteUser(id);
+      }
+      let users = adminApi._getLocalState("users", INITIAL_USERS);
+      users = users.filter(u => u.id !== id);
+      adminApi._setLocalState("users", users);
+      return { success: true };
+    },
+    inviteUser: async (payload) => {
+      if (adminApi.activeProviders.users === "database") {
+        return apiClient.users.inviteUser(payload);
+      }
+      return { success: true };
     }
   },
 
@@ -310,14 +368,158 @@ const adminApi = {
     getCoupons: () => apiClient.coupons.getCoupons(),
     saveCoupon: (payload, id) => apiClient.coupons.saveCoupon(payload, id),
     deleteCoupon: (id) => apiClient.coupons.deleteCoupon(id)
+  },
+
+  // Categories Service
+  categories: {
+    getCategories: async () => {
+      if (adminApi.activeProviders.categories === "database") {
+        return apiClient.categories.getCategories();
+      }
+      const categories = adminApi._getLocalState("categories", INITIAL_CATEGORIES);
+      return { success: true, data: categories };
+    },
+    saveCategory: async (catPayload, id) => {
+      if (adminApi.activeProviders.categories === "database") {
+        return apiClient.categories.saveCategory(catPayload, id);
+      }
+      let categories = adminApi._getLocalState("categories", INITIAL_CATEGORIES);
+      if (id && categories.find(c => c.id === id)) {
+        categories = categories.map(c => c.id === id ? { ...c, ...catPayload } : c);
+      } else {
+        categories = [catPayload, ...categories];
+      }
+      adminApi._setLocalState("categories", categories);
+      return { success: true, data: catPayload };
+    },
+    deleteCategory: async (id) => {
+      if (adminApi.activeProviders.categories === "database") {
+        return apiClient.categories.deleteCategory(id);
+      }
+      let categories = adminApi._getLocalState("categories", INITIAL_CATEGORIES);
+      categories = categories.filter(c => c.id !== id);
+      adminApi._setLocalState("categories", categories);
+      return { success: true };
+    }
+  },
+
+  // Tags Service
+  tags: {
+    getTags: async () => {
+      if (adminApi.activeProviders.tags === "database") {
+        return apiClient.tags.getTags();
+      }
+      const tags = adminApi._getLocalState("tags", INITIAL_TAGS);
+      return { success: true, data: tags };
+    },
+    saveTag: async (tagPayload, id) => {
+      if (adminApi.activeProviders.tags === "database") {
+        return apiClient.tags.saveTag(tagPayload, id);
+      }
+      let tags = adminApi._getLocalState("tags", INITIAL_TAGS);
+      if (id && tags.find(t => t.id === id)) {
+        tags = tags.map(t => t.id === id ? { ...t, ...tagPayload } : t);
+      } else {
+        tags = [tagPayload, ...tags];
+      }
+      adminApi._setLocalState("tags", tags);
+      return { success: true, data: tagPayload };
+    },
+    deleteTag: async (id) => {
+      if (adminApi.activeProviders.tags === "database") {
+        return apiClient.tags.deleteTag(id);
+      }
+      let tags = adminApi._getLocalState("tags", INITIAL_TAGS);
+      tags = tags.filter(t => t.id !== id);
+      adminApi._setLocalState("tags", tags);
+      return { success: true };
+    },
+  },
+  // Cities Service (city_controls)
+  cities: {
+    getCities: async (params) => {
+      if (adminApi.activeProviders.cities === "database") {
+        return apiClient.cities.getCities(params);
+      }
+      const stored = localStorage.getItem('samaagum_admin_city_controls');
+      if (stored) {
+        try {
+          const data = JSON.parse(stored);
+          return { success: true, data };
+        } catch (e) {
+          console.error('Error parsing city controls', e);
+        }
+      }
+      return { success: true, data: [] };
+    },
+    getStats: async () => {
+      if (adminApi.activeProviders.cities === "database") {
+        return apiClient.cities.getStats();
+      }
+      const stored = localStorage.getItem('samaagum_admin_city_controls');
+      const citiesList = stored ? JSON.parse(stored) : [];
+      const active = citiesList.filter(c => c.is_active).length;
+      return {
+        success: true,
+        data: {
+          total: citiesList.length,
+          active,
+          inactive: citiesList.length - active,
+          countries: new Set(citiesList.map(c => c.country_name)).size,
+          states: new Set(citiesList.map(c => c.state_name)).size
+        }
+      };
+    },
+    getFilters: async (country) => {
+      if (adminApi.activeProviders.cities === "database") {
+        return apiClient.cities.getFilters(country);
+      }
+      const stored = localStorage.getItem('samaagum_admin_city_controls');
+      const citiesList = stored ? JSON.parse(stored) : [];
+      const countries = [...new Set(citiesList.map(c => c.country_name).filter(Boolean))].sort();
+      const states = [...new Set(citiesList.filter(c => !country || c.country_name === country).map(c => c.state_name).filter(Boolean))].sort();
+      return { success: true, data: { countries, states } };
+    },
+    toggleCity: async (geonameId, newActive) => {
+      if (adminApi.activeProviders.cities === "database") {
+        return apiClient.cities.toggleCity(geonameId, newActive);
+      }
+      const stored = localStorage.getItem('samaagum_admin_city_controls');
+      let citiesList = stored ? JSON.parse(stored) : [];
+      citiesList = citiesList.map(c => c.geoname_id === geonameId ? { ...c, is_active: newActive } : c);
+      localStorage.setItem('samaagum_admin_city_controls', JSON.stringify(citiesList));
+      return { success: true };
+    },
   }
 };
 
 window.adminApi = adminApi;
 
+
+const GeoLocationsView = window.GeoLocationsView;
+const GeoIpv4View = window.GeoIpv4View;
+const GeoIpv6View = window.GeoIpv6View;
+
 // --- APP COMPONENT ---
 function App() {
-  const [user, setUser] = useState(null); // { email, role }
+  const [user, setUser] = useState(() => {
+    try {
+      const token = localStorage.getItem('samaagum_admin_token');
+      if (token) {
+        const parts = token.split('.');
+        if (parts.length >= 2) {
+          const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+          if (payload && payload.email) {
+            const roleLabel = payload.role === 'super_admin' ? 'Super Admin' : 'Platform Admin';
+            return { email: payload.email, role: roleLabel, name: payload.name || roleLabel };
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to restore session:", e);
+    }
+    return null;
+  }); // { email, role }
   const [activeTab, setActiveTab] = useState("dashboard");
   const [darkMode, setDarkMode] = useState(true);
 
@@ -330,11 +532,12 @@ function App() {
   const [auditLogs, setAuditLogs] = useState(() => adminApi._getLocalState("audit", INITIAL_AUDIT));
   const [featureFlags, setFeatureFlags] = useState(() => adminApi._getLocalState("featureFlags", FEATURE_FLAGS));
   const [usersList, setUsersList] = useState(() => adminApi._getLocalState("users", INITIAL_USERS));
+  const [categoriesList, setCategoriesList] = useState([]);
+  const [tagsList, setTagsList] = useState([]);
 
-  // Toasts
   const [toasts, setToasts] = useState([]);
   const addToast = (message, type = "success") => {
-    const id = Date.now();
+    const id = Date.now() + "-" + Math.random();
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
@@ -351,7 +554,7 @@ function App() {
     });
   };
 
-  const handleUpdateUser = (id, updates) => {
+  const handleUpdateUser = async (id, updates) => {
     setUsersList(prev => {
       const next = prev.map(u => u.id === id ? { ...u, ...updates } : u);
       const updatedUser = next.find(u => u.id === id);
@@ -364,20 +567,56 @@ function App() {
           logAction(user?.email || "Admin", `${updates.status === "Suspended" ? "Suspended" : "Activated"} user ${updatedUser.name}.`);
           addToast(`User ${updatedUser.name} is now ${updates.status.toLowerCase()}.`);
         }
+        if (updates.name || updates.email) {
+          logAction(user?.email || "Admin", `Updated user details for ${updatedUser.name || updatedUser.email}.`);
+          addToast(`Successfully updated user details.`);
+        }
         adminApi.users.saveUser(updatedUser);
       }
       return next;
     });
   };
 
-  const handleAddUser = (newUser) => {
-    setUsersList(prev => {
-      const next = [newUser, ...prev];
-      adminApi.users.saveUser(newUser);
-      return next;
-    });
-    logAction(user?.email || "Admin", `Invited new user ${newUser.name} (${newUser.email}) with role ${newUser.role}.`);
-    addToast(`Successfully invited ${newUser.name}.`);
+  const handleAddUser = async (newUser) => {
+    // Optimistically add with a temporary mock ID
+    setUsersList(prev => [newUser, ...prev]);
+    
+    try {
+      const res = await adminApi.users.saveUser(newUser);
+      if (res.success && res.data) {
+        // Replace temporary mock ID with actual database UUID
+        setUsersList(prev => prev.map(u => u.email === newUser.email ? { ...u, id: res.data.id } : u));
+      }
+      await adminApi.users.inviteUser({ email: newUser.email, role: newUser.role });
+      logAction(user?.email || "Admin", `Invited new user ${newUser.name} (${newUser.email}) with role ${newUser.role}.`);
+      addToast(`Successfully invited ${newUser.name} and sent invitation email.`);
+    } catch (err: any) {
+      console.error(err);
+      addToast("Failed to complete invitation.");
+    }
+  };
+
+  const handleDeleteUser = async (id) => {
+    const userToDelete = usersList.find(u => u.id === id);
+    if (!userToDelete) return;
+    
+    // Optimistically remove from state
+    setUsersList(prev => prev.filter(u => u.id !== id));
+    
+    try {
+      await adminApi.users.deleteUser(id);
+      logAction(user?.email || "Admin", `Deleted user ${userToDelete.name || userToDelete.email}.`);
+      addToast(`User ${userToDelete.name || userToDelete.email} has been deleted.`);
+    } catch (err: any) {
+      console.error(err);
+      addToast("Failed to delete user from database.");
+      // Rollback to original state on error
+      adminApi.users.getUsers().then(res => {
+        if (res.success && res.data) {
+          setUsersList(res.data);
+        }
+      });
+    }
   };
 
   // Modals state
@@ -393,6 +632,34 @@ function App() {
     document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
   }, [darkMode]);
 
+  // Load categories and tags from database
+  useEffect(() => {
+    if (user) {
+      adminApi.categories.getCategories().then(res => {
+        if (res.success && res.data) {
+          const raw = res.data;
+          const nonDeleted = raw.filter(c => !c.isDeleted).sort((a, b) => a.displayOrder - b.displayOrder);
+          const deleted = raw.filter(c => c.isDeleted);
+          const normalized = nonDeleted.map((c, idx) => ({ ...c, displayOrder: idx + 1 }));
+          setCategoriesList([...normalized, ...deleted]);
+        }
+      }).catch(err => {
+        addToast("Failed to fetch categories: " + err.message, "warning");
+      });
+
+      adminApi.tags.getTags().then(res => {
+        if (res.success && res.data) {
+          setTagsList(res.data);
+        }
+      }).catch(err => {
+        addToast("Failed to fetch tags: " + err.message, "warning");
+      });
+    } else {
+      setCategoriesList([]);
+      setTagsList([]);
+    }
+  }, [user]);
+
   useEffect(() => {
     window.samaagum_admin_setActiveTab = setActiveTab;
     window.samaagum_admin_login = (email) => {
@@ -403,6 +670,18 @@ function App() {
       delete window.samaagum_admin_login;
     };
   }, [setActiveTab]);
+
+  useEffect(() => {
+    if (user && activeTab === "users") {
+      adminApi.users.getUsers().then(res => {
+        if (res.success && res.data) {
+          setUsersList(res.data);
+        }
+      }).catch(err => {
+        addToast("Failed to load users from database.", "warning");
+      });
+    }
+  }, [activeTab, user]);
 
   // Auth Handler — calls real backend, no OTP for admin
   const handleLogin = async (email, accessKey) => {
@@ -598,12 +877,12 @@ function App() {
             <svg width="48" height="48" viewBox="0 0 40 40">
               <defs>
                 <linearGradient id="lg-admin" x1="6" y1="6" x2="34" y2="34" gradientUnits="userSpaceOnUse">
-                  <stop stopColor="var(--accent-1)"/><stop offset="1" stopColor="var(--accent-2)"/>
+                  <stop stopColor="var(--accent-1)" /><stop offset="1" stopColor="var(--accent-2)" />
                 </linearGradient>
               </defs>
-              <circle cx="15" cy="16" r="9.2" fill="url(#lg-admin)" opacity="0.92"/>
-              <circle cx="25" cy="16" r="9.2" fill="url(#lg-admin)" opacity="0.62"/>
-              <circle cx="20" cy="25" r="9.2" fill="url(#lg-admin)" opacity="0.8"/>
+              <circle cx="15" cy="16" r="9.2" fill="url(#lg-admin)" opacity="0.92" />
+              <circle cx="25" cy="16" r="9.2" fill="url(#lg-admin)" opacity="0.62" />
+              <circle cx="20" cy="25" r="9.2" fill="url(#lg-admin)" opacity="0.8" />
             </svg>
             <span className="wordmark">samaagum</span>
             <span style={{ fontSize: "12px", color: "var(--accent-2)", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.08em" }}>Admin Console</span>
@@ -617,11 +896,11 @@ function App() {
           <LoginForm onSubmit={handleLogin} />
 
           <p style={{ fontSize: '12px', color: 'var(--ink-3)', textAlign: 'center', marginTop: '16px' }}>
-            Use your Samaagum admin email and access key to log in.<br/>
+            Use your Samaagum admin email and access key to log in.<br />
             Keys are set during <code style={{ background: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: '4px' }}>npm run seed</code>.
           </p>
         </div>
-        
+
         {/* Toasts */}
         <div className="toast-container">
           {toasts.map(t => (
@@ -642,89 +921,104 @@ function App() {
     <div className="admin-container">
       {/* Sidebar */}
       <aside className="admin-sidebar">
-        <div>
-          <div className="admin-logo">
-            <svg width="28" height="28" viewBox="0 0 40 40">
-              <circle cx="15" cy="16" r="9.2" fill="url(#lg-admin)" opacity="0.92"/>
-              <circle cx="25" cy="16" r="9.2" fill="url(#lg-admin)" opacity="0.62"/>
-              <circle cx="20" cy="25" r="9.2" fill="url(#lg-admin)" opacity="0.8"/>
-            </svg>
-            <span className="wordmark">samaagum</span>
-            <span className="badge">Admin</span>
-          </div>
-
-          <nav className="sidebar-menu">
-            <button className={`sidebar-item ${activeTab === "dashboard" ? "active" : ""}`} onClick={() => setActiveTab("dashboard")}>
-              <Icons.dashboard /> Dashboard
-            </button>
-            
-            <button className={`sidebar-item ${activeTab === "users" ? "active" : ""}`} onClick={() => setActiveTab("users")}>
-              <Icons.users /> User Management
-            </button>
-            
-            <button className={`sidebar-item ${activeTab === "kyc" ? "active" : ""}`} onClick={() => setActiveTab("kyc")}>
-              <Icons.shield /> KYC Verification
-              {kycList.filter(k => k.status === "Pending").length > 0 && (
-                <span style={{ marginLeft: "auto", background: "var(--accent-1)", color: "#fff", fontSize: "11px", fontWeight: "bold", padding: "2px 6px", borderRadius: "10px" }}>
-                  {kycList.filter(k => k.status === "Pending").length}
-                </span>
-              )}
-            </button>
-
-            <button className={`sidebar-item ${activeTab === "disputes" ? "active" : ""}`} onClick={() => setActiveTab("disputes")}>
-              <Icons.dispute /> Dispute Resolution
-              {disputesList.filter(d => d.status === "Open" || d.status === "Refund Requested").length > 0 && (
-                <span style={{ marginLeft: "auto", background: "var(--accent-2)", color: "#fff", fontSize: "11px", fontWeight: "bold", padding: "2px 6px", borderRadius: "10px" }}>
-                  {disputesList.filter(d => d.status === "Open" || d.status === "Refund Requested").length}
-                </span>
-              )}
-            </button>
-
-            <button className={`sidebar-item ${activeTab === "moderation" ? "active" : ""}`} onClick={() => setActiveTab("moderation")}>
-              <Icons.alert /> Content Moderation
-            </button>
-
-            {isSuperAdmin && (
-              <button className={`sidebar-item ${activeTab === "tenants" ? "active" : ""}`} onClick={() => setActiveTab("tenants")}>
-                <Icons.tenant /> Tenant Provisioning
-              </button>
-            )}
-
-            <button className={`sidebar-item ${activeTab === "subscriptions" ? "active" : ""}`} onClick={() => setActiveTab("subscriptions")}>
-              <Icons.credit /> Subscription Plans
-            </button>
-
-            <button className={`sidebar-item ${activeTab === "coupons" ? "active" : ""}`} onClick={() => setActiveTab("coupons")}>
-              <Icons.tag /> Coupon Management
-            </button>
-
-            <button className={`sidebar-item ${activeTab === "rbac" ? "active" : ""}`} onClick={() => setActiveTab("rbac")}>
-              <Icons.key /> RBAC Governance
-            </button>
-
-            <button className={`sidebar-item ${activeTab === "audit" ? "active" : ""}`} onClick={() => setActiveTab("audit")}>
-              <Icons.terminal /> System Audit Logs
-            </button>
-
-            <button className={`sidebar-item ${activeTab === "settings" ? "active" : ""}`} onClick={() => setActiveTab("settings")}>
-              <Icons.settings /> System Settings
-            </button>
-          </nav>
+        <div className="admin-logo">
+          <svg width="28" height="28" viewBox="0 0 40 40">
+            <circle cx="15" cy="16" r="9.2" fill="url(#lg-admin)" opacity="0.92" />
+            <circle cx="25" cy="16" r="9.2" fill="url(#lg-admin)" opacity="0.62" />
+            <circle cx="20" cy="25" r="9.2" fill="url(#lg-admin)" opacity="0.8" />
+          </svg>
+          <span className="wordmark">samaagum</span>
+          <span className="badge">Admin</span>
         </div>
 
-        <div>
-          <div className="sidebar-user">
-            <div className="user-avatar" style={isSuperAdmin ? { background: "linear-gradient(135deg, #8b5cf6, #e5489d)" } : {}}>
-              {isSuperAdmin ? "SA" : "PA"}
-            </div>
-            <div className="user-info">
-              <span className="name">{user.name}</span>
-              <span className="role-badge">{user.role}</span>
-            </div>
-            <button onClick={handleLogout} style={{ marginLeft: "auto", background: "transparent", border: "none", color: "var(--ink-3)", cursor: "pointer" }} title="Log Out">
-              <Icons.logout style={{ width: "20px", height: "20px" }} />
+        <nav className="sidebar-menu">
+          <button className={`sidebar-item ${activeTab === "dashboard" ? "active" : ""}`} onClick={() => setActiveTab("dashboard")}>
+            <Icons.dashboard /> Dashboard
+          </button>
+
+          <button className={`sidebar-item ${activeTab === "categories" ? "active" : ""}`} onClick={() => setActiveTab("categories")}>
+            <Icons.tag /> Categories
+          </button>
+
+          <button className={`sidebar-item ${activeTab === "tags" ? "active" : ""}`} onClick={() => setActiveTab("tags")}>
+            <Icons.tag style={{ transform: "rotate(-10deg)" }} /> Tags
+          </button>
+
+          <button className={`sidebar-item ${activeTab === "users" ? "active" : ""}`} onClick={() => setActiveTab("users")}>
+            <Icons.users /> User Management
+          </button>
+
+          <button className={`sidebar-item ${activeTab === "kyc" ? "active" : ""}`} onClick={() => setActiveTab("kyc")}>
+            <Icons.shield /> KYC Verification
+            {kycList.filter(k => k.status === "Pending").length > 0 && (
+              <span style={{ marginLeft: "auto", background: "var(--accent-1)", color: "#fff", fontSize: "11px", fontWeight: "bold", padding: "2px 6px", borderRadius: "10px" }}>
+                {kycList.filter(k => k.status === "Pending").length}
+              </span>
+            )}
+          </button>
+
+          <button className={`sidebar-item ${activeTab === "disputes" ? "active" : ""}`} onClick={() => setActiveTab("disputes")}>
+            <Icons.dispute /> Dispute Resolution
+            {disputesList.filter(d => d.status === "Open" || d.status === "Refund Requested").length > 0 && (
+              <span style={{ marginLeft: "auto", background: "var(--accent-2)", color: "#fff", fontSize: "11px", fontWeight: "bold", padding: "2px 6px", borderRadius: "10px" }}>
+                {disputesList.filter(d => d.status === "Open" || d.status === "Refund Requested").length}
+              </span>
+            )}
+          </button>
+
+          <button className={`sidebar-item ${activeTab === "moderation" ? "active" : ""}`} onClick={() => setActiveTab("moderation")}>
+            <Icons.alert /> Content Moderation
+          </button>
+
+          {isSuperAdmin && (
+            <button className={`sidebar-item ${activeTab === "tenants" ? "active" : ""}`} onClick={() => setActiveTab("tenants")}>
+              <Icons.tenant /> Tenant Provisioning
             </button>
+          )}
+
+          <button className={`sidebar-item ${activeTab === "subscriptions" ? "active" : ""}`} onClick={() => setActiveTab("subscriptions")}>
+            <Icons.credit /> Subscription Plans
+          </button>
+
+          <button className={`sidebar-item ${activeTab === "coupons" ? "active" : ""}`} onClick={() => setActiveTab("coupons")}>
+            <Icons.tag /> Coupon Management
+          </button>
+
+          <button className={`sidebar-item ${activeTab === "rbac" ? "active" : ""}`} onClick={() => setActiveTab("rbac")}>
+            <Icons.key /> RBAC Governance
+          </button>
+
+          <button className={`sidebar-item ${activeTab === "audit" ? "active" : ""}`} onClick={() => setActiveTab("audit")}>
+            <Icons.terminal /> System Audit Logs
+          </button>
+
+
+          <button className={`sidebar-item ${activeTab === "geo-locations" ? "active" : ""}`} onClick={() => setActiveTab("geo-locations")}>
+            {Icons.globe({ className: "icon" })} Geo Locations
+          </button>
+          <button className={`sidebar-item ${activeTab === "geo-ipv4" ? "active" : ""}`} onClick={() => setActiveTab("geo-ipv4")}>
+            {Icons.globe({ className: "icon" })} Geo IPv4
+          </button>
+          <button className={`sidebar-item ${activeTab === "geo-ipv6" ? "active" : ""}`} onClick={() => setActiveTab("geo-ipv6")}>
+            {Icons.globe({ className: "icon" })} Geo IPv6
+          </button>
+
+          <button className={`sidebar-item ${activeTab === "settings" ? "active" : ""}`} onClick={() => setActiveTab("settings")}>
+            <Icons.settings /> System Settings
+          </button>
+        </nav>
+
+        <div className="sidebar-user">
+          <div className="user-avatar" style={isSuperAdmin ? { background: "linear-gradient(135deg, #8b5cf6, #e5489d)" } : {}}>
+            {isSuperAdmin ? "SA" : "PA"}
           </div>
+          <div className="user-info">
+            <span className="name">{user.name}</span>
+            <span className="role-badge">{user.role}</span>
+          </div>
+          <button onClick={handleLogout} style={{ marginLeft: "auto", background: "transparent", border: "none", color: "var(--ink-3)", cursor: "pointer" }} title="Log Out">
+            <Icons.logout style={{ width: "20px", height: "20px" }} />
+          </button>
         </div>
       </aside>
 
@@ -752,13 +1046,36 @@ function App() {
 
         <div className="admin-content">
           {activeTab === "dashboard" && (
-            <DashboardView 
-              kyc={kycList} 
-              disputes={disputesList} 
+            <DashboardView
+              kyc={kycList}
+              disputes={disputesList}
               moderation={moderationList}
               tenants={tenantsList}
               user={user}
               setActiveTab={setActiveTab}
+            />
+          )}
+
+          {activeTab === "categories" && (
+            <CategoriesView
+              categories={categoriesList}
+              setCategories={setCategoriesList}
+              tags={tagsList}
+              setTags={setTagsList}
+              showToast={addToast}
+              logAction={logAction}
+              user={user}
+            />
+          )}
+
+          {activeTab === "tags" && (
+            <TagsView
+              tags={tagsList}
+              setTags={setTagsList}
+              categories={categoriesList}
+              showToast={addToast}
+              logAction={logAction}
+              user={user}
             />
           )}
 
@@ -767,34 +1084,35 @@ function App() {
               users={usersList} 
               onUpdateUser={handleUpdateUser} 
               onAddUser={handleAddUser} 
+              onDeleteUser={handleDeleteUser}
             />
           )}
 
           {activeTab === "kyc" && (
-            <KycView 
-              kyc={kycList} 
-              onView={(item) => setSelectedKyc(item)} 
+            <KycView
+              kyc={kycList}
+              onView={(item) => setSelectedKyc(item)}
             />
           )}
 
           {activeTab === "disputes" && (
-            <DisputesView 
-              disputes={disputesList} 
+            <DisputesView
+              disputes={disputesList}
               onView={(item) => setSelectedDispute(item)}
               user={user}
             />
           )}
 
           {activeTab === "moderation" && (
-            <ModerationView 
-              moderation={moderationList} 
+            <ModerationView
+              moderation={moderationList}
               onAction={handleModAction}
             />
           )}
 
           {activeTab === "tenants" && isSuperAdmin && (
-            <TenantsView 
-              tenants={tenantsList} 
+            <TenantsView
+              tenants={tenantsList}
               newTenant={newTenant}
               onFormChange={setNewTenant}
               onCheckboxChange={handleTenantCheckboxChange}
@@ -813,21 +1131,35 @@ function App() {
           )}
 
           {activeTab === "rbac" && (
-            <RbacView 
-              matrix={rbacMatrix} 
-              user={user} 
+            <RbacView
+              matrix={rbacMatrix}
+              user={user}
               onToggle={toggleRbacPermission}
             />
           )}
 
           {activeTab === "audit" && (
-            <AuditView 
-              logs={auditLogs} 
+            <AuditView
+              logs={auditLogs}
             />
           )}
 
           {activeTab === "settings" && (
             <SettingsView user={user} logAction={logAction} addToast={addToast} />
+          )}
+
+
+
+          {activeTab === "geo-locations" && GeoLocationsView && (
+            <GeoLocationsView user={user} logAction={logAction} addToast={addToast} />
+          )}
+
+          {activeTab === "geo-ipv4" && GeoIpv4View && (
+            <GeoIpv4View user={user} logAction={logAction} addToast={addToast} />
+          )}
+
+          {activeTab === "geo-ipv6" && GeoIpv6View && (
+            <GeoIpv6View user={user} logAction={logAction} addToast={addToast} />
           )}
         </div>
       </main>
@@ -879,9 +1211,9 @@ function App() {
                   <label style={{ fontSize: "12px", fontWeight: "600", textTransform: "uppercase", color: "var(--ink-3)", display: "block", marginBottom: "8px" }}>
                     Reason for rejection (Only required if rejecting)
                   </label>
-                  <textarea 
-                    className="form-control" 
-                    placeholder="Enter notes why document is rejected..." 
+                  <textarea
+                    className="form-control"
+                    placeholder="Enter notes why document is rejected..."
                     style={{ width: "100%", height: "80px", resize: "none", boxSizing: "border-box" }}
                     value={rejectionReason}
                     onChange={(e) => setRejectionReason(e.target.value)}
@@ -958,7 +1290,7 @@ function App() {
             </div>
             <div className="modal-footer">
               <button className="btn-sm btn-sm-ghost" onClick={() => setSelectedDispute(null)}>Close</button>
-              
+
               {selectedDispute.status === "Open" && (
                 <button className="btn-sm btn-sm-primary" onClick={() => initiateRefund(selectedDispute.id)}>
                   Initiate Refund (Maker Request)
@@ -1009,10 +1341,10 @@ function LoginForm({ onSubmit }) {
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
       <div className="form-group">
         <label>Administrative Email</label>
-        <input 
-          type="email" 
-          className="form-control" 
-          placeholder="admin@samaagum.co" 
+        <input
+          type="email"
+          className="form-control"
+          placeholder="admin@samaagum.co"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
@@ -1020,10 +1352,10 @@ function LoginForm({ onSubmit }) {
       </div>
       <div className="form-group">
         <label>Administrative Key/Password</label>
-        <input 
-          type="password" 
-          className="form-control" 
-          placeholder="••••••••" 
+        <input
+          type="password"
+          className="form-control"
+          placeholder="••••••••"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
@@ -1047,7 +1379,7 @@ function DashboardView({ kyc, disputes, moderation, tenants, user, setActiveTab 
     <div>
       <div style={{ marginBottom: "32px" }}>
         <h2 style={{ fontFamily: "var(--font-display)", fontWeight: "600", fontSize: "28px", margin: "0 0 8px 0" }}>
-          Welcome back, {user.name.split(" ")[0]}
+          Welcome back, {(user?.name || user?.email || "Admin").split("@")[0].split(" ")[0]}
         </h2>
         <p style={{ color: "var(--ink-2)", margin: 0, fontSize: "15px" }}>
           Here is the security and operational overview of Samaagum network.
@@ -1381,22 +1713,22 @@ function TenantsView({ tenants, newTenant, onFormChange, onCheckboxChange, onSub
           <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             <div className="form-group">
               <label>Tenant Name</label>
-              <input 
-                type="text" 
-                className="form-control" 
-                placeholder="Indiranagar Tech Hub" 
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Indiranagar Tech Hub"
                 value={newTenant.name}
                 onChange={(e) => onFormChange({ ...newTenant, name: e.target.value })}
                 required
               />
             </div>
-            
+
             <div className="form-group">
               <label>Subdomain Slug</label>
-              <input 
-                type="text" 
-                className="form-control" 
-                placeholder="indiranagar-tech" 
+              <input
+                type="text"
+                className="form-control"
+                placeholder="indiranagar-tech"
                 value={newTenant.slug}
                 onChange={(e) => onFormChange({ ...newTenant, slug: e.target.value })}
                 required
@@ -1405,8 +1737,8 @@ function TenantsView({ tenants, newTenant, onFormChange, onCheckboxChange, onSub
 
             <div className="form-group">
               <label>Plan Tier</label>
-              <select 
-                className="form-control" 
+              <select
+                className="form-control"
                 value={newTenant.plan}
                 onChange={(e) => onFormChange({ ...newTenant, plan: e.target.value })}
               >
@@ -1420,24 +1752,24 @@ function TenantsView({ tenants, newTenant, onFormChange, onCheckboxChange, onSub
               <label>Entitled Services</label>
               <div className="checkbox-group">
                 <label className="checkbox-label">
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     checked={newTenant.entitlements.includes("Waitlist Priority Boosts")}
                     onChange={() => onCheckboxChange("Waitlist Priority Boosts")}
                   />
                   Waitlist Priority
                 </label>
                 <label className="checkbox-label">
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     checked={newTenant.entitlements.includes("Offline Cash Payments")}
                     onChange={() => onCheckboxChange("Offline Cash Payments")}
                   />
                   Offline Cash proof
                 </label>
                 <label className="checkbox-label">
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     checked={newTenant.entitlements.includes("PWA Check-in")}
                     onChange={() => onCheckboxChange("PWA Check-in")}
                   />
@@ -1463,8 +1795,8 @@ function TenantsView({ tenants, newTenant, onFormChange, onCheckboxChange, onSub
                   <div style={{ fontSize: "11px", color: "var(--ink-3)" }}>{flag.desc}</div>
                 </div>
                 <label className="switch">
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     checked={flag.active}
                     onChange={() => onToggleFlag(flag.id)}
                   />
@@ -1490,11 +1822,32 @@ function RbacView({ user }) {
   const [roles, setRoles] = React.useState([]);
   const [responsibilities, setResponsibilities] = React.useState([]);
   const [positions, setPositions] = React.useState([]);
+  const [makerCheckerRequests, setMakerCheckerRequests] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
 
   // Search filter
   const [search, setSearch] = React.useState("");
+
+  const handleMakerCheckerAction = async (requestId, action) => {
+    try {
+      const res = await fetch(`${apiBase}/api/admin/rbac/maker-checker/requests/${requestId}/${action}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('samaagum_admin_token')}`
+        }
+      }).then(r => r.json());
+      if (res.success) {
+        alert(res.message || `Request ${action}ed successfully`);
+        loadData();
+      } else {
+        alert(res.message || `Failed to ${action} request`);
+      }
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   // Modals & Form States
   const [modalOpen, setModalOpen] = React.useState(null); // 'role' | 'responsibility' | 'position' | null
@@ -1541,15 +1894,21 @@ function RbacView({ user }) {
     setLoading(true);
     setError(null);
     try {
-      const [rRes, respRes, pRes] = await Promise.all([
+      const [rRes, respRes, pRes, mcRes] = await Promise.all([
         adminApi.rbac.getRoles(),
         adminApi.rbac.getResponsibilities(),
-        adminApi.rbac.getPositions()
+        adminApi.rbac.getPositions(),
+        fetch(`${apiBase}/api/admin/rbac/maker-checker/requests`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('samaagum_admin_token')}`
+          }
+        }).then(r => r.json())
       ]);
 
       if (rRes.success) setRoles(rRes.data.roles || rRes.data);
       if (respRes.success) setResponsibilities(respRes.data);
       if (pRes.success) setPositions(pRes.data);
+      if (mcRes.success) setMakerCheckerRequests(mcRes.data);
     } catch (err) {
       console.error(err);
       setError("Failed to fetch RBAC configuration from backend API.");
@@ -1818,6 +2177,9 @@ function RbacView({ user }) {
         <button className={`btn-sm ${activeSubTab === "matrix" ? "btn-sm-primary" : "btn-sm-ghost"}`} onClick={() => { setActiveSubTab("matrix"); setSearch(""); }}>
           Permissions Matrix
         </button>
+        <button className={`btn-sm ${activeSubTab === "maker-checker" ? "btn-sm-primary" : "btn-sm-ghost"}`} onClick={() => { setActiveSubTab("maker-checker"); setSearch(""); }}>
+          Maker-Checker Requests ({makerCheckerRequests.length})
+        </button>
       </div>
 
       {loading && (
@@ -2074,6 +2436,58 @@ function RbacView({ user }) {
               </table>
             </div>
           )}
+
+          {activeSubTab === "maker-checker" && (
+            <div className="table-wrapper">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Request Info</th>
+                    <th>Maker</th>
+                    <th>Status</th>
+                    <th>Submitted</th>
+                    <th style={{ textAlign: "right" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {makerCheckerRequests.map(req => (
+                    <tr key={req.id}>
+                      <td>
+                        <div>
+                          <span style={{ fontWeight: "600", display: "block" }}>{req.action_type}</span>
+                          <span style={{ fontSize: "11px", color: "var(--ink-3)" }}>
+                            Payload: {JSON.stringify(req.payload)}
+                          </span>
+                        </div>
+                      </td>
+                      <td>{req.maker_email}</td>
+                      <td>
+                        <span className={`pill ${req.status === 'pending' ? 'yellow' : req.status === 'approved' ? 'green' : 'red'}`}>
+                          {req.status}
+                        </span>
+                      </td>
+                      <td>{new Date(req.created_at).toLocaleString()}</td>
+                      <td style={{ textAlign: "right" }}>
+                        {req.status === 'pending' && (
+                          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                            <button className="btn-sm btn-sm-ghost" onClick={() => handleMakerCheckerAction(req.id, 'reject')}>Reject</button>
+                            <button className="btn-sm btn-sm-primary" onClick={() => handleMakerCheckerAction(req.id, 'approve')}>Approve</button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {makerCheckerRequests.length === 0 && (
+                    <tr>
+                      <td colSpan="5" style={{ textAlign: "center", padding: "20px", color: "var(--ink-3)" }}>
+                        No pending maker-checker requests.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -2186,7 +2600,7 @@ function RbacView({ user }) {
                     )}
                   </div>
                 </div>
-                
+
                 <div style={{ display: "flex", gap: "20px", marginTop: "8px" }}>
                   <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "13px" }}>
                     <input
@@ -2468,12 +2882,12 @@ function AuditView({ logs }) {
         <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "600" }}>System Audit Logs Terminal</h3>
         <span style={{ fontSize: "11px", fontFamily: "monospace", color: "var(--accent-1)" }}>● LIVE MONITOR FEED</span>
       </div>
-      
+
       <div className="audit-terminal">
         {logs.map((log, idx) => (
           <div key={idx} className="log-line">
             <span className="time">[{log.time}]</span>
-            <span className="actor">{log.actor}</span>: 
+            <span className="actor">{log.actor}</span>:
             <span className="action"> {log.action}</span>
           </div>
         ))}
@@ -2486,18 +2900,27 @@ function AuditView({ logs }) {
 }
 
 // User Management View
-function UsersView({ users, onUpdateUser, onAddUser }) {
+function UsersView({ users, onUpdateUser, onAddUser, onDeleteUser }) {
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("All");
   const [showAddModal, setShowAddModal] = useState(false);
-  
+
   // Add User Form States
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState("Participant");
 
+  // Edit User Form States
+  const [editingUser, setEditingUser] = useState(null);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editRole, setEditRole] = useState("Participant");
+  const [editStatus, setEditStatus] = useState("Active");
+
   const filtered = users.filter(u => {
-    const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase());
+    const name = u.name || "";
+    const email = u.email || "";
+    const matchSearch = name.toLowerCase().includes(search.toLowerCase()) || email.toLowerCase().includes(search.toLowerCase());
     const matchRole = filterRole === "All" || u.role === filterRole;
     return matchSearch && matchRole;
   });
@@ -2512,13 +2935,33 @@ function UsersView({ users, onUpdateUser, onAddUser }) {
       name: newName,
       email: newEmail,
       role: newRole,
-      status: "Active",
-      joined: "Just now"
+      status: "Invited",
+      joined: new Date().toLocaleDateString()
     });
     setNewName("");
     setNewEmail("");
     setNewRole("Participant");
     setShowAddModal(false);
+  };
+
+  const handleStartEdit = (u) => {
+    setEditingUser(u);
+    setEditName(u.name || "");
+    setEditEmail(u.email || "");
+    setEditRole(u.role || "Participant");
+    setEditStatus(u.status || "Active");
+  };
+
+  const handleSaveEdit = (e) => {
+    e.preventDefault();
+    if (!editName || !editEmail) return;
+    onUpdateUser(editingUser.id, {
+      name: editName,
+      email: editEmail,
+      role: editRole,
+      status: editStatus
+    });
+    setEditingUser(null);
   };
 
   return (
@@ -2531,15 +2974,15 @@ function UsersView({ users, onUpdateUser, onAddUser }) {
       </div>
 
       <div style={{ display: "flex", gap: "12px", marginBottom: "20px", flexWrap: "wrap" }}>
-        <input 
-          type="text" 
-          placeholder="Search by name or email..." 
-          value={search} 
+        <input
+          type="text"
+          placeholder="Search by name or email..."
+          value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{ flex: 1, minWidth: "200px", padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)", outline: "none" }}
         />
-        <select 
-          value={filterRole} 
+        <select
+          value={filterRole}
           onChange={(e) => setFilterRole(e.target.value)}
           style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)", outline: "none" }}
         >
@@ -2569,8 +3012,8 @@ function UsersView({ users, onUpdateUser, onAddUser }) {
                   </div>
                 </td>
                 <td>
-                  <select 
-                    value={u.role} 
+                  <select
+                    value={u.role}
                     onChange={(e) => onUpdateUser(u.id, { role: e.target.value })}
                     style={{ padding: "4px 8px", borderRadius: "4px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)", fontSize: "12.5px", outline: "none" }}
                   >
@@ -2578,18 +3021,42 @@ function UsersView({ users, onUpdateUser, onAddUser }) {
                   </select>
                 </td>
                 <td>
-                  <span className={`pill ${u.status === "Active" ? "green" : "red"}`} style={{ padding: "3px 8px", fontSize: "11px", fontWeight: "600", borderRadius: "12px" }}>
+                  <span className={`pill ${u.status === "Active" ? "green" : u.status === "Invited" ? "orange" : "red"}`} style={{ padding: "3px 8px", fontSize: "11px", fontWeight: "600", borderRadius: "12px", background: u.status === "Invited" ? "rgba(245, 158, 11, 0.15)" : undefined, color: u.status === "Invited" ? "#f59e0b" : undefined }}>
                     {u.status}
                   </span>
                 </td>
                 <td style={{ fontSize: "13px", color: "var(--ink-3)" }}>{u.joined}</td>
                 <td style={{ textAlign: "right" }}>
-                  <button 
+                  <button
                     onClick={() => onUpdateUser(u.id, { status: u.status === "Active" ? "Suspended" : "Active" })}
                     style={{ background: "transparent", border: "none", color: u.status === "Active" ? "#ef4444" : "#10b981", cursor: "pointer", fontSize: "12.5px", fontWeight: "600" }}
                   >
                     {u.status === "Active" ? "Suspend" : "Activate"}
                   </button>
+                  <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                    <button 
+                      onClick={() => handleStartEdit(u)}
+                      style={{ background: "transparent", border: "none", color: "var(--accent-2)", cursor: "pointer", fontSize: "12.5px", fontWeight: "600" }}
+                    >
+                      Edit
+                    </button>
+                    <button 
+                      onClick={() => {
+                        if (window.confirm(`Are you sure you want to delete user ${u.name}?`)) {
+                          onDeleteUser(u.id);
+                        }
+                      }}
+                      style={{ background: "transparent", border: "none", color: "#f43f5e", cursor: "pointer", fontSize: "12.5px", fontWeight: "600" }}
+                    >
+                      Delete
+                    </button>
+                    <button 
+                      onClick={() => onUpdateUser(u.id, { status: u.status === "Active" ? "Suspended" : "Active" })}
+                      style={{ background: "transparent", border: "none", color: u.status === "Active" ? "#ef4444" : "#10b981", cursor: "pointer", fontSize: "12.5px", fontWeight: "600" }}
+                    >
+                      {u.status === "Active" ? "Suspend" : "Activate"}
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -2607,29 +3074,29 @@ function UsersView({ users, onUpdateUser, onAddUser }) {
             <form onSubmit={handleAdd} className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 <label style={{ fontSize: "12.5px", fontWeight: "600" }}>Name</label>
-                <input 
-                  type="text" 
-                  required 
-                  value={newName} 
-                  onChange={(e) => setNewName(e.target.value)} 
+                <input
+                  type="text"
+                  required
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
                   style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)" }}
                 />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 <label style={{ fontSize: "12.5px", fontWeight: "600" }}>Email Address</label>
-                <input 
-                  type="email" 
-                  required 
-                  value={newEmail} 
-                  onChange={(e) => setNewEmail(e.target.value)} 
+                <input
+                  type="email"
+                  required
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
                   style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)" }}
                 />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 <label style={{ fontSize: "12.5px", fontWeight: "600" }}>Initial Role</label>
-                <select 
-                  value={newRole} 
-                  onChange={(e) => setNewRole(e.target.value)} 
+                <select
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value)}
                   style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)" }}
                 >
                   {allRoles.map(r => <option key={r} value={r}>{r}</option>)}
@@ -2638,6 +3105,64 @@ function UsersView({ users, onUpdateUser, onAddUser }) {
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
                 <button type="button" className="hbtn hbtn--ghost" onClick={() => setShowAddModal(false)} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid var(--border)", background: "transparent", color: "var(--ink)", cursor: "pointer" }}>Cancel</button>
                 <button type="submit" className="hbtn hbtn--primary" style={{ background: "var(--accent-2)", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "6px", cursor: "pointer", fontWeight: "600" }}>Send Invitation</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editingUser && (
+        <div className="modal-overlay" style={{ zIndex: 1000 }}>
+          <div className="modal-card" style={{ maxWidth: "450px" }}>
+            <div className="modal-header">
+              <h3>Edit User Info</h3>
+              <button onClick={() => setEditingUser(null)} style={{ background: "transparent", border: "none", color: "var(--ink)", cursor: "pointer" }}><Icons.close /></button>
+            </div>
+            <form onSubmit={handleSaveEdit} className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12.5px", fontWeight: "600" }}>Name</label>
+                <input 
+                  type="text" 
+                  required 
+                  value={editName} 
+                  onChange={(e) => setEditName(e.target.value)} 
+                  style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)" }}
+                />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12.5px", fontWeight: "600" }}>Email Address</label>
+                <input 
+                  type="email" 
+                  required 
+                  value={editEmail} 
+                  onChange={(e) => setEditEmail(e.target.value)} 
+                  style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)" }}
+                />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12.5px", fontWeight: "600" }}>Role</label>
+                <select 
+                  value={editRole} 
+                  onChange={(e) => setEditRole(e.target.value)} 
+                  style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)" }}
+                >
+                  {allRoles.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12.5px", fontWeight: "600" }}>Status</label>
+                <select 
+                  value={editStatus} 
+                  onChange={(e) => setEditStatus(e.target.value)} 
+                  style={{ padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)" }}
+                >
+                  <option value="Active">Active</option>
+                  <option value="Suspended">Suspended</option>
+                </select>
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
+                <button type="button" className="hbtn hbtn--ghost" onClick={() => setEditingUser(null)} style={{ padding: "8px 16px", borderRadius: "6px", border: "1px solid var(--border)", background: "transparent", color: "var(--ink)", cursor: "pointer" }}>Cancel</button>
+                <button type="submit" className="hbtn hbtn--primary" style={{ padding: "8px 16px", borderRadius: "6px", border: "none", background: "var(--accent-2)", color: "#fff", cursor: "pointer", fontWeight: "600" }}>Save Changes</button>
               </div>
             </form>
           </div>
@@ -3100,7 +3625,7 @@ function CouponsView({ user, apiBase }) {
   };
 
   const copyCode = (code) => {
-    navigator.clipboard.writeText(code).catch(() => {});
+    navigator.clipboard.writeText(code).catch(() => { });
     setCopied(code);
     setTimeout(() => setCopied(null), 2000);
   };
@@ -3291,6 +3816,55 @@ function SettingsView({ user, logAction, addToast }) {
     google: { enabled: false, clientId: '', clientSecret: '' },
     linkedin: { enabled: false, clientId: '', clientSecret: '' }
   });
+
+  const addCustomProvider = () => {
+    const key = `custom_${Date.now()}`;
+    setAuthSettings(prev => ({
+      ...prev,
+      [key]: {
+        enabled: false,
+        clientId: '',
+        clientSecret: '',
+        displayName: 'Custom Provider',
+        authorizationEndpoint: '',
+        tokenEndpoint: '',
+        userEndpoint: '',
+        scope: 'openid email profile',
+        emailField: 'email',
+        nameField: 'name',
+        isCustom: true
+      }
+    }));
+  };
+
+  const removeCustomProvider = (key) => {
+    setAuthSettings(prev => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const updateProviderField = (providerKey, field, value) => {
+    setAuthSettings(prev => ({
+      ...prev,
+      [providerKey]: {
+        ...prev[providerKey],
+        [field]: value
+      }
+    }));
+  };
+
+  const updateProviderKey = (oldKey, newKey) => {
+    if (!newKey) return;
+    setAuthSettings(prev => {
+      const next = { ...prev };
+      if (next[newKey]) return prev;
+      next[newKey] = next[oldKey];
+      delete next[oldKey];
+      return next;
+    });
+  };
   const [authLoading, setAuthLoading] = React.useState(true);
   const [authSaving, setAuthSaving] = React.useState(false);
   const [authError, setAuthError] = React.useState(null);
@@ -3418,7 +3992,7 @@ function SettingsView({ user, logAction, addToast }) {
       </div>
 
       <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', alignItems: 'start', cursor: 'default' }}>
-        
+
         {/* Auth settings card */}
         <div className="stat-card" style={{ height: 'auto', display: 'flex', flexDirection: 'column', gap: '20px', padding: '24px', cursor: 'default' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid var(--border-color, rgba(255,255,255,0.06))', paddingBottom: '12px' }}>
@@ -3439,14 +4013,14 @@ function SettingsView({ user, logAction, addToast }) {
                     Google OAuth
                   </span>
                   <label style={{ position: 'relative', display: 'inline-block', width: '40px', height: '22px' }}>
-                    <input 
-                      type="checkbox" 
-                      checked={authSettings.google.enabled} 
+                    <input
+                      type="checkbox"
+                      checked={authSettings.google.enabled}
                       onChange={(e) => setAuthSettings({
                         ...authSettings,
                         google: { ...authSettings.google, enabled: e.target.checked }
                       })}
-                      style={{ opacity: 0, width: 0, height: 0 }} 
+                      style={{ opacity: 0, width: 0, height: 0 }}
                     />
                     <span className="slider round" style={{ position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: authSettings.google.enabled ? 'var(--accent-1)' : '#555', transition: '0.3s', borderRadius: '22px' }}>
                       <span style={{ position: 'absolute', height: '16px', width: '16px', left: authSettings.google.enabled ? '20px' : '3px', bottom: '3px', backgroundColor: 'white', transition: '0.3s', borderRadius: '50%' }}></span>
@@ -3457,8 +4031,8 @@ function SettingsView({ user, logAction, addToast }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', opacity: authSettings.google.enabled ? 1 : 0.6 }}>
                   <div className="form-group">
                     <label style={{ fontSize: '12px', marginBottom: '4px' }}>Client ID</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       className="form-control"
                       value={authSettings.google.clientId}
                       disabled={!authSettings.google.enabled}
@@ -3471,8 +4045,8 @@ function SettingsView({ user, logAction, addToast }) {
                   </div>
                   <div className="form-group">
                     <label style={{ fontSize: '12px', marginBottom: '4px' }}>Client Secret</label>
-                    <input 
-                      type="password" 
+                    <input
+                      type="password"
                       className="form-control"
                       value={authSettings.google.clientSecret}
                       disabled={!authSettings.google.enabled}
@@ -3493,14 +4067,14 @@ function SettingsView({ user, logAction, addToast }) {
                     LinkedIn OAuth
                   </span>
                   <label style={{ position: 'relative', display: 'inline-block', width: '40px', height: '22px' }}>
-                    <input 
-                      type="checkbox" 
-                      checked={authSettings.linkedin.enabled} 
+                    <input
+                      type="checkbox"
+                      checked={authSettings.linkedin.enabled}
                       onChange={(e) => setAuthSettings({
                         ...authSettings,
                         linkedin: { ...authSettings.linkedin, enabled: e.target.checked }
                       })}
-                      style={{ opacity: 0, width: 0, height: 0 }} 
+                      style={{ opacity: 0, width: 0, height: 0 }}
                     />
                     <span className="slider round" style={{ position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: authSettings.linkedin.enabled ? 'var(--accent-1)' : '#555', transition: '0.3s', borderRadius: '22px' }}>
                       <span style={{ position: 'absolute', height: '16px', width: '16px', left: authSettings.linkedin.enabled ? '20px' : '3px', bottom: '3px', backgroundColor: 'white', transition: '0.3s', borderRadius: '50%' }}></span>
@@ -3511,8 +4085,8 @@ function SettingsView({ user, logAction, addToast }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', opacity: authSettings.linkedin.enabled ? 1 : 0.6 }}>
                   <div className="form-group">
                     <label style={{ fontSize: '12px', marginBottom: '4px' }}>Client ID</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       className="form-control"
                       value={authSettings.linkedin.clientId}
                       disabled={!authSettings.linkedin.enabled}
@@ -3525,8 +4099,8 @@ function SettingsView({ user, logAction, addToast }) {
                   </div>
                   <div className="form-group">
                     <label style={{ fontSize: '12px', marginBottom: '4px' }}>Client Secret</label>
-                    <input 
-                      type="password" 
+                    <input
+                      type="password"
                       className="form-control"
                       value={authSettings.linkedin.clientSecret}
                       disabled={!authSettings.linkedin.enabled}
@@ -3539,6 +4113,189 @@ function SettingsView({ user, logAction, addToast }) {
                   </div>
                 </div>
               </div>
+
+              {/* DYNAMIC CUSTOM OAUTH PROVIDERS */}
+              {Object.keys(authSettings).filter(key => key !== 'google' && key !== 'linkedin').map(key => {
+                const provider = authSettings[key] || {};
+                return (
+                  <div key={key} style={{ padding: '16px', background: 'var(--bg-card, rgba(255,255,255,0.02))', borderRadius: '8px', border: '1px solid var(--border-color, rgba(255,255,255,0.04))', position: 'relative' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, color: 'var(--accent-2)' }}>
+                        Custom: {provider.displayName || key}
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <button 
+                          type="button" 
+                          onClick={() => removeCustomProvider(key)}
+                          style={{ background: 'none', border: 'none', color: '#ff4d4d', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }}
+                          title="Delete Provider"
+                        >
+                          <Icons.close style={{ width: '16px', height: '16px' }} />
+                        </button>
+                        <label style={{ position: 'relative', display: 'inline-block', width: '40px', height: '22px' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={provider.enabled || false} 
+                            onChange={(e) => updateProviderField(key, 'enabled', e.target.checked)}
+                            style={{ opacity: 0, width: 0, height: 0 }} 
+                          />
+                          <span className="slider round" style={{ position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: provider.enabled ? 'var(--accent-1)' : '#555', transition: '0.3s', borderRadius: '22px' }}>
+                            <span style={{ position: 'absolute', height: '16px', width: '16px', left: provider.enabled ? '20px' : '3px', bottom: '3px', backgroundColor: 'white', transition: '0.3s', borderRadius: '50%' }}></span>
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', opacity: provider.enabled ? 1 : 0.6 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                        <div className="form-group">
+                          <label style={{ fontSize: '12px', marginBottom: '4px' }}>Provider Key (ID)</label>
+                          <input 
+                            type="text" 
+                            className="form-control"
+                            defaultValue={key}
+                            onBlur={(e) => {
+                              const newKey = e.target.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+                              if (newKey && newKey !== key) {
+                                if (authSettings[newKey]) {
+                                  addToast('Provider key already exists', 'warning');
+                                  e.target.value = key;
+                                } else {
+                                  updateProviderKey(key, newKey);
+                                }
+                              }
+                            }}
+                            placeholder="e.g. github"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label style={{ fontSize: '12px', marginBottom: '4px' }}>Display Name</label>
+                          <input 
+                            type="text" 
+                            className="form-control"
+                            value={provider.displayName || ''}
+                            onChange={(e) => updateProviderField(key, 'displayName', e.target.value)}
+                            placeholder="e.g. GitHub"
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                        <div className="form-group">
+                          <label style={{ fontSize: '12px', marginBottom: '4px' }}>Client ID</label>
+                          <input 
+                            type="text" 
+                            className="form-control"
+                            value={provider.clientId || ''}
+                            onChange={(e) => updateProviderField(key, 'clientId', e.target.value)}
+                            placeholder="Enter Client ID"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label style={{ fontSize: '12px', marginBottom: '4px' }}>Client Secret</label>
+                          <input 
+                            type="password" 
+                            className="form-control"
+                            value={provider.clientSecret || ''}
+                            onChange={(e) => updateProviderField(key, 'clientSecret', e.target.value)}
+                            placeholder="Enter Client Secret"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label style={{ fontSize: '12px', marginBottom: '4px' }}>Authorization Endpoint</label>
+                        <input 
+                          type="text" 
+                          className="form-control"
+                          value={provider.authorizationEndpoint || ''}
+                          onChange={(e) => updateProviderField(key, 'authorizationEndpoint', e.target.value)}
+                          placeholder="e.g. https://github.com/login/oauth/authorize"
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label style={{ fontSize: '12px', marginBottom: '4px' }}>Token Endpoint</label>
+                        <input 
+                          type="text" 
+                          className="form-control"
+                          value={provider.tokenEndpoint || ''}
+                          onChange={(e) => updateProviderField(key, 'tokenEndpoint', e.target.value)}
+                          placeholder="e.g. https://github.com/login/oauth/access_token"
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label style={{ fontSize: '12px', marginBottom: '4px' }}>User Info Endpoint</label>
+                        <input 
+                          type="text" 
+                          className="form-control"
+                          value={provider.userEndpoint || ''}
+                          onChange={(e) => updateProviderField(key, 'userEndpoint', e.target.value)}
+                          placeholder="e.g. https://api.github.com/user"
+                        />
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '10px' }}>
+                        <div className="form-group">
+                          <label style={{ fontSize: '12px', marginBottom: '4px' }}>Scope</label>
+                          <input 
+                            type="text" 
+                            className="form-control"
+                            value={provider.scope || ''}
+                            onChange={(e) => updateProviderField(key, 'scope', e.target.value)}
+                            placeholder="e.g. read:user user:email"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label style={{ fontSize: '12px', marginBottom: '4px' }}>Email Field</label>
+                          <input 
+                            type="text" 
+                            className="form-control"
+                            value={provider.emailField || ''}
+                            onChange={(e) => updateProviderField(key, 'emailField', e.target.value)}
+                            placeholder="email"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label style={{ fontSize: '12px', marginBottom: '4px' }}>Name Field</label>
+                          <input 
+                            type="text" 
+                            className="form-control"
+                            value={provider.nameField || ''}
+                            onChange={(e) => updateProviderField(key, 'nameField', e.target.value)}
+                            placeholder="name"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              <button 
+                type="button" 
+                onClick={addCustomProvider}
+                className="btn-sm"
+                style={{ 
+                  width: '100%', 
+                  padding: '10px', 
+                  height: 'auto', 
+                  background: 'rgba(255,255,255,0.03)', 
+                  border: '1px dashed var(--border-color, rgba(255,255,255,0.15))', 
+                  color: 'var(--ink-1)', 
+                  borderRadius: '6px', 
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  transition: '0.2s'
+                }}
+              >
+                <Icons.plus style={{ width: '16px', height: '16px' }} />
+                Add Custom Login Method
+              </button>
 
               <button 
                 type="submit" 
@@ -3572,11 +4329,11 @@ function SettingsView({ user, logAction, addToast }) {
                   <span style={{ fontSize: '11px', color: 'var(--ink-2)' }}>Allow app to send transactional notifications</span>
                 </div>
                 <label style={{ position: 'relative', display: 'inline-block', width: '40px', height: '22px' }}>
-                  <input 
-                    type="checkbox" 
-                    checked={commSettings.enabled} 
+                  <input
+                    type="checkbox"
+                    checked={commSettings.enabled}
                     onChange={(e) => setCommSettings({ ...commSettings, enabled: e.target.checked })}
-                    style={{ opacity: 0, width: 0, height: 0 }} 
+                    style={{ opacity: 0, width: 0, height: 0 }}
                   />
                   <span className="slider round" style={{ position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: commSettings.enabled ? 'var(--accent-2)' : '#555', transition: '0.3s', borderRadius: '22px' }}>
                     <span style={{ position: 'absolute', height: '16px', width: '16px', left: commSettings.enabled ? '20px' : '3px', bottom: '3px', backgroundColor: 'white', transition: '0.3s', borderRadius: '50%' }}></span>
@@ -3588,7 +4345,7 @@ function SettingsView({ user, logAction, addToast }) {
                 {/* Provider Picker */}
                 <div className="form-group">
                   <label style={{ fontSize: '12px', marginBottom: '4px' }}>Email Provider</label>
-                  <select 
+                  <select
                     className="form-control"
                     value={commSettings.provider}
                     disabled={!commSettings.enabled}
@@ -3603,8 +4360,8 @@ function SettingsView({ user, logAction, addToast }) {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div className="form-group">
                     <label style={{ fontSize: '12px', marginBottom: '4px' }}>Sender Name</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       className="form-control"
                       value={commSettings.senderName}
                       disabled={!commSettings.enabled}
@@ -3614,8 +4371,8 @@ function SettingsView({ user, logAction, addToast }) {
                   </div>
                   <div className="form-group">
                     <label style={{ fontSize: '12px', marginBottom: '4px' }}>Sender Email</label>
-                    <input 
-                      type="email" 
+                    <input
+                      type="email"
                       className="form-control"
                       value={commSettings.senderEmail}
                       disabled={!commSettings.enabled}
@@ -3631,8 +4388,8 @@ function SettingsView({ user, logAction, addToast }) {
                     <div style={{ fontWeight: 500, fontSize: '13px', color: 'var(--accent-2)' }}>Brevo API Configuration</div>
                     <div className="form-group">
                       <label style={{ fontSize: '12px', marginBottom: '4px' }}>Brevo API Key v3</label>
-                      <input 
-                        type="password" 
+                      <input
+                        type="password"
                         className="form-control"
                         value={commSettings.brevoApiKey}
                         disabled={!commSettings.enabled}
@@ -3642,8 +4399,8 @@ function SettingsView({ user, logAction, addToast }) {
                     </div>
                     <div className="form-group" style={{ marginTop: '10px' }}>
                       <label style={{ fontSize: '12px', marginBottom: '4px' }}>Brevo Template ID (Optional)</label>
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         className="form-control"
                         value={commSettings.brevoTemplateId || ''}
                         disabled={!commSettings.enabled}
@@ -3658,12 +4415,12 @@ function SettingsView({ user, logAction, addToast }) {
                 {commSettings.provider === 'smtp' && (
                   <div style={{ padding: '16px', background: 'var(--bg-card, rgba(255,255,255,0.02))', borderRadius: '8px', border: '1px solid var(--border-color, rgba(255,255,255,0.05))', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <div style={{ fontWeight: 500, fontSize: '13px' }}>SMTP Configuration</div>
-                    
+
                     <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', gap: '12px' }}>
                       <div className="form-group">
                         <label style={{ fontSize: '11px', marginBottom: '4px' }}>SMTP Host</label>
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           className="form-control"
                           value={commSettings.smtpHost}
                           disabled={!commSettings.enabled}
@@ -3673,8 +4430,8 @@ function SettingsView({ user, logAction, addToast }) {
                       </div>
                       <div className="form-group">
                         <label style={{ fontSize: '11px', marginBottom: '4px' }}>Port</label>
-                        <input 
-                          type="number" 
+                        <input
+                          type="number"
                           className="form-control"
                           value={commSettings.smtpPort}
                           disabled={!commSettings.enabled}
@@ -3686,8 +4443,8 @@ function SettingsView({ user, logAction, addToast }) {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                       <div className="form-group">
                         <label style={{ fontSize: '11px', marginBottom: '4px' }}>SMTP User</label>
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           className="form-control"
                           value={commSettings.smtpUser}
                           disabled={!commSettings.enabled}
@@ -3697,8 +4454,8 @@ function SettingsView({ user, logAction, addToast }) {
                       </div>
                       <div className="form-group">
                         <label style={{ fontSize: '11px', marginBottom: '4px' }}>SMTP Password</label>
-                        <input 
-                          type="password" 
+                        <input
+                          type="password"
                           className="form-control"
                           value={commSettings.smtpPass}
                           disabled={!commSettings.enabled}
@@ -3709,8 +4466,8 @@ function SettingsView({ user, logAction, addToast }) {
                     </div>
 
                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer' }}>
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         checked={commSettings.smtpSecure}
                         disabled={!commSettings.enabled}
                         onChange={(e) => setCommSettings({ ...commSettings, smtpSecure: e.target.checked })}
@@ -3721,8 +4478,8 @@ function SettingsView({ user, logAction, addToast }) {
                 )}
               </div>
 
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 disabled={commSaving}
                 className="btn-sm btn-sm-primary"
                 style={{ width: '100%', padding: '10px', height: 'auto', background: 'var(--accent-2)' }}
@@ -3737,9 +4494,9 @@ function SettingsView({ user, logAction, addToast }) {
             <div style={{ marginTop: '10px', borderTop: '1px solid var(--border-color, rgba(255,255,255,0.06))', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ fontWeight: 500, fontSize: '13px' }}>Test Communication Integration</div>
               <p style={{ fontSize: '11px', color: 'var(--ink-2)', margin: 0 }}>Send a quick validation email to verify your configured Brevo or SMTP credentials.</p>
-              
+
               <div style={{ display: 'flex', gap: '10px' }}>
-                <input 
+                <input
                   type="email"
                   placeholder="recipient@test.com"
                   value={testEmail}
@@ -3747,7 +4504,7 @@ function SettingsView({ user, logAction, addToast }) {
                   onChange={(e) => setTestEmail(e.target.value)}
                   style={{ flex: 1, fontSize: '13px' }}
                 />
-                <button 
+                <button
                   onClick={handleTestConnection}
                   disabled={testLoading || !testEmail}
                   className="btn-sm"
@@ -3758,9 +4515,9 @@ function SettingsView({ user, logAction, addToast }) {
               </div>
 
               {testStatus && (
-                <div style={{ 
-                  padding: '8px 12px', 
-                  borderRadius: '6px', 
+                <div style={{
+                  padding: '8px 12px',
+                  borderRadius: '6px',
                   fontSize: '12px',
                   background: testStatus.success ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
                   border: `1px solid ${testStatus.success ? 'rgb(16,185,129)' : 'rgb(239,68,68)'}`,
@@ -3774,6 +4531,1196 @@ function SettingsView({ user, logAction, addToast }) {
         </div>
 
       </div>
+    </div>
+  );
+}
+
+// --- TAGS VIEW ---
+function TagsView({ tags, setTags, categories, showToast, logAction, user }) {
+  const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  // SlideOver Panel State
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [editingTag, setEditingTag] = useState(null);
+  const [formName, setFormName] = useState('');
+  const [formSlug, setFormSlug] = useState('');
+  const [formCategory, setFormCategory] = useState('');
+  const [formStatus, setFormStatus] = useState('active');
+
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [deletingTag, setDeletingTag] = useState(null);
+
+  // Simple helpers
+  const uuid = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+  const slugify = (text) => {
+    return text
+      .toString()
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^\w\-]+/g, '')
+      .replace(/\-\-+/g, '-')
+      .replace(/^-+/, '')
+      .replace(/-+$/, '');
+  };
+
+  const copySlug = (slug) => {
+    navigator.clipboard.writeText(slug).then(() => {
+      showToast(`Slug "${slug}" copied to clipboard`, 'info');
+    }).catch(() => {
+      showToast(`Slug: ${slug}`, 'info');
+    });
+  };
+
+  const toggleStatus = (id, e) => {
+    e.stopPropagation();
+    const tag = tags.find(t => t.id === id);
+    if (!tag) return;
+
+    const parentCat = categories.find(c => c.name === tag.category);
+    if (parentCat && parentCat.status === 'inactive') {
+      showToast('Cannot activate a tag under an inactive category', 'warning');
+      return;
+    }
+
+    const nextStatus = tag.status === 'active' ? 'inactive' : 'active';
+    adminApi.tags.saveTag({ status: nextStatus }, id).then(() => {
+      const updated = tags.map(t => t.id === id ? { ...t, status: nextStatus } : t);
+      setTags(updated);
+      logAction(user?.email || 'Admin', `Updated tag "${tag.name}" status to ${nextStatus}.`);
+      showToast(`"${tag.name}" is now ${nextStatus}`, 'success');
+    }).catch(err => {
+      showToast('Failed to update tag status: ' + err.message, 'warning');
+    });
+  };
+
+  const openPanel = (tag = null) => {
+    // Get active categories list to pre-populate category dropdown
+    const activeCats = categories.filter(c => !c.isDeleted && c.status === 'active');
+
+    if (tag) {
+      setEditingTag(tag);
+      setFormName(tag.name);
+      setFormSlug(tag.slug);
+      setFormCategory(tag.category);
+      setFormStatus(tag.status);
+    } else {
+      setEditingTag(null);
+      setFormName('');
+      setFormSlug('');
+      setFormCategory(activeCats[0]?.name || '');
+      setFormStatus('active');
+    }
+    setIsPanelOpen(true);
+  };
+
+  const handleSave = () => {
+    if (!formName.trim()) {
+      showToast('Tag name is required', 'warning');
+      return;
+    }
+
+    const slug = editingTag ? (formSlug.trim() || slugify(formName)) : slugify(formName);
+
+    const parentCat = categories.find(c => c.name === formCategory);
+    const isParentInactive = parentCat && parentCat.status === 'inactive';
+    const finalStatus = isParentInactive ? 'inactive' : formStatus;
+
+    if (editingTag) {
+      const newVal = {
+        name: formName,
+        slug,
+        category: formCategory,
+        status: finalStatus
+      };
+      adminApi.tags.saveTag(newVal, editingTag.id).then(() => {
+        const updatedList = tags.map(t => t.id === editingTag.id ? { ...t, ...newVal } : t);
+        setTags(updatedList);
+        logAction(user?.email || 'Admin', `Updated tag "${formName}" details.`);
+        showToast(`Tag "${formName}" updated successfully`, 'success');
+      }).catch(err => {
+        showToast('Failed to update tag: ' + err.message, 'warning');
+      });
+    } else {
+      const newTagId = uuid();
+      const newTag = {
+        id: newTagId,
+        name: formName,
+        slug,
+        category: formCategory,
+        status: finalStatus,
+        eventCount: 0,
+        isDeleted: false,
+        createdAt: new Date().toISOString()
+      };
+      adminApi.tags.saveTag(newTag).then(() => {
+        const updatedList = [newTag, ...tags];
+        setTags(updatedList);
+        logAction(user?.email || 'Admin', `Created tag "${formName}".`);
+        showToast(`Tag "${formName}" created successfully`, 'success');
+      }).catch(err => {
+        showToast('Failed to create tag: ' + err.message, 'warning');
+      });
+    }
+
+    setIsPanelOpen(false);
+  };
+
+  const openDelete = (tag, e) => {
+    e.stopPropagation();
+    setDeletingTag(tag);
+    setIsDeleteOpen(true);
+  };
+
+  const handleDelete = () => {
+    if (!deletingTag) return;
+    adminApi.tags.deleteTag(deletingTag.id).then(() => {
+      const updatedList = tags.map(t => t.id === deletingTag.id ? { ...t, isDeleted: true } : t);
+      setTags(updatedList);
+      logAction(user?.email || 'Admin', `Deleted tag "${deletingTag.name}".`);
+      showToast(`Tag "${deletingTag.name}" has been deleted`, 'success');
+    }).catch(err => {
+      showToast('Failed to delete tag: ' + err.message, 'warning');
+    });
+    setIsDeleteOpen(false);
+    setDeletingTag(null);
+  };
+
+  // Filter & sort
+  let filtered = tags.filter(t => !t.isDeleted);
+  if (search) {
+    filtered = filtered.filter(t => t.name.toLowerCase().includes(search.toLowerCase()) || t.slug.toLowerCase().includes(search.toLowerCase()));
+  }
+  if (categoryFilter !== 'all') {
+    filtered = filtered.filter(t => t.category === categoryFilter);
+  }
+  if (statusFilter !== 'all') {
+    filtered = filtered.filter(t => t.status === statusFilter);
+  }
+
+  // Active categories list
+  const activeCategories = categories.filter(c => !c.isDeleted);
+
+  return (
+    <div className="data-panel">
+      <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', borderBottom: '1px solid var(--border)' }}>
+        <div>
+          <h3 style={{ margin: 0 }}>Tag Master List</h3>
+          <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--ink-3)' }}>Manage event discovery tags, search keywords, and categories.</p>
+        </div>
+        <div>
+          <button className="btn-sm btn-sm-primary" onClick={() => openPanel()}>
+            + Add Tag
+          </button>
+        </div>
+      </div>
+
+      <div style={{ padding: '16px', display: 'flex', gap: '12px', borderBottom: '1px solid var(--border-2)', flexWrap: 'wrap' }}>
+        <input
+          type="text"
+          className="form-control"
+          style={{ maxWidth: '300px', flex: 1 }}
+          placeholder="Search tags..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <select
+          className="form-control"
+          style={{ maxWidth: '180px' }}
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+        >
+          <option value="all">All Categories</option>
+          {activeCategories.map(c => (
+            <option key={c.id} value={c.name}>{c.name}</option>
+          ))}
+        </select>
+        <select
+          className="form-control"
+          style={{ maxWidth: '160px' }}
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+        >
+          <option value="all">All Status</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+
+      <div className="table-wrapper">
+        {filtered.length === 0 ? (
+          <div style={{ padding: '48px', textAlign: 'center', color: 'var(--ink-3)' }}>
+            No tags found. Click "+ Add Tag" to create one.
+          </div>
+        ) : (
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th style={{ width: '50px' }}>#</th>
+                <th>Name</th>
+                <th>Slug</th>
+                <th>Category</th>
+                <th>Usages</th>
+                <th>Status</th>
+                <th style={{ width: '120px' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((tag, idx) => {
+                const parentCat = categories.find(c => c.name === tag.category);
+                const isParentInactive = parentCat && parentCat.status === 'inactive';
+                return (
+                  <tr key={tag.id}>
+                    <td className="mono" style={{ fontWeight: '600', textAlign: 'center' }}>{idx + 1}</td>
+                    <td>
+                      <span style={{ fontWeight: '600', cursor: 'pointer' }} onClick={() => openPanel(tag)}>
+                        {tag.name}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        style={{ cursor: 'pointer', opacity: 0.8 }}
+                        onClick={() => copySlug(tag.slug)}
+                        title="Click to copy"
+                      >
+                        {tag.slug} 📋
+                      </span>
+                    </td>
+                    <td>
+                      <span className="mini-chip" style={{ background: 'var(--surface-3)', border: '1px solid var(--border)' }}>
+                        {tag.category} {isParentInactive && <span style={{ color: '#ef4444', fontWeight: '600', fontSize: '10px' }}> (Inactive)</span>}
+                      </span>
+                    </td>
+                    <td>{tag.eventCount || 0} events</td>
+                    <td>
+                      <label className="switch" style={isParentInactive ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
+                        <input
+                          type="checkbox"
+                          checked={tag.status === 'active' && !isParentInactive}
+                          disabled={isParentInactive}
+                          onChange={(e) => toggleStatus(tag.id, e)}
+                        />
+                        <span className="slider"></span>
+                      </label>
+                      {isParentInactive && (
+                        <span style={{ display: 'block', fontSize: '10px', color: '#ef4444', marginTop: '4px', fontWeight: '500' }}>
+                          Category Inactive
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button className="btn-sm btn-sm-ghost" onClick={() => openPanel(tag)}>Edit</button>
+                        <button className="btn-sm btn-sm-danger" onClick={(e) => openDelete(tag, e)}>Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* --- ADD/EDIT SLIDE OVER PANEL --- */}
+      {isPanelOpen && (
+        <div className="modal-overlay" style={{ justifyContent: 'flex-end', padding: 0 }}>
+          <div className="modal-card" style={{ maxWidth: '460px', height: '100vh', borderRadius: 0, display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-header">
+              <h3>{editingTag ? 'Edit Tag' : 'Add Tag'}</h3>
+              <button onClick={() => setIsPanelOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--ink)', cursor: 'pointer', fontSize: '20px' }}>×</button>
+            </div>
+
+            <div className="modal-body" style={{ flex: 1, overflowY: 'auto' }}>
+              <div className="form-group">
+                <label>Tag Name</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="e.g. Web3"
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Tag Slug</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="auto-generated"
+                  value={editingTag ? formSlug : (formName ? slugify(formName) : '')}
+                  disabled={!editingTag}
+                  onChange={(e) => setFormSlug(e.target.value)}
+                  style={!editingTag ? { opacity: 0.6, cursor: 'not-allowed', backgroundColor: 'var(--surface-2)' } : {}}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Associated Category</label>
+                <select
+                  className="form-control"
+                  value={formCategory}
+                  onChange={(e) => setFormCategory(e.target.value)}
+                >
+                  {activeCategories.map(c => (
+                    <option key={c.id} value={c.name}>
+                      {c.name} {c.status === 'inactive' ? '(Inactive)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {(() => {
+                const isFormParentInactive = categories.find(c => c.name === formCategory)?.status === 'inactive';
+                const displayStatus = isFormParentInactive ? 'inactive' : formStatus;
+                return (
+                  <div className="form-group">
+                    <label style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-3)', display: 'block', marginBottom: '6px' }}>Status</label>
+                    {isFormParentInactive && (
+                      <div style={{ padding: '8px 12px', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '6px', fontSize: '12.5px', color: '#ef4444', marginBottom: '12px', fontWeight: '500' }}>
+                        ⚠️ Associated category is inactive. This tag will be automatically disabled.
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        type="button"
+                        disabled={isFormParentInactive}
+                        onClick={() => setFormStatus('active')}
+                        style={{
+                          flex: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px',
+                          height: '38px',
+                          borderRadius: '6px',
+                          fontSize: '13.5px',
+                          fontWeight: '500',
+                          cursor: isFormParentInactive ? 'not-allowed' : 'pointer',
+                          opacity: isFormParentInactive ? 0.5 : 1,
+                          border: displayStatus === 'active' ? '1.5px solid #10b981' : '1px solid var(--border)',
+                          background: displayStatus === 'active' ? 'rgba(16, 185, 129, 0.08)' : 'transparent',
+                          color: displayStatus === 'active' ? '#10b981' : 'var(--ink-3)',
+                          transition: 'all 0.15s'
+                        }}
+                      >
+                        <span style={{
+                          width: '10px',
+                          height: '10px',
+                          borderRadius: '50%',
+                          border: displayStatus === 'active' ? '2.5px solid #10b981' : '1.5px solid var(--ink-3)',
+                          background: displayStatus === 'active' ? '#10b981' : 'transparent',
+                          boxShadow: displayStatus === 'active' ? 'inset 0 0 0 2px var(--surface)' : 'none',
+                          boxSizing: 'border-box'
+                        }} />
+                        Active
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setFormStatus('inactive')}
+                        style={{
+                          flex: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px',
+                          height: '38px',
+                          borderRadius: '6px',
+                          fontSize: '13.5px',
+                          fontWeight: '500',
+                          cursor: 'pointer',
+                          border: displayStatus === 'inactive' ? '1.5px solid #ef4444' : '1px solid var(--border)',
+                          background: displayStatus === 'inactive' ? 'rgba(239, 68, 68, 0.08)' : 'transparent',
+                          color: displayStatus === 'inactive' ? '#ef4444' : 'var(--ink-3)',
+                          transition: 'all 0.15s'
+                        }}
+                      >
+                        <span style={{
+                          width: '10px',
+                          height: '10px',
+                          borderRadius: '50%',
+                          border: displayStatus === 'inactive' ? '2.5px solid #ef4444' : '1.5px solid var(--ink-3)',
+                          background: displayStatus === 'inactive' ? '#ef4444' : 'transparent',
+                          boxShadow: displayStatus === 'inactive' ? 'inset 0 0 0 2px var(--surface)' : 'none',
+                          boxSizing: 'border-box'
+                        }} />
+                        Inactive
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: '1px solid var(--border)' }}>
+              <button className="btn-sm btn-sm-ghost" onClick={() => setIsPanelOpen(false)}>Cancel</button>
+              <button className="btn-sm btn-sm-primary" onClick={handleSave}>Save Tag</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- CONFIRM DELETE DIALOG --- */}
+      {isDeleteOpen && deletingTag && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: '400px', padding: '24px' }}>
+            <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+              <span style={{ fontSize: '36px', color: '#ff6b4a' }}>⚠️</span>
+              <h3 style={{ margin: '8px 0 0 0' }}>Delete Tag "{deletingTag.name}"?</h3>
+            </div>
+
+            <p style={{ fontSize: '13px', color: 'var(--ink-2)', textAlign: 'center', lineHeight: '1.5', margin: '0 0 20px 0' }}>
+              This tag has been used in <strong>{deletingTag.eventCount || 0}</strong> events. Deleting it will remove it from discovery search queries.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <button className="btn-sm btn-sm-danger" style={{ justifyContent: 'center' }} onClick={handleDelete}>
+                Delete Tag permanently
+              </button>
+              <button className="btn-sm btn-sm-ghost" style={{ justifyContent: 'center' }} onClick={() => setIsDeleteOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- CATEGORIES VIEW ---
+function CategoriesView({ categories, setCategories, tags, setTags, showToast, logAction, user }) {
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [expandedCats, setExpandedCats] = useState(new Set());
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingToggles, setLoadingToggles] = useState({});
+
+  // SlideOver Form State
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [formName, setFormName] = useState('');
+  const [formSlug, setFormSlug] = useState('');
+  const [formDesc, setFormDesc] = useState('');
+  const [formIcon, setFormIcon] = useState('💻');
+  const [formOrder, setFormOrder] = useState(1);
+  const [formStatus, setFormStatus] = useState('active');
+
+  // Icon Picker tab state
+  const [activeIconTab, setActiveIconTab] = useState('emoji');
+  const [librarySearch, setLibrarySearch] = useState('');
+  const [isTranslationsOpen, setIsTranslationsOpen] = useState(false);
+
+  // Hindi, Marathi, Tamil translations inputs
+  const [transHindi, setTransHindi] = useState('');
+  const [transMarathi, setTransMarathi] = useState('');
+  const [transTamil, setTransTamil] = useState('');
+
+  // Delete Dialog State
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [deletingCat, setDeletingCat] = useState(null);
+  const [draggedId, setDraggedId] = useState(null);
+
+  const handleDragStart = (e, id) => {
+    e.dataTransfer.setData('text/plain', id);
+    setDraggedId(id);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e, targetId) => {
+    e.preventDefault();
+    if (!draggedId || draggedId === targetId) return;
+
+    const draggedIndex = categories.findIndex(c => c.id === draggedId);
+    const targetIndex = categories.findIndex(c => c.id === targetId);
+    if (draggedIndex === -1 || targetIndex === -1) return;
+
+    const newList = [...categories];
+    const [draggedItem] = newList.splice(draggedIndex, 1);
+    newList.splice(targetIndex, 0, draggedItem);
+
+    const updatedList = newList.map((c, index) => ({
+      ...c,
+      displayOrder: index + 1
+    }));
+
+    setCategories(updatedList);
+    localStorage.setItem('samaagum_admin_categories', JSON.stringify(updatedList));
+    logAction(user?.email || 'Admin', `Reordered category "${draggedItem.name}" to position ${targetIndex + 1}.`);
+    setDraggedId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedId(null);
+  };
+
+  // Simple uuid generator
+  const uuid = () => 'cat-' + Math.random().toString(36).substr(2, 9);
+
+  // Simple slugify helper
+  const slugify = (text) => {
+    return text
+      .toString()
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^\w\-]+/g, '')
+      .replace(/\-\-+/g, '-')
+      .replace(/^-+/, '')
+      .replace(/-+$/, '');
+  };
+
+  const getSubcategories = (catId) => {
+    return [];
+  };
+
+  const toggleExpand = (id) => {
+    const next = new Set(expandedCats);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setExpandedCats(next);
+  };
+
+  const copySlug = (slug) => {
+    navigator.clipboard.writeText(slug).then(() => {
+      showToast(`Slug "${slug}" copied to clipboard`, 'info');
+    }).catch(() => {
+      showToast(`Slug: ${slug}`, 'info');
+    });
+  };
+
+  const toggleStatus = (id, e) => {
+    e.stopPropagation();
+    const cat = categories.find(c => c.id === id);
+    if (!cat) return;
+
+    setLoadingToggles(prev => ({ ...prev, [id]: true }));
+
+    setTimeout(() => {
+      const oldStatus = cat.status;
+      const nextStatus = cat.status === 'active' ? 'inactive' : 'active';
+
+      setCategories(prev => prev.map(c => c.id === id ? { ...c, status: nextStatus } : c));
+      setLoadingToggles(prev => ({ ...prev, [id]: false }));
+
+      logAction(user?.email || 'Admin', `Updated category ${cat.name} status from ${oldStatus} to ${nextStatus}`);
+      showToast(`${cat.name} is now ${nextStatus}`, 'success');
+
+      const updatedList = categories.map(c => c.id === id ? { ...c, status: nextStatus } : c);
+      localStorage.setItem('samaagum_admin_categories', JSON.stringify(updatedList));
+      if (nextStatus === 'inactive' && tags && setTags) {
+        const updatedTags = tags.map(t => t.category === cat.name ? { ...t, status: 'inactive' } : t);
+        setTags(updatedTags);
+        localStorage.setItem('samaagum_admin_tags', JSON.stringify(updatedTags));
+        logAction('System', `Disabled all child tags under inactive category "${cat.name}".`);
+      }
+    }, 500);
+  };
+
+  const openPanel = (cat = null) => {
+    if (cat) {
+      setEditingCategory(cat);
+      setFormName(cat.name);
+      setFormSlug(cat.slug);
+      setFormDesc(cat.description || '');
+      setFormIcon(cat.iconValue || '💻');
+      setFormOrder(cat.displayOrder || 1);
+      setFormStatus(cat.status || 'active');
+      const isImg = typeof cat.iconValue === 'string' && (cat.iconValue.startsWith('data:image/') || cat.iconValue.startsWith('http'));
+      setActiveIconTab(isImg ? 'upload' : 'emoji');
+    } else {
+      setEditingCategory(null);
+      setFormName('');
+      setFormSlug('');
+      setFormDesc('');
+      setFormIcon('💻');
+      setFormOrder(categories.filter(c => !c.isDeleted).length + 1);
+      setFormStatus('active');
+      setActiveIconTab('emoji');
+    }
+    setIsTranslationsOpen(false);
+    setTransHindi('');
+    setTransMarathi('');
+    setTransTamil('');
+    setIsPanelOpen(true);
+  };
+
+  const handleNameChange = (val) => {
+    setFormName(val);
+    if (!editingCategory) {
+      setFormSlug(slugify(val));
+    }
+  };
+
+  const normalizeOrders = (list) => {
+    const nonDeleted = list.filter(c => !c.isDeleted).sort((a, b) => a.displayOrder - b.displayOrder);
+    const deleted = list.filter(c => c.isDeleted);
+    const updatedNonDeleted = nonDeleted.map((c, idx) => ({
+      ...c,
+      displayOrder: idx + 1
+    }));
+    return [...updatedNonDeleted, ...deleted];
+  };
+
+  const handleSave = () => {
+    if (!formName.trim()) {
+      showToast('Category name is required', 'warning');
+      return;
+    }
+    const slug = editingCategory ? (formSlug.trim() || slugify(formName)) : slugify(formName);
+
+    let updatedList;
+    if (editingCategory) {
+      const newVal = {
+        name: formName,
+        slug,
+        description: formDesc,
+        iconValue: formIcon,
+        displayOrder: Number(formOrder),
+        status: formStatus,
+      };
+
+      const targetOrder = Number(formOrder);
+      let listWithoutSelf = categories.filter(c => c.id !== editingCategory.id && !c.isDeleted).sort((a, b) => a.displayOrder - b.displayOrder);
+      const insertIndex = Math.max(0, Math.min(listWithoutSelf.length, targetOrder - 1));
+      listWithoutSelf.splice(insertIndex, 0, { ...editingCategory, ...newVal });
+
+      if (formStatus === 'inactive' && editingCategory.status === 'active' && tags && setTags) {
+        const updatedTags = tags.map(t => t.category === editingCategory.name ? { ...t, status: 'inactive' } : t);
+        setTags(updatedTags);
+        localStorage.setItem('samaagum_admin_tags', JSON.stringify(updatedTags));
+        logAction('System', `Disabled child tags under inactive category "${editingCategory.name}".`);
+      }
+
+      if (editingCategory.name !== formName && tags && setTags) {
+        const updatedTags = tags.map(t => t.category === editingCategory.name ? { ...t, category: formName } : t);
+        setTags(updatedTags);
+        localStorage.setItem('samaagum_admin_tags', JSON.stringify(updatedTags));
+        logAction('System', `Updated child tags category association from "${editingCategory.name}" to "${formName}".`);
+      }
+
+      updatedList = normalizeOrders([...listWithoutSelf, ...categories.filter(c => c.isDeleted)]);
+      setCategories(updatedList);
+      logAction(user?.email || 'Admin', `Updated category "${formName}" details and normalized display order.`);
+      showToast(`Category "${formName}" updated successfully`, 'success');
+    } else {
+      const newCat = {
+        id: uuid(),
+        name: formName,
+        slug,
+        description: formDesc,
+        iconType: 'emoji',
+        iconValue: formIcon,
+        displayOrder: Number(formOrder),
+        status: formStatus,
+        subcategoryCount: 0,
+        eventCount: 0,
+        isDeleted: false,
+        createdAt: new Date().toISOString(),
+      };
+
+      const targetOrder = Number(formOrder);
+      let listWithoutSelf = categories.filter(c => !c.isDeleted).sort((a, b) => a.displayOrder - b.displayOrder);
+      const insertIndex = Math.max(0, Math.min(listWithoutSelf.length, targetOrder - 1));
+      listWithoutSelf.splice(insertIndex, 0, newCat);
+
+      updatedList = normalizeOrders([...listWithoutSelf, ...categories.filter(c => c.isDeleted)]);
+      setCategories(updatedList);
+      logAction(user?.email || 'Admin', `Created category "${formName}" and normalized display order.`);
+      showToast(`Category "${formName}" created successfully`, 'success');
+    }
+
+    localStorage.setItem('samaagum_admin_categories', JSON.stringify(updatedList));
+    setIsPanelOpen(false);
+  };
+
+  const openDelete = (cat, e) => {
+    e.stopPropagation();
+    setDeletingCat(cat);
+    setIsDeleteOpen(true);
+  };
+
+  const handleArchive = () => {
+    if (!deletingCat) return;
+    const oldStatus = deletingCat.status;
+    const updatedList = categories.map(c => c.id === deletingCat.id ? { ...c, status: 'inactive' } : c);
+
+    const normalized = normalizeOrders(updatedList);
+    setCategories(normalized);
+    localStorage.setItem('samaagum_admin_categories', JSON.stringify(normalized));
+    logAction(user?.email || 'Admin', `Archived category "${deletingCat.name}".`);
+    showToast(`"${deletingCat.name}" has been archived`, 'warning');
+    setIsDeleteOpen(false);
+    setDeletingCat(null);
+  };
+
+  const handleDelete = () => {
+    if (!deletingCat) return;
+    const updatedList = categories.map(c => c.id === deletingCat.id ? { ...c, isDeleted: true } : c);
+
+    const normalized = normalizeOrders(updatedList);
+    setCategories(normalized);
+    localStorage.setItem('samaagum_admin_categories', JSON.stringify(normalized));
+    logAction(user?.email || 'Admin', `Deleted category "${deletingCat.name}".`);
+    showToast(`"${deletingCat.name}" has been deleted`, 'success');
+    setIsDeleteOpen(false);
+    setDeletingCat(null);
+  };
+
+  // Filter & sort
+  let filtered = categories.filter(c => !c.isDeleted);
+  if (search) {
+    filtered = filtered.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || c.slug.toLowerCase().includes(search.toLowerCase()));
+  }
+  if (statusFilter !== 'all') {
+    filtered = filtered.filter(c => c.status === statusFilter);
+  }
+  filtered.sort((a, b) => a.displayOrder - b.displayOrder);
+
+  return (
+    <div className="data-panel">
+      <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', borderBottom: '1px solid var(--border)' }}>
+        <div>
+          <h3 style={{ margin: 0 }}>Category Master List</h3>
+          <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--ink-3)' }}>Manage event categories, display orders, and icons.</p>
+        </div>
+        <div>
+          <button className="btn-sm btn-sm-primary" onClick={() => openPanel()}>
+            + Add Category
+          </button>
+        </div>
+      </div>
+
+      <div style={{ padding: '16px', display: 'flex', gap: '12px', borderBottom: '1px solid var(--border-2)' }}>
+        <input
+          type="text"
+          className="form-control"
+          style={{ maxWidth: '300px', flex: 1 }}
+          placeholder="Search categories..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <select
+          className="form-control"
+          style={{ maxWidth: '160px' }}
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+        >
+          <option value="all">All Status</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+
+      <div className="table-wrapper">
+        {filtered.length === 0 ? (
+          <div style={{ padding: '48px', textAlign: 'center', color: 'var(--ink-3)' }}>
+            No categories found. Click "+ Add Category" to create one.
+          </div>
+        ) : (
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th style={{ width: '40px' }}></th>
+                <th style={{ width: '60px' }}>Icon</th>
+                <th>Name</th>
+                <th>Slug</th>
+                <th>Events</th>
+                <th>Status</th>
+                <th>Order</th>
+                <th style={{ width: '120px' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(cat => {
+                const isToggleLoading = !!loadingToggles[cat.id];
+                return (
+                  <tr
+                    key={cat.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, cat.id)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, cat.id)}
+                    onDragEnd={handleDragEnd}
+                    style={{
+                      opacity: draggedId === cat.id ? 0.4 : 1,
+                      cursor: 'grab',
+                      transition: 'opacity 0.2s'
+                    }}
+                  >
+                    <td style={{ width: '40px', textAlign: 'center', verticalAlign: 'middle' }}>
+                      <div style={{ color: 'var(--ink-3)', opacity: 0.5, fontSize: '18px', userSelect: 'none', cursor: 'grab' }} title="Drag to reorder">
+                        ⠿
+                      </div>
+                    </td>
+                    <td>
+                      <div
+                        style={{ fontSize: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', background: 'var(--surface-2)', borderRadius: '6px' }}
+                        onClick={() => openPanel(cat)}
+                      >
+                        {typeof cat.iconValue === 'string' && (cat.iconValue.startsWith('data:image/') || cat.iconValue.startsWith('http')) ? (
+                          <img src={cat.iconValue} style={{ width: '22px', height: '22px', objectFit: 'contain', borderRadius: '4px' }} />
+                        ) : (
+                          cat.iconValue
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <span style={{ fontWeight: '600', cursor: 'pointer' }} onClick={() => openPanel(cat)}>
+                        {cat.name}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        style={{ cursor: 'pointer', opacity: 0.8 }}
+                        onClick={() => copySlug(cat.slug)}
+                        title="Click to copy"
+                      >
+                        {cat.slug} 📋
+                      </span>
+                    </td>
+                    <td>{cat.eventCount || 0}</td>
+                    <td>
+                      <label className="switch">
+                        <input
+                          type="checkbox"
+                          checked={cat.status === 'active'}
+                          onChange={(e) => toggleStatus(cat.id, e)}
+                        />
+                        <span className="slider"></span>
+                      </label>
+                    </td>
+                    <td>{cat.displayOrder}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button className="btn-sm btn-sm-ghost" onClick={() => openPanel(cat)}>Edit</button>
+                        <button className="btn-sm btn-sm-danger" onClick={(e) => openDelete(cat, e)}>Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* --- ADD/EDIT SLIDE OVER PANEL --- */}
+      {isPanelOpen && (
+        <div className="modal-overlay" style={{ justifyContent: 'flex-end', padding: 0 }}>
+          <div className="modal-card" style={{ maxWidth: '460px', height: '100vh', borderRadius: 0, display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-header">
+              <h3>{editingCategory ? 'Edit Category' : 'Add Category'}</h3>
+              <button onClick={() => setIsPanelOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--ink)', cursor: 'pointer', fontSize: '20px' }}>×</button>
+            </div>
+
+            <div className="modal-body" style={{ flex: 1, overflowY: 'auto' }}>
+              <div className="form-group">
+                <label>Category Name</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="e.g. Technology"
+                  value={formName}
+                  onChange={(e) => handleNameChange(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Category Slug</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="auto-generated"
+                  value={editingCategory ? formSlug : (formName ? slugify(formName) : '')}
+                  disabled={!editingCategory}
+                  onChange={(e) => setFormSlug(e.target.value)}
+                  style={!editingCategory ? { opacity: 0.6, cursor: 'not-allowed', backgroundColor: 'var(--surface-2)' } : {}}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Description</label>
+                <textarea
+                  className="form-control"
+                  style={{ height: '80px', resize: 'none' }}
+                  placeholder="Describe this category..."
+                  value={formDesc}
+                  onChange={(e) => setFormDesc(e.target.value)}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+                <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                  <label style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-3)', display: 'block', marginBottom: '6px' }}>Display Order</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={formOrder}
+                    onChange={(e) => setFormOrder(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group" style={{ flex: 1.2, marginBottom: 0 }}>
+                  <label style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-3)', display: 'block', marginBottom: '6px' }}>Status</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setFormStatus('active')}
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        height: '38px',
+                        borderRadius: '6px',
+                        fontSize: '13.5px',
+                        fontWeight: '500',
+                        cursor: 'pointer',
+                        border: formStatus === 'active' ? '1.5px solid #10b981' : '1px solid var(--border)',
+                        background: formStatus === 'active' ? 'rgba(16, 185, 129, 0.08)' : 'transparent',
+                        color: formStatus === 'active' ? '#10b981' : 'var(--ink-3)',
+                        transition: 'all 0.15s'
+                      }}
+                    >
+                      <span style={{
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '50%',
+                        border: formStatus === 'active' ? '2.5px solid #10b981' : '1.5px solid var(--ink-3)',
+                        background: formStatus === 'active' ? '#10b981' : 'transparent',
+                        boxShadow: formStatus === 'active' ? 'inset 0 0 0 2px var(--surface)' : 'none',
+                        boxSizing: 'border-box'
+                      }} />
+                      Active
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setFormStatus('inactive')}
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        height: '38px',
+                        borderRadius: '6px',
+                        fontSize: '13.5px',
+                        fontWeight: '500',
+                        cursor: 'pointer',
+                        border: formStatus === 'inactive' ? '1.5px solid #ef4444' : '1px solid var(--border)',
+                        background: formStatus === 'inactive' ? 'rgba(239, 68, 68, 0.08)' : 'transparent',
+                        color: formStatus === 'inactive' ? '#ef4444' : 'var(--ink-3)',
+                        transition: 'all 0.15s'
+                      }}
+                    >
+                      <span style={{
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '50%',
+                        border: formStatus === 'inactive' ? '2.5px solid #ef4444' : '1.5px solid var(--ink-3)',
+                        background: formStatus === 'inactive' ? '#ef4444' : 'transparent',
+                        boxShadow: formStatus === 'inactive' ? 'inset 0 0 0 2px var(--surface)' : 'none',
+                        boxSizing: 'border-box'
+                      }} />
+                      Inactive
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Icon Picker section */}
+              <div className="form-group">
+                <label style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ink-3)', display: 'block', marginBottom: '8px' }}>Icon</label>
+
+                {/* Tabs */}
+                <div style={{ display: 'flex', gap: '4px', background: 'var(--surface-2)', padding: '4px', borderRadius: '8px', marginBottom: '12px', width: 'fit-content' }}>
+                  <button
+                    type="button"
+                    onClick={() => setActiveIconTab('emoji')}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '6px 16px',
+                      borderRadius: '6px',
+                      border: 'none',
+                      background: activeIconTab === 'emoji' ? 'var(--accent-soft)' : 'transparent',
+                      color: activeIconTab === 'emoji' ? 'var(--accent-2)' : 'var(--ink-3)',
+                      fontWeight: '600',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    <span>🤪</span> Emoji
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveIconTab('upload')}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '6px 16px',
+                      borderRadius: '6px',
+                      border: 'none',
+                      background: activeIconTab === 'upload' ? 'var(--accent-soft)' : 'transparent',
+                      color: activeIconTab === 'upload' ? 'var(--accent-2)' : 'var(--ink-3)',
+                      fontWeight: '600',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    <span>📤</span> Upload
+                  </button>
+                </div>
+
+                {/* Tab Contents */}
+                {activeIconTab === 'emoji' ? (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '12px', background: 'var(--surface-2)', borderRadius: '6px', maxHeight: '180px', overflowY: 'auto' }}>
+                    {Object.entries(EMOJI_SETS).map(([group, emojis]) => (
+                      <div key={group} style={{ width: '100%' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--ink-3)', margin: '4px 0' }}>{group}</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                          {emojis.map(emoji => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => setFormIcon(emoji)}
+                              style={{
+                                fontSize: '20px',
+                                padding: '6px',
+                                background: formIcon === emoji ? 'var(--accent-2)' : 'transparent',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center', justifyContent: 'center', padding: '24px', background: 'var(--surface-2)', borderRadius: '6px', border: '1px dashed var(--border)', minHeight: '120px' }}>
+                    {typeof formIcon === 'string' && (formIcon.startsWith('data:image/') || formIcon.startsWith('http')) ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '56px', height: '56px', background: 'var(--surface)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--accent-2)', boxShadow: 'var(--sh-md)' }}>
+                          <img src={formIcon} style={{ width: '36px', height: '36px', objectFit: 'contain', borderRadius: '4px' }} />
+                        </div>
+                        <span style={{ fontSize: '12px', color: 'var(--ink-2)' }}>Custom Icon Loaded</span>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <label className="btn-sm btn-sm-ghost" style={{ cursor: 'pointer', border: '1px solid var(--border)', padding: '4px 8px', borderRadius: '4px', fontSize: '11px' }}>
+                            Replace Image
+                            <input
+                              type="file"
+                              accept="image/*"
+                              style={{ display: 'none' }}
+                              onChange={(e) => {
+                                const file = e.target.files[0];
+                                if (file) {
+                                  const reader = new FileReader();
+                                  reader.onloadend = () => {
+                                    setFormIcon(reader.result);
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            className="btn-sm btn-sm-ghost"
+                            style={{ color: '#ef4444', border: '1px solid var(--border)', fontSize: '11px', padding: '4px 8px', borderRadius: '4px' }}
+                            onClick={() => setFormIcon('💻')}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ fontSize: '32px', color: 'var(--ink-3)' }}>📁</div>
+                        <label className="btn-sm btn-sm-primary" style={{ cursor: 'pointer', padding: '6px 12px', borderRadius: '6px', fontSize: '12px' }}>
+                          Upload Image
+                          <input
+                            type="file"
+                            accept="image/*"
+                            style={{ display: 'none' }}
+                            onChange={(e) => {
+                              const file = e.target.files[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                  setFormIcon(reader.result);
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                        </label>
+                        <span style={{ fontSize: '11px', color: 'var(--ink-3)' }}>PNG, JPG or SVG up to 2MB</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ borderTop: '1px solid var(--border)' }}>
+              <button className="btn-sm btn-sm-ghost" onClick={() => setIsPanelOpen(false)}>Cancel</button>
+              <button className="btn-sm btn-sm-primary" onClick={handleSave}>Save Category</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- CONFIRM ARCHIVE/DELETE DIALOG --- */}
+      {isDeleteOpen && deletingCat && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: '400px', padding: '24px' }}>
+            <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+              <span style={{ fontSize: '36px', color: '#ff6b4a' }}>⚠️</span>
+              <h3 style={{ margin: '8px 0 0 0' }}>Delete "{deletingCat.name}"?</h3>
+            </div>
+
+            <p style={{ fontSize: '13px', color: 'var(--ink-2)', textAlign: 'center', lineHeight: '1.5', margin: '0 0 20px 0' }}>
+              This category has <strong>{deletingCat.subcategoryCount || 0}</strong> subcategories and <strong>{deletingCat.eventCount || 0}</strong> events. Consider archiving instead.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <button className="btn-sm btn-sm-primary" style={{ background: '#f59e0b', justifyContent: 'center' }} onClick={handleArchive}>
+                Archive Instead (Mark Inactive)
+              </button>
+              <button className="btn-sm btn-sm-danger" style={{ justifyContent: 'center' }} onClick={handleDelete}>
+                Delete Category permanently
+              </button>
+              <button className="btn-sm btn-sm-ghost" style={{ justifyContent: 'center' }} onClick={() => setIsDeleteOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

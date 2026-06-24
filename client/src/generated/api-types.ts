@@ -363,6 +363,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/geo/filters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve unique countries and states for filters */
+        get: operations["getGeoFilters"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/geo/{dataset}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve a paginated list of Geo data */
+        get: operations["getGeoData"];
+        /** Update a Geo data item */
+        put: operations["updateGeoData"];
+        /** Create a new Geo data item */
+        post: operations["createGeoData"];
+        /** Delete a Geo data item */
+        delete: operations["deleteGeoData"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/geo/{dataset}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export Geo data to CSV file */
+        get: operations["exportGeoData"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/geo/{dataset}/detail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get details of a single Geo data item */
+        get: operations["getGeoDataDetail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -586,6 +657,69 @@ export interface components {
             name: string;
             desc?: string;
             active: boolean;
+        };
+        GeoLocation: {
+            geoname_id?: number;
+            locale_code?: string;
+            continent_code?: string;
+            continent_name?: string;
+            country_iso_code?: string;
+            country_name?: string;
+            subdivision_1_iso_code?: string;
+            subdivision_1_name?: string;
+            subdivision_2_iso_code?: string;
+            subdivision_2_name?: string;
+            city_name?: string;
+            metro_code?: number;
+            time_zone?: string;
+            utc_offset?: string;
+            is_in_european_union?: number;
+            status?: boolean | null;
+        };
+        GeoLocationInput: {
+            geoname_id?: number;
+            locale_code?: string;
+            continent_code?: string;
+            continent_name?: string;
+            country_iso_code?: string;
+            country_name?: string;
+            subdivision_1_iso_code?: string;
+            subdivision_1_name?: string;
+            subdivision_2_iso_code?: string;
+            subdivision_2_name?: string;
+            city_name?: string;
+            metro_code?: number;
+            time_zone?: string;
+            is_in_european_union?: number;
+        };
+        GeoIpBlock: {
+            network?: string;
+            geoname_id?: number;
+            registered_country_geoname_id?: number;
+            represented_country_geoname_id?: number;
+            is_anonymous_proxy?: number;
+            is_satellite_provider?: number;
+            postal_code?: string;
+            latitude?: number;
+            longitude?: number;
+            accuracy_radius?: number;
+            is_anycast?: number;
+            country_name?: string;
+            state_name?: string;
+            status?: boolean | null;
+        };
+        GeoIpBlockInput: {
+            network?: string;
+            geoname_id?: number;
+            registered_country_geoname_id?: number;
+            represented_country_geoname_id?: number;
+            is_anonymous_proxy?: number;
+            is_satellite_provider?: number;
+            postal_code?: string;
+            latitude?: number;
+            longitude?: number;
+            accuracy_radius?: number;
+            is_anycast?: number;
         };
     };
     responses: never;
@@ -1572,6 +1706,374 @@ export interface operations {
                     "application/json": {
                         success?: boolean;
                         message?: string;
+                    };
+                };
+            };
+        };
+    };
+    getGeoFilters: {
+        parameters: {
+            query?: {
+                /** @description Optional country name to filter subdivision states */
+                country?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success response with filter values */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        data: {
+                            countries: string[];
+                            states: string[];
+                        };
+                    };
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                    };
+                };
+            };
+        };
+    };
+    getGeoData: {
+        parameters: {
+            query?: {
+                page?: number;
+                limit?: number;
+                search?: string;
+                status?: "all" | "active" | "inactive";
+                country?: string;
+                state?: string;
+                sortBy?: string;
+                sortOrder?: "asc" | "desc";
+            };
+            header?: never;
+            path: {
+                dataset: "locations" | "ipv4" | "ipv6";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A list of geo data items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: (components["schemas"]["GeoLocation"] | components["schemas"]["GeoIpBlock"])[];
+                        meta: {
+                            total: number;
+                            page: number;
+                            limit: number;
+                            totalPages: number;
+                        };
+                    };
+                };
+            };
+            /** @description Invalid dataset */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                    };
+                };
+            };
+        };
+    };
+    updateGeoData: {
+        parameters: {
+            query: {
+                id: string;
+            };
+            header?: never;
+            path: {
+                dataset: "locations" | "ipv4" | "ipv6";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeoLocationInput"] | components["schemas"]["GeoIpBlockInput"];
+            };
+        };
+        responses: {
+            /** @description Success response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                    };
+                };
+            };
+            /** @description Invalid dataset */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                    };
+                };
+            };
+        };
+    };
+    createGeoData: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset: "locations" | "ipv4" | "ipv6";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeoLocationInput"] | components["schemas"]["GeoIpBlockInput"];
+            };
+        };
+        responses: {
+            /** @description Success response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                    };
+                };
+            };
+            /** @description Invalid dataset */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                    };
+                };
+            };
+        };
+    };
+    deleteGeoData: {
+        parameters: {
+            query: {
+                id: string;
+            };
+            header?: never;
+            path: {
+                dataset: "locations" | "ipv4" | "ipv6";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                    };
+                };
+            };
+            /** @description Invalid dataset */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                    };
+                };
+            };
+        };
+    };
+    exportGeoData: {
+        parameters: {
+            query?: {
+                visibleCols?: string;
+                page?: number;
+                limit?: number;
+                search?: string;
+                status?: "all" | "active" | "inactive";
+                country?: string;
+                state?: string;
+                sortBy?: string;
+                sortOrder?: "asc" | "desc";
+            };
+            header?: never;
+            path: {
+                dataset: "locations" | "ipv4" | "ipv6";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Exported CSV file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Invalid dataset */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                    };
+                };
+            };
+        };
+    };
+    getGeoDataDetail: {
+        parameters: {
+            query: {
+                id: string;
+            };
+            header?: never;
+            path: {
+                dataset: "locations" | "ipv4" | "ipv6";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Item details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoLocation"] | components["schemas"]["GeoIpBlock"];
+                };
+            };
+            /** @description Invalid dataset */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                        message: string;
+                    };
+                };
+            };
+            /** @description Item not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                    };
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
                     };
                 };
             };

@@ -60,6 +60,24 @@
   flex-direction: column;
   gap: var(--s-2);
   flex-grow: 1;
+  overflow-y: auto;
+  min-height: 0;
+  margin-bottom: var(--s-4);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.sidebar-menu::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-menu::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: var(--r-pill);
 }
 
 .sidebar-item {

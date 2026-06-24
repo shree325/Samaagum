@@ -51,13 +51,48 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const [city, setCity] = useState("Bengaluru");
+  const overrideLocation = () => {};
+  const city = "Global";
   const [cityOpen, setCityOpen] = useState(false);
   const [meSync, setMeSync] = useState(0); // Add a tick to force re-render when ME updates asynchronously
 
   const [subscription, setSubscription] = useState({ plan: 'free', status: 'active' });
+  const [socket, setSocket] = useState(null);
 
   const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    
+    let userId = null;
+    try {
+      const parts = token.split('.');
+      if (parts.length >= 2) {
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+        userId = payload.id;
+      }
+    } catch (e) {
+      console.error('Error parsing token for socket:', e);
+    }
+
+    if (userId && window.io) {
+      const chatSocket = window.io(apiBase ? `${apiBase}/chat` : "/chat", {
+        auth: { token: userId },
+        transports: ["websocket", "polling"]
+      });
+
+      chatSocket.on("connect", () => {
+        console.log("🔌 Connected to chat socket as:", userId);
+      });
+
+      setSocket(chatSocket);
+
+      return () => {
+        chatSocket.disconnect();
+      };
+    }
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -304,4 +339,6 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <App />
+);
