@@ -591,6 +591,10 @@ function Profile({ st, go }) {
                 return VCard ? <VCard user={ME} /> : null;
               })()}
 
+        {tab==="groups" && (
+          <div className="prof-section">
+            <div className="ev-grid">
+              {myGroups.map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={true} onJoin={()=>st.toggleJoin(g)} />)}
             </div>
           </div>
 
