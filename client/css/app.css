@@ -189,15 +189,16 @@
 .sfield > label { display: block; font-size: 13px; font-weight: 600; color: var(--ink-2); margin-bottom: 8px; }
 .sfield-wrap { position: relative; display: flex; align-items: center; }
 .sfield-wrap .lead { position: absolute; left: 15px; display: flex; color: var(--ink-3); pointer-events: none; }
-.sfield input {
+.sfield input, .sfield select {
   width: 100%; font-family: inherit; font-size: 15.5px; color: var(--ink);
   padding: 15px 16px 15px 44px; border-radius: var(--r-md);
   border: 1.5px solid var(--border); background: var(--field); outline: none;
   transition: border-color var(--t-std), box-shadow var(--t-std);
+  appearance: none;
 }
-.sfield input::placeholder { color: var(--ink-3); }
-.sfield input:focus { border-color: color-mix(in oklch, var(--accent-2) 60%, var(--border)); box-shadow: var(--sh-focus); }
-.sfield input.no-icon { padding-left: 16px; }
+.sfield input::placeholder, .sfield select:invalid { color: var(--ink-3); }
+.sfield input:focus, .sfield select:focus { border-color: color-mix(in oklch, var(--accent-2) 60%, var(--border)); box-shadow: var(--sh-focus); }
+.sfield input.no-icon, .sfield select.no-icon { padding-left: 16px; }
 .sfield .err { margin-top: 8px; font-size: 12.5px; color: #e5484d; font-weight: 500; }
 
 /* terms */
@@ -343,7 +344,7 @@
   background: #1a1330;
 }
 .mob-hero.tall { padding-bottom: 42px; }
-.mob-hero .lp-bg, .mob-hero .lp-mesh, .mob-hero .lp-blob, .mob-hero .lp-grain { }
+/* .mob-hero .lp-bg, .mob-hero .lp-mesh, .mob-hero .lp-blob, .mob-hero .lp-grain { } */
 .mob-hero-content { position: relative; z-index: 2; }
 .mob-hero .wm { font-family: var(--font-display); font-weight: 600; font-size: 18px; display: flex; align-items: center; gap: 9px; }
 .mob-hero h2 { font-family: var(--font-display); font-weight: 600; font-size: 27px; line-height: 1.1; letter-spacing: -0.02em; margin-top: 20px; text-wrap: balance; }

@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/card/:username",
+      "destination": "/pages/VirtualCardPage.html"
+    }
+  ]
+}
