@@ -109,6 +109,9 @@ function Topbar({ go, counts, dark, onToggleTheme, city, onCity }) {
         </Popover>
       </div>
       <button className="tb-icon" onClick={onToggleTheme} title="Toggle theme">{dark? <I.sun/> : <I.moon/>}</button>
+      <button className="tb-icon" onClick={()=>go("messages")} title="Messages">
+        <I.chat/>{counts.messages ? <span className="dot" /> : null}
+      </button>
       <button className="tb-icon" onClick={()=>go("notifications")} title="Notifications">
         <I.bell/>{counts.notifs ? <span className="dot" /> : null}
       </button>
