@@ -117,12 +117,12 @@
 .cfield .opt { color: var(--ink-3); font-weight: 500; }
 .cinput, .cselect, .ctext {
   font-family: inherit; font-size: 14px; color: var(--ink);
-  padding: 11px 14px; border-radius: var(--r-sm); border: 1px solid var(--border);
-  background: var(--field); outline: none; width: 100%;
-  transition: border-color var(--t-std), box-shadow var(--t-std), background var(--t-std);
+  padding: 0 16px; border-radius: var(--r); border: 1px solid var(--border);
+  background: var(--field); outline: none; width: 100%; box-sizing: border-box; height: 44px;
+  transition: border-color var(--t-fast), background var(--t-fast);
 }
-.cinput:focus, .cselect:focus, .ctext:focus { border-color: color-mix(in oklch, var(--accent-2) 55%, var(--border)); box-shadow: var(--sh-focus); background: var(--surface); }
-.ctext { min-height: 96px; resize: vertical; line-height: 1.5; }
+.ctext { height: auto; min-height: 96px; padding: 12px 16px; resize: vertical; line-height: 1.5; }
+.cinput:focus, .cselect:focus, .ctext:focus { border-color: var(--accent-2); background: var(--surface); }
 .crow { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 
 /* payment method radios */

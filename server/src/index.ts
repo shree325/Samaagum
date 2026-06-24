@@ -11,6 +11,9 @@ import { adminSettingsRoutes } from './controllers/adminSettingsRoutes';
 import { userSubscriptionRoutes } from './controllers/userSubscriptionRoutes';
 import { adminAuthRoutes } from './controllers/adminAuthRoutes';
 import { oauthRoutes } from './controllers/oauthRoutes';
+import { uploadRoutes } from './controllers/uploadRoutes';
+import fastifyMultipart from '@fastify/multipart';
+import path from 'path';
 import { adminCategoryRoutes } from './controllers/adminCategoryRoutes';
 import { adminTagRoutes } from './controllers/adminTagRoutes';
 import { adminCityRoutes } from './controllers/adminCityRoutes';
@@ -51,6 +54,13 @@ fastify.register(cors, {
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
+});
+
+// Register Multipart
+fastify.register(fastifyMultipart, {
+    limits: {
+        fileSize: 10 * 1024 * 1024 // 10MB limit
+    }
 });
 
 // Decoupled types for typescript compiling
@@ -109,6 +119,9 @@ fastify.register(adminCityRoutes, { prefix: '/api/admin' });
 fastify.register(adminGeoRoutes, { prefix: '/api/admin' });
 
 fastify.register(userSubscriptionRoutes, { prefix: '/api/subscription' });
+fastify.register(uploadRoutes, { prefix: '/api' });
+import { publicRoutes } from './controllers/publicRoutes';
+fastify.register(publicRoutes, { prefix: '/api/public' });
 fastify.register(messagingTestRoutes, { prefix: '/api/test' });
 fastify.register(messagingRoutes, { prefix: '/api/messaging' });
 

@@ -8,6 +8,11 @@
     "build": "echo 'No build step required for client'"
   },
   "dependencies": {
+    "qrcode": "^1.5.4",
     "serve": "^14.2.4"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.6",
+    "tailwindcss": "^4.3.1"
   }
 }

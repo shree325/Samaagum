@@ -1165,6 +1165,16 @@ model profiles {
   template_key                                       String?
   created_at                                         DateTime      @default(now()) @db.Timestamptz(6)
   updated_at                                         DateTime      @default(now()) @db.Timestamptz(6)
+  skills                                             Json?         @default("[]")
+  gender                                             String?       @db.VarChar(20)
+  dob                                                DateTime?     @db.Date
+  cover_image_data                                   Bytes?
+  profile_image_data                                 Bytes?
+  first_name                                         String?
+  last_name                                          String?
+  phone_number                                       String?       @db.VarChar(20)
+  user_name                                          String?
+  headline                                           String?
   media_assets_profiles_cover_asset_idTomedia_assets media_assets? @relation("profiles_cover_asset_idTomedia_assets", fields: [cover_asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_profiles_cover")
   media_assets_profiles_photo_asset_idTomedia_assets media_assets? @relation("profiles_photo_asset_idTomedia_assets", fields: [photo_asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_profiles_photo")
   tenants                                            tenants       @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -1658,6 +1668,11 @@ model users {
   deleted_at                                                          DateTime?                    @db.Timestamptz(6)
   created_at                                                          DateTime                     @default(now()) @db.Timestamptz(6)
   updated_at                                                          DateTime                     @default(now()) @db.Timestamptz(6)
+  profile_image_data                                                  Bytes?
+  first_name                                                          String?
+  last_name                                                           String?
+  location                                                            String?
+  phone_number                                                        String?                      @db.VarChar(20)
   last_seen_at                                                        DateTime?                    @db.Timestamptz(6)
   admin_roles                                                         admin_roles[]
   affiliates                                                          affiliates[]
@@ -1950,6 +1965,14 @@ model subscription_orders {
 }
 
 model otp_verifications {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email      String   @db.VarChar(255)
+  otp_hash   String   @db.VarChar(255)
+  purpose    String   @db.VarChar(100)
+  attempts   Int      @default(0)
+  verified   Boolean  @default(false)
+  expires_at DateTime @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
   id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email      String    @db.VarChar(255)
   otp_hash   String    @db.VarChar(255)

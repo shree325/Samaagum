@@ -39,8 +39,11 @@ const I = {
   grid:    (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><rect x="4" y="4" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8"/><rect x="13" y="4" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8"/><rect x="4" y="13" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8"/><rect x="13" y="13" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8"/></svg>,
   image:   (p) => <svg viewBox="0 0 24 24" fill="none" width="17" height="17" {...p}><rect x="4" y="5" width="16" height="14" rx="2.5" stroke="currentColor" strokeWidth="1.7"/><circle cx="9" cy="10" r="1.6" stroke="currentColor" strokeWidth="1.5"/><path d="M5 17l4.5-4 3 2.5L16 11l3 3" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"/></svg>,
   qr:      (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><rect x="4" y="4" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.7"/><rect x="14" y="4" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.7"/><rect x="4" y="14" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.7"/><path d="M14 14h2v2M20 14v6M14 20h6M18 17v.01" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>,
+  scan:    (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M4 8V6a2 2 0 012-2h2M4 16v2a2 2 0 002 2h2M16 4h2a2 2 0 012 2v2M16 20h2a2 2 0 002-2v-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
   download:(p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M12 4v10m0 0l-4-4m4 4l4-4M5 19h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   link:    (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M9 15l6-6M8 9l-2 2a3.5 3.5 0 005 5l2-2M16 15l2-2a3.5 3.5 0 00-5-5l-2 2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  mail:    (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><rect x="3" y="5" width="18" height="14" rx="3" stroke="currentColor" strokeWidth="1.8"/><path d="M4 7l8 6 8-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
+  wallet:  (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M20 7H4a2 2 0 00-2 2v8a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" stroke="currentColor" strokeWidth="1.8"/><path d="M22 13h-4v2h4v-2zM4 7V5a2 2 0 012-2h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
   edit:    (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M5 19h14M7 15l9-9 3 3-9 9H7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/></svg>,
   filter:  (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M4 6h16M7 12h10M10 18h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
   crown:   (p) => <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" {...p}><path d="M3 8l3.5 3L12 5l5.5 6L21 8l-1.5 9h-15L3 8z"/></svg>,
@@ -105,7 +108,7 @@ function Avatar({ name, size = 40, img, className = "", style = {} }) {
   return (
     <div className={`avatar av ${className}`} style={{
       width: size, height: size, fontSize: size * 0.36,
-      backgroundImage: img ? `url(${img})` : gradFor(name), backgroundSize: "cover", ...style,
+      background: img ? `url("${img}") center / cover no-repeat` : gradFor(name), ...style,
     }}>{!img && initials(name)}</div>
   );
 }

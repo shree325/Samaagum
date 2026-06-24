@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* ============================================================
    Samaagum Home — Create event + Create group (Luma-grade, live preview)
    ============================================================ */
@@ -22,18 +23,18 @@ function CoverPicker({ value, onPick }) {
 function Toggle({ on, onClick }) { return <button className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
 
 /* ---------------- Create Event ---------------- */
-function CreateEvent({ editEv, go, mobile, st }) {
-  const [title, setTitle] = useState(editEv ? editEv.title : "");
-  const [cover, setCover] = useState(editEv ? editEv.cover : COVERS.sunset);
-  const [type, setType] = useState(editEv ? (editEv.type === "Free" ? "free" : editEv.online ? "online" : "paid") : "paid");
-  const [cat, setCat] = useState(editEv ? editEv.cat : "Startups");
-  const [date, setDate] = useState(editEv ? editEv.date : "");
-  const [time, setTime] = useState(editEv ? editEv.time : "");
-  const [venue, setVenue] = useState(editEv ? editEv.venue : "");
-  const [desc, setDesc] = useState(editEv ? editEv.desc : "");
-  const [approval, setApproval] = useState(editEv ? !!editEv.approval : false);
-  const [cash, setCash] = useState(editEv ? !!editEv.cash : false);
-  const [tickets, setTickets] = useState(editEv && editEv.tickets ? editEv.tickets : [{ n: "Early Bird", cap: "50", price: editEv ? editEv.price?.replace(/[^\d]/g, "") || "499" : "499" }]);
+function CreateEvent({ go, mobile }) {
+  const [title, setTitle] = useState("");
+  const [cover, setCover] = useState(COVERS.sunset);
+  const [type, setType] = useState("paid");
+  const [cat, setCat] = useState("Startups"); const [city, setCity] = useState("Bengaluru");
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [venue, setVenue] = useState("");
+  const [desc, setDesc] = useState("");
+  const [approval, setApproval] = useState(false);
+  const [cash, setCash] = useState(false);
+  const [tickets, setTickets] = useState([{ n: "Early Bird", cap: "50", price: "499" }]);
   const types = [
     { k: "paid", ic: <I.ticket />, t: "Paid", d: "Sell tickets" },
     { k: "free", ic: <I.users />, t: "Free", d: "RSVP only" },
@@ -41,16 +42,78 @@ function CreateEvent({ editEv, go, mobile, st }) {
   ];
   const setTk = (i, key, v) => setTickets(ts => ts.map((t, j) => j === i ? { ...t, [key]: v } : t));
 
+  const venueInputRef = useRef(null);
+  const cityInputRef = useRef(null);
+
+  useEffect(() => {
+    if (type === "online" || !window.google?.maps?.places || !venueInputRef.current) return;
+
+    const autocomplete = new window.google.maps.places.Autocomplete(venueInputRef.current, {
+      componentRestrictions: { country: "in" },
+      fields: ["address_components", "formatted_address"]
+    });
+
+    autocomplete.addListener("place_changed", () => {
+      const place = autocomplete.getPlace();
+      if (place.formatted_address) {
+        setVenue(place.formatted_address);
+        const cityComp = place.address_components?.find(c =>
+          c.types.includes("locality") || c.types.includes("administrative_area_level_2")
+        );
+        if (cityComp) {
+          setCity(cityComp.long_name);
+        }
+      }
+    });
+
+    return () => {
+      if (window.google?.maps?.event) {
+        window.google.maps.event.clearInstanceListeners(venueInputRef.current);
+      }
+    };
+  }, [type]);
+
+  useEffect(() => {
+    if (!window.google?.maps?.places || !cityInputRef.current) return;
+
+    const autocomplete = new window.google.maps.places.Autocomplete(cityInputRef.current, {
+      types: ["(cities)"],
+      componentRestrictions: { country: "in" },
+      fields: ["address_components", "formatted_address"]
+    });
+
+    autocomplete.addListener("place_changed", () => {
+      const place = autocomplete.getPlace();
+      if (place.address_components) {
+        const cityComp = place.address_components.find(c =>
+          c.types.includes("locality") || c.types.includes("administrative_area_level_2")
+        );
+        if (cityComp) {
+          setCity(cityComp.long_name);
+        } else if (place.formatted_address) {
+          setCity(place.formatted_address);
+        }
+      }
+    });
+
+    return () => {
+      if (window.google?.maps?.event) {
+        window.google.maps.event.clearInstanceListeners(cityInputRef.current);
+      }
+    };
+  }, []);
+
   const previewEv = {
     cover, cat, type: type === "free" ? "Free" : "Paid", online: type === "online",
     month: "JUN", day: "18", title: title || "Your event title",
     date: date || "Date TBD", time: time || "Time TBD",
     venue: type === "online" ? "Online" : (venue || "Venue TBD"),
-    going: editEv ? editEv.going : 0, price: type === "paid" ? `₹${tickets[0]?.price || "—"}` : "Free", attendees: editEv ? editEv.attendees : [],
+    going: 0, price: type === "paid" ? `₹${tickets[0]?.price || "—"}` : "Free", attendees: [],
+    city: city
   };
 
   return (
-    <div className={`create ${mobile ? "single" : ""}`}>
+    <div className={`create max-w-[1000px] mx-auto w-full ${mobile ? "single" : ""}`}>
       <div className="create-form">
         <div className="cf-inner">
           <div className="create-head">
@@ -89,16 +152,23 @@ function CreateEvent({ editEv, go, mobile, st }) {
 
           <div className="cfield">
             <label>{type === "online" ? "Meeting link" : "Venue"} <span className="opt">{type === "online" ? "· revealed after registration" : ""}</span></label>
-            <input className="cinput" placeholder={type === "online" ? "https://meet.samaagum.co/…" : "Add a venue or address"} value={venue} onChange={e => setVenue(e.target.value)} />
+            <input ref={venueInputRef} className="cinput" placeholder={type === "online" ? "https://meet.samaagum.co/…" : "Add a venue or address"} value={venue} onChange={e => setVenue(e.target.value)} />
           </div>
 
           <div className="crow">
+            <div className="cfield"><label>City</label>
+              <input ref={cityInputRef} className="cinput" placeholder="Search city in India..." value={city} onChange={e => setCity(e.target.value)} />
+            </div>
             <div className="cfield"><label>Category</label>
               <select className="cselect" value={cat} onChange={e => setCat(e.target.value)}>
                 {CATS.filter(c => c[0] !== "All").map(([c]) => <option key={c}>{c}</option>)}
               </select>
             </div>
-            <div className="cfield"><label>Capacity <span className="opt">· hard cap</span></label><input className="cinput" placeholder="180" /></div>
+          </div>
+
+          <div className="cfield">
+            <label>Capacity <span className="opt">· hard cap</span></label>
+            <input className="cinput" placeholder="180" />
           </div>
 
           <div className="cfield">
@@ -148,50 +218,34 @@ function CreateEvent({ editEv, go, mobile, st }) {
       )}
 
       <div className="create-foot" style={mobile ? { gridColumn: "1" } : { gridColumn: "1 / -1" }}>
-        <button className="hbtn hbtn--ghost" onClick={() => go(editEv ? "event-dashboard" : "home", editEv)}>Cancel</button>
+        <button className="hbtn hbtn--ghost" onClick={() => go("home")}>Cancel</button>
         <div className="sp" />
         <button className="hbtn hbtn--ghost">Save draft</button>
-        <button className="hbtn hbtn--primary" onClick={() => {
-          const targetId = editEv ? editEv.id : "ev-" + Math.floor(1000 + Math.random() * 9000);
-          const published = {
-            ...previewEv,
-            id: targetId,
-            host: ME.name,
-            hostBy: ME.name,
-            city: "Bengaluru",
-            cap: 180,
-            desc,
-            attendees: editEv ? editEv.attendees : []
-          };
-          if (st && st.addCreatedEvent) {
-            st.addCreatedEvent(published);
-          }
-          go("event-dashboard", published);
-        }}><I.check />{editEv ? "Save changes" : "Publish event"}</button>
+        <button className="hbtn hbtn--primary" onClick={() => go("event", { ...previewEv, id: "new", host: ME.name, hostBy: ME.name, city, cap: 180, desc })}><I.check />Publish event</button>
       </div>
     </div>
   );
 }
 
 /* ---------------- Create Group ---------------- */
-function CreateGroup({ editGroup, go, mobile, st }) {
-  const [name, setName] = useState(editGroup ? editGroup.name : "");
-  const [icon, setIcon] = useState(editGroup ? editGroup.icon : "✺");
-  const [cover, setCover] = useState(editGroup ? editGroup.cover : COVERS.violet);
-  const [cat, setCat] = useState(editGroup ? editGroup.cat : "Design");
-  const [desc, setDesc] = useState(editGroup ? editGroup.desc : "");
-  const [join, setJoin] = useState(editGroup ? editGroup.join || "approval" : "approval");
+function CreateGroup({ go, mobile }) {
+  const [name, setName] = useState("");
+  const [icon, setIcon] = useState("✺");
+  const [cover, setCover] = useState(COVERS.violet);
+  const [cat, setCat] = useState("Design");
+  const [desc, setDesc] = useState("");
+  const [join, setJoin] = useState("approval");
   const [questionnaire, setQuestionnaire] = useState(true);
   const icons = ["✺", "🚀", "🌅", "◆", "🎧", "🍲", "🎨", "⚡", "🌱", "📚"];
 
   const previewG = {
     name: name || "Your group name", icon, cover, cat,
     desc: desc || "A short description of what your community is about and who it's for.",
-    members: editGroup ? editGroup.members : 1, online: editGroup ? editGroup.online : 1, memberNames: editGroup ? editGroup.memberNames : [ME.name]
+    members: 1, online: 1, memberNames: [ME.name]
   };
 
   return (
-    <div className={`create ${mobile ? "single" : ""}`}>
+    <div className={`create max-w-[1000px] mx-auto w-full ${mobile ? "single" : ""}`}>
       <div className="create-form">
         <div className="cf-inner">
           <div className="create-head">
@@ -265,22 +319,9 @@ function CreateGroup({ editGroup, go, mobile, st }) {
       )}
 
       <div className="create-foot" style={mobile ? { gridColumn: "1" } : { gridColumn: "1 / -1" }}>
-        <button className="hbtn hbtn--ghost" onClick={() => go(editGroup ? "group-dashboard" : "home", editGroup)}>Cancel</button>
+        <button className="hbtn hbtn--ghost" onClick={() => go("home")}>Cancel</button>
         <div className="sp" />
-        <button className="hbtn hbtn--primary" onClick={() => {
-          const targetId = editGroup ? editGroup.id : "g-" + Math.floor(1000 + Math.random() * 9000);
-          const published = {
-            ...previewG,
-            id: targetId,
-            posts: editGroup ? editGroup.posts : 0,
-            members: editGroup ? editGroup.members : 1,
-            memberNames: editGroup ? editGroup.memberNames : [ME.name]
-          };
-          if (st && st.addCreatedGroup) {
-            st.addCreatedGroup(published);
-          }
-          go("group-dashboard", published);
-        }}><I.check />{editGroup ? "Save changes" : "Create group"}</button>
+        <button className="hbtn hbtn--primary" onClick={() => go("group", { ...previewG, id: "newg", posts: 0, members: 1 })}><I.check />Create group</button>
       </div>
     </div>
   );

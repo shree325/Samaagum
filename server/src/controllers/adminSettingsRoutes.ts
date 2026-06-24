@@ -8,18 +8,18 @@ import { DEFAULT_AUTH_SETTINGS, DEFAULT_COMMUNICATION_SETTINGS, DEFAULT_OTP_SETT
  */
 function maskSecret(secret?: string): string {
   if (!secret) return '';
-  if (secret.length <= 8) return '••••••••';
-  return `${secret.substring(0, 4)}••••••••${secret.substring(secret.length - 4)}`;
+  if (secret.length <= 8) return 'â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢';
+  return `${secret.substring(0, 4)}â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢${secret.substring(secret.length - 4)}`;
 }
 
 /**
  * Helper to check if a value is masked
  */
 function isMasked(value?: string): boolean {
-  return typeof value === 'string' && value.includes('••••');
+  return typeof value === 'string' && value.includes('â€¢â€¢â€¢â€¢');
 }
 
-// ── PORTABLE DATABASE HELPERS FOR OTP VERIFICATION ───────────────────────────
+// â”€â”€ PORTABLE DATABASE HELPERS FOR OTP VERIFICATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function saveOtpVerification(db: any, email: string, otp: string, purpose: string, expiresAt: Date) {
   if (db.otp_verifications) {
@@ -95,7 +95,7 @@ async function markOtpVerified(db: any, id: string) {
 
 export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
 
-  // ── AUTH SETTINGS ──────────────────────────────────────────────────────────
+  // â”€â”€ AUTH SETTINGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   
   fastify.get('/settings/auth', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
     try {
@@ -194,7 +194,7 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
     }
   });
 
-  // ── COMMUNICATION SETTINGS ──────────────────────────────────────────────────
+  // â”€â”€ COMMUNICATION SETTINGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   
   fastify.get('/settings/communication', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
     try {
@@ -340,7 +340,7 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
           `;
         }
 
-        if (!apiKey || apiKey === 'mock-key' || apiKey.trim() === '' || apiKey.includes('••••')) {
+        if (!apiKey || apiKey === 'mock-key' || apiKey.trim() === '' || apiKey.includes('â€¢â€¢â€¢â€¢')) {
           return { 
             success: true, 
             message: `[MOCK] Test email successfully routed to ${email} (Mock Brevo flow). Configure a real Brevo API Key to send live emails.` 
@@ -379,7 +379,7 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
     }
   });
 
-  // ── OTP CONFIGURATION & DEMO SANDBOX ─────────────────────────────────────────
+  // â”€â”€ OTP CONFIGURATION & DEMO SANDBOX â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   fastify.get('/settings/otp', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
     try {
@@ -542,7 +542,7 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
           `;
         }
 
-        if (apiKey && apiKey !== 'mock-key' && apiKey.trim() !== '' && !apiKey.includes('••••')) {
+        if (apiKey && apiKey !== 'mock-key' && apiKey.trim() !== '' && !apiKey.includes('â€¢â€¢â€¢â€¢')) {
           const response = await fetch('https://api.brevo.com/v3/smtp/email', {
             method: 'POST',
             headers: {
@@ -585,7 +585,7 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
   // Verifies an OTP
   fastify.post('/otp/verify', async (request: any, reply) => {
     try {
-      const { email, purpose, code } = request.body as any;
+      const { email, purpose, code, gender, dob, firstName, lastName, phoneNumber } = request.body as any;
       if (!email || !purpose || !code) {
         return reply.status(400).send({ success: false, message: 'Email, purpose and verification code are required.' });
       }
@@ -630,12 +630,30 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
           if (dbUser) {
             return reply.status(400).send({ success: false, message: 'Account already exists with this email. Please log in instead.' });
           }
+          const finalName = firstName && lastName ? `${firstName} ${lastName}`.trim() : (firstName || lastName || '');
           dbUser = await prisma.users.create({
             data: {
               tenant_id: tenantId,
               primary_email: email,
               email_verified: true,
               state: 'active' as any,
+              gender: gender || null,
+              dob: dob ? new Date(dob) : null,
+              first_name: firstName || null,
+              last_name: lastName || null,
+              phone_number: phoneNumber || null,
+              phone_e164: phoneNumber || null,
+              profiles: {
+                create: {
+                  tenant_id: tenantId,
+                  first_name: firstName || null,
+                  last_name: lastName || null,
+                  gender: gender || null,
+                  dob: dob ? new Date(dob) : null,
+                  phone_number: phoneNumber || null,
+                  display_name: finalName || null
+                }
+              }
             }
           });
         } else {
@@ -644,7 +662,7 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
           }
         }
 
-        // ── Determine real role from DB ─────────────────────────────────────
+        // â”€â”€ Determine real role from DB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         // 1. Check if this user is the seeded super-admin
         let userRole = 'user';
         let userRoleId: string | null = null;
@@ -680,7 +698,7 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
             }
           }
         } catch (roleErr) {
-          console.warn('⚠️ Could not determine user role from DB, defaulting to user:', roleErr);
+          console.warn('âš ï¸ Could not determine user role from DB, defaulting to user:', roleErr);
         }
 
         // Generate token with real role from DB
@@ -736,11 +754,53 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
         return reply.status(404).send({ success: false, message: 'User not found.' });
       }
 
+      const linksRows = await prisma.profile_links.findMany({
+        where: { user_id: request.user.id },
+        orderBy: { position: "asc" }
+      });
+
+      const socialLinks = {
+        instagram: "",
+        linkedin: "",
+        github: "",
+        twitter: "",
+        youtube: "",
+        website: ""
+      };
+
+      linksRows.forEach(row => {
+        if (row.kind in socialLinks) {
+          (socialLinks as any)[row.kind] = row.value;
+        }
+      });
+
+      let profilePhotoBase64: string | null = null;
+      let coverBannerBase64: string | null = null;
+
+      // Primary: read image bytes from users.profile_image_data
+      if (dbUser.profile_image_data) {
+        profilePhotoBase64 = `data:image/jpeg;base64,${Buffer.from(dbUser.profile_image_data).toString('base64')}`;
+      } else if (dbUser.profiles?.profile_image_data) {
+        // Fallback: read from profiles.profile_image_data
+        profilePhotoBase64 = `data:image/jpeg;base64,${Buffer.from(dbUser.profiles.profile_image_data).toString('base64')}`;
+      }
+      if (dbUser.profiles?.cover_image_data) {
+        coverBannerBase64 = `data:image/jpeg;base64,${Buffer.from(dbUser.profiles.cover_image_data).toString('base64')}`;
+      }
+
       return {
         success: true,
         data: {
           email: dbUser.primary_email,
-          profile: dbUser.profiles || null
+          phone: dbUser.phone_number || dbUser.phone_e164 || "",
+          location: dbUser.location || "",
+          gender: dbUser.gender || "",
+          dob: dbUser.dob || "",
+          full_name: [dbUser.first_name, dbUser.last_name].filter(Boolean).join(" "),
+          profilePhoto: profilePhotoBase64,
+          coverBanner: coverBannerBase64,
+          profile: dbUser.profiles || null,
+          socialLinks
         }
       };
     } catch (error: any) {
@@ -755,8 +815,6 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
         return reply.status(401).send({ success: false, message: 'Unauthorized: No valid user token provided.' });
       }
 
-      const { displayName, bio, preferredLocation } = request.body as any;
-
       const dbUser = await prisma.users.findUnique({
         where: { id: request.user.id }
       });
@@ -765,25 +823,187 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
         return reply.status(404).send({ success: false, message: 'User not found.' });
       }
 
+      let displayName, bio, preferredLocation, location, socialLinks, headline, skills, interests, gender, dob, phone, firstName, lastName, phoneNumber, userName;
+      let profilePhotoBuffer: Buffer | undefined;
+      let coverBannerBuffer: Buffer | undefined;
+      let clearCoverBanner = false;
+
+      if (request.isMultipart()) {
+        const parts = request.parts();
+        for await (const part of parts) {
+          if (part.type === 'file') {
+            const buffer = await part.toBuffer();
+            if (part.fieldname === 'profilePhoto') {
+              profilePhotoBuffer = buffer;
+            } else if (part.fieldname === 'coverBanner') {
+              coverBannerBuffer = buffer;
+            }
+          } else {
+            const fieldname = part.fieldname;
+            const value = part.value as string;
+            if (fieldname === 'socialLinks' || fieldname === 'skills' || fieldname === 'interests') {
+              try {
+                const parsed = JSON.parse(value);
+                if (fieldname === 'socialLinks') socialLinks = parsed;
+                if (fieldname === 'skills') skills = parsed;
+                if (fieldname === 'interests') interests = parsed;
+              } catch (e) {
+                // Ignore parse errors
+              }
+            } else {
+              if (fieldname === 'displayName') displayName = value;
+              if (fieldname === 'userName') userName = value;
+              if (fieldname === 'firstName') firstName = value;
+              if (fieldname === 'lastName') lastName = value;
+              if (fieldname === 'bio') bio = value;
+              if (fieldname === 'preferredLocation') preferredLocation = value;
+              if (fieldname === 'location') location = value;
+              if (fieldname === 'headline') headline = value;
+              if (fieldname === 'gender') gender = value;
+              if (fieldname === 'dob') dob = value;
+              if (fieldname === 'phone') phone = value;
+              if (fieldname === 'phoneNumber') phoneNumber = value;
+              if (fieldname === 'coverBanner' && value === '') clearCoverBanner = true;
+            }
+          }
+        }
+      } else {
+        const body = request.body as any || {};
+        displayName = body.displayName;
+        userName = body.userName;
+        firstName = body.firstName;
+        lastName = body.lastName;
+        bio = body.bio;
+        preferredLocation = body.preferredLocation;
+        location = body.location;
+        socialLinks = body.socialLinks;
+        headline = body.headline;
+        skills = body.skills;
+        interests = body.interests;
+        gender = body.gender;
+        dob = body.dob;
+        phone = body.phone;
+        phoneNumber = body.phoneNumber;
+        if (body.coverBanner === '') clearCoverBanner = true;
+      }
+
+      // Phone Number Validation
+      const finalPhone = phoneNumber || phone || '';
+      if (finalPhone && !/^\+?[0-9]{10,15}$/.test(finalPhone)) {
+        return reply.status(400).send({
+          success: false,
+          message: 'Invalid phone number. It must be numeric and between 10-15 digits long.'
+        });
+      }
+
+      let userUpdateData: any = {};
+      if (finalPhone) {
+        userUpdateData.phone_e164 = finalPhone;
+        userUpdateData.phone_number = finalPhone;
+      }
+      if (firstName !== undefined) userUpdateData.first_name = firstName;
+      if (lastName !== undefined) userUpdateData.last_name = lastName;
+      
+      const finalLocation = preferredLocation || location || '';
+      if (finalLocation) userUpdateData.location = finalLocation;
+      
+      const finalGender = gender || null;
+      if (finalGender !== null) userUpdateData.gender = finalGender;
+
+      const finalDob = dob ? new Date(dob) : null;
+      if (finalDob !== null) userUpdateData.dob = finalDob;
+
+      // Store image bytes directly on the users row
+      if (profilePhotoBuffer !== undefined) userUpdateData.profile_image_data = profilePhotoBuffer;
+
+      if (Object.keys(userUpdateData).length > 0) {
+        userUpdateData.updated_at = new Date();
+        await prisma.users.update({
+          where: { id: dbUser.id },
+          data: userUpdateData
+        });
+      }
+
+      const finalSkills = skills ? skills : interests ? interests : undefined;
+
+      const updateData: any = {
+        display_name: displayName,
+        first_name: firstName,
+        last_name: lastName,
+        user_name: userName,
+        bio: bio,
+        preferred_location: finalLocation,
+        phone_number: finalPhone,
+        template_key: headline,
+        headline: headline,
+        skills: finalSkills,
+        gender: finalGender,
+        dob: finalDob,
+        updated_at: new Date()
+      };
+      const createData: any = {
+        user_id: dbUser.id,
+        tenant_id: dbUser.tenant_id,
+        display_name: displayName,
+        first_name: firstName,
+        last_name: lastName,
+        user_name: userName,
+        bio: bio || '',
+        preferred_location: finalLocation,
+        phone_number: finalPhone,
+        template_key: headline || '',
+        headline: headline || '',
+        skills: finalSkills || [],
+        gender: finalGender,
+        dob: finalDob,
+        created_at: new Date(),
+        updated_at: new Date()
+      };
+
+      if (profilePhotoBuffer !== undefined) {
+         updateData.profile_image_data = profilePhotoBuffer;
+         createData.profile_image_data = profilePhotoBuffer;
+      }
+      if (coverBannerBuffer !== undefined) {
+         updateData.cover_image_data = coverBannerBuffer;
+         createData.cover_image_data = coverBannerBuffer;
+      } else if (clearCoverBanner) {
+         updateData.cover_image_data = null;
+         createData.cover_image_data = null;
+      }
+
       // Upsert profile
       const profile = await prisma.profiles.upsert({
         where: { user_id: dbUser.id },
-        update: {
-          display_name: displayName,
-          bio: bio,
-          preferred_location: preferredLocation,
-          updated_at: new Date()
-        },
-        create: {
-          user_id: dbUser.id,
-          tenant_id: dbUser.tenant_id,
-          display_name: displayName,
-          bio: bio || '',
-          preferred_location: preferredLocation || '',
-          created_at: new Date(),
-          updated_at: new Date()
-        }
+        update: updateData,
+        create: createData
       });
+
+      // Update social links only if provided in request
+      if (socialLinks !== undefined) {
+        await prisma.profile_links.deleteMany({
+          where: { user_id: request.user.id }
+        });
+
+        if (socialLinks !== null) {
+          const linkPromises = Object.entries(socialLinks)
+            .filter(([_, value]) => value && (value as string).trim() !== '')
+            .map(([kind, value], index) => {
+              return prisma.profile_links.create({
+                data: {
+                  user_id: request.user.id,
+                  tenant_id: dbUser.tenant_id,
+                  kind: kind,
+                  value: value as string,
+                  position: index,
+                  visibility: "public"
+                }
+              });
+            });
+
+          await Promise.all(linkPromises);
+        }
+      }
 
       return {
         success: true,

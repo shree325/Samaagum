@@ -5,7 +5,7 @@
 
 function useSet(initial = []) {
   const [s, setS] = useState(() => new Set(initial));
-  const toggle = useCallback((id) => setS(prev => { const n = new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; }), []);
+  const toggle = useCallback((id) => setS(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; }), []);
   const add = useCallback((id) => setS(prev => { const n = new Set(prev); n.add(id); return n; }), []);
   return [s, toggle, add];
 }
@@ -13,21 +13,21 @@ function useSet(initial = []) {
 /* mobile bottom tab bar */
 function TabBar({ view, go, counts }) {
   const tabs = [
-    { k:"home", ic:<I.home/>, label:"Home" },
-    { k:"discover", ic:<I.compass/>, label:"Discover" },
-    { k:"create-event", ic:<I.plus/>, label:"", fab:true },
-    { k:"messages", ic:<I.chat/>, label:"Chats", badge: counts.messages },
-    { k:"profile", ic:<I.user/>, label:"You" },
+    { k: "home", ic: <I.home />, label: "Home" },
+    { k: "discover", ic: <I.compass />, label: "Discover" },
+    { k: "create-event", ic: <I.plus />, label: "", fab: true },
+    { k: "messages", ic: <I.chat />, label: "Chats", badge: counts.messages },
+    { k: "profile", ic: <I.user />, label: "You" },
   ];
-  const active = (k) => view===k || (k==="home"&&view==="event") || (k==="discover"&&view==="group");
+  const active = (k) => view === k || (k === "home" && view === "event") || (k === "discover" && view === "group");
   return (
     <div className="tabbar">
       {tabs.map(t => t.fab ? (
-        <button key={t.k} className="tab" onClick={()=>go("create-event")}><span className="fab">{t.ic}</span></button>
+        <button key={t.k} className="tab" onClick={() => go("create-event")}><span className="fab">{t.ic}</span></button>
       ) : (
-        <button key={t.k} className={`tab ${active(t.k)?"on":""}`} onClick={()=>go(t.k)}>
+        <button key={t.k} className={`tab ${active(t.k) ? "on" : ""}`} onClick={() => go(t.k)}>
           <span className="ic">{t.ic}</span>{t.label}
-          {t.badge ? <span className="tdot"/> : null}
+          {t.badge ? <span className="tdot" /> : null}
         </button>
       ))}
     </div>
@@ -37,9 +37,9 @@ function TabBar({ view, go, counts }) {
 function MobileTop({ go, counts, city }) {
   return (
     <div className="m-top">
-      <Mark size={26}/>
-      <div className="m-search" onClick={()=>go("discover")}><I.search/> Search Samaagum</div>
-      <button className="tb-icon" style={{ width:38, height:38 }} onClick={()=>go("notifications")}><I.bell/>{counts.notifs?<span className="dot"/>:null}</button>
+      <Mark size={26} />
+      <div className="m-search" onClick={() => go("discover")}><I.search /> Search Samaagum</div>
+      <button className="tb-icon" style={{ width: 38, height: 38 }} onClick={() => go("notifications")}><I.bell />{counts.notifs ? <span className="dot" /> : null}</button>
     </div>
   );
 }
@@ -54,6 +54,7 @@ function App() {
   const overrideLocation = () => {};
   const city = "Global";
   const [cityOpen, setCityOpen] = useState(false);
+  const [meSync, setMeSync] = useState(0); // Add a tick to force re-render when ME updates asynchronously
 
   const [subscription, setSubscription] = useState({ plan: 'free', status: 'active' });
   const [socket, setSocket] = useState(null);
@@ -120,29 +121,57 @@ function App() {
       .then(res => {
         if (res.success) {
           if (res.data.email) {
+            ME.email = res.data.email;
             ME.handle = `@${res.data.email.split('@')[0]}`;
+          }
+          if (res.data.phone) {
+            ME.phone = res.data.phone;
+          }
+          if (res.data.profilePhoto) {
+            ME.img = res.data.profilePhoto.startsWith('data:') ? res.data.profilePhoto : (res.data.profilePhoto.startsWith('http') ? res.data.profilePhoto : apiBase + res.data.profilePhoto);
+          }
+          if (res.data.coverBanner) {
+            ME.coverBanner = res.data.coverBanner.startsWith('data:') ? res.data.coverBanner : (res.data.coverBanner.startsWith('http') ? res.data.coverBanner : apiBase + res.data.coverBanner);
+          }
+          if (res.data.full_name) {
+            ME.name = res.data.full_name;
+          } else if (res.data.profile && res.data.profile.display_name) {
+            ME.name = res.data.profile.display_name;
           }
           if (res.data.profile) {
             const prof = res.data.profile;
-            if (prof.display_name) ME.name = prof.display_name;
             if (prof.bio) ME.role = prof.bio;
             if (prof.preferred_location) ME.location = prof.preferred_location;
+            if (prof.skills && Array.isArray(prof.skills) && prof.skills.length > 0) {
+              ME.skills = prof.skills;
+            }
+            if (prof.gender || res.data.gender) ME.gender = prof.gender || res.data.gender;
+            
+            const dobToUse = prof.dob || res.data.dob;
+            if (dobToUse) {
+              // Convert ISO string to YYYY-MM-DD for date input
+              ME.dob = dobToUse.split('T')[0];
+            }
           }
+          if (res.data.socialLinks) {
+            ME.socialLinks = res.data.socialLinks;
+          }
+          setMeSync(tick => tick + 1); // Trigger re-render to reflect ME.img and ME.name updates
         }
       })
       .catch(err => console.error('Error fetching user profile', err));
   }, []);
 
   // navigation stack
-  const [stack, setStack] = useState([{ view:"home", param:null }]);
-  const cur = stack[stack.length-1];
-  const go = useCallback((view, param=null) => {
+  const [stack, setStack] = useState([{ view: "home", param: null }]);
+  const cur = stack[stack.length - 1];
+  const go = useCallback((view, param = null) => {
     setStack(s => {
-      if (view==="home") return [{ view:"home", param:null }];
+      if (view === "home") return [{ view: "home", param: null }];
       return [...s, { view, param }];
     });
     // scroll the active view to top
-    setTimeout(()=>{ document.querySelectorAll(".scroll").forEach(el=>el.scrollTop=0); }, 0);
+    setTimeout(() => { document.querySelectorAll(".scroll").forEach(el => el.scrollTop = 0); }, 0);
   }, []);
 
   useEffect(() => {
@@ -152,12 +181,12 @@ function App() {
 
   // engagement state
   const [saved, toggleSave] = useSet([]);
-  const [joined, toggleJoin] = useSet(["g1","g2","g4"]);
+  const [joined, toggleJoin] = useSet(["g1", "g2", "g4"]);
   const [connected, toggleConnect] = useSet([]);
-  const [registered, , registerAdd] = useSet(["e1","e2","e4"]);
+  const [registered, , registerAdd] = useSet(["e1", "e2", "e4"]);
   const [myTickets, setMyTickets] = useState(MY_TICKETS);
   const [waitlisted, setWaitlisted] = useState(new Set(["ev-feat"]));
-  
+
   const toggleWaitlist = useCallback((id) => setWaitlisted(prev => {
     const n = new Set(prev);
     n.has(id) ? n.delete(id) : n.add(id);
@@ -258,52 +287,53 @@ function App() {
     const r = document.documentElement;
     r.setAttribute("data-theme", t.dark ? "dark" : "light");
     r.style.setProperty("--glass-blur-h", `${t.glass}px`);
-    r.style.setProperty("--glass-blur", `${t.glass+4}px`);
-    const op = Math.min(0.85, 0.32 + (t.glass/30)*0.4);
-    r.style.setProperty("--glass-bg", t.dark ? `rgba(28,27,42,${op*0.92})` : `rgba(255,255,255,${op})`);
+    r.style.setProperty("--glass-blur", `${t.glass + 4}px`);
+    const op = Math.min(0.85, 0.32 + (t.glass / 30) * 0.4);
+    r.style.setProperty("--glass-bg", t.dark ? `rgba(28,27,42,${op * 0.92})` : `rgba(255,255,255,${op})`);
   }, [t]);
 
   const renderView = () => {
     const v = cur.view;
-    if (v==="home") return <HomeFeed st={st} go={go} />;
-    if (v==="discover") return <Discover st={st} go={go} />;
-    if (v==="events") return <MyTickets st={st} go={go} />;
-    if (v==="groups") return <MyGroups st={st} go={go} />;
-    if (v==="event") return <EventDetail ev={cur.param} st={st} go={go} />;
-    if (v==="group") return <GroupDetail group={cur.param} st={st} go={go} />;
-    if (v==="profile") return <Profile st={st} go={go} />;
-    if (v==="notifications") return <Notifications st={st} go={go} />;
-    if (v==="messages") return <Messages st={st} go={go} mobile={mobile} socket={socket} />;
-    if (v==="create-event") return <CreateEvent go={go} mobile={mobile} st={st} />;
-    if (v==="edit-event") return <CreateEvent editEv={cur.param} go={go} mobile={mobile} st={st} />;
-    if (v==="create-group") return <CreateGroup go={go} mobile={mobile} st={st} />;
-    if (v==="edit-group") return <CreateGroup editGroup={cur.param} go={go} mobile={mobile} st={st} />;
-    if (v==="event-dashboard") return <EventDashboard ev={cur.param} st={st} go={go} />;
-    if (v==="group-dashboard") return <GroupDashboard group={cur.param} st={st} go={go} />;
-    if (v==="ticket") return <TicketDetail tkt={cur.param} st={st} go={go} />;
-    if (v==="waitlist") return <Waitlist ev={cur.param} st={st} go={go} />;
-    if (v==="claim") return <ClaimFlow st={st} go={go} />;
-    if (v==="upgrade") return <UpgradePage st={st} go={go} />;
-    if (v==="checkout") return <CheckoutPage param={cur.param} st={st} go={go} />;
-    if (v==="checkout-success") return <CheckoutSuccessPage param={cur.param} st={st} go={go} />;
+    if (v === "home") return <HomeFeed st={st} go={go} />;
+    if (v === "discover") return <Discover st={st} go={go} />;
+    if (v === "events") return <MyTickets st={st} go={go} />;
+    if (v === "groups") return <MyGroups st={st} go={go} />;
+    if (v === "event") return <EventDetail ev={cur.param} st={st} go={go} />;
+    if (v === "group") return <GroupDetail group={cur.param} st={st} go={go} />;
+    if (v === "profile") return <Profile st={st} go={go} />;
+    if (v === "public-profile") return <PublicProfile profile={cur.param} go={go} />;
+    if (v === "notifications") return <Notifications st={st} go={go} />;
+    if (v === "messages") return <Messages st={st} go={go} mobile={mobile} />;
+    if (v === "create-event") return <CreateEvent go={go} mobile={mobile} st={st} />;
+    if (v === "edit-event") return <CreateEvent editEv={cur.param} go={go} mobile={mobile} st={st} />;
+    if (v === "create-group") return <CreateGroup go={go} mobile={mobile} st={st} />;
+    if (v === "edit-group") return <CreateGroup editGroup={cur.param} go={go} mobile={mobile} st={st} />;
+    if (v === "event-dashboard") return <EventDashboard ev={cur.param} st={st} go={go} />;
+    if (v === "group-dashboard") return <GroupDashboard group={cur.param} st={st} go={go} />;
+    if (v === "ticket") return <TicketDetail tkt={cur.param} st={st} go={go} />;
+    if (v === "waitlist") return <Waitlist ev={cur.param} st={st} go={go} />;
+    if (v === "claim") return <ClaimFlow st={st} go={go} />;
+    if (v === "upgrade") return <UpgradePage st={st} go={go} />;
+    if (v === "checkout") return <CheckoutPage param={cur.param} st={st} go={go} />;
+    if (v === "checkout-success") return <CheckoutSuccessPage param={cur.param} st={st} go={go} />;
     return <HomeFeed st={st} go={go} />;
   };
 
   // discover/events/groups map to sidebar active key
   const navKey = ["events", "event-dashboard", "edit-event"].includes(cur.view) ? "events"
     : ["groups", "group-dashboard", "edit-group"].includes(cur.view) ? "groups"
-    : ["create-event","create-group"].includes(cur.view) ? null
-    : cur.view;
+      : ["create-event", "create-group"].includes(cur.view) ? null
+        : cur.view;
 
   return (
-    <div className={`app ${mobile?"mobile":""}`}>
+    <div className={`app ${mobile ? "mobile" : ""}`}>
       {!mobile && <Sidebar view={navKey} go={go} counts={counts} />}
       <div className="content">
         {mobile ? <MobileTop go={go} counts={counts} city={city} />
-                : <Topbar go={go} counts={counts} dark={t.dark} onToggleTheme={()=>setTweak("dark", !t.dark)} city={city} onCity={()=>setCityOpen(true)} />}
+          : <Topbar go={go} counts={counts} dark={t.dark} onToggleTheme={() => setTweak("dark", !t.dark)} city={city} onCity={() => setCityOpen(true)} />}
         {renderView()}
         {mobile && <TabBar view={cur.view} go={go} counts={counts} />}
-        <CityPicker open={cityOpen} onClose={()=>setCityOpen(false)} city={city} onPick={(c) => overrideLocation({ city: c })} />
+        <CityPicker open={cityOpen} onClose={() => setCityOpen(false)} city={city} onPick={setCity} />
       </div>
     </div>
   );
