@@ -62,6 +62,46 @@ function useAuth() {
 }
 
 /* ---------------- Screens ---------------- */
+function useOAuthProviders(mode) {
+  const [providers, setProviders] = useState([]);
+  const [loadingProviders, setLoadingProviders] = useState(true);
+  const [loadingKeys, setLoadingKeys] = useState({});
+
+  useEffect(() => {
+    let active = true;
+    const fetchProviders = async () => {
+      try {
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+        const res = await fetch(`${apiBase}/api/auth/providers`);
+        const data = await res.json();
+        if (active && data.success && Array.isArray(data.providers)) {
+          setProviders(data.providers.filter(p => p.enabled));
+        }
+      } catch (e) {
+        console.error("Failed to load auth providers", e);
+      } finally {
+        if (active) setLoadingProviders(false);
+      }
+    };
+    fetchProviders();
+    return () => { active = false; };
+  }, []);
+
+  const handleProviderLogin = (key, isCustom) => {
+    setLoadingKeys(prev => ({ ...prev, [key]: true }));
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+    if (isCustom) {
+      window.location.href = `${apiBase}/api/auth/custom/${key}?mode=${mode}`;
+    } else {
+      window.location.href = `${apiBase}/api/auth/${key}?mode=${mode}`;
+    }
+  };
+
+  return { providers, loadingProviders, loadingKeys, handleProviderLogin };
+}
+
 function ScreenSignup({ m }) {
   const [formData, setFormData] = useState({
     firstName: m.data.name?.split(' ')[0] || '',
@@ -73,6 +113,8 @@ function ScreenSignup({ m }) {
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const { providers, loadingKeys, handleProviderLogin } = useOAuthProviders(m.mode);
+  const hasOauth = providers.length > 0;
 
   const handleChange = (e) => setFormData(d => ({ ...d, [e.target.name]: e.target.value }));
 
@@ -132,7 +174,29 @@ function ScreenSignup({ m }) {
       <h2 className="auth-h">Create Account</h2>
       {/* <p className="auth-p">Join Samaagum to discover events and meet your people.</p> */}
 
-      <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 16 }}>
+      {hasOauth && (
+        <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {providers.map(p => {
+            const IconComponent = Ic[p.key] || Ic.spark;
+            const btnVariant = (p.key === 'google' || p.key === 'linkedin') ? p.key : 'ghost';
+            return (
+              <SBtn 
+                key={p.key} 
+                variant={btnVariant} 
+                block 
+                loading={loadingKeys[p.key] || false} 
+                leftIcon={<IconComponent />} 
+                onClick={() => handleProviderLogin(p.key, p.isCustom)}
+              >
+                Continue with {p.displayName || p.key}
+              </SBtn>
+            );
+          })}
+        </div>
+      )}
+      {hasOauth && <div className="divider">or continue with email</div>}
+
+      <div style={{ marginTop: hasOauth ? 0 : 24, display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={{ display: "flex", gap: 12 }}>
           <div style={{ flex: 1 }}>
             <Field label="First Name" value={formData.firstName} onChange={e => setFormData(d => ({ ...d, firstName: e.target.value }))} placeholder="John" />
@@ -198,6 +262,8 @@ function ScreenLogin({ m }) {
   const [email, setEmail] = useState(m.data.email || "");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const { providers, loadingKeys, handleProviderLogin } = useOAuthProviders(m.mode);
+  const hasOauth = providers.length > 0;
 
   const cont = async () => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -234,7 +300,29 @@ function ScreenLogin({ m }) {
       <h2 className="auth-h">Welcome Back</h2>
       <p className="auth-p">Sign in to continue to your community.</p>
 
-      <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 16 }}>
+      {hasOauth && (
+        <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {providers.map(p => {
+            const IconComponent = Ic[p.key] || Ic.spark;
+            const btnVariant = (p.key === 'google' || p.key === 'linkedin') ? p.key : 'ghost';
+            return (
+              <SBtn 
+                key={p.key} 
+                variant={btnVariant} 
+                block 
+                loading={loadingKeys[p.key] || false} 
+                leftIcon={<IconComponent />} 
+                onClick={() => handleProviderLogin(p.key, p.isCustom)}
+              >
+                Continue with {p.displayName || p.key}
+              </SBtn>
+            );
+          })}
+        </div>
+      )}
+      {hasOauth && <div className="divider">or continue with email</div>}
+
+      <div style={{ marginTop: hasOauth ? 0 : 24, display: "flex", flexDirection: "column", gap: 16 }}>
         <div>
           <Field label="Email Address" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && cont()} placeholder="you@example.com" />
           {error && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 4 }}>{error}</div>}
