@@ -592,11 +592,11 @@ function ChatControlsView({ user, logAction, addToast }) {
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                     {permissionKeys.map(perm => {
-                      const active = isPermissionActive(role.key, perm.key);
+                      const active = isPermissionActive(role.name, perm.key);
                       return (
                         <button
                           key={perm.key}
-                          onClick={() => togglePermission(role.key, perm.key)}
+                          onClick={() => togglePermission(role.name, perm.key)}
                           style={{
                             padding: '4px 10px',
                             borderRadius: '12px',
