@@ -296,6 +296,11 @@ class AdminApiClient {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+    getChatSettings: () => this.request<{ success: boolean; data: any }>('/api/admin/settings/chat'),
+    saveChatSettings: (payload: any) => this.request<{ success: boolean; message: string }>('/api/admin/settings/chat', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   };
 
   // ── Auth endpoint (public — no token required) ─────────────────────────────

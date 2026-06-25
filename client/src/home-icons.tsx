@@ -101,11 +101,15 @@ function Wordmark({ size = 20, color }) {
 
 /* ---------------- Avatar ---------------- */
 function gradFor(seed) {
-  let h = 0; for (let i = 0; i < (seed||"").length; i++) h = seed.charCodeAt(i) + ((h << 5) - h);
+  const seedStr = typeof seed === 'string' ? seed : (seed ? String(seed) : "");
+  let h = 0; for (let i = 0; i < seedStr.length; i++) h = seedStr.charCodeAt(i) + ((h << 5) - h);
   const a = Math.abs(h) % 360, b = (a + 38) % 360;
   return `linear-gradient(135deg, hsl(${a} 68% 60%), hsl(${b} 70% 50%))`;
 }
-function initials(name) { return (name||"").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase(); }
+function initials(name) {
+  const nameStr = typeof name === 'string' ? name : (name ? String(name) : "");
+  return nameStr.split(" ").map(w => w ? w[0] : "").join("").slice(0, 2).toUpperCase();
+}
 function Avatar({ name, size = 40, img, className = "", style = {} }) {
   return (
     <div className={`avatar av ${className}`} style={{

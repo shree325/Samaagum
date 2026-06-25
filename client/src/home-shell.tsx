@@ -37,8 +37,9 @@ function CreateMenu({ onPick }) {
 }
 
 /* ---------------- Sidebar ---------------- */
-function Sidebar({ view, go, counts }) {
+function Sidebar({ view, go, counts, chatSettings }) {
   const [createOpen, setCreateOpen] = useState(false);
+  const showMessages = chatSettings?.allowSiteMessaging !== false;
   const main = [
     { k:"home", ic:<I.home/>, label:"Home" },
     { k:"discover", ic:<I.compass/>, label:"Discover" },
@@ -46,7 +47,7 @@ function Sidebar({ view, go, counts }) {
     { k:"groups", ic:<I.groups/>, label:"Groups" },
   ];
   const social = [
-    { k:"messages", ic:<I.chat/>, label:"Messages", badge: counts.messages },
+    ...(showMessages ? [{ k:"messages", ic:<I.chat/>, label:"Messages", badge: counts.messages }] : []),
     { k:"notifications", ic:<I.bell/>, label:"Notifications", badge: counts.notifs },
     { k:"profile", ic:<I.user/>, label:"Profile" },
   ];
@@ -88,9 +89,10 @@ function Sidebar({ view, go, counts }) {
 }
 
 /* ---------------- Topbar (desktop) ---------------- */
-function Topbar({ go, counts, dark, onToggleTheme, city, onCity }) {
+function Topbar({ go, counts, dark, onToggleTheme, city, onCity, chatSettings }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const showMessages = chatSettings?.allowSiteMessaging !== false;
   return (
     <header className="topbar">
       <div className="tb-search">
@@ -109,9 +111,11 @@ function Topbar({ go, counts, dark, onToggleTheme, city, onCity }) {
         </Popover>
       </div>
       <button className="tb-icon" onClick={onToggleTheme} title="Toggle theme">{dark? <I.sun/> : <I.moon/>}</button>
-      <button className="tb-icon" onClick={()=>go("messages")} title="Messages">
-        <I.chat/>{counts.messages ? <span className="dot" /> : null}
-      </button>
+      {showMessages && (
+        <button className="tb-icon" onClick={()=>go("messages")} title="Messages">
+          <I.chat/>{counts.messages ? <span className="dot" /> : null}
+        </button>
+      )}
       <button className="tb-icon" onClick={()=>go("notifications")} title="Notifications">
         <I.bell/>{counts.notifs ? <span className="dot" /> : null}
       </button>

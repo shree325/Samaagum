@@ -41,6 +41,44 @@ export interface OtpSettings {
   mockMode: boolean;
 }
 
+export interface ChatSettings {
+  allowSiteMessaging?: boolean;
+  allowDirectMessaging: boolean;
+  allowGroupChat: boolean;
+  allowEventChat: boolean;
+  rolePermissions: {
+    directMessaging: string[];
+    groupChat: string[];
+    eventChat: string[];
+    moderate?: string[];
+    pinMessages?: string[];
+    banUsers?: string[];
+  };
+  communicationPolicies: {
+    allowLinks: boolean;
+    allowMedia: boolean;
+    maxMessageLength: number;
+    directMessagesEnabled?: boolean;
+    dmWhoCanSend?: string;
+    dmRequestApproval?: boolean;
+    dmAllowMedia?: boolean;
+    groupChatsEnabled?: boolean;
+    groupWhoCanCreate?: string;
+    groupModerationMode?: string;
+    groupAllowMedia?: boolean;
+    eventChatsEnabled?: boolean;
+    eventDefaultModerationMode?: string;
+    eventAutoArchive?: boolean;
+    eventOrganizerOverride?: boolean;
+    profanityFilter?: string;
+    reportReviewQueue?: boolean;
+    linkPreviews?: boolean;
+    maxMessagesPerMin?: number;
+    maxDmsPerDay?: number;
+    maxGroupParticipants?: number;
+  };
+}
+
 export interface OtpVerificationRow {
   id?: string;
   email: string;

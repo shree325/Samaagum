@@ -17,6 +17,55 @@ function Messages({ st, go, mobile, socket }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
 
+  const checkCommonGroupOrEvent = (otherUser) => {
+    if (!otherUser) return false;
+    const cleanOtherName = (otherUser.name || "").toLowerCase().trim();
+    if (!cleanOtherName) return false;
+
+    const isSameUserByName = (n1, n2) => {
+      if (!n1 || !n2) return false;
+      const p1 = n1.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(' ').filter(Boolean)[0];
+      const p2 = n2.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(' ').filter(Boolean)[0];
+      return p1 === p2;
+    };
+
+    // Check Groups: other user is in a group that I have joined or created
+    const commonGroup = (window.GROUPS || []).some(g => {
+      const userJoined = st.joined && st.joined.has(g.id);
+      const userCreated = st.createdGroups && st.createdGroups.some(cg => cg.id === g.id);
+      const meInGroup = userJoined || userCreated || g.owner?.toLowerCase().includes("aanya");
+      
+      if (!meInGroup) return false;
+
+      const membersList = g.memberNames || [];
+      return membersList.some(m => {
+        const mName = typeof m === 'object' ? m.name : m;
+        return isSameUserByName(mName, cleanOtherName);
+      });
+    });
+
+    if (commonGroup) return true;
+
+    // Check Events: other user is in an event that I am registered for
+    const commonEvent = (window.EVENTS || []).some(e => {
+      const userReg = st.registered && st.registered.has(e.id);
+      const userWaitlist = st.waitlisted && st.waitlisted.has(e.id);
+      const meInEvent = userReg || userWaitlist;
+
+      if (!meInEvent) return false;
+
+      const hostName = e.hostBy || e.host || "";
+      if (isSameUserByName(hostName, cleanOtherName)) return true;
+
+      const attendeesList = e.attendees || [];
+      return attendeesList.some(a => isSameUserByName(a, cleanOtherName));
+    });
+
+    if (commonEvent) return true;
+
+    return false;
+  };
+
   useEffect(() => {
     if (!searchQuery.trim()) {
       setSearchResults([]);
@@ -103,7 +152,11 @@ function Messages({ st, go, mobile, socket }) {
       .then(res => {
         if (res.success && res.data) {
           setThreads(res.data);
-          if (res.data.length > 0) {
+          const savedConvId = localStorage.getItem('active_chat_conv_id');
+          if (savedConvId && res.data.some(t => t.id === savedConvId)) {
+            setActiveId(savedConvId);
+            localStorage.removeItem('active_chat_conv_id');
+          } else if (res.data.length > 0) {
             setActiveId(res.data[0].id);
           }
         }
@@ -546,6 +599,17 @@ function Messages({ st, go, mobile, socket }) {
         const displayName = active.type === "GROUP" ? (active.title || "Group Chat") : (other?.name || "Chat Room");
         const presenceStatus = other ? (presenceMap[other.userId] || "OFFLINE") : "OFFLINE";
         const firstName = displayName.split(" ")[0];
+
+        const chatSettings = st.chatSettings || {
+          allowDirectMessaging: true,
+          allowGroupChat: true,
+          allowEventChat: true
+        };
+        const isDM = active.type === "DIRECT" || active.type === "dm" || !active.type;
+        const isDMRestricted = isDM && chatSettings.allowDirectMessaging === false;
+        const shareCommon = other ? checkCommonGroupOrEvent(other) : false;
+        const hideCompose = isDMRestricted && !shareCommon;
+
         return (
           <div className="msg-conv">
             <div className="conv-head">
@@ -696,15 +760,42 @@ function Messages({ st, go, mobile, socket }) {
               })}
             </div>
 
-            <div className="conv-compose">
-              <input 
-                placeholder={`Message ${firstName}…`} 
-                value={input} 
-                onChange={e=>setInput(e.target.value)} 
-                onKeyDown={e=>e.key==="Enter"&&send()} 
-              />
-              <button className="send" onClick={send}><I.send/></button>
-            </div>
+            {hideCompose ? (
+              <div className="dm-restricted-banner" style={{
+                padding: "20px",
+                margin: "15px",
+                background: "var(--surface-2)",
+                border: "1px dashed var(--border)",
+                borderRadius: "12px",
+                color: "var(--ink-2)",
+                fontSize: "13.5px",
+                lineHeight: "1.5",
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "10px"
+              }}>
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="var(--ink-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                <div>
+                  <strong>Direct messaging is disabled.</strong><br/>
+                  You can only message users you share a common group or event with.
+                </div>
+              </div>
+            ) : (
+              <div className="conv-compose">
+                <input 
+                  placeholder={`Message ${firstName}…`} 
+                  value={input} 
+                  onChange={e=>setInput(e.target.value)} 
+                  onKeyDown={e=>e.key==="Enter"&&send()} 
+                />
+                <button className="send" onClick={send}><I.send/></button>
+              </div>
+            )}
           </div>
         );
       })()}
