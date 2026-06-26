@@ -460,11 +460,13 @@ function Messages({ st, go, mobile, socket }) {
                     {searchedContacts.map(user => (
                       <div key={user.id} className="search-item" onClick={() => selectSearchResult(user)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: "8px", cursor: "pointer" }}>
                         <div style={{ position: "relative" }}>
-                          <Avatar name={user.name || "null"} size={40} />
+                          <I.Avatar userId={user.id} name={user.name || "null"} size={40} />
                           <span className="search-presence-dot" style={{ position: "absolute", bottom: 0, right: 0, width: 10, height: 10, borderRadius: "50%", background: presenceMap[user.id] === "ONLINE" ? "#2bb673" : "#8e8e93", border: "2px solid var(--surface)" }} />
                         </div>
                         <div className="info" style={{ flex: 1, minWidth: 0 }}>
-                          <div className="name" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{user.name === null ? "null" : user.name}</div>
+                          <div className="name" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
+                            {I.useProfileSync ? I.useProfileSync(user.id, { name: user.name }).name || "null" : (user.name || "null")}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -476,11 +478,13 @@ function Messages({ st, go, mobile, socket }) {
                     {searchedMoreAccounts.map(user => (
                       <div key={user.id} className="search-item" onClick={() => selectSearchResult(user)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: "8px", cursor: "pointer" }}>
                         <div style={{ position: "relative" }}>
-                          <Avatar name={user.name || "null"} size={40} />
+                          <I.Avatar userId={user.id} name={user.name || "null"} size={40} />
                           <span className="search-presence-dot" style={{ position: "absolute", bottom: 0, right: 0, width: 10, height: 10, borderRadius: "50%", background: presenceMap[user.id] === "ONLINE" ? "#2bb673" : "#8e8e93", border: "2px solid var(--surface)" }} />
                         </div>
                         <div className="info" style={{ flex: 1, minWidth: 0 }}>
-                          <div className="name" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{user.name === null ? "null" : user.name}</div>
+                          <div className="name" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
+                            {I.useProfileSync ? I.useProfileSync(user.id, { name: user.name }).name || "null" : (user.name || "null")}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -501,7 +505,7 @@ function Messages({ st, go, mobile, socket }) {
                 return (
                   <div key={t.id} className={`thread ${t.id===activeId && !mobile?"on":""}`} onClick={()=>openThread(t.id)}>
                     <div className="av" style={{ background:"transparent" }}>
-                      <Avatar name={displayName} size={46}/>
+                      <I.Avatar userId={other?.userId || other?.id} name={displayName} size={46}/>
                       <span className={presenceStatus === "ONLINE" ? "online" : "offline"}/>
                     </div>
                     <div className="ti">
@@ -524,7 +528,7 @@ function Messages({ st, go, mobile, socket }) {
               <div style={{ display:"flex", flexDirection:"column", gap:10, padding:"4px" }}>
                 {REQUESTS.map(r => (
                   <div key={r.name} className="req-card">
-                    <Avatar name={r.name} size={48}/>
+                    <I.Avatar userId={r.userId || r.id} name={r.name} size={48}/>
                     <div className="ri"><div className="n">{r.name}</div><div className="d">{r.role}</div><div className="d" style={{ color:"var(--accent-2)" }}>{r.mutual} mutual</div></div>
                     <div className="ract" style={{ flexDirection:"column", gap:7 }}>
                       <button className="hbtn hbtn--primary hbtn--sm" onClick={()=>st.toggleConnect(r.name)}><I.check/></button>
@@ -551,7 +555,7 @@ function Messages({ st, go, mobile, socket }) {
             <div className="conv-head">
               {mobile && <button className="hbtn hbtn--ghost hbtn--sm" style={{ padding:"7px 10px" }} onClick={()=>setShowConv(false)}><I.arrowL/></button>}
               <div style={{ position:"relative" }}>
-                <Avatar name={displayName} size={40}/>
+                <I.Avatar userId={other?.userId || other?.id} name={displayName} size={40}/>
                 <span className={presenceStatus === "ONLINE" ? "online" : "offline"} style={{ position:"absolute", bottom:0, right:0, width:11, height:11, borderRadius:"50%", background: presenceStatus === "ONLINE" ? "#2bb673" : "#8e8e93", border:"2px solid var(--surface)" }}/>
               </div>
               <div className="ci">

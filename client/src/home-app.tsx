@@ -52,7 +52,7 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const [city, setCity] = useState("Global");
+  const [city, setCity] = useState(window.ME?.location || "Global");
   const [cityOpen, setCityOpen] = useState(false);
   const [meSync, setMeSync] = useState(0); // Add a tick to force re-render when ME updates asynchronously
 
@@ -71,6 +71,7 @@ function App() {
       if (parts.length >= 2) {
         const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
         userId = payload.id;
+        window.ME.id = userId; // Store globally
       }
     } catch (e) {
       console.error('Error parsing token for socket:', e);
@@ -86,6 +87,23 @@ function App() {
         console.log("🔌 Connected to chat socket as:", userId);
       });
 
+      chatSocket.on("profile.updated", (payload) => {
+        // Dispatch global event for useProfileSync hook
+        window.dispatchEvent(new CustomEvent('samaagum:profileSync', { detail: payload }));
+        
+        // Update ME directly if it's the current user
+        if (window.ME?.id === payload.userId) {
+          if (payload.name) window.ME.name = payload.name;
+          if (payload.bio) window.ME.role = payload.bio;
+          if (payload.location) {
+            window.ME.location = payload.location;
+            setCity(payload.location);
+          }
+          if (payload.profilePhoto) window.ME.img = payload.profilePhoto;
+          setMeSync(Date.now()); // trigger global re-render
+        }
+      });
+
       setSocket(chatSocket);
 
       return () => {
@@ -94,9 +112,22 @@ function App() {
     }
   }, []);
 
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) return; // Not logged in — skip profile/subscription fetch
+    useEffect(() => {
+      const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+      
+      // Fetch features
+      fetch(`${apiBase}/api/public/features`)
+        .then(res => res.json())
+        .then(json => {
+          if (json.success) {
+            window.featureSettings = json.data;
+            setMeSync(Date.now());
+          }
+        })
+        .catch(err => console.error('Error fetching features', err));
+
+      const token = localStorage.getItem('token');
+      if (!token) return; // Not logged in - skip profile/subscription fetch
 
     // Fetch subscription status
     fetch(`${apiBase}/api/subscription/status`, {
@@ -141,7 +172,10 @@ function App() {
           if (res.data.profile) {
             const prof = res.data.profile;
             if (prof.bio) ME.role = prof.bio;
-            if (prof.preferred_location) ME.location = prof.preferred_location;
+            if (prof.preferred_location) {
+              ME.location = prof.preferred_location;
+              setCity(prof.preferred_location);
+            }
             if (prof.skills && Array.isArray(prof.skills) && prof.skills.length > 0) {
               ME.skills = prof.skills;
             }

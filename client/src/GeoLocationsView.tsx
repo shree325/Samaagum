@@ -390,7 +390,7 @@ const GeoLocationsView = ({ addToast }) => {
                 <div style={{ overflowY: 'auto', padding: '8px' }}>
                   {filteredCols.map(c => (
                     <label key={c.key} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', ':hover': { background: 'var(--surface-2)' } }}>
-                      <input type="checkbox" checked={visibleCols[c.key]} onChange={() => toggleCol(c.key)} />
+                      <input type="checkbox" checked={!!visibleCols[c.key]} onChange={() => toggleCol(c.key)} />
                       {c.label}
                     </label>
                   ))}
@@ -519,14 +519,14 @@ const GeoLocationsView = ({ addToast }) => {
                   <div key={c.key} className="form-group">
                     <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--ink-2)' }}>{c.label}</label>
                     {c.key === 'is_in_european_union' ? (
-                      <select className="form-control" value={formData[c.key] || 0} onChange={e => setFormData({ ...formData, [c.key]: parseInt(e.target.value) })}>
+                      <select className="form-control" value={formData[c.key] ?? 0} onChange={e => setFormData({ ...formData, [c.key]: parseInt(e.target.value) })}>
                         <option value={0}>No (0)</option>
                         <option value={1}>Yes (1)</option>
                       </select>
                     ) : c.key === 'geoname_id' || c.key === 'metro_code' ? (
-                      <input className="form-control" type="number" value={formData[c.key] || ''} onChange={e => setFormData({ ...formData, [c.key]: e.target.value ? parseInt(e.target.value) : null })} disabled={c.key === 'geoname_id' && !!editingId} />
+                      <input className="form-control" type="number" value={formData[c.key] ?? ''} onChange={e => setFormData({ ...formData, [c.key]: e.target.value ? parseInt(e.target.value) : null })} disabled={c.key === 'geoname_id' && !!editingId} />
                     ) : (
-                      <input className="form-control" type="text" value={formData[c.key] || ''} onChange={e => setFormData({ ...formData, [c.key]: e.target.value })} />
+                      <input className="form-control" type="text" value={formData[c.key] ?? ''} onChange={e => setFormData({ ...formData, [c.key]: e.target.value })} />
                     )}
                   </div>
                 ))}

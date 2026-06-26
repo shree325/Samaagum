@@ -41,6 +41,10 @@ export interface OtpSettings {
   mockMode: boolean;
 }
 
+export interface FeatureSettings {
+  location_active: boolean;
+}
+
 export interface OtpVerificationRow {
   id?: string;
   email: string;

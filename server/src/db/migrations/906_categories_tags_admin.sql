@@ -33,7 +33,7 @@ VALUES
   ('fa2c8b09-b4ab-4cd2-b6ab-1299c8ea0011'::uuid, 'Food & Dining', 'food-dining', 'Food festivals, cooking workshops, and dining events', 'emoji', '🍕', 8, 'active', false, '2025-12-01T10:07:00Z'),
   ('c3a9abf2-124b-4b1d-ad12-58eac2aa8f00'::uuid, 'Social & Networking', 'social-networking', 'Professional meetups, mixers, and community gatherings', 'emoji', '🤝', 9, 'active', false, '2025-12-01T10:08:00Z'),
   ('d09a8bf6-a4f2-49da-8bca-4ea0f29c2ab8'::uuid, 'Health & Wellness', 'health-wellness', 'Yoga, meditation, mental health, and wellness sessions', 'emoji', '🧘', 10, 'active', false, '2025-12-01T10:09:00Z')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- Seed initial tags
 INSERT INTO tags (id, name, slug, category_id, status, is_deleted, created_at)
@@ -46,4 +46,4 @@ VALUES
   ('f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c'::uuid, 'Trekking & Hiking', 'trekking-hiking', 'd12c9b2f-ab01-44cd-9f12-a128e4ea7b21'::uuid, 'active', false, '2026-01-01T10:05:00Z'),
   ('a7b8c9d0-e1f2-3a4b-5c6d-7e8f9a0b1c2d'::uuid, 'UI/UX Design', 'ui-ux-design', 'b09d0a1b-312c-4912-88d4-5ea2b12da4f1'::uuid, 'active', false, '2026-01-01T10:06:00Z'),
   ('b8c9d0e1-f2a3-4b5c-6d7e-8f9a0b1c2d3e'::uuid, 'Fitness & Running', 'fitness-running', 'c5d2c5e5-d72b-42ab-ba41-1188d3e91122'::uuid, 'inactive', false, '2026-01-01T10:07:00Z')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT DO NOTHING;
