@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import prisma from '../config/prisma';
-import { AdminAuthSettings, CommunicationSettings, OtpSettings } from '../settings-library/settingsTypes';
-import { DEFAULT_AUTH_SETTINGS, DEFAULT_COMMUNICATION_SETTINGS, DEFAULT_OTP_SETTINGS } from '../settings-library/settingsSeeder';
+import { AdminAuthSettings, CommunicationSettings, OtpSettings, ChatSettings } from '../settings-library/settingsTypes';
+import { DEFAULT_AUTH_SETTINGS, DEFAULT_COMMUNICATION_SETTINGS, DEFAULT_OTP_SETTINGS, DEFAULT_CHAT_SETTINGS } from '../settings-library/settingsSeeder';
 import { emitProfileUpdate } from '../services/messagingSocket';
 
 /**
@@ -1050,6 +1050,71 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
       };
     } catch (error: any) {
       return reply.status(500).send({ success: false, message: error.message || 'Failed to update profile.' });
+    }
+  });
+
+  // ── CHAT SETTINGS ──────────────────────────────────────────────────────────
+  
+  fastify.get('/settings/chat', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
+    try {
+      const row = await prisma.platform_settings.findFirst({
+        where: {
+          scope_tenant_id: null,
+          key: 'chat_settings',
+        }
+      });
+
+      let settings: ChatSettings = DEFAULT_CHAT_SETTINGS;
+      if (row && row.value) {
+        settings = { ...DEFAULT_CHAT_SETTINGS, ...(row.value as any) };
+      }
+
+      return { success: true, data: settings };
+    } catch (error: any) {
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to fetch chat settings' });
+    }
+  });
+
+  fastify.post('/settings/chat', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
+    try {
+      const bodySettings = request.body as any;
+      if (!bodySettings || typeof bodySettings !== 'object') {
+        return reply.status(400).send({ success: false, message: 'Invalid payload' });
+      }
+
+      const row = await prisma.platform_settings.findFirst({
+        where: {
+          scope_tenant_id: null,
+          key: 'chat_settings',
+        }
+      });
+
+      if (row) {
+        await prisma.platform_settings.update({
+          where: { id: row.id },
+          data: {
+            value: bodySettings,
+            updated_at: new Date()
+          }
+        });
+      } else {
+        await prisma.platform_settings.create({
+          data: {
+            scope_tenant_id: null,
+            key: 'chat_settings',
+            value: bodySettings,
+            updated_at: new Date()
+          }
+        });
+      }
+
+      if ((fastify as any).io) {
+        (fastify as any).io.of("/chat").emit("settings.updated", bodySettings);
+      }
+
+      return { success: true, message: 'Chat settings saved successfully' };
+    } catch (error: any) {
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to save chat settings' });
     }
   });
 };
