@@ -39,19 +39,30 @@ const I = {
   grid:    (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><rect x="4" y="4" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8"/><rect x="13" y="4" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8"/><rect x="4" y="13" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8"/><rect x="13" y="13" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8"/></svg>,
   image:   (p) => <svg viewBox="0 0 24 24" fill="none" width="17" height="17" {...p}><rect x="4" y="5" width="16" height="14" rx="2.5" stroke="currentColor" strokeWidth="1.7"/><circle cx="9" cy="10" r="1.6" stroke="currentColor" strokeWidth="1.5"/><path d="M5 17l4.5-4 3 2.5L16 11l3 3" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"/></svg>,
   qr:      (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><rect x="4" y="4" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.7"/><rect x="14" y="4" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.7"/><rect x="4" y="14" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.7"/><path d="M14 14h2v2M20 14v6M14 20h6M18 17v.01" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>,
+  scan:    (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M4 8V6a2 2 0 012-2h2M4 16v2a2 2 0 002 2h2M16 4h2a2 2 0 012 2v2M16 20h2a2 2 0 002-2v-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
   download:(p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M12 4v10m0 0l-4-4m4 4l4-4M5 19h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   link:    (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M9 15l6-6M8 9l-2 2a3.5 3.5 0 005 5l2-2M16 15l2-2a3.5 3.5 0 00-5-5l-2 2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  mail:    (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><rect x="3" y="5" width="18" height="14" rx="3" stroke="currentColor" strokeWidth="1.8"/><path d="M4 7l8 6 8-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
+  wallet:  (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M20 7H4a2 2 0 00-2 2v8a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" stroke="currentColor" strokeWidth="1.8"/><path d="M22 13h-4v2h4v-2zM4 7V5a2 2 0 012-2h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
   edit:    (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M5 19h14M7 15l9-9 3 3-9 9H7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/></svg>,
   filter:  (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M4 6h16M7 12h10M10 18h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
   crown:   (p) => <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" {...p}><path d="M3 8l3.5 3L12 5l5.5 6L21 8l-1.5 9h-15L3 8z"/></svg>,
   external:(p) => <svg viewBox="0 0 24 24" fill="none" width="14" height="14" {...p}><path d="M14 5h5v5M19 5l-8 8M11 5H6a1 1 0 00-1 1v12a1 1 0 001 1h12a1 1 0 001-1v-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   more:    (p) => <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" {...p}><circle cx="6" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18" cy="12" r="1.7"/></svg>,
+  moreV:   (p) => <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" {...p}><circle cx="12" cy="6" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="18" r="1.7"/></svg>,
+  reply:   (p) => <svg viewBox="0 0 24 24" fill="none" width="18" height="18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v.5"/></svg>,
+  react:   (p) => <svg viewBox="0 0 24 24" fill="none" width="18" height="18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>,
+  copy:    (p) => <svg viewBox="0 0 24 24" fill="none" width="18" height="18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>,
+  forward: (p) => <svg viewBox="0 0 24 24" fill="none" width="18" height="18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>,
+  unsend:  (p) => <svg viewBox="0 0 24 24" fill="none" width="18" height="18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>,
   phone:   (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><rect x="7" y="3" width="10" height="18" rx="2.5" stroke="currentColor" strokeWidth="1.8"/><path d="M11 18h2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
   online:  (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><rect x="3" y="5" width="18" height="11" rx="2" stroke="currentColor" strokeWidth="1.8"/><path d="M8 20h8M12 16v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
   trophy:  (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M7 4h10v4a5 5 0 01-10 0V4zM7 6H4v1a3 3 0 003 3M17 6h3v1a3 3 0 01-3 3M9 14h6M10 18h4M9 20h6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   sun:     (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.8"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
   moon:    (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M20 13a8 8 0 11-9-9 6 6 0 009 9z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/></svg>,
   google:  (p) => <svg viewBox="0 0 24 24" width="18" height="18" {...p}><path fill="#EA4335" d="M12 10.2v3.9h5.5c-.24 1.4-1.7 4.1-5.5 4.1-3.3 0-6-2.7-6-6.1s2.7-6.1 6-6.1c1.9 0 3.1.8 3.9 1.5l2.6-2.6C17.1 2.6 14.8 1.6 12 1.6 6.7 1.6 2.4 5.9 2.4 12s4.3 10.4 9.6 10.4c5.5 0 9.2-3.9 9.2-9.4 0-.6-.1-1.1-.2-1.6H12z"/></svg>,
+  lock:    (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><rect x="5" y="11" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.8"/><path d="M8 11V7a4 4 0 118 0v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  eyeOff:  (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24M1 1l22 22" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   lock:    (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><rect x="5" y="11" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.8"/><path d="M12 17v-2M8 11V7a4 4 0 018 0v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
 };
 
@@ -90,11 +101,15 @@ function Wordmark({ size = 20, color }) {
 
 /* ---------------- Avatar ---------------- */
 function gradFor(seed) {
-  let h = 0; for (let i = 0; i < (seed||"").length; i++) h = seed.charCodeAt(i) + ((h << 5) - h);
+  const seedStr = typeof seed === 'string' ? seed : (seed ? String(seed) : "");
+  let h = 0; for (let i = 0; i < seedStr.length; i++) h = seedStr.charCodeAt(i) + ((h << 5) - h);
   const a = Math.abs(h) % 360, b = (a + 38) % 360;
   return `linear-gradient(135deg, hsl(${a} 68% 60%), hsl(${b} 70% 50%))`;
 }
-function initials(name) { return (name||"").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase(); }
+function initials(name) {
+  const nameStr = typeof name === 'string' ? name : (name ? String(name) : "");
+  return nameStr.split(" ").map(w => w ? w[0] : "").join("").slice(0, 2).toUpperCase();
+}
 function Avatar({ name, size = 40, img, className = "", style = {} }) {
   return (
     <div className={`avatar av ${className}`} style={{

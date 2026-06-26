@@ -1,6 +1,9 @@
+// @ts-nocheck
 /* ============================================================
    Samaagum Home — Notification center
    ============================================================ */
+
+const { useState } = React;
 
 const NTYPE = {
   join:        { ico:<I.groups style={{width:14,height:14}}/>, c:"linear-gradient(135deg,#6d5efc,#2a7fff)" },

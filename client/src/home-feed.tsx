@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* ============================================================
    Samaagum Home — Home feed + Discover
    ============================================================ */
@@ -107,9 +108,9 @@ function HomeFeed({ st, go }) {
           <div>
             <SectionBar title="Trending groups" onMore={()=>go("discover")} />
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-              {TRENDING.map((g,i) => (
+              {TRENDING.filter(g => g.visibility !== "hidden").map((g,i) => (
                 <GroupRow key={g.id} g={g} rank={i+1} onOpen={(g)=>go("group", g)}
-                  joined={joined.has(g.id)} onJoin={()=>toggleJoin(g.id)} />
+                  joined={joined.has(g.id) ? true : st.pending.has(g.id) ? "pending" : false} onJoin={()=>toggleJoin(g)} />
               ))}
             </div>
           </div>
@@ -119,7 +120,7 @@ function HomeFeed({ st, go }) {
         <div className="section">
           <SectionBar title="Communities near you" onMore={()=>go("discover")} />
           <div className="ev-grid">
-            {NEAR.map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={joined.has(g.id)} onJoin={()=>toggleJoin(g.id)} />)}
+            {NEAR.filter(g => g.visibility !== "hidden").map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={joined.has(g.id) ? true : st.pending.has(g.id) ? "pending" : false} onJoin={()=>toggleJoin(g)} />)}
           </div>
         </div>
 
@@ -139,9 +140,9 @@ function HomeFeed({ st, go }) {
 function Discover({ st, go }) {
   const [tab, setTab] = useState("events");
   const [cat, setCat] = useState("All");
-  const { saved, toggleSave, joined, toggleJoin, registered } = st;
+  const { saved, toggleSave, joined, pending, toggleJoin, registered } = st;
   const evs = EVENTS.filter(e => cat==="All" || e.cat===cat);
-  const grps = GROUPS.filter(g => cat==="All" || g.cat===cat);
+  const grps = GROUPS.filter(g => g.visibility !== "hidden" && (cat==="All" || g.cat===cat));
   return (
     <div className="scroll">
       <div className="page wide view-enter">
@@ -164,7 +165,7 @@ function Discover({ st, go }) {
           </div>
         ) : (
           <div className="ev-grid">
-            {grps.map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={joined.has(g.id)} onJoin={()=>toggleJoin(g.id)} />)}
+            {grps.map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={joined.has(g.id) ? true : pending.has(g.id) ? "pending" : false} onJoin={()=>toggleJoin(g)} />)}
           </div>
         )}
       </div>

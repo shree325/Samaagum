@@ -10,6 +10,17 @@ function EventDetail({ ev, st, go }) {
   const isWaitlisted = waitlisted ? waitlisted.has(e.id) : false;
   const isSoldOut = e.going >= (e.cap || 9999) || e.id === "ev-feat";
 
+  const chatSettings = st.chatSettings || {
+    allowSiteMessaging: true,
+    allowDirectMessaging: true,
+    allowGroupChat: true,
+    allowEventChat: true
+  };
+  const showChatButton = chatSettings.allowSiteMessaging !== false && (
+    chatSettings.allowDirectMessaging ||
+    (chatSettings.allowGroupChat || chatSettings.allowEventChat)
+  );
+
   const tiers = e.type === "Free"
     ? [{ id:"rsvp", n:"General RSVP", d:"Free entry · approval-based", p:"Free", free:true }]
     : [
@@ -156,7 +167,18 @@ function EventDetail({ ev, st, go }) {
                 <div className="hb">Curating the best gatherings in {e.city||city}. Follow to never miss a drop.</div>
                 <div style={{ display:"flex", gap:8 }}>
                   <button className="hbtn hbtn--ghost hbtn--sm hbtn--block"><I.plus/>Follow</button>
-                  <button className="hbtn hbtn--ghost hbtn--sm hbtn--block"><I.msg/>Message</button>
+                  {showChatButton && (e.hostBy || e.host) && (e.hostBy || e.host) !== ME.name && (
+                    <button 
+                      className="hbtn hbtn--ghost hbtn--sm hbtn--block"
+                      onClick={() => {
+                        if (window.initiateChatWithName) {
+                          window.initiateChatWithName(e.hostBy || e.host);
+                        }
+                      }}
+                    >
+                      <I.msg/>Message
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

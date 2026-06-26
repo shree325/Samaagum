@@ -528,10 +528,10 @@ export async function seedAdminRBAC(): Promise<void> {
 
     // ── Seed 2 Admin Users with Access Keys ───────────────────────────────────
     // Access keys come from env or are auto-generated (printed once to console)
-    const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || 'superadmin@samaagum.com';
-    const superAdminKey = process.env.SUPER_ADMIN_KEY || crypto.randomBytes(16).toString('hex');
-    const adminEmail2 = process.env.ADMIN_EMAIL || 'admin@samaagum.com';
-    const adminKey = process.env.ADMIN_KEY || crypto.randomBytes(16).toString('hex');
+     const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || 'superadmin@samaagum.com';
+    const superAdminKey   = process.env.SUPER_ADMIN_KEY   || crypto.randomBytes(16).toString('hex');
+    const adminEmail2     = process.env.ADMIN_EMAIL        || 'admin@samaagum.com';
+    const adminKey        = process.env.ADMIN_KEY          || crypto.randomBytes(16).toString('hex');
 
     // Upsert both users
     const superAdminUserRows = await prisma.$queryRawUnsafe<{ id: string }[]>(

@@ -37,8 +37,9 @@ function CreateMenu({ onPick }) {
 }
 
 /* ---------------- Sidebar ---------------- */
-function Sidebar({ view, go, counts }) {
+function Sidebar({ view, go, counts, chatSettings }) {
   const [createOpen, setCreateOpen] = useState(false);
+  const showMessages = chatSettings?.allowSiteMessaging !== false;
   const main = [
     { k:"home", ic:<I.home/>, label:"Home" },
     { k:"discover", ic:<I.compass/>, label:"Discover" },
@@ -46,7 +47,7 @@ function Sidebar({ view, go, counts }) {
     { k:"groups", ic:<I.groups/>, label:"Groups" },
   ];
   const social = [
-    { k:"messages", ic:<I.chat/>, label:"Messages", badge: counts.messages },
+    ...(showMessages ? [{ k:"messages", ic:<I.chat/>, label:"Messages", badge: counts.messages }] : []),
     { k:"notifications", ic:<I.bell/>, label:"Notifications", badge: counts.notifs },
     { k:"profile", ic:<I.user/>, label:"Profile" },
   ];
@@ -78,7 +79,7 @@ function Sidebar({ view, go, counts }) {
       </nav>
       <div className="sb-foot">
         <button className="sb-user" onClick={()=>go("profile")}>
-          <Avatar name={ME.name} size={36} className="ring" />
+          <Avatar name={ME.name} img={ME.img} size={36} className="ring" />
           <span className="meta"><span className="n">{ME.name}</span><span className="h">{ME.handle}</span></span>
           <I.chevD style={{ color:"var(--ink-3)" }} />
         </button>
@@ -88,9 +89,10 @@ function Sidebar({ view, go, counts }) {
 }
 
 /* ---------------- Topbar (desktop) ---------------- */
-function Topbar({ go, counts, dark, onToggleTheme, city, onCity }) {
+function Topbar({ go, counts, dark, onToggleTheme, city, onCity, chatSettings }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const showMessages = chatSettings?.allowSiteMessaging !== false;
   return (
     <header className="topbar">
       <div className="tb-search">
@@ -109,12 +111,17 @@ function Topbar({ go, counts, dark, onToggleTheme, city, onCity }) {
         </Popover>
       </div>
       <button className="tb-icon" onClick={onToggleTheme} title="Toggle theme">{dark? <I.sun/> : <I.moon/>}</button>
+      {showMessages && (
+        <button className="tb-icon" onClick={()=>go("messages")} title="Messages">
+          <I.chat/>{counts.messages ? <span className="dot" /> : null}
+        </button>
+      )}
       <button className="tb-icon" onClick={()=>go("notifications")} title="Notifications">
         <I.bell/>{counts.notifs ? <span className="dot" /> : null}
       </button>
       <div style={{ position:"relative" }}>
         <button className="tb-icon" style={{ padding:0, border:"none" }} onClick={()=>setProfileOpen(v=>!v)}>
-          <Avatar name={ME.name} size={40} className="ring" />
+          <Avatar name={ME.name} img={ME.img} size={40} className="ring" />
         </button>
         <Popover open={profileOpen} onClose={()=>setProfileOpen(false)} style={{ top:"calc(100% + 8px)", right:0, width:248 }}>
           <ProfileMenu go={(k)=>{ setProfileOpen(false); go(k); }} dark={dark} onToggleTheme={onToggleTheme} />
@@ -136,7 +143,7 @@ function ProfileMenu({ go, dark, onToggleTheme }) {
   return (
     <div className="pmenu">
       <div className="pmenu-head">
-        <Avatar name={ME.name} size={42} />
+        <Avatar name={ME.name} img={ME.img} size={42} />
         <div><div className="n">{ME.name}</div><div className="h">{ME.handle}</div></div>
       </div>
       <div className="pmenu-list">
