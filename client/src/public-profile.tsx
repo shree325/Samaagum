@@ -5,7 +5,7 @@
  * mapped to a clean white theme.
  */
 
-function PublicProfile({ profile, go }) {
+function PublicProfile({ profile, go, socket }) {
   const User = (p) => <svg viewBox="0 0 24 24" fill="none" width="24" height="24" {...p}><circle cx="12" cy="8" r="5" stroke="currentColor" strokeWidth="2" /><path d="M20 21a8 8 0 10-16 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>;
   const Mail = (p) => <svg viewBox="0 0 24 24" fill="none" width="24" height="24" {...p}><rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M2 8l10 7 10-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
   const Share2 = (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><circle cx="18" cy="5" r="3" stroke="currentColor" strokeWidth="2" /><circle cx="6" cy="12" r="3" stroke="currentColor" strokeWidth="2" /><circle cx="18" cy="19" r="3" stroke="currentColor" strokeWidth="2" /><path d="M8.59 13.51l6.83 3.98M15.41 6.51L8.59 10.49" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
@@ -25,6 +25,106 @@ function PublicProfile({ profile, go }) {
     whatsapp: "+1234567890",
     profilePhoto: "https://i.pravatar.cc/200?img=47",
     coverBanner: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&q=80&w=1200",
+  };
+
+  const targetId = p.user_id || p.id || p.userId;
+  const [requestStatus, setRequestStatus] = React.useState(null); // null, 'PENDING', 'ACCEPTED', 'DECLINED'
+  const [checking, setChecking] = React.useState(true);
+
+  React.useEffect(() => {
+    if (!socket || !targetId) return;
+
+    const handleRequestAccepted = (payload) => {
+      if (payload.receiverId === targetId || payload.senderId === targetId) {
+        setRequestStatus('ACCEPTED');
+      }
+    };
+
+    const handleRequestDeclined = (payload) => {
+      if (payload.receiverId === targetId || payload.senderId === targetId) {
+        setRequestStatus('DECLINED');
+      }
+    };
+
+    socket.on("request.accepted", handleRequestAccepted);
+    socket.on("request.declined", handleRequestDeclined);
+
+    return () => {
+      socket.off("request.accepted", handleRequestAccepted);
+      socket.off("request.declined", handleRequestDeclined);
+    };
+  }, [socket, targetId]);
+
+  React.useEffect(() => {
+    if (!targetId) {
+      setChecking(false);
+      return;
+    }
+    const token = localStorage.getItem('token');
+    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+    const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+
+    fetch(`${apiBase}/api/messaging/requests/status/${targetId}`, { headers })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.data) {
+          setRequestStatus(res.data.status);
+        }
+        setChecking(false);
+      })
+      .catch(err => {
+        console.error("Error checking request status:", err);
+        setChecking(false);
+      });
+  }, [targetId]);
+
+  const handleStartMessaging = () => {
+    if (!targetId) return;
+    const token = localStorage.getItem('token');
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
+    const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+
+    fetch(`${apiBase}/api/messaging/conversations/direct`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ targetId })
+    })
+      .then(res => {
+        if (res.ok) {
+          return res.json().then(json => {
+            go("messages");
+          });
+        } else if (res.status === 403) {
+          return res.json().then(json => {
+            if (json.restriction === 'approval_required') {
+              fetch(`${apiBase}/api/messaging/requests`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ targetId })
+              })
+                .then(r => r.json())
+                .then(rJson => {
+                  if (rJson.success) {
+                    setRequestStatus('PENDING');
+                    if (window.toast) window.toast("Messaging request sent!");
+                    else alert("Messaging request sent!");
+                  }
+                });
+            } else if (json.restriction === 'only_connected') {
+              if (window.toast) window.toast("This user only allows DMs from connections.");
+              else alert("This user only allows DMs from connections.");
+            } else {
+              alert(json.error || "Unable to start messaging.");
+            }
+          });
+        } else {
+          alert("Failed to start messaging.");
+        }
+      })
+      .catch(err => console.error("Error starting messaging:", err));
   };
 
   const contactIcons = [
@@ -113,11 +213,15 @@ function PublicProfile({ profile, go }) {
 
         {/* CTA buttons */}
         <div className="flex items-center justify-center gap-3 px-6 mb-6">
+          <button 
+            onClick={handleStartMessaging}
+            disabled={requestStatus === 'PENDING'}
+            className="flex-1 py-3 rounded-full bg-[#6366f1] text-white text-sm font-semibold hover:bg-[#4f46e5] transition-colors shadow-sm disabled:bg-gray-300 disabled:text-gray-500"
+          >
+            {requestStatus === 'PENDING' ? 'Request Pending' : 'Start Messaging'}
+          </button>
           <button className="flex-1 py-3 rounded-full border border-gray-200 text-gray-800 text-sm font-semibold hover:bg-gray-50 transition-colors shadow-sm">
             Exchange Contact
-          </button>
-          <button className="w-11 h-11 rounded-full border border-gray-200 flex items-center justify-center text-gray-800 hover:bg-gray-50 transition-colors flex-shrink-0 shadow-sm">
-            <UserPlus className="w-4 h-4" />
           </button>
         </div>
 

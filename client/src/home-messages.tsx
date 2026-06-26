@@ -16,6 +16,9 @@ function Messages({ st, go, mobile, socket }) {
   const [menuMsgId, setMenuMsgId] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
+  const [replyingTo, setReplyingTo] = useState(null);
+
+  const [requestStatuses, setRequestStatuses] = useState({});
 
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -32,6 +35,16 @@ function Messages({ st, go, mobile, socket }) {
         .then(res => {
           if (res.success && res.data) {
             setSearchResults(res.data);
+            res.data.forEach(user => {
+              fetch(`${apiBase}/api/messaging/requests/status/${user.id}`, { headers })
+                .then(r => r.json())
+                .then(rJson => {
+                  if (rJson.success && rJson.data) {
+                    setRequestStatuses(prev => ({ ...prev, [user.id]: rJson.data.status }));
+                  }
+                })
+                .catch(e => console.error("Error fetching request status:", e));
+            });
           }
         })
         .catch(err => console.error("Error searching users:", err));
@@ -39,6 +52,63 @@ function Messages({ st, go, mobile, socket }) {
 
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery, apiBase]);
+
+  const handleConnectUser = (user, e) => {
+    if (e) e.stopPropagation();
+    const token = localStorage.getItem('token');
+    const headers = { 
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
+
+    fetch(`${apiBase}/api/messaging/conversations/direct`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ targetId: user.id })
+    })
+      .then(async res => {
+        const data = await res.json();
+        if (res.ok) {
+          const conv = data.data;
+          setThreads(prev => {
+            if (prev.some(t => t.id === conv.id)) return prev;
+            return [conv, ...prev];
+          });
+          setActiveId(conv.id);
+          setSearchQuery("");
+          setShowConv(true);
+          setRequestStatuses(prev => ({ ...prev, [user.id]: 'CONNECTED' }));
+        } else if (res.status === 403 && data.restriction === 'approval_required') {
+          if (data.hasPending) {
+            if (window.toast) window.toast("Messaging request is already pending.");
+            else alert("Messaging request is already pending.");
+            setRequestStatuses(prev => ({ ...prev, [user.id]: 'PENDING' }));
+            return;
+          }
+          fetch(`${apiBase}/api/messaging/requests`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ targetId: user.id })
+          })
+            .then(r => r.json())
+            .then(rData => {
+              if (rData.success) {
+                setRequestStatuses(prev => ({ ...prev, [user.id]: 'PENDING' }));
+                if (window.toast) window.toast("Messaging request sent!");
+                else alert("Messaging request sent!");
+              } else {
+                alert(rData.error || "Failed to send request.");
+              }
+            });
+        } else if (res.status === 403 && data.restriction === 'only_connected') {
+          if (window.toast) window.toast("This user only allows messaging from connected users.");
+          else alert("This user only allows messaging from connected users.");
+        } else {
+          alert(data.error || "Connection failed.");
+        }
+      })
+      .catch(err => console.error("Error connecting user:", err));
+  };
 
   const selectSearchResult = (user) => {
     const token = localStorage.getItem('token');
@@ -93,8 +163,59 @@ function Messages({ st, go, mobile, socket }) {
 
   const currentUserId = getActiveUserId();
 
-  // 1. Fetch conversations/threads on mount
-  useEffect(() => {
+  const [requests, setRequests] = useState([]);
+
+  const fetchIncomingRequests = () => {
+    const token = localStorage.getItem('token');
+    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+    fetch(`${apiBase}/api/messaging/requests/incoming`, { headers })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.data) {
+          setRequests(res.data);
+        }
+      })
+      .catch(err => console.error("Error fetching incoming requests:", err));
+  };
+
+  const handleAcceptRequest = (reqId) => {
+    const token = localStorage.getItem('token');
+    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+    fetch(`${apiBase}/api/messaging/requests/${reqId}/accept`, {
+      method: 'POST',
+      headers
+    })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success) {
+          if (window.toast) window.toast("Messaging request accepted!");
+          fetchIncomingRequests();
+          fetchConversations();
+          if (st.fetchCounts) st.fetchCounts();
+        }
+      })
+      .catch(err => console.error("Error accepting request:", err));
+  };
+
+  const handleDeclineRequest = (reqId) => {
+    const token = localStorage.getItem('token');
+    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+    fetch(`${apiBase}/api/messaging/requests/${reqId}/decline`, {
+      method: 'POST',
+      headers
+    })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success) {
+          if (window.toast) window.toast("Messaging request declined.");
+          fetchIncomingRequests();
+          if (st.fetchCounts) st.fetchCounts();
+        }
+      })
+      .catch(err => console.error("Error declining request:", err));
+  };
+
+  const fetchConversations = () => {
     const token = localStorage.getItem('token');
     const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
@@ -103,7 +224,7 @@ function Messages({ st, go, mobile, socket }) {
       .then(res => {
         if (res.success && res.data) {
           setThreads(res.data);
-          if (res.data.length > 0) {
+          if (res.data.length > 0 && !activeId) {
             setActiveId(res.data[0].id);
           }
         }
@@ -112,7 +233,12 @@ function Messages({ st, go, mobile, socket }) {
         console.error("Error fetching conversations:", err);
         setThreads([]);
       });
-  }, [apiBase]);
+  };
+
+  useEffect(() => {
+    fetchConversations();
+    fetchIncomingRequests();
+  }, [apiBase, seg]);
 
   // 2. Fetch presence of participants dynamically on thread list load/refresh
   useEffect(() => {
@@ -161,7 +287,10 @@ function Messages({ st, go, mobile, socket }) {
         }
       });
       // Mark messages as read/seen on open
-      socket.emit("conversation.read", { conversationId: activeId });
+      socket.emit("conversation.read", { conversationId: activeId }, () => {
+        fetchConversations();
+        if (st.fetchCounts) st.fetchCounts();
+      });
     }
 
     // Load message logs from API
@@ -206,7 +335,10 @@ function Messages({ st, go, mobile, socket }) {
       if (msg.conversationId === activeId) {
         // Immediately mark message as read if we are looking at this conversation
         if (msg.senderId !== currentUserId) {
-          socket.emit("conversation.read", { conversationId: activeId });
+          socket.emit("conversation.read", { conversationId: activeId }, () => {
+            fetchConversations();
+            if (st.fetchCounts) st.fetchCounts();
+          });
         }
 
         setMessages(prev => {
@@ -233,6 +365,8 @@ function Messages({ st, go, mobile, socket }) {
             content: msg.content || msg.body,
             createdAt: msg.createdAt,
             status,
+            replyTo: msg.replyTo,
+            replyToMessageId: msg.replyToMessageId,
             receipts
           }];
         });
@@ -316,16 +450,41 @@ function Messages({ st, go, mobile, socket }) {
       }));
     };
 
+    const handleRequestReceived = (req) => {
+      setRequests(prev => {
+        if (prev.some(r => r.id === req.id)) return prev;
+        return [req, ...prev];
+      });
+      if (st.fetchCounts) st.fetchCounts();
+    };
+
+    const handleRequestAccepted = (payload) => {
+      fetchConversations();
+      fetchIncomingRequests();
+      if (st.fetchCounts) st.fetchCounts();
+    };
+
+    const handleRequestDeclined = (payload) => {
+      fetchIncomingRequests();
+      if (st.fetchCounts) st.fetchCounts();
+    };
+
     socket.on("message.created", handleMessageCreated);
     socket.on("message.updated", handleMessageUpdated);
     socket.on("message.deleted", handleMessageDeleted);
     socket.on("receipt.updated", handleReceiptUpdated);
+    socket.on("request.received", handleRequestReceived);
+    socket.on("request.accepted", handleRequestAccepted);
+    socket.on("request.declined", handleRequestDeclined);
 
     return () => {
       socket.off("message.created", handleMessageCreated);
       socket.off("message.updated", handleMessageUpdated);
       socket.off("message.deleted", handleMessageDeleted);
       socket.off("receipt.updated", handleReceiptUpdated);
+      socket.off("request.received", handleRequestReceived);
+      socket.off("request.accepted", handleRequestAccepted);
+socket.off("request.declined", handleRequestDeclined);
     };
   }, [socket, activeId]);
 
@@ -335,10 +494,12 @@ function Messages({ st, go, mobile, socket }) {
     if (!input.trim() || !activeId) return; 
     
     const currentInput = input;
+    const parentId = replyingTo?.id;
     setInput(""); 
+    setReplyingTo(null);
 
     if (socket) {
-      socket.emit("message.send", { conversationId: activeId, content: currentInput }, (ack) => {
+      socket.emit("message.send", { conversationId: activeId, content: currentInput, replyToMessageId: parentId }, (ack) => {
         if (ack && !ack.success) {
           console.error("Message send failed:", ack.error);
           setInput(currentInput);
@@ -437,7 +598,7 @@ function Messages({ st, go, mobile, socket }) {
           </div>
           <div className="msg-seg">
             <button className={seg==="messages"?"on":""} onClick={()=>setSeg("messages")}>Chats</button>
-            <button className={seg==="requests"?"on":""} onClick={()=>setSeg("requests")}>Requests <span style={{ color:"var(--accent-1)" }}>{REQUESTS.length}</span></button>
+            <button className={seg==="requests"?"on":""} onClick={()=>setSeg("requests")}>Requests <span style={{ color:"var(--accent-1)" }}>{requests.length}</span></button>
           </div>
         </div>
         <div className="msg-threads">
@@ -474,14 +635,28 @@ function Messages({ st, go, mobile, socket }) {
                   <>
                     <div className="search-group-title" style={{ fontSize: 11, textTransform: "uppercase", fontWeight: 700, color: "var(--ink-3)", margin: "16px 12px 4px" }}>More Accounts</div>
                     {searchedMoreAccounts.map(user => (
-                      <div key={user.id} className="search-item" onClick={() => selectSearchResult(user)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: "8px", cursor: "pointer" }}>
-                        <div style={{ position: "relative" }}>
-                          <Avatar name={user.name || "null"} size={40} />
-                          <span className="search-presence-dot" style={{ position: "absolute", bottom: 0, right: 0, width: 10, height: 10, borderRadius: "50%", background: presenceMap[user.id] === "ONLINE" ? "#2bb673" : "#8e8e93", border: "2px solid var(--surface)" }} />
+                      <div key={user.id} className="search-item" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 12px", borderRadius: "8px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+                          <div style={{ position: "relative" }}>
+                            <Avatar name={user.name || "null"} size={40} />
+                            <span className="search-presence-dot" style={{ position: "absolute", bottom: 0, right: 0, width: 10, height: 10, borderRadius: "50%", background: presenceMap[user.id] === "ONLINE" ? "#2bb673" : "#8e8e93", border: "2px solid var(--surface)" }} />
+                          </div>
+                          <div className="info" style={{ flex: 1, minWidth: 0 }}>
+                            <div className="name" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{user.name === null ? "null" : user.name}</div>
+                          </div>
                         </div>
-                        <div className="info" style={{ flex: 1, minWidth: 0 }}>
-                          <div className="name" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{user.name === null ? "null" : user.name}</div>
-                        </div>
+                        <button 
+                          onClick={(e) => handleConnectUser(user, e)}
+                          className="hbtn hbtn--primary hbtn--sm"
+                          style={{
+                            padding: "6px 12px",
+                            fontSize: "12px",
+                            borderRadius: "15px",
+                            flexShrink: 0
+                          }}
+                        >
+                          {requestStatuses[user.id] === 'PENDING' ? 'Requested' : 'Connect'}
+                        </button>
                       </div>
                     ))}
                   </>
@@ -522,18 +697,22 @@ function Messages({ st, go, mobile, socket }) {
               )
             ) : (
               <div style={{ display:"flex", flexDirection:"column", gap:10, padding:"4px" }}>
-                {REQUESTS.map(r => (
-                  <div key={r.name} className="req-card">
-                    <Avatar name={r.name} size={48}/>
-                    <div className="ri"><div className="n">{r.name}</div><div className="d">{r.role}</div><div className="d" style={{ color:"var(--accent-2)" }}>{r.mutual} mutual</div></div>
-                    <div className="ract" style={{ flexDirection:"column", gap:7 }}>
-                      <button className="hbtn hbtn--primary hbtn--sm" onClick={()=>st.toggleConnect(r.name)}><I.check/></button>
-                      <button className="hbtn hbtn--ghost hbtn--sm"><I.x/></button>
+                {requests.map(r => {
+                  const displayName = r.sender?.profiles?.display_name || r.sender?.primary_email || "Unknown User";
+                  const headline = r.sender?.profiles?.headline || "";
+                  return (
+                    <div key={r.id} className="req-card">
+                      <Avatar name={displayName} size={48}/>
+                      <div className="ri"><div className="n">{displayName}</div><div className="d">{headline}</div></div>
+                      <div className="ract" style={{ flexDirection:"column", gap:7 }}>
+                        <button className="hbtn hbtn--primary hbtn--sm" onClick={()=>handleAcceptRequest(r.id)}><I.check/></button>
+                        <button className="hbtn hbtn--ghost hbtn--sm" onClick={()=>handleDeclineRequest(r.id)}><I.x/></button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.5, padding:"8px 6px" }}>
-                Connection requests need your approval before you can exchange direct messages.
+                Messaging requests need your approval before you can start a conversation.
               </div>
             </div>
           )
@@ -587,7 +766,7 @@ function Messages({ st, go, mobile, socket }) {
                 const isEditing = m.id === editingId;
 
                 return (
-                  <div key={m.id || i} className={`msg-row ${isMe ? "me" : "them"}`}>
+                  <div key={m.id || i} id={`msg-item-${m.id}`} className={`msg-row ${isMe ? "me" : "them"}`}>
                     {/* Hover Actions */}
                     {!isEditing && (
                       <div className="hover-actions">
@@ -636,7 +815,7 @@ function Messages({ st, go, mobile, socket }) {
                             </div>
                           )}
                         </button>
-                        <button className="hover-action-btn" data-tooltip="Reply" onClick={() => console.log("Reply to:", m.id)}>
+                        <button className="hover-action-btn" data-tooltip="Reply" onClick={() => setReplyingTo(m)}>
                           <I.reply style={{ width: 14, height: 14 }} />
                         </button>
                         <button className="hover-action-btn" data-tooltip="React" onClick={() => console.log("React to:", m.id)}>
@@ -647,6 +826,41 @@ function Messages({ st, go, mobile, socket }) {
 
                     {/* Bubble */}
                     <div className={`bubble ${isMe ? "me" : "them"}`}>
+                      {m.replyTo && (
+                        <div 
+                          onClick={() => {
+                            const element = document.getElementById(`msg-item-${m.replyTo.id}`);
+                            if (element) {
+                              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              element.style.transition = 'background-color 0.3s ease';
+                              const oldBg = element.style.backgroundColor;
+                              element.style.backgroundColor = 'rgba(99, 102, 241, 0.25)';
+                              setTimeout(() => {
+                                element.style.backgroundColor = oldBg;
+                              }, 1000);
+                            }
+                          }}
+                          style={{
+                            background: "rgba(0, 0, 0, 0.16)",
+                            borderLeft: "3.5px solid #2196f3",
+                            padding: "6px 12px",
+                            borderRadius: "4px",
+                            fontSize: "12px",
+                            cursor: "pointer",
+                            marginBottom: "6px",
+                            opacity: 0.95,
+                            maxWidth: "100%",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap"
+                          }}
+                        >
+                          <div style={{ fontWeight: 600, fontSize: "11px", marginBottom: "2px", color: "#2196f3" }}>
+                            {m.replyTo.senderId === currentUserId ? "You" : m.replyTo.senderName}
+                          </div>
+                          <div style={{ color: isMe ? "rgba(255,255,255,0.75)" : "var(--ink-2)", fontSize: "11.5px" }}>{m.replyTo.body}</div>
+                        </div>
+                      )}
                       {isEditing ? (
                         <div className="edit-box" style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 150 }}>
                           <input 
@@ -695,6 +909,42 @@ function Messages({ st, go, mobile, socket }) {
                 );
               })}
             </div>
+
+            {replyingTo && (
+              <div 
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  background: "var(--field)",
+                  padding: "10px 16px",
+                  borderTop: "1px solid var(--border)",
+                  borderBottom: "1px solid var(--border)",
+                  animation: "slideUp 0.2s ease"
+                }}
+              >
+                <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+                  <span style={{ fontSize: "11.5px", fontWeight: 700, color: "var(--accent-1)" }}>
+                    Replying to {replyingTo.senderId === currentUserId ? "yourself" : (active.participants?.find(p => p.userId === replyingTo.senderId)?.name || "User")}
+                  </span>
+                  <span style={{ fontSize: "12.5px", color: "var(--ink-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: "2px" }}>
+                    {replyingTo.body || replyingTo.content}
+                  </span>
+                </div>
+                <button 
+                  onClick={() => setReplyingTo(null)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "var(--ink-3)",
+                    padding: "4px"
+                  }}
+                >
+                  <I.x style={{ width: 16, height: 16 }} />
+                </button>
+              </div>
+            )}
 
             <div className="conv-compose">
               <input 

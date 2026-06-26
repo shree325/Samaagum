@@ -823,7 +823,7 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
         return reply.status(404).send({ success: false, message: 'User not found.' });
       }
 
-      let displayName, bio, preferredLocation, location, socialLinks, headline, skills, interests, gender, dob, phone, firstName, lastName, phoneNumber, userName;
+      let displayName, bio, preferredLocation, location, socialLinks, headline, skills, interests, gender, dob, phone, firstName, lastName, phoneNumber, userName, messagingRestriction;
       let profilePhotoBuffer: Buffer | undefined;
       let coverBannerBuffer: Buffer | undefined;
       let clearCoverBanner = false;
@@ -863,6 +863,7 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
               if (fieldname === 'dob') dob = value;
               if (fieldname === 'phone') phone = value;
               if (fieldname === 'phoneNumber') phoneNumber = value;
+              if (fieldname === 'messagingRestriction' || fieldname === 'messaging_restriction') messagingRestriction = value;
               if (fieldname === 'coverBanner' && value === '') clearCoverBanner = true;
             }
           }
@@ -884,6 +885,7 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
         dob = body.dob;
         phone = body.phone;
         phoneNumber = body.phoneNumber;
+        messagingRestriction = body.messagingRestriction || body.messaging_restriction;
         if (body.coverBanner === '') clearCoverBanner = true;
       }
 
@@ -941,6 +943,9 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
         dob: finalDob,
         updated_at: new Date()
       };
+      if (messagingRestriction !== undefined) {
+        updateData.messaging_restriction = messagingRestriction;
+      }
       const createData: any = {
         user_id: dbUser.id,
         tenant_id: dbUser.tenant_id,
@@ -959,6 +964,9 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
         created_at: new Date(),
         updated_at: new Date()
       };
+      if (messagingRestriction !== undefined) {
+        createData.messaging_restriction = messagingRestriction;
+      }
 
       if (profilePhotoBuffer !== undefined) {
          updateData.profile_image_data = profilePhotoBuffer;
