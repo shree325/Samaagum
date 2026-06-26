@@ -1,7 +1,8 @@
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import prisma from '../config/prisma';
-import { AdminAuthSettings, CommunicationSettings, OtpSettings } from '../settings-library/settingsTypes';
-import { DEFAULT_AUTH_SETTINGS, DEFAULT_COMMUNICATION_SETTINGS, DEFAULT_OTP_SETTINGS } from '../settings-library/settingsSeeder';
+import { AdminAuthSettings, CommunicationSettings, OtpSettings, ChatSettings } from '../settings-library/settingsTypes';
+import { DEFAULT_AUTH_SETTINGS, DEFAULT_COMMUNICATION_SETTINGS, DEFAULT_OTP_SETTINGS, DEFAULT_CHAT_SETTINGS } from '../settings-library/settingsSeeder';
+import { emitProfileUpdate } from '../services/messagingSocket';
 
 /**
  * Utility to mask sensitive credentials
@@ -824,6 +825,8 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
       }
 
       let displayName, bio, preferredLocation, location, socialLinks, headline, skills, interests, gender, dob, phone, firstName, lastName, phoneNumber, userName, messagingRestriction;
+      let displayName, bio, preferredLocation, location, socialLinks, headline, skills, interests, gender, dob, phone, firstName, lastName, phoneNumber, userName;
+      let locationName: string | undefined, locationLat: number | undefined, locationLng: number | undefined, address: string | undefined;
       let profilePhotoBuffer: Buffer | undefined;
       let coverBannerBuffer: Buffer | undefined;
       let clearCoverBanner = false;
@@ -858,6 +861,10 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
               if (fieldname === 'bio') bio = value;
               if (fieldname === 'preferredLocation') preferredLocation = value;
               if (fieldname === 'location') location = value;
+              if (fieldname === 'locationName') locationName = value;
+              if (fieldname === 'locationLat') locationLat = parseFloat(value);
+              if (fieldname === 'locationLng') locationLng = parseFloat(value);
+              if (fieldname === 'address') address = value;
               if (fieldname === 'headline') headline = value;
               if (fieldname === 'gender') gender = value;
               if (fieldname === 'dob') dob = value;
@@ -877,6 +884,10 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
         bio = body.bio;
         preferredLocation = body.preferredLocation;
         location = body.location;
+        locationName = body.locationName;
+        locationLat = body.locationLat !== undefined ? parseFloat(body.locationLat) : undefined;
+        locationLng = body.locationLng !== undefined ? parseFloat(body.locationLng) : undefined;
+        address = body.address;
         socialLinks = body.socialLinks;
         headline = body.headline;
         skills = body.skills;
@@ -907,17 +918,33 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
       if (lastName !== undefined) userUpdateData.last_name = lastName;
       
       const finalLocation = preferredLocation || location || '';
-      if (finalLocation) userUpdateData.location = finalLocation;
+      if (finalLocation) {
+        // --- Added Active Location Validation ---
+        const { locationService } = require('../services/locationService');
+        const isValid = await locationService.validateActiveLocation(
+          locationName || finalLocation, 
+          dbUser.location
+        );
+        if (!isValid) {
+          return reply.status(400).send({
+            success: false,
+            message: 'This city is currently unavailable.'
+          });
+        }
+        // ----------------------------------------
+        
+        userUpdateData.location = finalLocation;
+      }
       
       const finalGender = gender || null;
       if (finalGender !== null) userUpdateData.gender = finalGender;
-
+ 
       const finalDob = dob ? new Date(dob) : null;
       if (finalDob !== null) userUpdateData.dob = finalDob;
-
+ 
       // Store image bytes directly on the users row
       if (profilePhotoBuffer !== undefined) userUpdateData.profile_image_data = profilePhotoBuffer;
-
+ 
       if (Object.keys(userUpdateData).length > 0) {
         userUpdateData.updated_at = new Date();
         await prisma.users.update({
@@ -925,9 +952,9 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
           data: userUpdateData
         });
       }
-
+ 
       const finalSkills = skills ? skills : interests ? interests : undefined;
-
+ 
       const updateData: any = {
         display_name: displayName,
         first_name: firstName,
@@ -935,6 +962,8 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
         user_name: userName,
         bio: bio,
         preferred_location: finalLocation,
+        location_lat: locationLat !== undefined && !isNaN(locationLat) ? locationLat : undefined,
+        location_lng: locationLng !== undefined && !isNaN(locationLng) ? locationLng : undefined,
         phone_number: finalPhone,
         template_key: headline,
         headline: headline,
@@ -955,6 +984,8 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
         user_name: userName,
         bio: bio || '',
         preferred_location: finalLocation,
+        location_lat: locationLat !== undefined && !isNaN(locationLat) ? locationLat : undefined,
+        location_lng: locationLng !== undefined && !isNaN(locationLng) ? locationLng : undefined,
         phone_number: finalPhone,
         template_key: headline || '',
         headline: headline || '',
@@ -1020,6 +1051,71 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
       };
     } catch (error: any) {
       return reply.status(500).send({ success: false, message: error.message || 'Failed to update profile.' });
+    }
+  });
+
+  // ── CHAT SETTINGS ──────────────────────────────────────────────────────────
+  
+  fastify.get('/settings/chat', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
+    try {
+      const row = await prisma.platform_settings.findFirst({
+        where: {
+          scope_tenant_id: null,
+          key: 'chat_settings',
+        }
+      });
+
+      let settings: ChatSettings = DEFAULT_CHAT_SETTINGS;
+      if (row && row.value) {
+        settings = { ...DEFAULT_CHAT_SETTINGS, ...(row.value as any) };
+      }
+
+      return { success: true, data: settings };
+    } catch (error: any) {
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to fetch chat settings' });
+    }
+  });
+
+  fastify.post('/settings/chat', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
+    try {
+      const bodySettings = request.body as any;
+      if (!bodySettings || typeof bodySettings !== 'object') {
+        return reply.status(400).send({ success: false, message: 'Invalid payload' });
+      }
+
+      const row = await prisma.platform_settings.findFirst({
+        where: {
+          scope_tenant_id: null,
+          key: 'chat_settings',
+        }
+      });
+
+      if (row) {
+        await prisma.platform_settings.update({
+          where: { id: row.id },
+          data: {
+            value: bodySettings,
+            updated_at: new Date()
+          }
+        });
+      } else {
+        await prisma.platform_settings.create({
+          data: {
+            scope_tenant_id: null,
+            key: 'chat_settings',
+            value: bodySettings,
+            updated_at: new Date()
+          }
+        });
+      }
+
+      if ((fastify as any).io) {
+        (fastify as any).io.of("/chat").emit("settings.updated", bodySettings);
+      }
+
+      return { success: true, message: 'Chat settings saved successfully' };
+    } catch (error: any) {
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to save chat settings' });
     }
   });
 };

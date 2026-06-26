@@ -237,23 +237,40 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
   const [isSearching, setIsSearching] = useState(false);
   const [leafletLoaded, setLeafletLoaded] = useState(false);
 
-  const cities = [
-    { name: "Indore", x: 140, y: 120, info: "Madhya Pradesh, India", lat: 22.7196, lon: 75.8577 },
-    { name: "Bengaluru", x: 135, y: 190, info: "Karnataka, India", lat: 12.9716, lon: 77.5946 },
-    { name: "Mumbai", x: 105, y: 145, info: "Maharashtra, India", lat: 19.0760, lon: 72.8777 },
-    { name: "Delhi", x: 130, y: 70, info: "NCR, India", lat: 28.6139, lon: 77.2090 },
-    { name: "Bhopal", x: 155, y: 115, info: "Madhya Pradesh, India", lat: 23.2599, lon: 77.4126 },
-    { name: "Pune", x: 112, y: 158, info: "Maharashtra, India", lat: 18.5204, lon: 73.8567 },
-    { name: "Hyderabad", x: 160, y: 165, info: "Telangana, India", lat: 17.3850, lon: 78.4867 },
-    { name: "Chennai", x: 170, y: 198, info: "Tamil Nadu, India", lat: 13.0827, lon: 80.2707 },
-    { name: "Kolkata", x: 235, y: 110, info: "West Bengal, India", lat: 22.5726, lon: 88.3639 }
-  ];
+  const [dynamicCities, setDynamicCities] = useState([]);
+  const [isCityActive, setIsCityActive] = useState(true);
+
+  React.useEffect(() => {
+    if (window.getActiveCities) {
+      window.getActiveCities(true).then(data => {
+        if (data && data.length) {
+          setDynamicCities(data.map((c: any) => ({
+            name: c.city_name && c.city_name !== 'Unknown' ? c.city_name : c.state_name,
+            x: Math.max(10, Math.min(90, (Number(c.longitude) + 180) / 360 * 100)),
+            y: Math.max(10, Math.min(90, (90 - Number(c.latitude)) / 180 * 100)),
+            info: `${c.state_name || ''}, ${c.country_name || ''}`.replace(/^,\s*/, ''),
+            lat: Number(c.latitude),
+            lon: Number(c.longitude)
+          })));
+        }
+      });
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (tempCity && dynamicCities.length > 0) {
+      const isActive = dynamicCities.some(c => c.name.toLowerCase() === tempCity.toLowerCase());
+      setIsCityActive(isActive);
+    } else {
+      setIsCityActive(true); // default true while loading or if not checked yet
+    }
+  }, [tempCity, dynamicCities]);
 
   const mapRef = React.useRef(null);
   const mapInstanceRef = React.useRef(null);
   const markerRef = React.useRef(null);
 
-  const activeCityObj = cities.find(c => c.name === tempCity) || cities.find(c => c.name === selectedCity) || cities[0];
+  const activeCityObj = dynamicCities.find(c => c.name === tempCity) || dynamicCities.find(c => c.name === selectedCity) || dynamicCities[0];
 
   const [currentLat, setCurrentLat] = useState(activeCityObj?.lat || 20.5937);
   const [currentLon, setCurrentLon] = useState(activeCityObj?.lon || 78.9629);
@@ -411,7 +428,7 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
     if (!searchQuery.trim()) return;
 
     // Match local cities first
-    const match = cities.find(c => c.name.toLowerCase() === searchQuery.trim().toLowerCase());
+    const match = dynamicCities.find(c => c.name.toLowerCase() === searchQuery.trim().toLowerCase());
     if (match) {
       setTempCity(match.name);
       setCustomLocationName(match.info);
@@ -424,7 +441,17 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
       const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=5`);
       const data = await res.json();
       if (data && data.length > 0) {
-        setSearchResults(data.map(item => ({
+        const filteredData = data.filter((item: any) => {
+          const locationName = (item.name || item.display_name.split(',')[0]).toLowerCase().trim();
+          return dynamicCities.some(dc => {
+            const dcName = dc.name.toLowerCase();
+            return locationName === dcName || 
+                   locationName === dcName + " city" || 
+                   dcName === locationName + " city";
+          });
+        });
+        
+        setSearchResults(filteredData.map((item: any) => ({
           name: item.display_name.split(',')[0],
           fullName: item.display_name,
           lat: parseFloat(item.lat),
@@ -448,7 +475,7 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
     }
   };
 
-  const filtered = cities.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filtered = dynamicCities.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   if (!open) return null;
 
@@ -536,7 +563,7 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
               )}
 
               {/* Local Predefined Cities */}
-              <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-3)", padding: "4px 8px" }}>Popular Cities</div>
+              {filtered.length > 0 && <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-3)", padding: "4px 8px" }}>Popular Cities</div>}
               {filtered.map(c => (
                 <button
                   key={c.name}
@@ -678,13 +705,21 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
         </div>
 
         {/* Modal Actions */}
+        {!isCityActive && (
+          <div style={{ padding: "10px 20px", background: "var(--surface-3)", color: "var(--danger)", fontSize: 13, fontWeight: 500, textAlign: "center", borderTop: "1px solid var(--border)" }}>
+            <I.warning style={{ display: "inline-block", verticalAlign: "middle", marginRight: 6, marginBottom: 2, width: 16 }} />
+            This city is currently unavailable.
+          </div>
+        )}
         <div style={{ padding: "14px 20px", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end", gap: 10, background: "var(--field)" }}>
           <button type="button" className="hbtn hbtn--ghost hbtn--sm" onClick={onClose}>Cancel</button>
           <button
             type="button"
             className="hbtn hbtn--primary hbtn--sm"
+            disabled={!isCityActive}
+            style={{ opacity: !isCityActive ? 0.5 : 1, cursor: !isCityActive ? "not-allowed" : "pointer" }}
             onClick={() => {
-              if (tempCity) {
+              if (tempCity && isCityActive) {
                 onSelectCity(tempCity);
               }
               onClose();

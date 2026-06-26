@@ -58,6 +58,17 @@ function GroupDetail({ group, st, go }) {
   const isJoined = joined.has(g.id);
   const isPending = pending.has(g.id);
   const isOwner = ME.name === g.owner;
+
+  const chatSettings = st.chatSettings || {
+    allowSiteMessaging: true,
+    allowDirectMessaging: true,
+    allowGroupChat: true,
+    allowEventChat: true
+  };
+  const showChatButton = chatSettings.allowSiteMessaging !== false && (
+    chatSettings.allowDirectMessaging ||
+    (chatSettings.allowGroupChat || chatSettings.allowEventChat)
+  );
   const [tab, setTab] = useState("discussion");
   const [draft, setDraft] = useState("");
   const tabs = [
@@ -76,7 +87,12 @@ function GroupDetail({ group, st, go }) {
     } else if (action === "decline") {
       setJoinRequests(prev => prev.filter(r => r.id !== reqId));
     } else if (action === "message") {
-      alert("Opening direct chat with user...");
+      const req = joinRequests.find(r => r.id === reqId);
+      if (req && req.name && window.initiateChatWithName) {
+        window.initiateChatWithName(req.name);
+      } else {
+        alert("Opening direct chat with user...");
+      }
     }
   };
 
@@ -166,7 +182,21 @@ function GroupDetail({ group, st, go }) {
                           </div>
                           <div className="r" style={{ textTransform: "capitalize" }}>{mRole}</div>
                         </div>
-                        <button className="hbtn hbtn--ghost hbtn--sm">View</button>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {showChatButton && mName !== ME.name && (
+                            <button 
+                              className="hbtn hbtn--ghost hbtn--sm"
+                              onClick={() => {
+                                if (window.initiateChatWithName) {
+                                  window.initiateChatWithName(mName);
+                                }
+                              }}
+                            >
+                              <I.chat style={{ width: 14, height: 14 }} />
+                            </button>
+                          )}
+                          <button className="hbtn hbtn--ghost hbtn--sm">View</button>
+                        </div>
                       </div>
                     );
                   })}

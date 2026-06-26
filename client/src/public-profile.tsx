@@ -227,6 +227,13 @@ function PublicProfile({ profile, go, socket }) {
 
         {/* Scrollable content area */}
         <div className="flex-1 px-6 pb-10 space-y-6 overflow-y-auto">
+          {/* Location Preview */}
+          {p.locationLat !== undefined && p.locationLng !== undefined && window.LocationPreview && (
+            <div>
+              <window.LocationPreview city={p.locationName || p.location} address={p.location} lat={p.locationLat} lng={p.locationLng} />
+            </div>
+          )}
+
           {/* Contact icons grid */}
           <div className="grid grid-cols-4 gap-3">
             {contactIcons.map((c) => (

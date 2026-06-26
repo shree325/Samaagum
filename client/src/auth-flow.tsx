@@ -405,7 +405,6 @@ function ScreenOtp({ m }) {
             setStatus("ok");
             if (data.token) {
               localStorage.setItem('token', data.token);
-              localStorage.setItem('samaagum_admin_token', data.token);
 
               // Fetch profile to show in ScreenDone
               try {
@@ -515,7 +514,7 @@ function ScreenProfile({ m }) {
       const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
       const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
       const token = localStorage.getItem('token');
-      
+
       const res = await fetch(`${apiBase}/api/upload-profile-photo`, {
         method: 'POST',
         headers: {
@@ -542,10 +541,10 @@ function ScreenProfile({ m }) {
       <p className="auth-p">This is how the community will see you.</p>
 
       <div className="avatar-up" style={{ position: "relative" }}>
-        <input 
-          type="file" 
-          accept="image/jpeg,image/jpg,image/png,image/webp" 
-          onChange={handlePhotoUpload} 
+        <input
+          type="file"
+          accept="image/jpeg,image/jpg,image/png,image/webp"
+          onChange={handlePhotoUpload}
           style={{ position: "absolute", width: "100%", height: "100%", opacity: 0, cursor: "pointer", zIndex: 2 }}
           disabled={uploadingImage}
         />
@@ -636,33 +635,25 @@ function ScreenInterests({ m }) {
 }
 
 function ScreenLocation({ m }) {
-  const [q, setQ] = useState("");
-  const [city, setCity] = useState(m.data.city);
-  const { location } = window.useLocation ? window.useLocation() : { location: null };
+  const [city, setCity] = useState(m.data.city); // expected: { location_name, address, latitude, longitude }
   const [loading, setLoading] = useState(false);
-  const [list, setList] = useState([]);
-  const [searching, setSearching] = useState(false);
+  const { location } = window.useLocation ? window.useLocation() : { location: null };
 
   useEffect(() => {
-    const fetchCities = async () => {
-      setSearching(true);
+    const checkFeature = async () => {
       try {
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
-        const res = await fetch(`${apiBase}/api/location/cities?limit=6&search=${encodeURIComponent(q)}`);
+        const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:3000' : window.location.origin;
+        const res = await fetch(`${apiBase}/api/features`);
         const json = await res.json();
-        if (json.success) {
-          setList(json.data.map(c => [c.city_name, c.country_name, "📍"]));
+        if (json.success && json.data && json.data.location_active === false) {
+          m.set({ city: null });
+          m.next();
         }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setSearching(false);
-      }
+      } catch (e) { }
     };
-    const timer = setTimeout(fetchCities, 300);
-    return () => clearTimeout(timer);
-  }, [q]);
+    checkFeature();
+  }, []);
+
   const finish = async () => {
     setLoading(true);
     try {
@@ -684,8 +675,12 @@ function ScreenLocation({ m }) {
             dob: m.data.dob,
             displayName: m.data.name,
             bio: m.data.role || '',
-            location: city ? (Array.isArray(city) ? city[0] : city) : 'Bengaluru',
-            preferredLocation: city ? (Array.isArray(city) ? city[0] : city) : 'Bengaluru',
+            location: city ? city.address : 'Bengaluru',
+            preferredLocation: city ? city.address : 'Bengaluru',
+            locationName: city ? city.location_name : 'Bengaluru',
+            locationLat: city ? city.latitude : undefined,
+            locationLng: city ? city.longitude : undefined,
+            address: city ? city.address : undefined,
             phoneNumber: m.data.phoneNumber || '',
             interests: m.data.interests || []
           })
@@ -698,7 +693,7 @@ function ScreenLocation({ m }) {
     if (window.ME) {
       window.ME.name = m.data.name || window.ME.name;
       window.ME.role = m.data.role || window.ME.role;
-      window.ME.location = city ? `${city[0]}, ${city[1]}` : window.ME.location;
+      window.ME.location = city ? city.location_name : window.ME.location;
       if (m.data.interests && m.data.interests.length > 0) {
         window.ME.skills = m.data.interests;
       }
@@ -732,38 +727,24 @@ function ScreenLocation({ m }) {
               <div style={{ fontSize: '13px', color: 'var(--ink-3)' }}>📍 Detected Location</div>
               <div style={{ fontWeight: '600' }}>{location.city}, {location.state || location.country}</div>
             </div>
-            <button className="sbtn sbtn--primary" style={{ marginLeft: 'auto', padding: '4px 12px', fontSize: '12px' }} onClick={() => setCity([location.city, location.country, "📍"])}>Use This</button>
+            <button className="sbtn sbtn--primary" style={{ marginLeft: 'auto', padding: '4px 12px', fontSize: '12px' }} onClick={() => setCity({
+              location_name: location.city,
+              address: `${location.city}, ${location.state || location.country}`,
+              latitude: location.lat || 0,
+              longitude: location.lon || 0
+            })}>Use This</button>
           </div>
         </div>
       )}
 
-      <div className="loc-search">
-        <Field icon={<Ic.search />} placeholder="Search your city" value={q}
-          onChange={(e) => setQ(e.target.value)} />
-      </div>
-
-      <div className="popular-label">{q ? "Results" : "Popular near India & beyond"}</div>
-      <div className="city-grid">
-        {list.map(([c, country, flag], idx) => (
-          <button key={`${c}-${idx}`} className={`city ${city && city[0] === c ? "on" : ""}`} onClick={() => setCity([c, country, flag])}>
-            <span className="flag">{flag}</span>
-            <span><span className="cn" style={{ display: "block" }}>{c}</span><span className="cc">{country}</span></span>
-          </button>
-        ))}
-        {searching && <div style={{ padding: "16px", color: "var(--ink-3)", fontSize: "14px" }}>Searching...</div>}
-        {!searching && list.length === 0 && <div style={{ padding: "16px", color: "var(--ink-3)", fontSize: "14px" }}>No cities found.</div>}
-      </div>
-
-      <div className={`map-reveal ${city ? "open" : ""}`}>
-        <div className="map-canvas">
-          <div className="map-grid" />
-          <div className="map-road" style={{ left: 0, right: 0, top: "60%", height: 6, opacity: 0.6 }} />
-          <div className="map-road" style={{ left: "38%", top: 0, bottom: 0, width: 6, opacity: 0.6 }} />
-          {city && <React.Fragment>
-            <div className="map-pin"><span className="ring" /><span className="dot" /></div>
-            <div className="map-label"><Ic.pin style={{ verticalAlign: "-3px", marginRight: 4 }} />{city[0]}, {city[1]}</div>
-          </React.Fragment>}
-        </div>
+      <div style={{ marginTop: "16px" }}>
+        {window.LocationSelector && (
+          <window.LocationSelector
+            value={city}
+            onChange={(val) => setCity(val)}
+            placeholder="Search your city..."
+          />
+        )}
       </div>
 
       <div style={{ marginTop: 22 }}>
@@ -779,6 +760,24 @@ function ScreenDone({ m }) {
   const d = m.data;
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+
+  const loc = React.useMemo(() => {
+    if (!d.city) return null;
+    if (Array.isArray(d.city)) {
+      return {
+        location_name: d.city[0],
+        address: d.city[5] || d.city[0],
+        latitude: parseFloat(d.city[3]),
+        longitude: parseFloat(d.city[4])
+      };
+    }
+    return {
+      location_name: d.city.location_name || d.city.address || d.city.name || d.city,
+      address: d.city.address || d.city.location_name,
+      latitude: parseFloat(d.city.latitude),
+      longitude: parseFloat(d.city.longitude)
+    };
+  }, [d.city]);
 
   return (
     <div className="welcome">
@@ -796,15 +795,27 @@ function ScreenDone({ m }) {
           )}
           {d.name || "You"} · {d.role || "Explorer"}
         </span></div>
-        <div className="srow"><span className="k">Location</span><span className="v"><Ic.pin style={{ color: "var(--accent-2)" }} />{d.city ? `${d.city[0]}, ${d.city[1]}` : "Bengaluru, India"}</span></div>
+        <div className="srow"><span className="k">Location</span><span className="v"><Ic.pin style={{ color: "var(--accent-2)" }} />{loc ? loc.location_name : "Bengaluru, India"}</span></div>
         <div className="srow"><span className="k">Interests</span><span className="v">
           {(d.interests.length ? d.interests : ["Startups", "Design", "Music"]).slice(0, 4).map(i => <span key={i} className="mini-chip">{i}</span>)}
           {d.interests.length > 4 && <span className="mini-chip">+{d.interests.length - 4}</span>}
         </span></div>
       </div>
 
+      {loc && !isNaN(loc.latitude) && !isNaN(loc.longitude) && (
+        <div style={{ marginTop: "16px", marginBottom: "24px" }}>
+          <iframe
+            src={`https://www.openstreetmap.org/export/embed.html?bbox=${loc.longitude - 0.01},${loc.latitude - 0.01},${loc.longitude + 0.01},${loc.latitude + 0.01}&marker=${loc.latitude},${loc.longitude}`}
+            width="100%"
+            height="140"
+            style={{ border: 0, borderRadius: "16px", background: "var(--bg-2, #f5f5f5)", boxShadow: "0 4px 12px rgba(0,0,0,0.05)" }}
+            loading="lazy"
+          />
+        </div>
+      )}
+
       <a href="Samaagum%20Home.html" className="sbtn sbtn--primary sbtn--block focusable" style={{ textDecoration: "none" }}>Enter Samaagum<Ic.arrowR /></a>
-      <p style={{ textAlign: "center", fontSize: 13, color: "var(--ink-3)", marginTop: 14, cursor: "pointer" }} onClick={m.restart}>↻ Replay the flow</p>
+      {/* <p style={{ textAlign: "center", fontSize: 13, color: "var(--ink-3)", marginTop: 14, cursor: "pointer" }} onClick={m.restart}>↻</p> */}
     </div>
   );
 }

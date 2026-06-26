@@ -20,6 +20,55 @@ function Messages({ st, go, mobile, socket }) {
 
   const [requestStatuses, setRequestStatuses] = useState({});
 
+  const checkCommonGroupOrEvent = (otherUser) => {
+    if (!otherUser) return false;
+    const cleanOtherName = (otherUser.name || "").toLowerCase().trim();
+    if (!cleanOtherName) return false;
+
+    const isSameUserByName = (n1, n2) => {
+      if (!n1 || !n2) return false;
+      const p1 = n1.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(' ').filter(Boolean)[0];
+      const p2 = n2.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(' ').filter(Boolean)[0];
+      return p1 === p2;
+    };
+
+    // Check Groups: other user is in a group that I have joined or created
+    const commonGroup = (window.GROUPS || []).some(g => {
+      const userJoined = st.joined && st.joined.has(g.id);
+      const userCreated = st.createdGroups && st.createdGroups.some(cg => cg.id === g.id);
+      const meInGroup = userJoined || userCreated || g.owner?.toLowerCase().includes("aanya");
+      
+      if (!meInGroup) return false;
+
+      const membersList = g.memberNames || [];
+      return membersList.some(m => {
+        const mName = typeof m === 'object' ? m.name : m;
+        return isSameUserByName(mName, cleanOtherName);
+      });
+    });
+
+    if (commonGroup) return true;
+
+    // Check Events: other user is in an event that I am registered for
+    const commonEvent = (window.EVENTS || []).some(e => {
+      const userReg = st.registered && st.registered.has(e.id);
+      const userWaitlist = st.waitlisted && st.waitlisted.has(e.id);
+      const meInEvent = userReg || userWaitlist;
+
+      if (!meInEvent) return false;
+
+      const hostName = e.hostBy || e.host || "";
+      if (isSameUserByName(hostName, cleanOtherName)) return true;
+
+      const attendeesList = e.attendees || [];
+      return attendeesList.some(a => isSameUserByName(a, cleanOtherName));
+    });
+
+    if (commonEvent) return true;
+
+    return false;
+  };
+
   useEffect(() => {
     if (!searchQuery.trim()) {
       setSearchResults([]);
@@ -225,6 +274,11 @@ function Messages({ st, go, mobile, socket }) {
         if (res.success && res.data) {
           setThreads(res.data);
           if (res.data.length > 0 && !activeId) {
+          const savedConvId = localStorage.getItem('active_chat_conv_id');
+          if (savedConvId && res.data.some(t => t.id === savedConvId)) {
+            setActiveId(savedConvId);
+            localStorage.removeItem('active_chat_conv_id');
+          } else if (res.data.length > 0) {
             setActiveId(res.data[0].id);
           }
         }
@@ -621,11 +675,13 @@ socket.off("request.declined", handleRequestDeclined);
                     {searchedContacts.map(user => (
                       <div key={user.id} className="search-item" onClick={() => selectSearchResult(user)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: "8px", cursor: "pointer" }}>
                         <div style={{ position: "relative" }}>
-                          <Avatar name={user.name || "null"} size={40} />
+                          <I.Avatar userId={user.id} name={user.name || "null"} size={40} />
                           <span className="search-presence-dot" style={{ position: "absolute", bottom: 0, right: 0, width: 10, height: 10, borderRadius: "50%", background: presenceMap[user.id] === "ONLINE" ? "#2bb673" : "#8e8e93", border: "2px solid var(--surface)" }} />
                         </div>
                         <div className="info" style={{ flex: 1, minWidth: 0 }}>
-                          <div className="name" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{user.name === null ? "null" : user.name}</div>
+                          <div className="name" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
+                            {I.useProfileSync ? I.useProfileSync(user.id, { name: user.name }).name || "null" : (user.name || "null")}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -643,6 +699,14 @@ socket.off("request.declined", handleRequestDeclined);
                           </div>
                           <div className="info" style={{ flex: 1, minWidth: 0 }}>
                             <div className="name" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{user.name === null ? "null" : user.name}</div>
+                      <div key={user.id} className="search-item" onClick={() => selectSearchResult(user)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: "8px", cursor: "pointer" }}>
+                        <div style={{ position: "relative" }}>
+                          <I.Avatar userId={user.id} name={user.name || "null"} size={40} />
+                          <span className="search-presence-dot" style={{ position: "absolute", bottom: 0, right: 0, width: 10, height: 10, borderRadius: "50%", background: presenceMap[user.id] === "ONLINE" ? "#2bb673" : "#8e8e93", border: "2px solid var(--surface)" }} />
+                        </div>
+                        <div className="info" style={{ flex: 1, minWidth: 0 }}>
+                          <div className="name" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
+                            {I.useProfileSync ? I.useProfileSync(user.id, { name: user.name }).name || "null" : (user.name || "null")}
                           </div>
                         </div>
                         <button 
@@ -676,7 +740,7 @@ socket.off("request.declined", handleRequestDeclined);
                 return (
                   <div key={t.id} className={`thread ${t.id===activeId && !mobile?"on":""}`} onClick={()=>openThread(t.id)}>
                     <div className="av" style={{ background:"transparent" }}>
-                      <Avatar name={displayName} size={46}/>
+                      <I.Avatar userId={other?.userId || other?.id} name={displayName} size={46}/>
                       <span className={presenceStatus === "ONLINE" ? "online" : "offline"}/>
                     </div>
                     <div className="ti">
@@ -708,6 +772,13 @@ socket.off("request.declined", handleRequestDeclined);
                         <button className="hbtn hbtn--primary hbtn--sm" onClick={()=>handleAcceptRequest(r.id)}><I.check/></button>
                         <button className="hbtn hbtn--ghost hbtn--sm" onClick={()=>handleDeclineRequest(r.id)}><I.x/></button>
                       </div>
+                {REQUESTS.map(r => (
+                  <div key={r.name} className="req-card">
+                    <I.Avatar userId={r.userId || r.id} name={r.name} size={48}/>
+                    <div className="ri"><div className="n">{r.name}</div><div className="d">{r.role}</div><div className="d" style={{ color:"var(--accent-2)" }}>{r.mutual} mutual</div></div>
+                    <div className="ract" style={{ flexDirection:"column", gap:7 }}>
+                      <button className="hbtn hbtn--primary hbtn--sm" onClick={()=>st.toggleConnect(r.name)}><I.check/></button>
+                      <button className="hbtn hbtn--ghost hbtn--sm"><I.x/></button>
                     </div>
                   );
                 })}
@@ -725,12 +796,23 @@ socket.off("request.declined", handleRequestDeclined);
         const displayName = active.type === "GROUP" ? (active.title || "Group Chat") : (other?.name || "Chat Room");
         const presenceStatus = other ? (presenceMap[other.userId] || "OFFLINE") : "OFFLINE";
         const firstName = displayName.split(" ")[0];
+
+        const chatSettings = st.chatSettings || {
+          allowDirectMessaging: true,
+          allowGroupChat: true,
+          allowEventChat: true
+        };
+        const isDM = active.type === "DIRECT" || active.type === "dm" || !active.type;
+        const isDMRestricted = isDM && chatSettings.allowDirectMessaging === false;
+        const shareCommon = other ? checkCommonGroupOrEvent(other) : false;
+        const hideCompose = isDMRestricted && !shareCommon;
+
         return (
           <div className="msg-conv">
             <div className="conv-head">
               {mobile && <button className="hbtn hbtn--ghost hbtn--sm" style={{ padding:"7px 10px" }} onClick={()=>setShowConv(false)}><I.arrowL/></button>}
               <div style={{ position:"relative" }}>
-                <Avatar name={displayName} size={40}/>
+                <I.Avatar userId={other?.userId || other?.id} name={displayName} size={40}/>
                 <span className={presenceStatus === "ONLINE" ? "online" : "offline"} style={{ position:"absolute", bottom:0, right:0, width:11, height:11, borderRadius:"50%", background: presenceStatus === "ONLINE" ? "#2bb673" : "#8e8e93", border:"2px solid var(--surface)" }}/>
               </div>
               <div className="ci">
@@ -955,6 +1037,42 @@ socket.off("request.declined", handleRequestDeclined);
               />
               <button className="send" onClick={send}><I.send/></button>
             </div>
+            {hideCompose ? (
+              <div className="dm-restricted-banner" style={{
+                padding: "20px",
+                margin: "15px",
+                background: "var(--surface-2)",
+                border: "1px dashed var(--border)",
+                borderRadius: "12px",
+                color: "var(--ink-2)",
+                fontSize: "13.5px",
+                lineHeight: "1.5",
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "10px"
+              }}>
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="var(--ink-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                <div>
+                  <strong>Direct messaging is disabled.</strong><br/>
+                  You can only message users you share a common group or event with.
+                </div>
+              </div>
+            ) : (
+              <div className="conv-compose">
+                <input 
+                  placeholder={`Message ${firstName}…`} 
+                  value={input} 
+                  onChange={e=>setInput(e.target.value)} 
+                  onKeyDown={e=>e.key==="Enter"&&send()} 
+                />
+                <button className="send" onClick={send}><I.send/></button>
+              </div>
+            )}
           </div>
         );
       })()}

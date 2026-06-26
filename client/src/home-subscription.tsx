@@ -35,7 +35,10 @@ window.UpgradePage = function UpgradePage({ st, go }) {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [billingCycle, setBillingCycle] = useState('monthly');
-  const userPlan = st.subscription?.plan || 'free';
+  const userPlan = st.subscription?.plan || null;
+  const userCycle = st.subscription?.billingCycle || 'monthly';
+  const previousPlans = Array.isArray(st.subscription?.previousPlans) ? st.subscription.previousPlans : [];
+  const switchablePlans = Array.isArray(st.subscription?.switchablePlans) ? st.subscription.switchablePlans : [];
 
   useEffect(() => {
     fetch(`${apiBase}/api/subscription/plans/public`)
@@ -93,7 +96,51 @@ window.UpgradePage = function UpgradePage({ st, go }) {
         {plans.map(plan => {
           const pricing = plan.pricing[billingCycle] || {};
           const priceAmount = pricing.amount || 0;
-          const isCurrent = userPlan === plan.name.toLowerCase();
+          const isCurrent = userPlan === plan.name.toLowerCase() && userCycle === billingCycle;
+          const isPrevious = previousPlans.some(p => p.planId === plan.id && p.billingCycle === billingCycle);
+          const switchableMatch = switchablePlans.find(p => p.planId === plan.id && p.billingCycle === billingCycle);
+
+          let buttonContent = `Get ${plan.display_name}`;
+          let buttonAction = () => go("checkout", { selectedPlan: plan, billingCycle });
+
+          if (isCurrent) {
+            buttonContent = "Current Plan";
+          } else if (switchableMatch) {
+            buttonContent = "Switch Plan";
+            buttonAction = async () => {
+              setLoading(true);
+              try {
+                const res = await fetch(`${apiBase}/api/subscription/switch`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                  },
+                  body: JSON.stringify({ orderId: switchableMatch.orderId })
+                });
+                const json = await res.json();
+                if (json.success) {
+                  const statusRes = await fetch(`${apiBase}/api/subscription/status`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                  });
+                  const statusJson = await statusRes.json();
+                  if (statusJson.success && statusJson.data?.subscription) {
+                    if (st.setSubscription) {
+                      st.setSubscription(statusJson.data.subscription);
+                    }
+                  }
+                } else {
+                  alert(json.message || "Failed to switch plan");
+                }
+              } catch(e) {
+                alert("Error switching plan");
+              } finally {
+                setLoading(false);
+              }
+            };
+          } else if (isPrevious) {
+            buttonContent = "Renew Plan";
+          }
 
           return (
             <div key={plan.id} className={`pricing-card glass-card ${plan.is_popular ? 'popular' : ''}`}>
@@ -121,18 +168,13 @@ window.UpgradePage = function UpgradePage({ st, go }) {
               </div>
 
               <div className="card-foot">
-                {isCurrent ? (
-                  <button className="btn btn-secondary w-full" disabled>
-                    Current Plan
-                  </button>
-                ) : (
-                  <button 
-                    className={`btn ${plan.is_popular ? 'btn-primary' : 'btn-secondary'} w-full`}
-                    onClick={() => go("checkout", { selectedPlan: plan, billingCycle })}
-                  >
-                    Get {plan.display_name}
-                  </button>
-                )}
+                <button 
+                  className={`btn-sub-cta ${isCurrent ? 'btn-sub-basic' : (plan.is_popular ? 'btn-sub-pro' : 'btn-sub-basic')}`}
+                  onClick={buttonAction}
+                  disabled={isCurrent || loading}
+                >
+                  {buttonContent}
+                </button>
               </div>
             </div>
           );
@@ -148,7 +190,9 @@ window.UpgradePage = function UpgradePage({ st, go }) {
    ────────────────────────────────────────────────────────────── */
 window.CheckoutPage = function CheckoutPage({ param, st, go }) {
   const { selectedPlan, billingCycle } = param || {};
-  const [shippingAddress, setShippingAddress] = useState({
+  const savedState = JSON.parse(sessionStorage.getItem('subscriptionCheckout') || '{}');
+  
+  const [shippingAddress, setShippingAddress] = useState(savedState.shippingAddress || {
     firstName: ME.name.split(' ')[0] || '',
     lastName: ME.name.split(' ')[1] || '',
     company: '',
@@ -160,7 +204,7 @@ window.CheckoutPage = function CheckoutPage({ param, st, go }) {
     country: 'IN'
   });
 
-  const [billingAddress, setBillingAddress] = useState({
+  const [billingAddress, setBillingAddress] = useState(savedState.billingAddress || {
     firstName: ME.name.split(' ')[0] || '',
     lastName: ME.name.split(' ')[1] || '',
     company: '',
@@ -174,14 +218,27 @@ window.CheckoutPage = function CheckoutPage({ param, st, go }) {
     phone: '9876543210'
   });
 
-  const [sameAsShipping, setSameAsShipping] = useState(true);
-  const [couponCode, setCouponCode] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState(null);
-  const [couponLoading, setCouponLoading] = useState(false);
-  const [discountAmount, setDiscountAmount] = useState(0);
+  const [sameAsShipping, setSameAsShipping] = useState(savedState.sameAsShipping !== undefined ? savedState.sameAsShipping : true);
+  const [couponCode, setCouponCode] = useState(savedState.couponCode || '');
+  const [appliedCoupon, setAppliedCoupon] = useState(savedState.appliedCoupon || null);
+  const [discountAmount, setDiscountAmount] = useState(savedState.discountAmount || 0);
 
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  useEffect(() => {
+    sessionStorage.setItem('subscriptionCheckout', JSON.stringify({
+      shippingAddress,
+      billingAddress,
+      sameAsShipping,
+      couponCode,
+      appliedCoupon,
+      discountAmount
+    }));
+  }, [shippingAddress, billingAddress, sameAsShipping, couponCode, appliedCoupon, discountAmount]);
+
+  const [couponLoading, setCouponLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [previewData, setPreviewData] = useState(null);
 
   if (!selectedPlan) {
     return (
@@ -249,9 +306,8 @@ window.CheckoutPage = function CheckoutPage({ param, st, go }) {
         setCheckoutLoading(false);
         return;
       }
-      
-      // 1. Create order on backend
-      const orderRes = await fetch(`${apiBase}/api/subscription/orders`, {
+
+      const previewRes = await fetch(`${apiBase}/api/subscription/payment/preview`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -259,155 +315,24 @@ window.CheckoutPage = function CheckoutPage({ param, st, go }) {
         },
         body: JSON.stringify({
           planId: selectedPlan.id,
-          planType: billingCycle,
+          billingCycle: billingCycle,
           shippingAddress,
           billingAddress: sameAsShipping ? shippingAddress : billingAddress,
-          paymentMethod: 'razorpay',
           couponCode: appliedCoupon ? appliedCoupon.code : undefined
         })
       });
 
-      const orderData = await orderRes.json();
-      if (!orderData.success) {
-        throw new Error(orderData.message || 'Failed to create order');
+      const previewData = await previewRes.json();
+      if (!previewData.success) {
+        throw new Error(previewData.message || 'Failed to generate preview');
       }
 
-      const order = orderData.data;
+      setPreviewData(previewData.data);
+      setShowReviewModal(true);
 
-      // If total is 0 (fully discounted or free plan), order is completed instantly
-      if (order.total === 0) {
-        // Sync user subscription details state
-        st.setSubscription({
-          plan: billingCycle,
-          status: 'active',
-          planId: selectedPlan.id,
-          orderNumber: order.orderNumber
-        });
-        go("checkout-success", { orderId: order.orderId, orderNumber: order.orderNumber, selectedPlan, total: 0, billingCycle });
-        return;
-      }
-
-      // 2. Initialize Razorpay Payment
-      const isRazorpayLoaded = await loadRazorpayScript();
-      if (!isRazorpayLoaded) {
-        throw new Error('Razorpay SDK failed to load. Please check your connection.');
-      }
-
-      // Create Payment Intent on backend
-      const intentRes = await fetch(`${apiBase}/api/subscription/payment/create-intent`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ orderId: order.orderId })
-      });
-
-      const intentData = await intentRes.json();
-      if (!intentData.success) {
-        throw new Error(intentData.message || 'Failed to initialize payment gateway');
-      }
-
-      const intent = intentData.data;
-
-      // Handle Mock Sandbox bypass if server operates in mock mode
-      if (intentData.sandbox) {
-        // Confirm mock payment automatically for seamless testing
-        const confirmRes = await fetch(`${apiBase}/api/subscription/payment/confirm`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            orderId: order.orderId,
-            paymentIntentId: intent.orderId,
-            razorpayPaymentId: 'mock_payment_id',
-            razorpaySignature: 'mock_signature'
-          })
-        });
-
-        const confirmData = await confirmRes.json();
-        if (!confirmData.success) {
-          throw new Error(confirmData.message || 'Mock payment confirmation failed');
-        }
-
-        // Sync subscription state
-        st.setSubscription({
-          plan: selectedPlan.name.toLowerCase(),
-          status: 'active',
-          planId: selectedPlan.id,
-          orderNumber: order.orderNumber
-        });
-
-        go("checkout-success", { orderId: order.orderId, orderNumber: order.orderNumber, selectedPlan, total: finalTotal, billingCycle });
-        return;
-      }
-
-      // Standard Razorpay Options
-      const options = {
-        key: intent.key,
-        amount: intent.amount,
-        currency: intent.currency,
-        name: 'Samaagum',
-        description: `Upgrade to ${selectedPlan.display_name} (${billingCycle})`,
-        order_id: intent.orderId,
-        handler: async (response) => {
-          try {
-            setCheckoutLoading(true);
-            const confirmRes = await fetch(`${apiBase}/api/subscription/payment/confirm`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              },
-              body: JSON.stringify({
-                orderId: order.orderId,
-                paymentIntentId: intent.orderId,
-                razorpayPaymentId: response.razorpay_payment_id,
-                razorpaySignature: response.razorpay_signature
-              })
-            });
-
-            const confirmData = await confirmRes.json();
-            if (!confirmData.success) {
-              throw new Error(confirmData.message || 'Payment confirmation failed');
-            }
-
-            // Sync user subscription details state
-            st.setSubscription({
-              plan: selectedPlan.name.toLowerCase(),
-              status: 'active',
-              planId: selectedPlan.id,
-              orderNumber: order.orderNumber
-            });
-
-            go("checkout-success", { orderId: order.orderId, orderNumber: order.orderNumber, selectedPlan, total: finalTotal, billingCycle });
-          } catch (err) {
-            setErrorMessage(err.message || 'Error confirming payment');
-          } finally {
-            setCheckoutLoading(false);
-          }
-        },
-        prefill: {
-          name: `${shippingAddress.firstName} ${shippingAddress.lastName}`,
-          email: billingAddress.email,
-          contact: billingAddress.phone
-        },
-        theme: {
-          color: '#6d5efc'
-        }
-      };
-
-      const rzp = new window.Razorpay(options);
-      rzp.on('payment.failed', function (response) {
-        setErrorMessage(response.error.description || 'Payment failed');
-      });
-      rzp.open();
-
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setErrorMessage(err.message || 'Error processing checkout');
+      setErrorMessage(err.message || 'Error processing checkout preview');
     } finally {
       setCheckoutLoading(false);
     }
@@ -603,11 +528,19 @@ window.CheckoutPage = function CheckoutPage({ param, st, go }) {
             )}
 
             <button 
-              className="btn btn-primary w-full pay-btn" 
+              className={`btn-sub-cta btn-sub-pay ${checkoutLoading ? 'loading' : ''}`}
               onClick={handleCheckout}
               disabled={checkoutLoading}
             >
-              {checkoutLoading ? 'Processing Payment...' : 'Pay & Activate Access'}
+              {checkoutLoading ? (
+                <>
+                  <span className="spinner-small" /> Loading...
+                </>
+              ) : (
+                <>
+                  Proceed to Review <I.arrowR style={{ width: 14, height: 14, marginLeft: 4 }} />
+                </>
+              )}
             </button>
 
             <div className="secure-badge">
@@ -616,16 +549,352 @@ window.CheckoutPage = function CheckoutPage({ param, st, go }) {
           </div>
         </div>
       </div>
+
+      {showReviewModal && previewData && (
+        <OrderReviewModal 
+          previewData={previewData}
+          checkoutParams={{
+            selectedPlan,
+            billingCycle,
+            shippingAddress,
+            billingAddress: sameAsShipping ? shippingAddress : billingAddress,
+            couponCode: appliedCoupon ? appliedCoupon.code : undefined
+          }}
+          onClose={() => setShowReviewModal(false)}
+          st={st}
+          go={go}
+        />
+      )}
     </div>
   );
 };
 
 
 /* ──────────────────────────────────────────────────────────────
+   2.5 ORDER REVIEW MODAL
+   ────────────────────────────────────────────────────────────── */
+const OrderReviewModal = ({ previewData, checkoutParams, onClose, st, go }) => {
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
+  const [agreedTerms, setAgreedTerms] = useState(false);
+  const [agreedRecurring, setAgreedRecurring] = useState(false);
+
+  const handleProceedToPayment = async () => {
+    setLoading(true);
+    setErrorMessage(null);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setErrorMessage('Please log in to complete your purchase.');
+        setLoading(false);
+        return;
+      }
+
+      // Create order on backend 
+      const orderRes = await fetch(`${apiBase}/api/subscription/payment/create-order`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          planId: checkoutParams.selectedPlan.id,
+          billingCycle: checkoutParams.billingCycle,
+          shippingAddress: checkoutParams.shippingAddress,
+          billingAddress: checkoutParams.billingAddress,
+          couponCode: checkoutParams.couponCode,
+          previewId: previewData.previewId
+        })
+      });
+
+      const orderData = await orderRes.json();
+      if (!orderData.success) {
+        if (orderData.code === 'PREVIEW_EXPIRED' || orderData.code === 'COUPON_INVALID') {
+          setErrorMessage(orderData.message);
+          setTimeout(() => {
+            onClose(); // Just close the modal so they can review and click Proceed to Review again
+          }, 2000);
+          return;
+        }
+        throw new Error(orderData.message || 'Failed to create order');
+      }
+
+      const { orderId, amount, currency, key, localOrderId } = orderData.data;
+
+      // Handle Mock Sandbox bypass
+      if (orderData.sandbox) {
+        console.log('Using Sandbox bypass for checkout verification');
+        setTimeout(async () => {
+          try {
+            const confirmRes = await fetch(`${apiBase}/api/subscription/payment/verify`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                localOrderId,
+                razorpayOrderId: orderId,
+                razorpayPaymentId: 'mock_payment_id',
+                razorpaySignature: 'mock_signature'
+              })
+            });
+
+            const confirmData = await confirmRes.json();
+            if (!confirmData.success) {
+              throw new Error(confirmData.message || 'Sandbox verification failed');
+            }
+
+            st.setSubscription({
+              plan: checkoutParams.selectedPlan.name.toLowerCase(),
+              status: 'active',
+              planId: checkoutParams.selectedPlan.id,
+              orderNumber: confirmData.data.order_number
+            });
+
+            go("checkout-success", {
+              order_number: confirmData.data.order_number,
+              plan_name: confirmData.data.plan_name,
+              billing_cycle: confirmData.data.billing_cycle,
+              activated_at: confirmData.data.activated_at,
+              next_billing_at: confirmData.data.next_billing_at,
+              subscription_status: confirmData.data.subscription_status,
+              total: previewData.totalAmount
+            });
+
+          } catch (err: any) {
+            setErrorMessage(err.message || 'Sandbox payment confirmation failed');
+            setLoading(false);
+          }
+        }, 1500);
+        return;
+      }
+
+      // Initialize official Razorpay Payment popup
+      const isRazorpayLoaded = await loadRazorpayScript();
+      if (!isRazorpayLoaded) {
+        throw new Error('Razorpay SDK failed to load. Please check your connection.');
+      }
+
+      const options = {
+        key,
+        amount,
+        currency,
+        name: 'Samaagum',
+        description: `Upgrade to ${previewData.planName} (${previewData.billingCycle})`,
+        order_id: orderId,
+        handler: async (response: any) => {
+          try {
+            setLoading(true);
+            const confirmRes = await fetch(`${apiBase}/api/subscription/payment/verify`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                localOrderId,
+                razorpayOrderId: response.razorpay_order_id,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature
+              })
+            });
+
+            const confirmData = await confirmRes.json();
+            if (!confirmData.success) {
+              throw new Error(confirmData.message || 'Payment verification failed');
+            }
+
+            st.setSubscription({
+              plan: checkoutParams.selectedPlan.name.toLowerCase(),
+              status: 'active',
+              planId: checkoutParams.selectedPlan.id,
+              orderNumber: confirmData.data.order_number
+            });
+
+            go("checkout-success", {
+              order_number: confirmData.data.order_number,
+              plan_name: confirmData.data.plan_name,
+              billing_cycle: confirmData.data.billing_cycle,
+              activated_at: confirmData.data.activated_at,
+              next_billing_at: confirmData.data.next_billing_at,
+              subscription_status: confirmData.data.subscription_status,
+              total: previewData.totalAmount
+            });
+          } catch (err: any) {
+            setErrorMessage(err.message || 'Error confirming payment');
+            setLoading(false); // Enable buttons again if failed
+          } 
+        },
+        modal: {
+          ondismiss: () => {
+            // User closed the modal without paying
+            setLoading(false);
+          }
+        },
+        prefill: {
+          name: `${checkoutParams.shippingAddress.firstName} ${checkoutParams.shippingAddress.lastName}`,
+          email: checkoutParams.billingAddress.email,
+          contact: checkoutParams.billingAddress.phone
+        },
+        theme: {
+          color: '#6d5efc'
+        }
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.on('payment.failed', function (response: any) {
+        setErrorMessage(response.error.description || 'Payment failed');
+        setLoading(false);
+      });
+      rzp.open();
+
+    } catch (err: any) {
+      console.error(err);
+      setErrorMessage(err.message || 'Error processing checkout');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div className="glass-card scroll" style={{ width: '100%', maxWidth: 640, maxHeight: '90vh', overflowY: 'auto', backgroundColor: 'var(--bg)', position: 'relative', padding: "40px 32px" }}>
+        
+        <button 
+          onClick={onClose} 
+          disabled={loading}
+          style={{ position: 'absolute', top: 20, right: 20, background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 10 }}
+        >
+          <I.x style={{ width: 16, height: 16, color: 'var(--ink-2)' }} />
+        </button>
+
+        <div className="v-header" style={{ marginBottom: 32 }}>
+          <h2 className="v-title">Order Review</h2>
+          <p className="v-subtitle">Please confirm your order details before proceeding to payment.</p>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+          <span style={{ color: 'var(--ink-2)', fontWeight: 500 }}>Plan:</span>
+          <span style={{ fontWeight: 600 }}>{previewData.planName}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24, paddingBottom: 24, borderBottom: '1px solid var(--border)' }}>
+          <span style={{ color: 'var(--ink-2)', fontWeight: 500 }}>Billing Cycle:</span>
+          <span style={{ fontWeight: 600, textTransform: 'capitalize' }}>{previewData.billingCycle}</span>
+        </div>
+
+        <div className="pricing-rows" style={{ marginBottom: 24 }}>
+          <div className="price-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span>Subtotal</span>
+            <span>{formatPrice(previewData.baseAmount, previewData.currency)}</span>
+          </div>
+          <div className="price-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span>GST (18%)</span>
+            <span>{formatPrice(previewData.gstAmount, previewData.currency)}</span>
+          </div>
+          {previewData.discountAmount > 0 && (
+            <div className="price-row discount" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, color: 'var(--accent-1)' }}>
+              <span>Coupon Discount</span>
+              <span>-{formatPrice(previewData.discountAmount, previewData.currency)}</span>
+            </div>
+          )}
+        </div>
+
+        <div style={{ borderTop: '2px solid var(--border)', paddingTop: 16, marginBottom: 32, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: 20 }}>Total Payable</h3>
+          <h3 style={{ margin: 0, fontSize: 24, color: 'var(--primary)' }}>{formatPrice(previewData.totalAmount, previewData.currency)}</h3>
+        </div>
+
+        {errorMessage && (
+          <div className="checkout-error-msg" style={{ marginBottom: 24 }}>
+            <span className="bullet"><I.x style={{ width: 14, height: 14 }} /></span>
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
+        <div className="terms-container" style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32 }}>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+            <input 
+              type="checkbox" 
+              checked={agreedTerms} 
+              onChange={e => setAgreedTerms(e.target.checked)} 
+              disabled={loading}
+              style={{ marginTop: 4 }}
+            />
+            <span style={{ color: 'var(--ink-2)', fontSize: 14, lineHeight: 1.4 }}>I agree to the Terms & Conditions</span>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+            <input 
+              type="checkbox" 
+              checked={agreedRecurring} 
+              onChange={e => setAgreedRecurring(e.target.checked)} 
+              disabled={loading}
+              style={{ marginTop: 4 }}
+            />
+            <span style={{ color: 'var(--ink-2)', fontSize: 14, lineHeight: 1.4 }}>I understand this subscription may renew according to the selected billing cycle</span>
+          </label>
+        </div>
+
+        <div style={{ display: 'flex', gap: 16 }}>
+          <button 
+            className="btn-sub-cta" 
+            style={{ 
+              flex: 1, 
+              margin: 0,
+              background: 'var(--surface-1)',
+              color: 'var(--ink-1)',
+              border: '1px solid var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8
+            }} 
+            onClick={onClose}
+            disabled={loading}
+          >
+            <I.arrowL style={{ width: 16, height: 16 }} /> Back to Checkout
+          </button>
+          <button 
+            className={`btn-sub-cta btn-sub-pay ${loading ? 'loading' : ''}`} 
+            style={{ flex: 1, margin: 0 }}
+            onClick={handleProceedToPayment}
+            disabled={loading || !agreedTerms || !agreedRecurring}
+          >
+            {loading ? (
+              <>
+                <span className="spinner-small" /> Creating Order...
+              </>
+            ) : (
+              <>
+                <I.lock style={{ width: 14, height: 14 }} /> Proceed to Payment
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+
+/* ──────────────────────────────────────────────────────────────
    3. CHECKOUT SUCCESS PAGE
    ────────────────────────────────────────────────────────────── */
 window.CheckoutSuccessPage = function CheckoutSuccessPage({ param, go }) {
-  const { orderNumber, selectedPlan, total, billingCycle } = param || {};
+  const { order_number, plan_name, billing_cycle, activated_at, next_billing_at, subscription_status, total } = param || {};
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'N/A';
+    try {
+      return new Date(dateStr).toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
+    } catch {
+      return dateStr;
+    }
+  };
 
   return (
     <div className="view-enter checkout-success-page scroll" style={{ textAlign:"center", padding:"64px 24px" }}>
@@ -638,27 +907,67 @@ window.CheckoutSuccessPage = function CheckoutSuccessPage({ param, go }) {
       <div className="glass-card success-summary" style={{ maxWidth: 440, margin: "32px auto", padding: 24, textAlign:"left" }}>
         <div className="success-row">
           <span className="label">Order Number:</span>
-          <span className="val">{orderNumber || 'SUB-000001'}</span>
+          <span className="val">{order_number || 'SAMA-MOCK'}</span>
         </div>
         <div className="success-row">
-          <span className="label">Plan Details:</span>
-          <span className="val">{selectedPlan?.display_name || 'Premium'} · {billingCycle === 'yearly' ? 'Yearly' : 'Monthly'}</span>
+          <span className="label">Plan Name:</span>
+          <span className="val">{plan_name || 'Premium Plan'}</span>
+        </div>
+        <div className="success-row">
+          <span className="label">Billing Cycle:</span>
+          <span className="val" style={{ textTransform: 'capitalize' }}>{billing_cycle || 'monthly'}</span>
+        </div>
+        <div className="success-row">
+          <span className="label">Activation Date:</span>
+          <span className="val">{formatDate(activated_at)}</span>
+        </div>
+        <div className="success-row">
+          <span className="label">Renewal Date:</span>
+          <span className="val">{formatDate(next_billing_at)}</span>
         </div>
         <div className="success-row">
           <span className="label">Total Paid:</span>
           <span className="val">{formatPrice(total || 0)}</span>
         </div>
         <div className="success-row">
-          <span className="label">Status:</span>
-          <span className="val active-status-tag">Active</span>
+          <span className="label">Subscription Status:</span>
+          <span className="val active-status-tag">{subscription_status ? subscription_status.toUpperCase() : 'ACTIVE'}</span>
         </div>
       </div>
 
-      <div style={{ display:"flex", justifyContent:"center", gap:16 }}>
-        <button className="btn btn-primary" onClick={() => go("home")}>
+      <div style={{ display:"flex", justifyContent:"center", gap: 16, marginTop: 32 }}>
+        <button 
+          className="btn" 
+          style={{ 
+            padding: "12px 24px", 
+            borderRadius: 8,
+            background: 'rgba(18, 8, 101, 0.25)', 
+            color: 'var(--ink-1)', 
+            fontWeight: 600,
+            border: 'none',
+            boxShadow: '0 4px 12px rgba(109, 94, 252, 0.25)',
+            cursor: 'pointer',
+            minWidth: 160
+          }} 
+          onClick={() => go("home")}
+        >
           Go to Home Feed
         </button>
-        <button className="btn btn-secondary" onClick={() => go("profile")}>
+        <button 
+          className="btn" 
+          style={{ 
+            padding: "12px 24px", 
+            borderRadius: 8,
+            background: 'rgba(18, 8, 101, 0.25)', 
+            color: 'var(--ink-1)', 
+            fontWeight: 600,
+            border: '1px solid var(--border)',
+            boxShadow: '0 4px 12px rgba(109, 94, 252, 0.25)',
+            cursor: 'pointer',
+            minWidth: 160
+          }} 
+          onClick={() => go("profile")}
+        >
           View Profile
         </button>
       </div>

@@ -1,7 +1,73 @@
 import { Server, Socket } from "socket.io";
 import prisma from "../config/prisma";
+import { DEFAULT_CHAT_SETTINGS } from "../settings-library/settingsSeeder";
 
 let chatNamespace: any = null;
+
+async function getChatSettings() {
+  const row = await prisma.platform_settings.findFirst({
+    where: { scope_tenant_id: null, key: 'chat_settings' }
+  });
+  if (row && row.value) {
+    return { ...DEFAULT_CHAT_SETTINGS, ...(row.value as any) };
+  }
+  return DEFAULT_CHAT_SETTINGS;
+}
+
+async function getUserRoles(userId: string): Promise<string[]> {
+  const roles = await prisma.$queryRawUnsafe<{ key: string }[]>(
+    `SELECT r.key FROM role_assignments ra
+     JOIN roles r ON r.id = ra.role_id
+     WHERE ra.user_id = $1::uuid
+       AND (ra.expires_at IS NULL OR ra.expires_at > now())`,
+    userId
+  );
+  const roleKeys = roles.map(r => r.key);
+  if (roleKeys.length === 0) {
+    roleKeys.push('registered_user'); // default fallback
+  }
+  return roleKeys;
+}
+
+// Helper to check if two users share a common group or event
+async function shareCommonGroupOrEvent(user1: string, user2: string): Promise<boolean> {
+  const user2Groups = await prisma.group_memberships.findMany({
+    where: { user_id: user2, state: 'active' },
+    select: { group_id: true }
+  });
+  const user2GroupIds = user2Groups.map(g => g.group_id);
+
+  if (user2GroupIds.length > 0) {
+    const commonGroup = await prisma.group_memberships.findFirst({
+      where: {
+        user_id: user1,
+        state: 'active',
+        group_id: { in: user2GroupIds }
+      }
+    });
+    if (commonGroup) return true;
+  }
+
+  const user2Events = await prisma.attendees.findMany({
+    where: { user_id: user2 },
+    select: { bookings: { select: { event_id: true } } }
+  });
+  const user2EventIds = user2Events.map(a => a.bookings.event_id).filter(Boolean);
+
+  if (user2EventIds.length > 0) {
+    const commonEvent = await prisma.attendees.findFirst({
+      where: {
+        user_id: user1,
+        bookings: {
+          event_id: { in: user2EventIds }
+        }
+      }
+    });
+    if (commonEvent) return true;
+  }
+
+  return false;
+}
 
 export async function startMessaging(io: Server): Promise<void> {
   console.log("🔄 Starting Messaging Socket Gateway...");
@@ -205,6 +271,97 @@ export async function startMessaging(io: Server): Promise<void> {
         if (!participant) {
           if (callback) callback({ success: false, error: "User is not a participant of this conversation" });
           return;
+        }
+
+        // Fetch conversation to determine the type
+        const conversation = await prisma.conversations.findUnique({
+          where: { id: conversationId }
+        });
+        if (!conversation) {
+          if (callback) callback({ success: false, error: "Conversation not found" });
+          return;
+        }
+
+        // Enforce Chat Settings and Policies
+        const settings = await getChatSettings();
+
+        if (settings.allowSiteMessaging === false) {
+          if (callback) callback({ success: false, error: "Messaging is disabled globally by the administrator" });
+          return;
+        }
+        
+        let isFeatureAllowed = true;
+        let allowedRoles: string[] = [];
+        let featureName = "";
+
+        if (conversation.event_id) {
+          isFeatureAllowed = settings.allowEventChat;
+          allowedRoles = settings.rolePermissions?.eventChat || [];
+          featureName = "Event chat";
+        } else if (conversation.type === "group") {
+          isFeatureAllowed = settings.allowGroupChat;
+          allowedRoles = settings.rolePermissions?.groupChat || [];
+          featureName = "Group chat";
+        } else if (conversation.type === "dm") {
+          isFeatureAllowed = settings.allowDirectMessaging;
+          allowedRoles = settings.rolePermissions?.directMessaging || [];
+          featureName = "Direct messaging";
+
+          if (!isFeatureAllowed) {
+            const isGroupEnabled = settings.allowGroupChat;
+            const isEventEnabled = settings.allowEventChat;
+            if (isGroupEnabled || isEventEnabled) {
+              const otherParticipant = await prisma.conversation_participants.findFirst({
+                where: {
+                  conversation_id: conversationId,
+                  user_id: { not: userId }
+                }
+              });
+              if (otherParticipant) {
+                const shareCommon = await shareCommonGroupOrEvent(userId, otherParticipant.user_id);
+                if (shareCommon) {
+                  isFeatureAllowed = true;
+                }
+              }
+            }
+          }
+        }
+
+        if (!isFeatureAllowed) {
+          if (callback) callback({ success: false, error: `${featureName} is disabled by the administrator` });
+          return;
+        }
+
+        const userRoles = await getUserRoles(userId);
+        const hasRolePermission = userRoles.some(r => allowedRoles.includes(r));
+        if (!hasRolePermission) {
+          if (callback) callback({ success: false, error: `Your role does not have permission to send messages in this chat type` });
+          return;
+        }
+
+        // Enforce Communication Policies
+        const maxLen = settings.communicationPolicies?.maxMessageLength || 2000;
+        if (content.length > maxLen) {
+          if (callback) callback({ success: false, error: `Message exceeds maximum allowed length of ${maxLen} characters` });
+          return;
+        }
+
+        const allowLinks = settings.communicationPolicies?.allowLinks !== false;
+        if (!allowLinks) {
+          const simpleUrlRegex = /(https?:\/\/|www\.)/i;
+          if (simpleUrlRegex.test(content)) {
+            if (callback) callback({ success: false, error: "Sharing links in messages is disabled by the administrator" });
+            return;
+          }
+        }
+
+        const allowMedia = settings.communicationPolicies?.allowMedia !== false;
+        if (!allowMedia) {
+          const markdownImageRegex = /!\[.*?\]\(.*?\)/gi;
+          if (markdownImageRegex.test(content)) {
+            if (callback) callback({ success: false, error: "Sharing media/images in messages is disabled by the administrator" });
+            return;
+          }
         }
 
         // Create message in DB
@@ -534,4 +691,10 @@ export async function stopMessaging(): Promise<void> {
 
 export function getMessagingHealth() {
   return { status: "healthy", gateway: chatNamespace ? "connected" : "disconnected" };
+}
+
+export function emitProfileUpdate(userId: string, profileData: any) {
+  if (chatNamespace) {
+    chatNamespace.emit('profile.updated', { userId, ...profileData });
+  }
 }

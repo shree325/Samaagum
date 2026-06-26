@@ -1,7 +1,85 @@
 import { FastifyInstance } from 'fastify';
 import prisma from '../config/prisma';
+import { DEFAULT_CHAT_SETTINGS } from '../settings-library/settingsSeeder';
+
+// Helper to get active chat settings
+async function getChatSettings() {
+  const row = await prisma.platform_settings.findFirst({
+    where: { scope_tenant_id: null, key: 'chat_settings' }
+  });
+  if (row && row.value) {
+    return { ...DEFAULT_CHAT_SETTINGS, ...(row.value as any) };
+  }
+  return DEFAULT_CHAT_SETTINGS;
+}
+
+// Helper to get user role keys
+async function getUserRoles(userId: string): Promise<string[]> {
+  const roles = await prisma.$queryRawUnsafe<{ key: string }[]>(
+    `SELECT r.key FROM role_assignments ra
+     JOIN roles r ON r.id = ra.role_id
+     WHERE ra.user_id = $1::uuid
+       AND (ra.expires_at IS NULL OR ra.expires_at > now())`,
+    userId
+  );
+  const roleKeys = roles.map(r => r.key);
+  if (roleKeys.length === 0) {
+    roleKeys.push('registered_user'); // default fallback
+  }
+  return roleKeys;
+}
+
+// Helper to check if two users share a common group or event
+async function shareCommonGroupOrEvent(user1: string, user2: string): Promise<boolean> {
+  const user2Groups = await prisma.group_memberships.findMany({
+    where: { user_id: user2, state: 'active' },
+    select: { group_id: true }
+  });
+  const user2GroupIds = user2Groups.map(g => g.group_id);
+
+  if (user2GroupIds.length > 0) {
+    const commonGroup = await prisma.group_memberships.findFirst({
+      where: {
+        user_id: user1,
+        state: 'active',
+        group_id: { in: user2GroupIds }
+      }
+    });
+    if (commonGroup) return true;
+  }
+
+  const user2Events = await prisma.attendees.findMany({
+    where: { user_id: user2 },
+    select: { bookings: { select: { event_id: true } } }
+  });
+  const user2EventIds = user2Events.map(a => a.bookings.event_id).filter(Boolean);
+
+  if (user2EventIds.length > 0) {
+    const commonEvent = await prisma.attendees.findFirst({
+      where: {
+        user_id: user1,
+        bookings: {
+          event_id: { in: user2EventIds }
+        }
+      }
+    });
+    if (commonEvent) return true;
+  }
+
+  return false;
+}
 
 export async function messagingRoutes(fastify: FastifyInstance) {
+  // GET /api/messaging/settings
+  fastify.get('/settings', async (request, reply) => {
+    try {
+      const settings = await getChatSettings();
+      return reply.send({ success: true, data: settings });
+    } catch (err: any) {
+      return reply.status(500).send({ success: false, message: err.message });
+    }
+  });
+
   // GET /api/messaging/conversations
   fastify.get('/conversations', { preHandler: [(fastify as any).authenticate] }, async (request, reply) => {
     const userId = request.user?.id;
@@ -126,6 +204,11 @@ export async function messagingRoutes(fastify: FastifyInstance) {
     }
     
     try {
+      const settings = await getChatSettings();
+      if (settings.allowSiteMessaging === false) {
+        return reply.status(400).send({ success: false, error: "Messaging is disabled globally by the administrator" });
+      }
+
       const { targetId } = request.body as any;
       if (!targetId) {
         return reply.status(400).send({ success: false, error: "targetId is required" });
@@ -179,6 +262,26 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             hasPending: !!pending
           });
         }
+      }
+
+      if (!settings.allowDirectMessaging) {
+        const isGroupEnabled = settings.allowGroupChat;
+        const isEventEnabled = settings.allowEventChat;
+        if (isGroupEnabled || isEventEnabled) {
+          const shareCommon = await shareCommonGroupOrEvent(creatorId, targetId);
+          if (!shareCommon) {
+            return reply.status(400).send({ success: false, error: "Direct messaging is disabled by the administrator. You can only message users you share a common group or event with." });
+          }
+        } else {
+          return reply.status(400).send({ success: false, error: "Direct messaging is disabled by the administrator" });
+        }
+      }
+
+      const creatorRoles = await getUserRoles(creatorId);
+      const allowedRoles = settings.rolePermissions?.directMessaging || [];
+      const isAllowed = creatorRoles.some(r => allowedRoles.includes(r));
+      if (!isAllowed) {
+        return reply.status(403).send({ success: false, error: "Your role does not have permission to initiate direct messages" });
       }
 
       // Check if a DM already exists
