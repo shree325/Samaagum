@@ -96,10 +96,31 @@ export async function startMessaging(io: Server): Promise<void> {
       return;
     }
 
-    const userId = token;
+    let userId: string;
+    try {
+      const rawToken = token.startsWith("Bearer ") ? token.substring(7) : token;
+      const parts = rawToken.split(".");
+      if (parts.length === 3) {
+        const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf8"));
+        userId = payload.id;
+      } else {
+        userId = token; // Fallback for testing/mock IDs
+      }
+      if (!userId) {
+        throw new Error("No user ID in token");
+      }
+    } catch (err: any) {
+      console.warn("⚠️ Socket connection rejected: Invalid token format", err.message);
+      socket.disconnect(true);
+      return;
+    }
+
     const socketRooms = new Set<string>();
 
     console.log(`🔌 User connected to chat: ${userId} (Socket: ${socket.id})`);
+
+    socket.join(`user:${userId}`);
+    socketRooms.add(`user:${userId}`);
 
     // Increment active connection count atomically in database (asynchronously to avoid blocking listener registration)
     prisma.$executeRawUnsafe(
@@ -229,9 +250,9 @@ export async function startMessaging(io: Server): Promise<void> {
     });
 
     // Send message to conversation
-    socket.on("message.send", async (payload: { conversationId: string, content: string }, callback: any) => {
+    socket.on("message.send", async (payload: { conversationId: string, content: string, replyToMessageId?: string }, callback: any) => {
       try {
-        const { conversationId, content } = payload;
+        const { conversationId, content, replyToMessageId } = payload;
         if (!conversationId || !content) {
           if (callback) callback({ success: false, error: "conversationId and content are required" });
           return;
@@ -349,7 +370,24 @@ export async function startMessaging(io: Server): Promise<void> {
             tenant_id: "00000000-0000-0000-0000-000000000000",
             conversation_id: conversationId,
             sender_user_id: userId,
-            body: content
+            body: content,
+            reply_to_message_id: replyToMessageId || null
+          },
+          include: {
+            messages: {
+              select: {
+                id: true,
+                body: true,
+                sender_user_id: true,
+                users: {
+                  select: {
+                    profiles: {
+                      select: { display_name: true }
+                    }
+                  }
+                }
+              }
+            }
           }
         });
 
@@ -415,11 +453,23 @@ export async function startMessaging(io: Server): Promise<void> {
           content: message.body,
           body: message.body,
           createdAt: message.created_at,
+          replyToMessageId: message.reply_to_message_id,
+          replyTo: message.messages ? {
+            id: message.messages.id,
+            body: message.messages.body,
+            senderId: message.messages.sender_user_id,
+            senderName: message.messages.users?.profiles?.display_name || "User"
+          } : null,
           receipts: receiptsList
         };
 
         const roomName = `conversation:${conversationId}`;
         chatNamespace.to(roomName).emit("message.created", eventPayload);
+
+        // Emit real-time notification to all other participants' personal rooms
+        targetIds.forEach(tId => {
+          chatNamespace.to(`user:${tId}`).emit("message.received", eventPayload);
+        });
 
         console.log(`✉️ Message sent by ${userId} in room ${roomName}: "${content.substring(0, 30)}..."`);
         if (callback) callback({ success: true, data: eventPayload });

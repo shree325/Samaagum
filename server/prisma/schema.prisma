@@ -1177,6 +1177,7 @@ model profiles {
   headline                                           String?
   media_assets_profiles_cover_asset_idTomedia_assets media_assets? @relation("profiles_cover_asset_idTomedia_assets", fields: [cover_asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_profiles_cover")
   media_assets_profiles_photo_asset_idTomedia_assets media_assets? @relation("profiles_photo_asset_idTomedia_assets", fields: [photo_asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_profiles_photo")
+  messaging_restriction                              String        @default("anyone")
   tenants                                            tenants       @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   users                                              users         @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
@@ -1713,6 +1714,46 @@ model users {
   kyc_submissions                                                      kyc_submissions[]
   maker_checker_requests_maker_checker_requests_checker_user_idTousers maker_checker_requests[]     @relation("maker_checker_requests_checker_user_idTousers")
   maker_checker_requests_maker_checker_requests_maker_user_idTousers   maker_checker_requests[]     @relation("maker_checker_requests_maker_user_idTousers")
+  marketplace_bids                                                    marketplace_bids[]
+  marketplace_listings                                                marketplace_listings[]
+  media_assets                                                        media_assets[]
+  membership_subscriptions                                            membership_subscriptions[]
+  message_receipts                                                    message_receipts[]
+  message_versions                                                    message_versions[]
+  message_visibilities                                                message_visibilities[]
+  messages                                                            messages[]
+  ml_feature_store_ml_feature_store_created_byTousers                 ml_feature_store[]           @relation("ml_feature_store_created_byTousers")
+  ml_feature_store_ml_feature_store_last_upd_byTousers                ml_feature_store[]           @relation("ml_feature_store_last_upd_byTousers")
+  moderation_actions                                                  moderation_actions[]
+  moderation_audit_logs                                               moderation_audit_logs[]
+  moderation_reports_moderation_reports_handled_byTousers             moderation_reports[]         @relation("moderation_reports_handled_byTousers")
+  moderation_reports_moderation_reports_reporter_user_idTousers       moderation_reports[]         @relation("moderation_reports_reporter_user_idTousers")
+  notification_log                                                    notification_log[]
+  notification_preferences                                            notification_preferences[]
+  notification_recipients                                             notification_recipients[]
+  org_domains_org_domains_created_byTousers                           org_domains[]                @relation("org_domains_created_byTousers")
+  org_domains_org_domains_updated_byTousers                           org_domains[]                @relation("org_domains_updated_byTousers")
+  platform_settings                                                   platform_settings[]
+  presences                                                           presences?
+  profile_links                                                       profile_links[]
+  profile_requirement_status                                          profile_requirement_status[]
+  profiles                                                            profiles?
+  ratings                                                             ratings[]
+  reactions                                                           reactions[]
+  refunds_refunds_checker_user_idTousers                              refunds[]                    @relation("refunds_checker_user_idTousers")
+  refunds_refunds_maker_user_idTousers                                refunds[]                    @relation("refunds_maker_user_idTousers")
+  reports_reports_assigned_moderator_idTousers                        reports[]                    @relation("reports_assigned_moderator_idTousers")
+  reports_reports_reporter_idTousers                                  reports[]                    @relation("reports_reporter_idTousers")
+  reports_reports_resolved_by_idTousers                               reports[]                    @relation("reports_resolved_by_idTousers")
+  reviews                                                             reviews[]
+  role_assignments_role_assignments_granted_byTousers                 role_assignments[]           @relation("role_assignments_granted_byTousers")
+  role_assignments_role_assignments_user_idTousers                    role_assignments[]           @relation("role_assignments_user_idTousers")
+  sub_communities_sub_communities_created_byTousers                   sub_communities[]            @relation("sub_communities_created_byTousers")
+  sent_messaging_requests                                             messaging_requests[]         @relation("sent_messaging_requests")
+  received_messaging_requests                                         messaging_requests[]         @relation("received_messaging_requests")
+  sub_communities_sub_communities_updated_byTousers                   sub_communities[]            @relation("sub_communities_updated_byTousers")
+  subscription_orders                                                 subscription_orders[]
+  support_cases_support_cases_assigned_toTousers                      support_cases[]              @relation("support_cases_assigned_toTousers")
   marketplace_bids                                                     marketplace_bids[]
   marketplace_listings                                                 marketplace_listings[]
   media_assets                                                         media_assets[]
@@ -2744,6 +2785,18 @@ enum MessageType {
   SYSTEM
 }
 
+model messaging_requests {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sender_id    String   @db.Uuid
+  receiver_id  String   @db.Uuid
+  status       String   @default("PENDING") // PENDING, ACCEPTED, DECLINED
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime @default(now()) @db.Timestamptz(6)
+
+  sender       users    @relation("sent_messaging_requests", fields: [sender_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  receiver     users    @relation("received_messaging_requests", fields: [receiver_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([sender_id, receiver_id])
 enum ConversationParticipantStatus {
   PENDING
   ACCEPTED

@@ -68,8 +68,24 @@ function App() {
 
   const [subscription, setSubscription] = useState({ plan: 'free', status: 'active' });
   const [socket, setSocket] = useState(null);
+  const [counts, setCounts] = useState({ notifs: 0, messages: 0 });
 
   const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+
+  const fetchCounts = () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    fetch(`${apiBase}/api/messaging/counts`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.data) {
+          setCounts(res.data);
+        }
+      })
+      .catch(err => console.error("Error fetching counts:", err));
+  };
 
   useEffect(() => {
     fetch(`${apiBase}/api/messaging/settings`)
@@ -107,6 +123,27 @@ function App() {
 
       chatSocket.on("connect", () => {
         console.log("🔌 Connected to chat socket as:", userId);
+        fetchCounts();
+      });
+
+      chatSocket.on("message.received", () => {
+        fetchCounts();
+      });
+
+      chatSocket.on("request.received", () => {
+        fetchCounts();
+      });
+
+      chatSocket.on("request.accepted", () => {
+        fetchCounts();
+      });
+
+      chatSocket.on("request.declined", () => {
+        fetchCounts();
+      });
+
+      chatSocket.on("receipt.updated", () => {
+        fetchCounts();
       });
 
       chatSocket.on("profile.updated", (payload) => {
@@ -156,6 +193,8 @@ function App() {
 
       const token = localStorage.getItem('token');
       if (!token) return; // Not logged in - skip profile/subscription fetch
+
+    fetchCounts();
 
     // Fetch subscription status
     fetch(`${apiBase}/api/subscription/status`, {
@@ -213,6 +252,9 @@ function App() {
             if (dobToUse) {
               // Convert ISO string to YYYY-MM-DD for date input
               ME.dob = dobToUse.split('T')[0];
+            }
+            if (prof.messaging_restriction) {
+              ME.messaging_restriction = prof.messaging_restriction;
             }
           }
           if (res.data.socialLinks) {
@@ -377,13 +419,13 @@ function App() {
     }
   }, [toggleJoin, togglePending]);
 
-  const counts = { notifs: 3, messages: 2 };
   const st = {
     saved, toggleSave, joined, pending, toggleJoin: handleJoin, connected, toggleConnect, registered, register, city,
     myTickets, setMyTickets, waitlisted, toggleWaitlist, addClaimedTicket,
     createdEvents, setCreatedEvents, createdGroups, setCreatedGroups,
     addCreatedEvent, addCreatedGroup,
     subscription, setSubscription,
+    fetchCounts
     chatSettings, setChatSettings
   };
 
@@ -415,6 +457,10 @@ function App() {
     if (v === "event") return <EventDetail ev={cur.param} st={st} go={go} />;
     if (v === "group") return <GroupDetail group={cur.param} st={st} go={go} />;
     if (v === "profile") return <Profile st={st} go={go} />;
+    if (v === "settings") return <SettingsPage st={st} go={go} />;
+    if (v === "public-profile") return <PublicProfile profile={cur.param} go={go} socket={socket} />;
+    if (v === "notifications") return <Notifications st={st} go={go} socket={socket} />;
+    if (v === "messages") return <Messages st={st} go={go} mobile={mobile} socket={socket} />;
     if (v === "public-profile") return <PublicProfile profile={cur.param} go={go} />;
     if (v === "notifications") return <Notifications st={st} go={go} />;
     if (v === "messages") {
