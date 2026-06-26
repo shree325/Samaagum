@@ -322,11 +322,11 @@ model conversation_participants {
   user_id         String                        @db.Uuid
   role            String                        @default("member")
   last_read_at    DateTime?                     @db.Timestamptz(6)
-  left_at         DateTime?                     @db.Timestamptz(6)
   archived_at     DateTime?                     @db.Timestamptz(6)
+  left_at         DateTime?                     @db.Timestamptz(6)
   muted_until     DateTime?                     @db.Timestamptz(6)
-  status          ConversationParticipantStatus @default(ACCEPTED)
   pinned_at       DateTime?                     @db.Timestamptz(6)
+  status          ConversationParticipantStatus @default(ACCEPTED)
   conversations   conversations                 @relation(fields: [conversation_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   users           users                         @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -974,17 +974,17 @@ model messages {
   sender_user_id       String                 @db.Uuid
   body                 String?
   created_at           DateTime               @default(now()) @db.Timestamptz(6)
-  edited_at            DateTime?              @db.Timestamptz(6)
-  deleted_at           DateTime?              @db.Timestamptz(6)
-  reply_to_message_id  String?                @db.Uuid
-  attachments_count    Int?                   @default(0)
-  deleted_for_everyone Boolean                @default(false)
-  status               MessageStatus          @default(ACTIVE)
-  type                 MessageType            @default(TEXT)
-  version              Int                    @default(1)
   is_edited            Boolean?               @default(false)
   is_deleted           Boolean?               @default(false)
   updated_at           DateTime?              @default(now()) @db.Timestamptz(6)
+  attachments_count    Int?                   @default(0)
+  deleted_at           DateTime?              @db.Timestamptz(6)
+  deleted_for_everyone Boolean                @default(false)
+  edited_at            DateTime?              @db.Timestamptz(6)
+  reply_to_message_id  String?                @db.Uuid
+  status               MessageStatus          @default(ACTIVE)
+  type                 MessageType            @default(TEXT)
+  version              Int                    @default(1)
   attachments          attachments[]
   message_receipts     message_receipts[]
   message_versions     message_versions[]
@@ -1653,113 +1653,113 @@ model user_interests {
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model users {
-  id                                                                  String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id                                                           String                       @db.Uuid
-  primary_email                                                       String?                      @db.Citext
-  email_verified                                                      Boolean                      @default(false)
-  state                                                               user_state                   @default(provisional)
-  locale                                                              String                       @default("en")
-  preferred_currency                                                  String?                      @db.Char(3)
-  gender                                                              String?
-  dob                                                                 DateTime?                    @db.Date
-  phone_e164                                                          String?
-  profile_completed                                                   Boolean                      @default(false)
-  activated_at                                                        DateTime?                    @db.Timestamptz(6)
-  deleted_at                                                          DateTime?                    @db.Timestamptz(6)
-  created_at                                                          DateTime                     @default(now()) @db.Timestamptz(6)
-  updated_at                                                          DateTime                     @default(now()) @db.Timestamptz(6)
-  profile_image_data                                                  Bytes?
-  first_name                                                          String?
-  last_name                                                           String?
-  location                                                            String?
-  phone_number                                                        String?                      @db.VarChar(20)
-  last_seen_at                                                        DateTime?                    @db.Timestamptz(6)
-  admin_roles                                                         admin_roles[]
-  affiliates                                                          affiliates[]
-  attendees_attendees_created_byTousers                               attendees[]                  @relation("attendees_created_byTousers")
-  attendees_attendees_updated_byTousers                               attendees[]                  @relation("attendees_updated_byTousers")
-  attendees_attendees_user_idTousers                                  attendees[]                  @relation("attendees_user_idTousers")
-  auth_identities                                                     auth_identities[]
-  blocked_users_blocked_users_blocked_idTousers                       blocked_users[]              @relation("blocked_users_blocked_idTousers")
-  blocked_users_blocked_users_blocker_idTousers                       blocked_users[]              @relation("blocked_users_blocker_idTousers")
-  bookings                                                            bookings[]
-  checkin_gates_checkin_gates_created_byTousers                       checkin_gates[]              @relation("checkin_gates_created_byTousers")
-  checkin_gates_checkin_gates_updated_byTousers                       checkin_gates[]              @relation("checkin_gates_updated_byTousers")
-  checkins                                                            checkins[]
-  connections_connections_addressee_user_idTousers                    connections[]                @relation("connections_addressee_user_idTousers")
-  connections_connections_requester_user_idTousers                    connections[]                @relation("connections_requester_user_idTousers")
-  conversation_participants                                           conversation_participants[]
-  conversations                                                       conversations[]
-  coupon_redemptions                                                  coupon_redemptions[]
-  disputes                                                            disputes[]
-  entities                                                            entities[]
-  event_categories_event_categories_created_byTousers                 event_categories[]           @relation("event_categories_created_byTousers")
-  event_categories_event_categories_updated_byTousers                 event_categories[]           @relation("event_categories_updated_byTousers")
-  event_media_event_media_created_byTousers                           event_media[]                @relation("event_media_created_byTousers")
-  event_media_event_media_updated_byTousers                           event_media[]                @relation("event_media_updated_byTousers")
-  event_team_assignments_event_team_assignments_granted_byTousers     event_team_assignments[]     @relation("event_team_assignments_granted_byTousers")
-  event_team_assignments_event_team_assignments_user_idTousers        event_team_assignments[]     @relation("event_team_assignments_user_idTousers")
-  follows                                                             follows[]
-  form_responses                                                      form_responses[]
-  forum_comments                                                      forum_comments[]
-  forum_posts                                                         forum_posts[]
-  gamification_gamification_created_byTousers                         gamification[]               @relation("gamification_created_byTousers")
-  gamification_gamification_last_upd_byTousers                        gamification[]               @relation("gamification_last_upd_byTousers")
-  gamification_gamification_user_idTousers                            gamification?                @relation("gamification_user_idTousers")
-  group_memberships                                                   group_memberships[]
-  impersonation_sessions_impersonation_sessions_admin_user_idTousers  impersonation_sessions[]     @relation("impersonation_sessions_admin_user_idTousers")
-  impersonation_sessions_impersonation_sessions_target_user_idTousers impersonation_sessions[]     @relation("impersonation_sessions_target_user_idTousers")
-  kyc_reviews                                                         kyc_reviews[]
-  kyc_submissions                                                     kyc_submissions[]
+  id                                                                   String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                                                            String                       @db.Uuid
+  primary_email                                                        String?                      @db.Citext
+  email_verified                                                       Boolean                      @default(false)
+  state                                                                user_state                   @default(provisional)
+  locale                                                               String                       @default("en")
+  preferred_currency                                                   String?                      @db.Char(3)
+  gender                                                               String?
+  dob                                                                  DateTime?                    @db.Date
+  phone_e164                                                           String?
+  profile_completed                                                    Boolean                      @default(false)
+  activated_at                                                         DateTime?                    @db.Timestamptz(6)
+  deleted_at                                                           DateTime?                    @db.Timestamptz(6)
+  created_at                                                           DateTime                     @default(now()) @db.Timestamptz(6)
+  updated_at                                                           DateTime                     @default(now()) @db.Timestamptz(6)
+  last_seen_at                                                         DateTime?                    @db.Timestamptz(6)
+  profile_image_data                                                   Bytes?
+  first_name                                                           String?
+  last_name                                                            String?
+  location                                                             String?
+  phone_number                                                         String?                      @db.VarChar(20)
+  admin_roles                                                          admin_roles[]
+  affiliates                                                           affiliates[]
+  attendees_attendees_created_byTousers                                attendees[]                  @relation("attendees_created_byTousers")
+  attendees_attendees_updated_byTousers                                attendees[]                  @relation("attendees_updated_byTousers")
+  attendees_attendees_user_idTousers                                   attendees[]                  @relation("attendees_user_idTousers")
+  auth_identities                                                      auth_identities[]
+  blocked_users_blocked_users_blocked_idTousers                        blocked_users[]              @relation("blocked_users_blocked_idTousers")
+  blocked_users_blocked_users_blocker_idTousers                        blocked_users[]              @relation("blocked_users_blocker_idTousers")
+  bookings                                                             bookings[]
+  checkin_gates_checkin_gates_created_byTousers                        checkin_gates[]              @relation("checkin_gates_created_byTousers")
+  checkin_gates_checkin_gates_updated_byTousers                        checkin_gates[]              @relation("checkin_gates_updated_byTousers")
+  checkins                                                             checkins[]
+  connections_connections_addressee_user_idTousers                     connections[]                @relation("connections_addressee_user_idTousers")
+  connections_connections_requester_user_idTousers                     connections[]                @relation("connections_requester_user_idTousers")
+  conversation_participants                                            conversation_participants[]
+  conversations                                                        conversations[]
+  coupon_redemptions                                                   coupon_redemptions[]
+  disputes                                                             disputes[]
+  entities                                                             entities[]
+  event_categories_event_categories_created_byTousers                  event_categories[]           @relation("event_categories_created_byTousers")
+  event_categories_event_categories_updated_byTousers                  event_categories[]           @relation("event_categories_updated_byTousers")
+  event_media_event_media_created_byTousers                            event_media[]                @relation("event_media_created_byTousers")
+  event_media_event_media_updated_byTousers                            event_media[]                @relation("event_media_updated_byTousers")
+  event_team_assignments_event_team_assignments_granted_byTousers      event_team_assignments[]     @relation("event_team_assignments_granted_byTousers")
+  event_team_assignments_event_team_assignments_user_idTousers         event_team_assignments[]     @relation("event_team_assignments_user_idTousers")
+  follows                                                              follows[]
+  form_responses                                                       form_responses[]
+  forum_comments                                                       forum_comments[]
+  forum_posts                                                          forum_posts[]
+  gamification_gamification_created_byTousers                          gamification[]               @relation("gamification_created_byTousers")
+  gamification_gamification_last_upd_byTousers                         gamification[]               @relation("gamification_last_upd_byTousers")
+  gamification_gamification_user_idTousers                             gamification?                @relation("gamification_user_idTousers")
+  group_memberships                                                    group_memberships[]
+  impersonation_sessions_impersonation_sessions_admin_user_idTousers   impersonation_sessions[]     @relation("impersonation_sessions_admin_user_idTousers")
+  impersonation_sessions_impersonation_sessions_target_user_idTousers  impersonation_sessions[]     @relation("impersonation_sessions_target_user_idTousers")
+  kyc_reviews                                                          kyc_reviews[]
+  kyc_submissions                                                      kyc_submissions[]
   maker_checker_requests_maker_checker_requests_checker_user_idTousers maker_checker_requests[]     @relation("maker_checker_requests_checker_user_idTousers")
   maker_checker_requests_maker_checker_requests_maker_user_idTousers   maker_checker_requests[]     @relation("maker_checker_requests_maker_user_idTousers")
-  marketplace_bids                                                    marketplace_bids[]
-  marketplace_listings                                                marketplace_listings[]
-  media_assets                                                        media_assets[]
-  membership_subscriptions                                            membership_subscriptions[]
-  message_receipts                                                    message_receipts[]
-  message_versions                                                    message_versions[]
-  message_visibilities                                                message_visibilities[]
-  messages                                                            messages[]
-  ml_feature_store_ml_feature_store_created_byTousers                 ml_feature_store[]           @relation("ml_feature_store_created_byTousers")
-  ml_feature_store_ml_feature_store_last_upd_byTousers                ml_feature_store[]           @relation("ml_feature_store_last_upd_byTousers")
-  moderation_actions                                                  moderation_actions[]
-  moderation_audit_logs                                               moderation_audit_logs[]
-  moderation_reports_moderation_reports_handled_byTousers             moderation_reports[]         @relation("moderation_reports_handled_byTousers")
-  moderation_reports_moderation_reports_reporter_user_idTousers       moderation_reports[]         @relation("moderation_reports_reporter_user_idTousers")
-  notification_log                                                    notification_log[]
-  notification_preferences                                            notification_preferences[]
-  notification_recipients                                             notification_recipients[]
-  org_domains_org_domains_created_byTousers                           org_domains[]                @relation("org_domains_created_byTousers")
-  org_domains_org_domains_updated_byTousers                           org_domains[]                @relation("org_domains_updated_byTousers")
-  platform_settings                                                   platform_settings[]
-  presences                                                           presences?
-  profile_links                                                       profile_links[]
-  profile_requirement_status                                          profile_requirement_status[]
-  profiles                                                            profiles?
-  ratings                                                             ratings[]
-  reactions                                                           reactions[]
-  refunds_refunds_checker_user_idTousers                              refunds[]                    @relation("refunds_checker_user_idTousers")
-  refunds_refunds_maker_user_idTousers                                refunds[]                    @relation("refunds_maker_user_idTousers")
-  reports_reports_assigned_moderator_idTousers                        reports[]                    @relation("reports_assigned_moderator_idTousers")
-  reports_reports_reporter_idTousers                                  reports[]                    @relation("reports_reporter_idTousers")
-  reports_reports_resolved_by_idTousers                               reports[]                    @relation("reports_resolved_by_idTousers")
-  reviews                                                             reviews[]
-  role_assignments_role_assignments_granted_byTousers                 role_assignments[]           @relation("role_assignments_granted_byTousers")
-  role_assignments_role_assignments_user_idTousers                    role_assignments[]           @relation("role_assignments_user_idTousers")
-  sub_communities_sub_communities_created_byTousers                   sub_communities[]            @relation("sub_communities_created_byTousers")
-  sub_communities_sub_communities_updated_byTousers                   sub_communities[]            @relation("sub_communities_updated_byTousers")
-  subscription_orders                                                 subscription_orders[]
-  support_cases_support_cases_assigned_toTousers                      support_cases[]              @relation("support_cases_assigned_toTousers")
+  marketplace_bids                                                     marketplace_bids[]
+  marketplace_listings                                                 marketplace_listings[]
+  media_assets                                                         media_assets[]
+  membership_subscriptions                                             membership_subscriptions[]
+  message_receipts                                                     message_receipts[]
+  message_versions                                                     message_versions[]
+  message_visibilities                                                 message_visibilities[]
+  messages                                                             messages[]
+  ml_feature_store_ml_feature_store_created_byTousers                  ml_feature_store[]           @relation("ml_feature_store_created_byTousers")
+  ml_feature_store_ml_feature_store_last_upd_byTousers                 ml_feature_store[]           @relation("ml_feature_store_last_upd_byTousers")
+  moderation_actions                                                   moderation_actions[]
+  moderation_audit_logs                                                moderation_audit_logs[]
+  moderation_reports_moderation_reports_handled_byTousers              moderation_reports[]         @relation("moderation_reports_handled_byTousers")
+  moderation_reports_moderation_reports_reporter_user_idTousers        moderation_reports[]         @relation("moderation_reports_reporter_user_idTousers")
+  notification_log                                                     notification_log[]
+  notification_preferences                                             notification_preferences[]
+  notification_recipients                                              notification_recipients[]
+  org_domains_org_domains_created_byTousers                            org_domains[]                @relation("org_domains_created_byTousers")
+  org_domains_org_domains_updated_byTousers                            org_domains[]                @relation("org_domains_updated_byTousers")
+  platform_settings                                                    platform_settings[]
+  presences                                                            presences?
+  profile_links                                                        profile_links[]
+  profile_requirement_status                                           profile_requirement_status[]
+  profiles                                                             profiles?
+  ratings                                                              ratings[]
+  reactions                                                            reactions[]
+  refunds_refunds_checker_user_idTousers                               refunds[]                    @relation("refunds_checker_user_idTousers")
+  refunds_refunds_maker_user_idTousers                                 refunds[]                    @relation("refunds_maker_user_idTousers")
+  reports_reports_assigned_moderator_idTousers                         reports[]                    @relation("reports_assigned_moderator_idTousers")
+  reports_reports_reporter_idTousers                                   reports[]                    @relation("reports_reporter_idTousers")
+  reports_reports_resolved_by_idTousers                                reports[]                    @relation("reports_resolved_by_idTousers")
+  reviews                                                              reviews[]
+  role_assignments_role_assignments_granted_byTousers                  role_assignments[]           @relation("role_assignments_granted_byTousers")
+  role_assignments_role_assignments_user_idTousers                     role_assignments[]           @relation("role_assignments_user_idTousers")
+  sub_communities_sub_communities_created_byTousers                    sub_communities[]            @relation("sub_communities_created_byTousers")
+  sub_communities_sub_communities_updated_byTousers                    sub_communities[]            @relation("sub_communities_updated_byTousers")
+  subscription_orders                                                  subscription_orders[]
+  support_cases_support_cases_assigned_toTousers                       support_cases[]              @relation("support_cases_assigned_toTousers")
   support_cases_support_cases_raised_by_user_idTousers                 support_cases[]              @relation("support_cases_raised_by_user_idTousers")
-  takeover_requests                                                   takeover_requests[]
-  tickets                                                             tickets[]
-  user_badges                                                         user_badges[]
-  user_consents                                                       user_consents[]
-  user_interests                                                      user_interests[]
-  tenants                                                             tenants                      @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  waitlist_entries                                                    waitlist_entries[]
-  wishlists                                                           wishlists[]
+  takeover_requests                                                    takeover_requests[]
+  tickets                                                              tickets[]
+  user_badges                                                          user_badges[]
+  user_consents                                                        user_consents[]
+  user_interests                                                       user_interests[]
+  tenants                                                              tenants                      @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  waitlist_entries                                                     waitlist_entries[]
+  wishlists                                                            wishlists[]
 
   @@unique([tenant_id, primary_email])
   @@index([tenant_id], map: "idx_users_tenant_id")
@@ -2137,12 +2137,12 @@ model gamification {
 }
 
 model message_receipts {
-  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   message_id   String    @db.Uuid
   user_id      String    @db.Uuid
   delivered_at DateTime? @db.Timestamptz(6)
   seen_at      DateTime? @db.Timestamptz(6)
   failed_at    DateTime? @db.Timestamptz(6)
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   messages     messages  @relation(fields: [message_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   users        users     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -2521,8 +2521,8 @@ enum content_status {
 
 enum conversation_type {
   dm
-  group
   organizer_inbox
+  group
 }
 
 enum coupon_discount {
@@ -2691,7 +2691,7 @@ enum subscription_state {
 }
 
 enum takeover_state {
-  requested 
+  requested
   admin_review
   approved
   declined
