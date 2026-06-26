@@ -2687,10 +2687,11 @@ enum subscription_state {
   grace
   expired
   cancelled
+  inactive
 }
 
 enum takeover_state {
-  requested
+  requested 
   admin_review
   approved
   declined
