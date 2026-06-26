@@ -131,7 +131,6 @@ function App() {
         setChatSettings(updatedSettings);
         window.chatSettings = updatedSettings;
       });
-      });
 
       setSocket(chatSocket);
 

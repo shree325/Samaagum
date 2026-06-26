@@ -920,7 +920,7 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
         const { locationService } = require('../services/locationService');
         const isValid = await locationService.validateActiveLocation(
           locationName || finalLocation, 
-          dbUser.location_name || dbUser.location
+          dbUser.location
         );
         if (!isValid) {
           return reply.status(400).send({
@@ -931,21 +931,17 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
         // ----------------------------------------
         
         userUpdateData.location = finalLocation;
-        if (locationName) userUpdateData.location_name = locationName;
-        if (locationLat !== undefined && !isNaN(locationLat)) userUpdateData.location_lat = locationLat;
-        if (locationLng !== undefined && !isNaN(locationLng)) userUpdateData.location_lng = locationLng;
-        if (address) userUpdateData.address = address;
       }
       
       const finalGender = gender || null;
       if (finalGender !== null) userUpdateData.gender = finalGender;
-
+ 
       const finalDob = dob ? new Date(dob) : null;
       if (finalDob !== null) userUpdateData.dob = finalDob;
-
+ 
       // Store image bytes directly on the users row
       if (profilePhotoBuffer !== undefined) userUpdateData.profile_image_data = profilePhotoBuffer;
-
+ 
       if (Object.keys(userUpdateData).length > 0) {
         userUpdateData.updated_at = new Date();
         await prisma.users.update({
@@ -953,9 +949,9 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
           data: userUpdateData
         });
       }
-
+ 
       const finalSkills = skills ? skills : interests ? interests : undefined;
-
+ 
       const updateData: any = {
         display_name: displayName,
         first_name: firstName,
@@ -963,10 +959,8 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
         user_name: userName,
         bio: bio,
         preferred_location: finalLocation,
-        location_name: locationName || undefined,
         location_lat: locationLat !== undefined && !isNaN(locationLat) ? locationLat : undefined,
         location_lng: locationLng !== undefined && !isNaN(locationLng) ? locationLng : undefined,
-        address: address || undefined,
         phone_number: finalPhone,
         template_key: headline,
         headline: headline,
@@ -984,10 +978,8 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
         user_name: userName,
         bio: bio || '',
         preferred_location: finalLocation,
-        location_name: locationName || undefined,
         location_lat: locationLat !== undefined && !isNaN(locationLat) ? locationLat : undefined,
         location_lng: locationLng !== undefined && !isNaN(locationLng) ? locationLng : undefined,
-        address: address || undefined,
         phone_number: finalPhone,
         template_key: headline || '',
         headline: headline || '',
