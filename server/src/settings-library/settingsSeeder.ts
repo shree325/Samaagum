@@ -33,6 +33,10 @@ export const DEFAULT_OTP_SETTINGS: OtpSettings = {
   mockMode: false
 };
 
+export const DEFAULT_FEATURE_SETTINGS: any = {
+  location_active: true
+};
+
 export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
   allowSiteMessaging: true,
   allowDirectMessaging: true,
@@ -161,6 +165,20 @@ export async function seedPlatformSettings(
     console.log('Seeded default OTP settings');
   } else {
     console.log('OTP settings already exist, skipping...');
+  }
+
+  // Insert Feature Settings if not exists
+  const checkFeatureRows = await dbExecutor(checkAuthQuery, ['feature_settings']);
+
+  if (checkFeatureRows.length === 0) {
+    const insertFeatureQuery = `
+      INSERT INTO platform_settings (id, scope_tenant_id, key, value, updated_at)
+      VALUES (gen_random_uuid(), null, $1, $2::jsonb, now())
+    `;
+    await dbExecutor(insertFeatureQuery, ['feature_settings', JSON.stringify(DEFAULT_FEATURE_SETTINGS)]);
+    console.log('Seeded default Feature settings');
+  } else {
+    console.log('Feature settings already exist, skipping...');
   }
 
   // Insert Chat Settings if not exists

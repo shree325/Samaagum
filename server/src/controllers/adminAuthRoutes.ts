@@ -73,7 +73,7 @@ export const adminAuthRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                 id: adminRecord.userId,
                 tenantId: adminRecord.tenantId,
                 email: adminRecord.email,
-                role: adminRecord.role,
+                role: adminRecord.role || 'admin',
                 roleId: adminRecord.roleId,
                 name: adminRecord.name
             })).toString('base64url');
@@ -87,7 +87,7 @@ export const adminAuthRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                 user: {
                     id: adminRecord.userId,
                     email: adminRecord.email,
-                    role: adminRecord.role,
+                    role: adminRecord.role || 'admin',
                     name: adminRecord.name
                 }
             };

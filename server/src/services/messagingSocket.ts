@@ -642,3 +642,9 @@ export async function stopMessaging(): Promise<void> {
 export function getMessagingHealth() {
   return { status: "healthy", gateway: chatNamespace ? "connected" : "disconnected" };
 }
+
+export function emitProfileUpdate(userId: string, profileData: any) {
+  if (chatNamespace) {
+    chatNamespace.emit('profile.updated', { userId, ...profileData });
+  }
+}

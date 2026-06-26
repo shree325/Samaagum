@@ -13,13 +13,13 @@ const pool = new Pool({
 });
 
 let REPO_ROOT = process.cwd();
-if (!fs.existsSync(path.join(REPO_ROOT, 'GeoLite2-City-Locations-en.csv'))) {
+if (!fs.existsSync(path.join(REPO_ROOT, 'GeoLite2-City-CSV_20260616', 'GeoLite2-City-CSV_20260616', 'GeoLite2-City-Locations-en.csv'))) {
   REPO_ROOT = path.resolve(process.cwd(), '../');
 }
 
-const LOCATIONS_CSV = path.join(REPO_ROOT, 'GeoLite2-City-Locations-en.csv');
-const IPV4_CSV = path.join(REPO_ROOT, 'GeoLite2-City-Blocks-IPv4.csv');
-const IPV6_CSV = path.join(REPO_ROOT, 'GeoLite2-City-Blocks-IPv6.csv');
+const LOCATIONS_CSV = path.join(REPO_ROOT, 'GeoLite2-City-CSV_20260616', 'GeoLite2-City-CSV_20260616', 'GeoLite2-City-Locations-en.csv');
+const IPV4_CSV = path.join(REPO_ROOT, 'GeoLite2-City-CSV_20260616', 'GeoLite2-City-CSV_20260616', 'GeoLite2-City-Blocks-IPv4.csv');
+const IPV6_CSV = path.join(REPO_ROOT, 'GeoLite2-City-CSV_20260616', 'GeoLite2-City-CSV_20260616', 'GeoLite2-City-Blocks-IPv6.csv');
 
 function validateFiles() {
   const files = [
