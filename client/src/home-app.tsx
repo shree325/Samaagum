@@ -425,7 +425,7 @@ function App() {
     createdEvents, setCreatedEvents, createdGroups, setCreatedGroups,
     addCreatedEvent, addCreatedGroup,
     subscription, setSubscription,
-    fetchCounts
+    fetchCounts,
     chatSettings, setChatSettings
   };
 

@@ -825,7 +825,6 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
       }
 
       let displayName, bio, preferredLocation, location, socialLinks, headline, skills, interests, gender, dob, phone, firstName, lastName, phoneNumber, userName, messagingRestriction;
-      let displayName, bio, preferredLocation, location, socialLinks, headline, skills, interests, gender, dob, phone, firstName, lastName, phoneNumber, userName;
       let locationName: string | undefined, locationLat: number | undefined, locationLng: number | undefined, address: string | undefined;
       let profilePhotoBuffer: Buffer | undefined;
       let coverBannerBuffer: Buffer | undefined;

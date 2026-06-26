@@ -274,12 +274,13 @@ function Messages({ st, go, mobile, socket }) {
         if (res.success && res.data) {
           setThreads(res.data);
           if (res.data.length > 0 && !activeId) {
-          const savedConvId = localStorage.getItem('active_chat_conv_id');
-          if (savedConvId && res.data.some(t => t.id === savedConvId)) {
-            setActiveId(savedConvId);
-            localStorage.removeItem('active_chat_conv_id');
-          } else if (res.data.length > 0) {
-            setActiveId(res.data[0].id);
+            const savedConvId = localStorage.getItem('active_chat_conv_id');
+            if (savedConvId && res.data.some(t => t.id === savedConvId)) {
+              setActiveId(savedConvId);
+              localStorage.removeItem('active_chat_conv_id');
+            } else if (res.data.length > 0) {
+              setActiveId(res.data[0].id);
+            }
           }
         }
       })
@@ -691,14 +692,6 @@ socket.off("request.declined", handleRequestDeclined);
                   <>
                     <div className="search-group-title" style={{ fontSize: 11, textTransform: "uppercase", fontWeight: 700, color: "var(--ink-3)", margin: "16px 12px 4px" }}>More Accounts</div>
                     {searchedMoreAccounts.map(user => (
-                      <div key={user.id} className="search-item" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 12px", borderRadius: "8px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
-                          <div style={{ position: "relative" }}>
-                            <Avatar name={user.name || "null"} size={40} />
-                            <span className="search-presence-dot" style={{ position: "absolute", bottom: 0, right: 0, width: 10, height: 10, borderRadius: "50%", background: presenceMap[user.id] === "ONLINE" ? "#2bb673" : "#8e8e93", border: "2px solid var(--surface)" }} />
-                          </div>
-                          <div className="info" style={{ flex: 1, minWidth: 0 }}>
-                            <div className="name" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{user.name === null ? "null" : user.name}</div>
                       <div key={user.id} className="search-item" onClick={() => selectSearchResult(user)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: "8px", cursor: "pointer" }}>
                         <div style={{ position: "relative" }}>
                           <I.Avatar userId={user.id} name={user.name || "null"} size={40} />
@@ -766,19 +759,15 @@ socket.off("request.declined", handleRequestDeclined);
                   const headline = r.sender?.profiles?.headline || "";
                   return (
                     <div key={r.id} className="req-card">
-                      <Avatar name={displayName} size={48}/>
-                      <div className="ri"><div className="n">{displayName}</div><div className="d">{headline}</div></div>
-                      <div className="ract" style={{ flexDirection:"column", gap:7 }}>
+                      <I.Avatar userId={r.senderId || r.sender?.id} name={displayName} size={48}/>
+                      <div className="ri">
+                        <div className="n">{displayName}</div>
+                        <div className="d">{headline}</div>
+                      </div>
+                      <div className="ract" style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                         <button className="hbtn hbtn--primary hbtn--sm" onClick={()=>handleAcceptRequest(r.id)}><I.check/></button>
                         <button className="hbtn hbtn--ghost hbtn--sm" onClick={()=>handleDeclineRequest(r.id)}><I.x/></button>
                       </div>
-                {REQUESTS.map(r => (
-                  <div key={r.name} className="req-card">
-                    <I.Avatar userId={r.userId || r.id} name={r.name} size={48}/>
-                    <div className="ri"><div className="n">{r.name}</div><div className="d">{r.role}</div><div className="d" style={{ color:"var(--accent-2)" }}>{r.mutual} mutual</div></div>
-                    <div className="ract" style={{ flexDirection:"column", gap:7 }}>
-                      <button className="hbtn hbtn--primary hbtn--sm" onClick={()=>st.toggleConnect(r.name)}><I.check/></button>
-                      <button className="hbtn hbtn--ghost hbtn--sm"><I.x/></button>
                     </div>
                   );
                 })}
@@ -1028,15 +1017,6 @@ socket.off("request.declined", handleRequestDeclined);
               </div>
             )}
 
-            <div className="conv-compose">
-              <input 
-                placeholder={`Message ${firstName}…`} 
-                value={input} 
-                onChange={e=>setInput(e.target.value)} 
-                onKeyDown={e=>e.key==="Enter"&&send()} 
-              />
-              <button className="send" onClick={send}><I.send/></button>
-            </div>
             {hideCompose ? (
               <div className="dm-restricted-banner" style={{
                 padding: "20px",
