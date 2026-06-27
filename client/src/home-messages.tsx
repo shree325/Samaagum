@@ -3,6 +3,11 @@
    Samaagum Home — Messages, connections (DMs, upward, requests)
    ============================================================ */
 
+function ProfileName({ userId, name }) {
+  const p = I.useProfileSync ? I.useProfileSync(userId, { name }) : { name };
+  return <>{p.name || "null"}</>;
+}
+
 function Messages({ st, go, mobile, socket }) {
   const [seg, setSeg] = useState("messages");
   const [threads, setThreads] = useState([]);
@@ -16,6 +21,66 @@ function Messages({ st, go, mobile, socket }) {
   const [menuMsgId, setMenuMsgId] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
+  const [replyingTo, setReplyingTo] = useState(null);
+
+  const [requestStatuses, setRequestStatuses] = useState({});
+
+  // Sync the currently active conversation ID to window so the shell's socket handler can check it
+  useEffect(() => {
+    window.activeConversationId = activeId;
+    return () => {
+      window.activeConversationId = null;
+    };
+  }, [activeId]);
+
+  const checkCommonGroupOrEvent = (otherUser) => {
+    if (!otherUser) return false;
+    const cleanOtherName = (otherUser.name || "").toLowerCase().trim();
+    if (!cleanOtherName) return false;
+
+    const isSameUserByName = (n1, n2) => {
+      if (!n1 || !n2) return false;
+      const p1 = n1.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(' ').filter(Boolean)[0];
+      const p2 = n2.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(' ').filter(Boolean)[0];
+      return p1 === p2;
+    };
+
+    // Check Groups: other user is in a group that I have joined or created
+    const commonGroup = (window.GROUPS || []).some(g => {
+      const userJoined = st.joined && st.joined.has(g.id);
+      const userCreated = st.createdGroups && st.createdGroups.some(cg => cg.id === g.id);
+      const meInGroup = userJoined || userCreated || g.owner?.toLowerCase().includes("aanya");
+      
+      if (!meInGroup) return false;
+
+      const membersList = g.memberNames || [];
+      return membersList.some(m => {
+        const mName = typeof m === 'object' ? m.name : m;
+        return isSameUserByName(mName, cleanOtherName);
+      });
+    });
+
+    if (commonGroup) return true;
+
+    // Check Events: other user is in an event that I am registered for
+    const commonEvent = (window.EVENTS || []).some(e => {
+      const userReg = st.registered && st.registered.has(e.id);
+      const userWaitlist = st.waitlisted && st.waitlisted.has(e.id);
+      const meInEvent = userReg || userWaitlist;
+
+      if (!meInEvent) return false;
+
+      const hostName = e.hostBy || e.host || "";
+      if (isSameUserByName(hostName, cleanOtherName)) return true;
+
+      const attendeesList = e.attendees || [];
+      return attendeesList.some(a => isSameUserByName(a, cleanOtherName));
+    });
+
+    if (commonEvent) return true;
+
+    return false;
+  };
 
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -32,6 +97,16 @@ function Messages({ st, go, mobile, socket }) {
         .then(res => {
           if (res.success && res.data) {
             setSearchResults(res.data);
+            res.data.forEach(user => {
+              fetch(`${apiBase}/api/messaging/requests/status/${user.id}`, { headers })
+                .then(r => r.json())
+                .then(rJson => {
+                  if (rJson.success && rJson.data) {
+                    setRequestStatuses(prev => ({ ...prev, [user.id]: rJson.data.status }));
+                  }
+                })
+                .catch(e => console.error("Error fetching request status:", e));
+            });
           }
         })
         .catch(err => console.error("Error searching users:", err));
@@ -39,6 +114,64 @@ function Messages({ st, go, mobile, socket }) {
 
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery, apiBase]);
+
+  const handleConnectUser = (user, e) => {
+    if (e) e.stopPropagation();
+    const token = localStorage.getItem('token');
+    const headers = { 
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
+
+    fetch(`${apiBase}/api/messaging/conversations/direct`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ targetId: user.id })
+    })
+      .then(async res => {
+        const data = await res.json();
+        if (res.ok) {
+          const conv = data.data;
+          setThreads(prev => {
+            if (prev.some(t => t.id === conv.id)) return prev;
+            return [conv, ...prev];
+          });
+          setActiveId(conv.id);
+          setSearchQuery("");
+          setShowConv(true);
+          setRequestStatuses(prev => ({ ...prev, [user.id]: 'CONNECTED' }));
+        } else if (res.status === 403 && data.restriction === 'approval_required') {
+          if (data.hasPending) {
+            if (window.toast) window.toast("Messaging request is already pending.");
+            else alert("Messaging request is already pending.");
+            setRequestStatuses(prev => ({ ...prev, [user.id]: 'PENDING' }));
+            return;
+          }
+          fetch(`${apiBase}/api/messaging/requests`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ targetId: user.id })
+          })
+            .then(r => r.json())
+            .then(rData => {
+              if (rData.success) {
+                setRequestStatuses(prev => ({ ...prev, [user.id]: 'PENDING' }));
+                if (window.toast) window.toast("Messaging request sent!");
+                else alert("Messaging request sent!");
+              } else {
+                alert(rData.error || "Failed to send request.");
+              }
+            });
+        } else if (res.status === 403 && data.restriction === 'only_connected') {
+          if (window.toast) window.toast("This user only allows messaging from connected users.");
+          else alert("This user only allows messaging from connected users.");
+          go("public-profile", user);
+        } else {
+          alert(data.error || "Connection failed.");
+        }
+      })
+      .catch(err => console.error("Error connecting user:", err));
+  };
 
   const selectSearchResult = (user) => {
     const token = localStorage.getItem('token');
@@ -52,7 +185,24 @@ function Messages({ st, go, mobile, socket }) {
       headers,
       body: JSON.stringify({ targetId: user.id })
     })
-      .then(res => res.json())
+      .then(res => {
+        if (res.status === 403) {
+          return res.json().then(data => {
+            if (data.restriction === 'only_connected') {
+              if (window.toast) window.toast("This user only allows messaging from connected users.");
+              else alert("This user only allows messaging from connected users.");
+              go("public-profile", user);
+            } else if (data.restriction === 'no_one') {
+              if (window.toast) window.toast("This user has disabled direct messages.");
+              else alert("This user has disabled direct messages.");
+            } else {
+              alert(data.error || "Unable to start messaging.");
+            }
+            throw new Error("restricted");
+          });
+        }
+        return res.json();
+      })
       .then(res => {
         if (res.success && res.data) {
           const conv = res.data;
@@ -65,7 +215,11 @@ function Messages({ st, go, mobile, socket }) {
           setShowConv(true);
         }
       })
-      .catch(err => console.error("Error creating direct conversation:", err));
+      .catch(err => {
+        if (err.message !== "restricted") {
+          console.error("Error creating direct conversation:", err);
+        }
+      });
   };
 
   useEffect(() => {
@@ -93,8 +247,59 @@ function Messages({ st, go, mobile, socket }) {
 
   const currentUserId = getActiveUserId();
 
-  // 1. Fetch conversations/threads on mount
-  useEffect(() => {
+  const [requests, setRequests] = useState([]);
+
+  const fetchIncomingRequests = () => {
+    const token = localStorage.getItem('token');
+    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+    fetch(`${apiBase}/api/messaging/requests/incoming`, { headers })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.data) {
+          setRequests(res.data);
+        }
+      })
+      .catch(err => console.error("Error fetching incoming requests:", err));
+  };
+
+  const handleAcceptRequest = (reqId) => {
+    const token = localStorage.getItem('token');
+    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+    fetch(`${apiBase}/api/messaging/requests/${reqId}/accept`, {
+      method: 'POST',
+      headers
+    })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success) {
+          if (window.toast) window.toast("Messaging request accepted!");
+          fetchIncomingRequests();
+          fetchConversations();
+          if (st.fetchCounts) st.fetchCounts();
+        }
+      })
+      .catch(err => console.error("Error accepting request:", err));
+  };
+
+  const handleDeclineRequest = (reqId) => {
+    const token = localStorage.getItem('token');
+    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+    fetch(`${apiBase}/api/messaging/requests/${reqId}/decline`, {
+      method: 'POST',
+      headers
+    })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success) {
+          if (window.toast) window.toast("Messaging request declined.");
+          fetchIncomingRequests();
+          if (st.fetchCounts) st.fetchCounts();
+        }
+      })
+      .catch(err => console.error("Error declining request:", err));
+  };
+
+  const fetchConversations = () => {
     const token = localStorage.getItem('token');
     const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
@@ -103,8 +308,14 @@ function Messages({ st, go, mobile, socket }) {
       .then(res => {
         if (res.success && res.data) {
           setThreads(res.data);
-          if (res.data.length > 0) {
-            setActiveId(res.data[0].id);
+          if (res.data.length > 0 && !activeId) {
+            const savedConvId = localStorage.getItem('active_chat_conv_id');
+            if (savedConvId && res.data.some(t => t.id === savedConvId)) {
+              setActiveId(savedConvId);
+              localStorage.removeItem('active_chat_conv_id');
+            } else if (res.data.length > 0) {
+              setActiveId(res.data[0].id);
+            }
           }
         }
       })
@@ -112,7 +323,12 @@ function Messages({ st, go, mobile, socket }) {
         console.error("Error fetching conversations:", err);
         setThreads([]);
       });
-  }, [apiBase]);
+  };
+
+  useEffect(() => {
+    fetchConversations();
+    fetchIncomingRequests();
+  }, [apiBase, seg]);
 
   // 2. Fetch presence of participants dynamically on thread list load/refresh
   useEffect(() => {
@@ -161,7 +377,10 @@ function Messages({ st, go, mobile, socket }) {
         }
       });
       // Mark messages as read/seen on open
-      socket.emit("conversation.read", { conversationId: activeId });
+      socket.emit("conversation.read", { conversationId: activeId }, () => {
+        fetchConversations();
+        if (st.fetchCounts) st.fetchCounts();
+      });
     }
 
     // Load message logs from API
@@ -206,7 +425,10 @@ function Messages({ st, go, mobile, socket }) {
       if (msg.conversationId === activeId) {
         // Immediately mark message as read if we are looking at this conversation
         if (msg.senderId !== currentUserId) {
-          socket.emit("conversation.read", { conversationId: activeId });
+          socket.emit("conversation.read", { conversationId: activeId }, () => {
+            fetchConversations();
+            if (st.fetchCounts) st.fetchCounts();
+          });
         }
 
         setMessages(prev => {
@@ -233,6 +455,8 @@ function Messages({ st, go, mobile, socket }) {
             content: msg.content || msg.body,
             createdAt: msg.createdAt,
             status,
+            replyTo: msg.replyTo,
+            replyToMessageId: msg.replyToMessageId,
             receipts
           }];
         });
@@ -316,16 +540,41 @@ function Messages({ st, go, mobile, socket }) {
       }));
     };
 
+    const handleRequestReceived = (req) => {
+      setRequests(prev => {
+        if (prev.some(r => r.id === req.id)) return prev;
+        return [req, ...prev];
+      });
+      if (st.fetchCounts) st.fetchCounts();
+    };
+
+    const handleRequestAccepted = (payload) => {
+      fetchConversations();
+      fetchIncomingRequests();
+      if (st.fetchCounts) st.fetchCounts();
+    };
+
+    const handleRequestDeclined = (payload) => {
+      fetchIncomingRequests();
+      if (st.fetchCounts) st.fetchCounts();
+    };
+
     socket.on("message.created", handleMessageCreated);
     socket.on("message.updated", handleMessageUpdated);
     socket.on("message.deleted", handleMessageDeleted);
     socket.on("receipt.updated", handleReceiptUpdated);
+    socket.on("request.received", handleRequestReceived);
+    socket.on("request.accepted", handleRequestAccepted);
+    socket.on("request.declined", handleRequestDeclined);
 
     return () => {
       socket.off("message.created", handleMessageCreated);
       socket.off("message.updated", handleMessageUpdated);
       socket.off("message.deleted", handleMessageDeleted);
       socket.off("receipt.updated", handleReceiptUpdated);
+      socket.off("request.received", handleRequestReceived);
+      socket.off("request.accepted", handleRequestAccepted);
+socket.off("request.declined", handleRequestDeclined);
     };
   }, [socket, activeId]);
 
@@ -335,10 +584,12 @@ function Messages({ st, go, mobile, socket }) {
     if (!input.trim() || !activeId) return; 
     
     const currentInput = input;
+    const parentId = replyingTo?.id;
     setInput(""); 
+    setReplyingTo(null);
 
     if (socket) {
-      socket.emit("message.send", { conversationId: activeId, content: currentInput }, (ack) => {
+      socket.emit("message.send", { conversationId: activeId, content: currentInput, replyToMessageId: parentId }, (ack) => {
         if (ack && !ack.success) {
           console.error("Message send failed:", ack.error);
           setInput(currentInput);
@@ -437,7 +688,7 @@ function Messages({ st, go, mobile, socket }) {
           </div>
           <div className="msg-seg">
             <button className={seg==="messages"?"on":""} onClick={()=>setSeg("messages")}>Chats</button>
-            <button className={seg==="requests"?"on":""} onClick={()=>setSeg("requests")}>Requests <span style={{ color:"var(--accent-1)" }}>{REQUESTS.length}</span></button>
+            <button className={seg==="requests"?"on":""} onClick={()=>setSeg("requests")}>Requests <span style={{ color:"var(--accent-1)" }}>{requests.length}</span></button>
           </div>
         </div>
         <div className="msg-threads">
@@ -460,11 +711,13 @@ function Messages({ st, go, mobile, socket }) {
                     {searchedContacts.map(user => (
                       <div key={user.id} className="search-item" onClick={() => selectSearchResult(user)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: "8px", cursor: "pointer" }}>
                         <div style={{ position: "relative" }}>
-                          <Avatar name={user.name || "null"} size={40} />
+                          <I.Avatar userId={user.id} name={user.name || "null"} size={40} />
                           <span className="search-presence-dot" style={{ position: "absolute", bottom: 0, right: 0, width: 10, height: 10, borderRadius: "50%", background: presenceMap[user.id] === "ONLINE" ? "#2bb673" : "#8e8e93", border: "2px solid var(--surface)" }} />
                         </div>
                         <div className="info" style={{ flex: 1, minWidth: 0 }}>
-                          <div className="name" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{user.name === null ? "null" : user.name}</div>
+                          <div className="name" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
+                            <ProfileName userId={user.id} name={user.name} />
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -476,12 +729,26 @@ function Messages({ st, go, mobile, socket }) {
                     {searchedMoreAccounts.map(user => (
                       <div key={user.id} className="search-item" onClick={() => selectSearchResult(user)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: "8px", cursor: "pointer" }}>
                         <div style={{ position: "relative" }}>
-                          <Avatar name={user.name || "null"} size={40} />
+                          <I.Avatar userId={user.id} name={user.name || "null"} size={40} />
                           <span className="search-presence-dot" style={{ position: "absolute", bottom: 0, right: 0, width: 10, height: 10, borderRadius: "50%", background: presenceMap[user.id] === "ONLINE" ? "#2bb673" : "#8e8e93", border: "2px solid var(--surface)" }} />
                         </div>
                         <div className="info" style={{ flex: 1, minWidth: 0 }}>
-                          <div className="name" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{user.name === null ? "null" : user.name}</div>
+                          <div className="name" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
+                            <ProfileName userId={user.id} name={user.name} />
+                          </div>
                         </div>
+                        <button 
+                          onClick={(e) => handleConnectUser(user, e)}
+                          className="hbtn hbtn--primary hbtn--sm"
+                          style={{
+                            padding: "6px 12px",
+                            fontSize: "12px",
+                            borderRadius: "15px",
+                            flexShrink: 0
+                          }}
+                        >
+                          {requestStatuses[user.id] === 'PENDING' ? 'Requested' : 'Connect'}
+                        </button>
                       </div>
                     ))}
                   </>
@@ -501,7 +768,7 @@ function Messages({ st, go, mobile, socket }) {
                 return (
                   <div key={t.id} className={`thread ${t.id===activeId && !mobile?"on":""}`} onClick={()=>openThread(t.id)}>
                     <div className="av" style={{ background:"transparent" }}>
-                      <Avatar name={displayName} size={46}/>
+                      <I.Avatar userId={other?.userId || other?.id} name={displayName} size={46}/>
                       <span className={presenceStatus === "ONLINE" ? "online" : "offline"}/>
                     </div>
                     <div className="ti">
@@ -522,18 +789,25 @@ function Messages({ st, go, mobile, socket }) {
               )
             ) : (
               <div style={{ display:"flex", flexDirection:"column", gap:10, padding:"4px" }}>
-                {REQUESTS.map(r => (
-                  <div key={r.name} className="req-card">
-                    <Avatar name={r.name} size={48}/>
-                    <div className="ri"><div className="n">{r.name}</div><div className="d">{r.role}</div><div className="d" style={{ color:"var(--accent-2)" }}>{r.mutual} mutual</div></div>
-                    <div className="ract" style={{ flexDirection:"column", gap:7 }}>
-                      <button className="hbtn hbtn--primary hbtn--sm" onClick={()=>st.toggleConnect(r.name)}><I.check/></button>
-                      <button className="hbtn hbtn--ghost hbtn--sm"><I.x/></button>
+                {requests.map(r => {
+                  const displayName = r.sender?.profiles?.display_name || r.sender?.primary_email || "Unknown User";
+                  const headline = r.sender?.profiles?.headline || "";
+                  return (
+                    <div key={r.id} className="req-card">
+                      <I.Avatar userId={r.senderId || r.sender?.id} name={displayName} size={48}/>
+                      <div className="ri">
+                        <div className="n">{displayName}</div>
+                        <div className="d">{headline}</div>
+                      </div>
+                      <div className="ract" style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                        <button className="hbtn hbtn--primary hbtn--sm" onClick={()=>handleAcceptRequest(r.id)}><I.check/></button>
+                        <button className="hbtn hbtn--ghost hbtn--sm" onClick={()=>handleDeclineRequest(r.id)}><I.x/></button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.5, padding:"8px 6px" }}>
-                Connection requests need your approval before you can exchange direct messages.
+                Messaging requests need your approval before you can start a conversation.
               </div>
             </div>
           )
@@ -546,23 +820,44 @@ function Messages({ st, go, mobile, socket }) {
         const displayName = active.type === "GROUP" ? (active.title || "Group Chat") : (other?.name || "Chat Room");
         const presenceStatus = other ? (presenceMap[other.userId] || "OFFLINE") : "OFFLINE";
         const firstName = displayName.split(" ")[0];
+
+        const chatSettings = st.chatSettings || {
+          allowDirectMessaging: true,
+          allowGroupChat: true,
+          allowEventChat: true
+        };
+        const isDM = active.type === "DIRECT" || active.type === "dm" || !active.type;
+        const isDMRestricted = isDM && chatSettings.allowDirectMessaging === false;
+        const shareCommon = other ? checkCommonGroupOrEvent(other) : false;
+        const hideCompose = isDMRestricted && !shareCommon;
+
         return (
           <div className="msg-conv">
             <div className="conv-head">
               {mobile && <button className="hbtn hbtn--ghost hbtn--sm" style={{ padding:"7px 10px" }} onClick={()=>setShowConv(false)}><I.arrowL/></button>}
-              <div style={{ position:"relative" }}>
-                <Avatar name={displayName} size={40}/>
-                <span className={presenceStatus === "ONLINE" ? "online" : "offline"} style={{ position:"absolute", bottom:0, right:0, width:11, height:11, borderRadius:"50%", background: presenceStatus === "ONLINE" ? "#2bb673" : "#8e8e93", border:"2px solid var(--surface)" }}/>
-              </div>
-              <div className="ci">
-                <div className="n">{displayName}</div>
-                <div className="s">
-                  {presenceStatus === "ONLINE" && "Online"}
-                  {presenceStatus === "RECENTLY_ONLINE" && "Recently Online"}
-                  {presenceStatus === "OFFLINE" && "Offline"}
+              <div 
+                style={{ display: "flex", alignItems: "center", gap: 10, cursor: other ? "pointer" : "default" }}
+                onClick={() => {
+                  if (other) {
+                    go("public-profile", { id: other.userId || other.id });
+                  }
+                }}
+                title={other ? "View Profile" : undefined}
+              >
+                <div style={{ position:"relative" }}>
+                  <I.Avatar userId={other?.userId || other?.id} name={displayName} size={40}/>
+                  <span className={presenceStatus === "ONLINE" ? "online" : "offline"} style={{ position:"absolute", bottom:0, right:0, width:11, height:11, borderRadius:"50%", background: presenceStatus === "ONLINE" ? "#2bb673" : "#8e8e93", border:"2px solid var(--surface)" }}/>
+                </div>
+                <div className="ci">
+                  <div className="n">{displayName}</div>
+                  <div className="s">
+                    {presenceStatus === "ONLINE" && "Online"}
+                    {presenceStatus === "RECENTLY_ONLINE" && "Recently Online"}
+                    {presenceStatus === "OFFLINE" && "Offline"}
+                  </div>
                 </div>
               </div>
-              <div className="cact">
+              <div className="cact" style={{ marginLeft: "auto" }}>
                 <button className="tb-icon" style={{ width:36, height:36 }}><I.phone/></button>
                 <button className="tb-icon" style={{ width:36, height:36 }}><I.more/></button>
               </div>
@@ -587,7 +882,22 @@ function Messages({ st, go, mobile, socket }) {
                 const isEditing = m.id === editingId;
 
                 return (
-                  <div key={m.id || i} className={`msg-row ${isMe ? "me" : "them"}`}>
+                  <div key={m.id || i} id={`msg-item-${m.id}`} className={`msg-row ${isMe ? "me" : "them"}`}>
+                    {!isMe && (
+                      <div 
+                        className="msg-avatar-click" 
+                        onClick={() => {
+                          if (m.senderId && m.senderId !== "them") {
+                            go("public-profile", { id: m.senderId });
+                          }
+                        }}
+                        style={{ cursor: (m.senderId && m.senderId !== "them") ? "pointer" : "default", flexShrink: 0, order: 0, marginRight: 8 }}
+                        title={m.senderId && m.senderId !== "them" ? "View Profile" : undefined}
+                      >
+                        <I.Avatar userId={m.senderId} name={m.senderName || displayName} size={28} />
+                      </div>
+                    )}
+
                     {/* Hover Actions */}
                     {!isEditing && (
                       <div className="hover-actions">
@@ -636,7 +946,7 @@ function Messages({ st, go, mobile, socket }) {
                             </div>
                           )}
                         </button>
-                        <button className="hover-action-btn" data-tooltip="Reply" onClick={() => console.log("Reply to:", m.id)}>
+                        <button className="hover-action-btn" data-tooltip="Reply" onClick={() => setReplyingTo(m)}>
                           <I.reply style={{ width: 14, height: 14 }} />
                         </button>
                         <button className="hover-action-btn" data-tooltip="React" onClick={() => console.log("React to:", m.id)}>
@@ -647,6 +957,41 @@ function Messages({ st, go, mobile, socket }) {
 
                     {/* Bubble */}
                     <div className={`bubble ${isMe ? "me" : "them"}`}>
+                      {m.replyTo && (
+                        <div 
+                          onClick={() => {
+                            const element = document.getElementById(`msg-item-${m.replyTo.id}`);
+                            if (element) {
+                              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              element.style.transition = 'background-color 0.3s ease';
+                              const oldBg = element.style.backgroundColor;
+                              element.style.backgroundColor = 'rgba(99, 102, 241, 0.25)';
+                              setTimeout(() => {
+                                element.style.backgroundColor = oldBg;
+                              }, 1000);
+                            }
+                          }}
+                          style={{
+                            background: "rgba(0, 0, 0, 0.16)",
+                            borderLeft: "3.5px solid #2196f3",
+                            padding: "6px 12px",
+                            borderRadius: "4px",
+                            fontSize: "12px",
+                            cursor: "pointer",
+                            marginBottom: "6px",
+                            opacity: 0.95,
+                            maxWidth: "100%",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap"
+                          }}
+                        >
+                          <div style={{ fontWeight: 600, fontSize: "11px", marginBottom: "2px", color: "#2196f3" }}>
+                            {m.replyTo.senderId === currentUserId ? "You" : m.replyTo.senderName}
+                          </div>
+                          <div style={{ color: isMe ? "rgba(255,255,255,0.75)" : "var(--ink-2)", fontSize: "11.5px" }}>{m.replyTo.body}</div>
+                        </div>
+                      )}
                       {isEditing ? (
                         <div className="edit-box" style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 150 }}>
                           <input 
@@ -691,20 +1036,98 @@ function Messages({ st, go, mobile, socket }) {
                         </>
                       )}
                     </div>
+
+                    {isMe && (
+                      <div 
+                        className="msg-avatar-click" 
+                        onClick={() => {
+                          if (currentUserId && currentUserId !== "me") {
+                            go("public-profile", { id: currentUserId });
+                          }
+                        }}
+                        style={{ cursor: (currentUserId && currentUserId !== "me") ? "pointer" : "default", flexShrink: 0, order: 3, marginLeft: 8 }}
+                        title={currentUserId && currentUserId !== "me" ? "View Profile" : undefined}
+                      >
+                        <I.Avatar userId={currentUserId} name="Me" size={28} />
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
 
-            <div className="conv-compose">
-              <input 
-                placeholder={`Message ${firstName}…`} 
-                value={input} 
-                onChange={e=>setInput(e.target.value)} 
-                onKeyDown={e=>e.key==="Enter"&&send()} 
-              />
-              <button className="send" onClick={send}><I.send/></button>
-            </div>
+            {replyingTo && (
+              <div 
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  background: "var(--field)",
+                  padding: "10px 16px",
+                  borderTop: "1px solid var(--border)",
+                  borderBottom: "1px solid var(--border)",
+                  animation: "slideUp 0.2s ease"
+                }}
+              >
+                <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+                  <span style={{ fontSize: "11.5px", fontWeight: 700, color: "var(--accent-1)" }}>
+                    Replying to {replyingTo.senderId === currentUserId ? "yourself" : (active.participants?.find(p => p.userId === replyingTo.senderId)?.name || "User")}
+                  </span>
+                  <span style={{ fontSize: "12.5px", color: "var(--ink-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: "2px" }}>
+                    {replyingTo.body || replyingTo.content}
+                  </span>
+                </div>
+                <button 
+                  onClick={() => setReplyingTo(null)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: "var(--ink-3)",
+                    padding: "4px"
+                  }}
+                >
+                  <I.x style={{ width: 16, height: 16 }} />
+                </button>
+              </div>
+            )}
+
+            {hideCompose ? (
+              <div className="dm-restricted-banner" style={{
+                padding: "20px",
+                margin: "15px",
+                background: "var(--surface-2)",
+                border: "1px dashed var(--border)",
+                borderRadius: "12px",
+                color: "var(--ink-2)",
+                fontSize: "13.5px",
+                lineHeight: "1.5",
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "10px"
+              }}>
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="var(--ink-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                <div>
+                  <strong>Direct messaging is disabled.</strong><br/>
+                  You can only message users you share a common group or event with.
+                </div>
+              </div>
+            ) : (
+              <div className="conv-compose">
+                <input 
+                  placeholder={`Message ${firstName}…`} 
+                  value={input} 
+                  onChange={e=>setInput(e.target.value)} 
+                  onKeyDown={e=>e.key==="Enter"&&send()} 
+                />
+                <button className="send" onClick={send}><I.send/></button>
+              </div>
+            )}
           </div>
         );
       })()}

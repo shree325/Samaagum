@@ -11,12 +11,13 @@ function useSet(initial = []) {
 }
 
 /* mobile bottom tab bar */
-function TabBar({ view, go, counts }) {
+function TabBar({ view, go, counts, chatSettings }) {
+  const showMessages = chatSettings?.allowSiteMessaging !== false;
   const tabs = [
     { k: "home", ic: <I.home />, label: "Home" },
     { k: "discover", ic: <I.compass />, label: "Discover" },
     { k: "create-event", ic: <I.plus />, label: "", fab: true },
-    { k: "messages", ic: <I.chat />, label: "Chats", badge: counts.messages },
+    ...(showMessages ? [{ k: "messages", ic: <I.chat />, label: "Chats", badge: counts.messages }] : []),
     { k: "profile", ic: <I.user />, label: "You" },
   ];
   const active = (k) => view === k || (k === "home" && view === "event") || (k === "discover" && view === "group");
@@ -27,20 +28,23 @@ function TabBar({ view, go, counts }) {
       ) : (
         <button key={t.k} className={`tab ${active(t.k) ? "on" : ""}`} onClick={() => go(t.k)}>
           <span className="ic">{t.ic}</span>{t.label}
-          {t.badge ? <span className="tdot" /> : null}
+          {t.badge ? <span className="badge">{t.badge}</span> : null}
         </button>
       ))}
     </div>
   );
 }
 
-function MobileTop({ go, counts, city }) {
+function MobileTop({ go, counts, city, chatSettings }) {
+  const showMessages = chatSettings?.allowSiteMessaging !== false;
   return (
     <div className="m-top">
       <Mark size={26}/>
       <div className="m-search" onClick={()=>go("discover")}><I.search/> Search Samaagum</div>
-      <button className="tb-icon" style={{ width:38, height:38 }} onClick={()=>go("messages")}><I.chat/>{counts.messages?<span className="dot"/>:null}</button>
-      <button className="tb-icon" style={{ width:38, height:38 }} onClick={()=>go("notifications")}><I.bell/>{counts.notifs?<span className="dot"/>:null}</button>
+      {showMessages && (
+        <button className="tb-icon" style={{ width:38, height:38 }} onClick={()=>go("messages")}><I.chat/>{counts.messages?<span className="badge">{counts.messages}</span>:null}</button>
+      )}
+      <button className="tb-icon" style={{ width:38, height:38 }} onClick={()=>go("notifications")}><I.bell/>{counts.notifs?<span className="badge">{counts.notifs}</span>:null}</button>
     </div>
   );
 }
@@ -52,14 +56,76 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const [city, setCity] = useState("Global");
+  const [city, setCity] = useState(window.ME?.location || "Global");
+  const [chatSettings, setChatSettings] = useState({
+    allowSiteMessaging: true,
+    allowDirectMessaging: true,
+    allowGroupChat: true,
+    allowEventChat: true
+  });
   const [cityOpen, setCityOpen] = useState(false);
   const [meSync, setMeSync] = useState(0); // Add a tick to force re-render when ME updates asynchronously
 
   const [subscription, setSubscription] = useState({ plan: 'free', status: 'active' });
   const [socket, setSocket] = useState(null);
+  const [counts, setCounts] = useState({ notifs: 0, messages: 0 });
+  const [toasts, setToasts] = useState([]);
+  const [ioLoaded, setIoLoaded] = useState(!!window.io);
+
+  useEffect(() => {
+    if (window.io) return;
+    const interval = setInterval(() => {
+      if (window.io) {
+        setIoLoaded(true);
+        clearInterval(interval);
+      }
+    }, 200);
+    return () => clearInterval(interval);
+  }, []);
 
   const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+
+  // Set up global toast helper and initial fetch
+  useEffect(() => {
+    window.toast = (message, type = 'info') => {
+      const id = Math.random().toString(36).substring(2, 9);
+      setToasts(prev => [...prev, { id, message, type }]);
+      setTimeout(() => {
+        setToasts(prev => prev.filter(t => t.id !== id));
+      }, 4000);
+    };
+    fetchCounts();
+    return () => {
+      delete window.toast;
+    };
+  }, []);
+
+  const fetchCounts = () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    fetch(`${apiBase}/api/messaging/counts`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.data) {
+          setCounts(res.data);
+        }
+      })
+      .catch(err => console.error("Error fetching counts:", err));
+  };
+
+  useEffect(() => {
+    fetch(`${apiBase}/api/messaging/settings`)
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.data) {
+          setChatSettings(res.data);
+          window.chatSettings = res.data;
+        }
+      })
+      .catch(err => console.error("Error fetching chat settings:", err));
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -71,6 +137,7 @@ function App() {
       if (parts.length >= 2) {
         const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
         userId = payload.id;
+        window.ME.id = userId; // Store globally
       }
     } catch (e) {
       console.error('Error parsing token for socket:', e);
@@ -84,6 +151,88 @@ function App() {
 
       chatSocket.on("connect", () => {
         console.log("🔌 Connected to chat socket as:", userId);
+        fetchCounts();
+      });
+
+      chatSocket.on("message.received", (payload) => {
+        fetchCounts();
+        
+        // Show visual toast notification if recipient is not actively viewing this conversation
+        const isCurrentlyViewingConversation = curRef.current?.view === "messages" && window.activeConversationId === payload.conversationId;
+        if (!isCurrentlyViewingConversation && window.toast) {
+          const sender = payload.senderName || "New message";
+          const text = payload.content || payload.body || "";
+          window.toast(`${sender}: ${text}`, "message");
+        }
+      });
+
+      chatSocket.on("request.received", (payload) => {
+        fetchCounts();
+        if (window.toast) {
+          const senderName = payload.sender?.profiles?.display_name || payload.sender?.primary_email?.split('@')[0] || "Someone";
+          window.toast(`${senderName} sent you a chat request`, "info");
+        }
+      });
+
+      chatSocket.on("request.accepted", (payload) => {
+        fetchCounts();
+        if (window.toast && window.ME?.id === payload.senderId) {
+          window.toast(`Your chat request was accepted`, "success");
+        }
+      });
+
+      chatSocket.on("request.declined", (payload) => {
+        fetchCounts();
+        if (window.toast && window.ME?.id === payload.senderId) {
+          window.toast(`Your chat request was declined`, "warning");
+        }
+      });
+
+      // Connection request events (new system)
+      chatSocket.on("connection.request.received", (payload) => {
+        fetchCounts();
+        if (window.toast) {
+          const name = payload.requester?.display_name || "Someone";
+          window.toast(`${name} sent you a connection request 🤝`, "info");
+        }
+      });
+
+      chatSocket.on("connection.accepted", (payload) => {
+        fetchCounts();
+        if (window.toast && window.ME?.id === payload.requesterId) {
+          window.toast(`Your connection request was accepted! 🎉`, "success");
+        }
+      });
+
+      chatSocket.on("connection.declined", (payload) => {
+        fetchCounts();
+      });
+
+      chatSocket.on("receipt.updated", () => {
+        fetchCounts();
+      });
+
+      chatSocket.on("profile.updated", (payload) => {
+        // Dispatch global event for useProfileSync hook
+        window.dispatchEvent(new CustomEvent('samaagum:profileSync', { detail: payload }));
+        
+        // Update ME directly if it's the current user
+        if (window.ME?.id === payload.userId) {
+          if (payload.name) window.ME.name = payload.name;
+          if (payload.bio) window.ME.role = payload.bio;
+          if (payload.location) {
+            window.ME.location = payload.location;
+            setCity(payload.location);
+          }
+          if (payload.profilePhoto) window.ME.img = payload.profilePhoto;
+          setMeSync(Date.now()); // trigger global re-render
+        }
+      });
+
+      chatSocket.on("settings.updated", (updatedSettings) => {
+        console.log("⚡ Chat settings updated in real-time:", updatedSettings);
+        setChatSettings(updatedSettings);
+        window.chatSettings = updatedSettings;
       });
 
       setSocket(chatSocket);
@@ -92,11 +241,26 @@ function App() {
         chatSocket.disconnect();
       };
     }
-  }, []);
+  }, [ioLoaded]);
 
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) return; // Not logged in — skip profile/subscription fetch
+    useEffect(() => {
+      const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+      
+      // Fetch features
+      fetch(`${apiBase}/api/public/features`)
+        .then(res => res.json())
+        .then(json => {
+          if (json.success) {
+            window.featureSettings = json.data;
+            setMeSync(Date.now());
+          }
+        })
+        .catch(err => console.error('Error fetching features', err));
+
+      const token = localStorage.getItem('token');
+      if (!token) return; // Not logged in - skip profile/subscription fetch
+
+    fetchCounts();
 
     // Fetch subscription status
     fetch(`${apiBase}/api/subscription/status`, {
@@ -120,6 +284,10 @@ function App() {
       .then(res => res.json())
       .then(res => {
         if (res.success) {
+          if (res.data.privacyPrefs) {
+            ME.privacy = res.data.privacyPrefs;
+            localStorage.setItem("samaagum_privacy_prefs", JSON.stringify(res.data.privacyPrefs));
+          }
           if (res.data.email) {
             ME.email = res.data.email;
             ME.handle = `@${res.data.email.split('@')[0]}`;
@@ -141,7 +309,10 @@ function App() {
           if (res.data.profile) {
             const prof = res.data.profile;
             if (prof.bio) ME.role = prof.bio;
-            if (prof.preferred_location) ME.location = prof.preferred_location;
+            if (prof.preferred_location) {
+              ME.location = prof.preferred_location;
+              setCity(prof.preferred_location);
+            }
             if (prof.skills && Array.isArray(prof.skills) && prof.skills.length > 0) {
               ME.skills = prof.skills;
             }
@@ -151,6 +322,9 @@ function App() {
             if (dobToUse) {
               // Convert ISO string to YYYY-MM-DD for date input
               ME.dob = dobToUse.split('T')[0];
+            }
+            if (prof.messaging_restriction) {
+              ME.messaging_restriction = prof.messaging_restriction;
             }
           }
           if (res.data.socialLinks) {
@@ -165,6 +339,11 @@ function App() {
   // navigation stack
   const [stack, setStack] = useState([{ view: "home", param: null }]);
   const cur = stack[stack.length - 1];
+  const curRef = useRef(cur);
+  useEffect(() => {
+    curRef.current = cur;
+  }, [cur]);
+
   const go = useCallback((view, param = null) => {
     setStack(s => {
       if (view === "home") return [{ view: "home", param: null }];
@@ -178,6 +357,48 @@ function App() {
     window.samaagum_go = go;
     return () => { delete window.samaagum_go; };
   }, [go]);
+
+  useEffect(() => {
+    window.initiateChatWithName = (name) => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      fetch(`${apiBase}/api/messaging/users/search?q=${encodeURIComponent(name)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(res => {
+          if (res.success && res.data && res.data.length > 0) {
+            const targetUser = res.data[0];
+            fetch(`${apiBase}/api/messaging/conversations/direct`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({ targetId: targetUser.id })
+            })
+              .then(cRes => cRes.json())
+              .then(cRes => {
+                if (cRes.success && cRes.data) {
+                  localStorage.setItem('active_chat_conv_id', cRes.data.id);
+                  go("messages");
+                } else {
+                  alert(cRes.error || "Failed to start chat.");
+                }
+              })
+              .catch(err => console.error("Error starting chat:", err));
+          } else {
+            alert("User could not be found to start chat.");
+          }
+        })
+        .catch(err => console.error("Error searching user:", err));
+    };
+
+    return () => {
+      delete window.initiateChatWithName;
+    };
+  }, [go, apiBase]);
 
   // engagement state
   const [saved, toggleSave] = useSet([]);
@@ -273,13 +494,14 @@ function App() {
     }
   }, [toggleJoin, togglePending]);
 
-  const counts = { notifs: 3, messages: 2 };
   const st = {
     saved, toggleSave, joined, pending, toggleJoin: handleJoin, connected, toggleConnect, registered, register, city,
     myTickets, setMyTickets, waitlisted, toggleWaitlist, addClaimedTicket,
     createdEvents, setCreatedEvents, createdGroups, setCreatedGroups,
     addCreatedEvent, addCreatedGroup,
-    subscription, setSubscription
+    subscription, setSubscription,
+    fetchCounts,
+    chatSettings, setChatSettings
   };
 
   // responsive window width check
@@ -310,9 +532,16 @@ function App() {
     if (v === "event") return <EventDetail ev={cur.param} st={st} go={go} />;
     if (v === "group") return <GroupDetail group={cur.param} st={st} go={go} />;
     if (v === "profile") return <Profile st={st} go={go} />;
-    if (v === "public-profile") return <PublicProfile profile={cur.param} go={go} />;
-    if (v === "notifications") return <Notifications st={st} go={go} />;
-    if (v === "messages") return <Messages st={st} go={go} mobile={mobile} socket={socket} />;
+    if (v === "settings") return <SettingsPage st={st} go={go} />;
+    if (v === "public-profile") return <PublicProfile profile={cur.param} go={go} socket={socket} />;
+    if (v === "notifications") return <Notifications st={st} go={go} socket={socket} />;
+    if (v === "messages") {
+      if (chatSettings.allowSiteMessaging === false) {
+        setTimeout(() => go("home"), 0);
+        return <HomeFeed st={st} go={go} />;
+      }
+      return <Messages st={st} go={go} mobile={mobile} socket={socket} />;
+    }
     if (v === "create-event") return <CreateEvent go={go} mobile={mobile} st={st} />;
     if (v === "edit-event") return <CreateEvent editEv={cur.param} go={go} mobile={mobile} st={st} />;
     if (v === "create-group") return <CreateGroup go={go} mobile={mobile} st={st} />;
@@ -336,13 +565,32 @@ function App() {
 
   return (
     <div className={`app ${mobile ? "mobile" : ""}`}>
-      {!mobile && <Sidebar view={navKey} go={go} counts={counts} />}
+      {!mobile && <Sidebar view={navKey} go={go} counts={counts} chatSettings={chatSettings} />}
       <div className="content">
-        {mobile ? <MobileTop go={go} counts={counts} city={city} />
-          : <Topbar go={go} counts={counts} dark={t.dark} onToggleTheme={() => setTweak("dark", !t.dark)} city={city} onCity={() => setCityOpen(true)} />}
+        {mobile ? <MobileTop go={go} counts={counts} city={city} chatSettings={chatSettings} />
+          : <Topbar go={go} counts={counts} dark={t.dark} onToggleTheme={() => setTweak("dark", !t.dark)} city={city} onCity={() => setCityOpen(true)} chatSettings={chatSettings} />}
         {renderView()}
-        {mobile && <TabBar view={cur.view} go={go} counts={counts} />}
+        {mobile && <TabBar view={cur.view} go={go} counts={counts} chatSettings={chatSettings} />}
         <CityPicker open={cityOpen} onClose={() => setCityOpen(false)} city={city} onPick={setCity} />
+      </div>
+
+      {/* Visual Toast Notification Container */}
+      <div className="toast-container">
+        {toasts.map(toast => (
+          <div 
+            key={toast.id} 
+            className={`toast ${toast.type || ''}`}
+            onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
+          >
+            <div className="toast-content">
+              {toast.type === 'message' && <I.chat style={{ width: 16, height: 16, color: 'var(--accent-1)' }} />}
+              {toast.type === 'success' && <I.check style={{ width: 16, height: 16, color: '#10b981' }} />}
+              {toast.type === 'warning' && <I.warning style={{ width: 16, height: 16, color: '#f59e0b' }} />}
+              {(!toast.type || toast.type === 'info') && <I.bell style={{ width: 16, height: 16, color: '#6d5efc' }} />}
+              <span className="toast-msg">{toast.message}</span>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

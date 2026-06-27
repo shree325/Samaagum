@@ -21,12 +21,18 @@ function EditProfileForm({ profile, onCancel }) {
     handle: profile.handle || "",
     bio: profile.bio || "",
     location: profile.location || "",
+    locationName: profile.locationName || "",
+    locationLat: profile.locationLat || undefined,
+    locationLng: profile.locationLng || undefined,
+    address: profile.address || "",
     gender: profile.gender || "",
     dob: profile.dob || "",
     phone: profile.phone || "",
     profilePhoto: profile.img || "",
     coverBanner: profile.coverBanner || ""
   });
+
+
 
   const coverRef = React.useRef(null);
   const avatarRef = React.useRef(null);
@@ -52,6 +58,10 @@ function EditProfileForm({ profile, onCancel }) {
       formData.append("headline", form.role || "");
       formData.append("bio", form.bio || "");
       formData.append("location", form.location || "");
+      formData.append("locationName", form.locationName || "");
+      if (form.locationLat !== undefined) formData.append("locationLat", form.locationLat);
+      if (form.locationLng !== undefined) formData.append("locationLng", form.locationLng);
+      formData.append("address", form.address || "");
       formData.append("gender", form.gender || "");
       formData.append("dob", form.dob || "");
       formData.append("phone", form.phone || "");
@@ -89,6 +99,15 @@ function EditProfileForm({ profile, onCancel }) {
       if (res.ok) {
         Object.assign(profile, form);
         if (form.profilePhoto) profile.img = form.profilePhoto;
+        if (form.locationName) profile.locationName = form.locationName;
+        if (form.locationLat !== undefined) profile.locationLat = form.locationLat;
+        if (form.locationLng !== undefined) profile.locationLng = form.locationLng;
+        if (form.address) profile.address = form.address;
+        
+        if (window.ME) {
+          window.ME.location = form.location || form.locationName || window.ME.location;
+        }
+
         if (window.toast) window.toast("Profile saved to database!");
         onCancel();
       } else {
@@ -179,10 +198,37 @@ function EditProfileForm({ profile, onCancel }) {
                 <label style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-2)" }}>Role / Headline</label>
                 <input className="cfield" value={form.role} onChange={(e) => set("role")(e.target.value)} placeholder="e.g. Software Engineer" style={{ background: "var(--bg-1)", border: "1px solid var(--border)", color: "var(--ink-1)", padding: "12px 16px", borderRadius: 10, fontSize: 15, outline: "none", width: "100%", boxSizing: "border-box", transition: "border-color 0.2s ease" }} />
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <label style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-2)" }}>Location</label>
-                <input className="cfield" value={form.location} onChange={(e) => set("location")(e.target.value)} placeholder="e.g. Bengaluru" style={{ background: "var(--bg-1)", border: "1px solid var(--border)", color: "var(--ink-1)", padding: "12px 16px", borderRadius: 10, fontSize: 15, outline: "none", width: "100%", boxSizing: "border-box", transition: "border-color 0.2s ease" }} />
-              </div>
+              {window.featureSettings?.location_active !== false && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, position: "relative" }}>
+                  <label style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-2)" }}>Location</label>
+                  {window.LocationSelector && (
+                    <window.LocationSelector
+                      value={{
+                        location_name: form.locationName || form.location,
+                        address: form.address || form.location,
+                        latitude: form.locationLat,
+                        longitude: form.locationLng
+                      }}
+                      onChange={(loc) => {
+                        if (loc) {
+                          set("locationName")(loc.location_name);
+                          set("location")(loc.location_name);
+                          set("address")(loc.address);
+                          set("locationLat")(loc.latitude);
+                          set("locationLng")(loc.longitude);
+                        } else {
+                          set("locationName")("");
+                          set("location")("");
+                          set("address")("");
+                          set("locationLat")(undefined);
+                          set("locationLng")(undefined);
+                        }
+                      }}
+                      placeholder="e.g. Bengaluru"
+                    />
+                  )}
+                </div>
+              )}
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <label style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-2)" }}>Gender</label>
                 <div style={{ position: "relative" }}>
@@ -379,7 +425,7 @@ function Profile({ st, go }) {
               <button onClick={() => setIsEditing(true)} style={{ width: 44, height: 44, borderRadius: "50%", background: colors.navBg, backdropFilter: "blur(4px)", color: colors.textMain, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(0,0,0,0.05)", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
                 <I.edit style={{ width: 18, height: 18 }} />
               </button>
-              <button style={{ width: 44, height: 44, borderRadius: "50%", background: colors.navBg, backdropFilter: "blur(4px)", color: colors.textMain, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(0,0,0,0.05)", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+              <button onClick={() => go("settings")} style={{ width: 44, height: 44, borderRadius: "50%", background: colors.navBg, backdropFilter: "blur(4px)", color: colors.textMain, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(0,0,0,0.05)", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }} title="Settings">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
               </button>
             </div>
@@ -391,7 +437,7 @@ function Profile({ st, go }) {
           {/* User Info (overlaid on cover) */}
           <div style={{ padding: "0 40px 32px 40px", maxWidth: 880, margin: "0 auto", width: "100%", display: "flex", alignItems: "flex-end", gap: 24 }}>
             <div style={{ position: "relative", zIndex: 2 }}>
-              <Avatar name={ME.name} img={ME.img} size={116} style={{ border: `4px solid ${colors.bgContainer}`, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }} />
+              <I.Avatar userId={window.ME?.id} name={ME.name} img={ME.img} size={116} style={{ border: `4px solid ${colors.bgContainer}`, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }} />
               <button onClick={() => setIsEditing(true)} style={{ position: "absolute", bottom: 0, right: 0, background: colors.pillBg, backdropFilter: "blur(8px)", border: `1px solid ${colors.pillBorder}`, color: colors.textMain, borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: colors.pillShadow }}>
                 <I.edit style={{ width: 16, height: 16 }} />
               </button>
