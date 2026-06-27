@@ -34,7 +34,8 @@ function SettingsPage({ st, go }) {
         location: true,
         gender: false,
         dob: false,
-        socialLinks: true
+        socialLinks: true,
+        virtualCard: true
       }
     };
     if (ME.privacy) {
@@ -470,7 +471,7 @@ function SettingsPage({ st, go }) {
                           }}
                         >
                           <div style={{ fontWeight: 600, fontSize: "14px", marginBottom: 4 }}>Private Profile</div>
-                          <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Only connections can see your details. Hidden from searches.</div>
+                          <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>You control exactly what every visitor can see. Hidden from searches.</div>
                         </button>
                       </div>
                     </div>
@@ -509,7 +510,7 @@ function SettingsPage({ st, go }) {
                             />
                             <div>
                               <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--ink)" }}>Hide full profile</div>
-                              <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Your entire profile is hidden from non-connections. Only your name is visible.</div>
+                              <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Your entire profile is hidden from everyone who visits it. Only your name is visible.</div>
                             </div>
                           </label>
 
@@ -527,7 +528,7 @@ function SettingsPage({ st, go }) {
                             />
                             <div>
                               <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--ink)" }}>Custom visibility (Select visible fields)</div>
-                              <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Control exactly what fields are visible to visitors who are not connections.</div>
+                              <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Control exactly what fields are visible to everyone who visits your profile.</div>
                             </div>
                           </label>
                         </div>
@@ -552,7 +553,8 @@ function SettingsPage({ st, go }) {
                               { key: "location", label: "Location" },
                               { key: "gender", label: "Gender" },
                               { key: "dob", label: "Date of Birth" },
-                              { key: "socialLinks", label: "Social Links & Socials" }
+                              { key: "socialLinks", label: "Social Links & Socials" },
+                              { key: "virtualCard", label: "Virtual Card" }
                             ].map(field => (
                               <label key={field.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "13px", color: "var(--ink)", cursor: "pointer" }}>
                                 <input 

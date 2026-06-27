@@ -1119,12 +1119,11 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
         create: createData
       });
 
-      // Broadcast real-time profile update if privacy settings changed
+      // Broadcast real-time profile update if privacy settings changed.
+      // Clients listen on the /chat namespace, so emit there (a plain io.emit
+      // hits the default "/" namespace and never reaches them).
       if (privacyPrefs !== undefined) {
-        const io = (request.server as any).io;
-        if (io) {
-          io.emit('profile.updated', { userId: dbUser.id, privacyPrefs });
-        }
+        emitProfileUpdate(dbUser.id, { privacyPrefs });
       }
 
       // Update social links only if provided in request
