@@ -374,6 +374,14 @@ export async function startMessaging(io: Server): Promise<void> {
             reply_to_message_id: replyToMessageId || null
           },
           include: {
+            users: {
+              select: {
+                primary_email: true,
+                profiles: {
+                  select: { display_name: true }
+                }
+              }
+            },
             messages: {
               select: {
                 id: true,
@@ -436,6 +444,23 @@ export async function startMessaging(io: Server): Promise<void> {
             }
           });
 
+          // Log the message notification to the database log
+          try {
+            await prisma.notification_log.create({
+              data: {
+                tenant_id: "00000000-0000-0000-0000-000000000000",
+                user_id: op.user_id,
+                channel: "socket",
+                template_key: "message_received",
+                status: isOnline ? "delivered" : "sent",
+                provider_ref: message.id
+              }
+            });
+            console.log(`📝 Logged message notification in notification_log for user ${op.user_id} with ref ${message.id}`);
+          } catch (logErr) {
+            console.error("❌ Failed to log notification in notification_log:", logErr);
+          }
+
           receiptsList.push({
             messageId: message.id,
             conversationId,
@@ -445,11 +470,14 @@ export async function startMessaging(io: Server): Promise<void> {
           });
         }
 
+        const senderName = message.users?.profiles?.display_name || message.users?.primary_email?.split('@')[0] || "Someone";
+
         const eventPayload = {
           id: message.id,
           messageId: message.id,
           conversationId,
           senderId: userId,
+          senderName,
           content: message.body,
           body: message.body,
           createdAt: message.created_at,
@@ -471,7 +499,7 @@ export async function startMessaging(io: Server): Promise<void> {
           chatNamespace.to(`user:${tId}`).emit("message.received", eventPayload);
         });
 
-        console.log(`✉️ Message sent by ${userId} in room ${roomName}: "${content.substring(0, 30)}..."`);
+        console.log(`✉️ Message sent by ${userId} (display: ${senderName}) in room ${roomName}: "${content.substring(0, 30)}..."`);
         if (callback) callback({ success: true, data: eventPayload });
       } catch (err: any) {
         if (callback) callback({ success: false, error: err.message });

@@ -218,7 +218,18 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       const targetProfile = await prisma.profiles.findUnique({
         where: { user_id: targetId }
       });
-      const restriction = targetProfile?.messaging_restriction || 'anyone';
+      let restriction = targetProfile?.messaging_restriction || 'anyone';
+      // Treat legacy approval_required as only_connected (connection is now the gate)
+      if (restriction === 'approval_required') restriction = 'only_connected';
+
+      if (restriction === 'no_one') {
+        // User has disabled all incoming DMs
+        return reply.status(403).send({
+          success: false,
+          error: "This user has disabled direct messages.",
+          restriction: "no_one"
+        });
+      }
 
       if (restriction === 'only_connected') {
         const connected = await prisma.connections.findFirst({
@@ -235,31 +246,6 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             success: false,
             error: "Messaging restricted to connected users only.",
             restriction: "only_connected"
-          });
-        }
-      } else if (restriction === 'approval_required') {
-        const approved = await prisma.messaging_requests.findFirst({
-          where: {
-            status: 'ACCEPTED',
-            OR: [
-              { sender_id: creatorId, receiver_id: targetId },
-              { sender_id: targetId, receiver_id: creatorId }
-            ]
-          }
-        });
-        if (!approved) {
-          const pending = await prisma.messaging_requests.findFirst({
-            where: {
-              sender_id: creatorId,
-              receiver_id: targetId,
-              status: 'PENDING'
-            }
-          });
-          return reply.status(403).send({
-            success: false,
-            error: "Approval required to start messaging.",
-            restriction: "approval_required",
-            hasPending: !!pending
           });
         }
       }
@@ -687,15 +673,19 @@ export async function messagingRoutes(fastify: FastifyInstance) {
 
       const uniqueSenders = new Set(unreadMessages.map(m => m.sender_user_id));
       
-      const pendingRequests = await prisma.messaging_requests.count({
-        where: { receiver_id: userId, status: 'PENDING' }
+      const pendingConnRequests = await prisma.connections.count({
+        where: { addressee_user_id: userId, state: 'requested' }
+      });
+
+      const unreadNotifLogs = await prisma.notification_log.count({
+        where: { user_id: userId, status: { not: 'read' } }
       });
 
       return reply.send({
         success: true,
         data: {
           messages: uniqueSenders.size,
-          notifs: pendingRequests // map pending requests as notification count
+          notifs: pendingConnRequests + unreadNotifLogs
         }
       });
     } catch (err: any) {
@@ -731,5 +721,125 @@ export async function messagingRoutes(fastify: FastifyInstance) {
   // POST /api/messaging/users/:id/unblock
   fastify.post<{ Params: { id: string } }>('/users/:id/unblock', { preHandler: [(fastify as any).authenticate] }, async (request, reply) => {
     return reply.send({ success: true });
+  });
+
+  // GET /api/messaging/notifications
+  fastify.get('/notifications', { preHandler: [(fastify as any).authenticate] }, async (request, reply) => {
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply.status(401).send({ success: false, message: 'Unauthorized' });
+    }
+    try {
+      const logs = await prisma.notification_log.findMany({
+        where: { user_id: userId },
+        orderBy: { created_at: 'desc' },
+        take: 50
+      });
+
+      const msgIds = logs
+        .filter(l => l.template_key === 'message_received' && l.provider_ref)
+        .map(l => l.provider_ref) as string[];
+
+      const messages = msgIds.length > 0 ? await prisma.messages.findMany({
+        where: { id: { in: msgIds } },
+        include: {
+          users: {
+            select: {
+              primary_email: true,
+              profiles: {
+                select: { display_name: true }
+              }
+            }
+          }
+        }
+      }) : [];
+      const messageMap = new Map(messages.map(m => [m.id, m]));
+
+      const acceptorUserIds = logs
+        .filter(l => l.template_key === 'connection_accepted' && l.provider_ref)
+        .map(l => l.provider_ref) as string[];
+
+      const acceptors = acceptorUserIds.length > 0 ? await prisma.users.findMany({
+        where: { id: { in: acceptorUserIds } },
+        include: {
+          profiles: {
+            select: { display_name: true }
+          }
+        }
+      }) : [];
+      const acceptorMap = new Map(acceptors.map(u => [u.id, u]));
+
+      const mappedLogs = logs.map(l => {
+        const time = new Date(l.created_at);
+        const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const dayLabel = time.toDateString() === new Date().toDateString() ? "Today" : time.toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+        if (l.template_key === 'message_received' && l.provider_ref) {
+          const msg = messageMap.get(l.provider_ref);
+          if (msg) {
+            const senderName = msg.users?.profiles?.display_name || msg.users?.primary_email?.split('@')[0] || "Someone";
+            return {
+              id: l.id,
+              type: "message",
+              who: senderName,
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `<b>${senderName}</b> sent you a message: “${msg.body}”`,
+              action: "reply"
+            };
+          }
+        }
+
+        if (l.template_key === 'connection_accepted' && l.provider_ref) {
+          const u = acceptorMap.get(l.provider_ref);
+          if (u) {
+            const acceptorName = u.profiles?.display_name || u.primary_email?.split('@')[0] || "Someone";
+            return {
+              id: l.id,
+              type: "connect",
+              who: acceptorName,
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `<b>${acceptorName}</b> accepted your connection request! 🎉`,
+              action: "view"
+            };
+          }
+        }
+
+        return {
+          id: l.id,
+          type: "system",
+          who: "System",
+          unread: l.status !== 'read',
+          day: dayLabel,
+          time: timeStr,
+          text: `Notification: ${l.template_key}`,
+          action: null
+        };
+      });
+
+      return reply.send({ success: true, data: mappedLogs });
+    } catch (err: any) {
+      return reply.status(500).send({ success: false, message: err.message });
+    }
+  });
+
+  // POST /api/messaging/notifications/mark-read
+  fastify.post('/notifications/mark-read', { preHandler: [(fastify as any).authenticate] }, async (request, reply) => {
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply.status(401).send({ success: false, message: 'Unauthorized' });
+    }
+    try {
+      await prisma.notification_log.updateMany({
+        where: { user_id: userId, status: { not: 'read' } },
+        data: { status: 'read' }
+      });
+      return reply.send({ success: true });
+    } catch (err: any) {
+      return reply.status(500).send({ success: false, message: err.message });
+    }
   });
 }

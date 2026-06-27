@@ -119,4 +119,136 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
     }
   });
 
+  // Public profile details fetch by user ID
+  fastify.get('/profile/:userId', async (request: any, reply: any) => {
+    try {
+      const { userId } = request.params;
+      const user = await prisma.users.findUnique({
+        where: { id: userId },
+        include: {
+          profiles: true,
+          profile_links: true,
+        }
+      });
+
+      if (!user) {
+        return reply.status(404).send({ success: false, message: 'User not found' });
+      }
+
+      const profile = user.profiles ? (Array.isArray(user.profiles) ? user.profiles[0] : user.profiles) : null;
+
+      let profilePhotoUrl = '';
+      if (user.profile_image_data) {
+        profilePhotoUrl = `data:image/jpeg;base64,${Buffer.from(user.profile_image_data).toString('base64')}`;
+      } else if (profile?.profile_image_data) {
+        profilePhotoUrl = `data:image/jpeg;base64,${Buffer.from(profile.profile_image_data).toString('base64')}`;
+      }
+
+      let coverBannerUrl = '';
+      if (profile?.cover_image_data) {
+        coverBannerUrl = `data:image/jpeg;base64,${Buffer.from(profile.cover_image_data).toString('base64')}`;
+      }
+
+      // Determine if requester is the user itself or is an accepted connection
+      let isOwnerOrConnected = false;
+      try {
+        const header = request.headers.authorization || '';
+        if (header.startsWith('Bearer ')) {
+          const token = header.slice(7);
+          const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
+          const visitorUserId = payload.sub || payload.userId || payload.id;
+          if (visitorUserId) {
+            if (visitorUserId === userId) {
+              isOwnerOrConnected = true;
+            } else {
+              const conn = await prisma.connections.findFirst({
+                where: {
+                  OR: [
+                    { requester_user_id: visitorUserId, addressee_user_id: userId },
+                    { requester_user_id: userId, addressee_user_id: visitorUserId },
+                  ]
+                }
+              });
+              if (conn && conn.state === 'accepted') {
+                isOwnerOrConnected = true;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        // Ignore token/database lookup errors
+      }
+
+      const privacyPrefs = (profile?.privacy_prefs as any) || {};
+      const profileVisibility = privacyPrefs.profileVisibility || 'public';
+      const privateProfileMode = privacyPrefs.privateProfileMode || 'hide_all';
+      const visibleFields = privacyPrefs.visibleFields || {
+        email: false,
+        phone: false,
+        location: true,
+        gender: false,
+        dob: false,
+        socialLinks: true
+      };
+
+      let finalEmail = user.primary_email || '';
+      let finalPhone = user.phone_number || user.phone_e164 || profile?.phone_number || '';
+      let finalLocation = user.location || profile?.preferred_location || '';
+      let finalGender = profile?.gender || user.gender || '';
+      let finalDob = profile?.dob || user.dob || '';
+      let finalHeadline = profile?.headline || profile?.template_key || '';
+      let finalBio = profile?.bio || '';
+      let finalSkills = profile?.skills || [];
+      let finalSocialLinks = user.profile_links || [];
+      let finalProfilePhoto = profilePhotoUrl;
+      let finalCoverBanner = coverBannerUrl;
+
+      if (!isOwnerOrConnected && profileVisibility === 'private') {
+        if (privateProfileMode === 'hide_all') {
+          finalEmail = '';
+          finalPhone = '';
+          finalLocation = '';
+          finalGender = '';
+          finalDob = '';
+          finalHeadline = '';
+          finalBio = '';
+          finalSkills = [];
+          finalSocialLinks = [];
+          finalProfilePhoto = '';
+          finalCoverBanner = '';
+        } else if (privateProfileMode === 'custom_fields') {
+          if (!visibleFields.email) finalEmail = '';
+          if (!visibleFields.phone) finalPhone = '';
+          if (!visibleFields.location) finalLocation = '';
+          if (!visibleFields.gender) finalGender = '';
+          if (!visibleFields.dob) finalDob = '';
+          if (!visibleFields.socialLinks) finalSocialLinks = [];
+        }
+      }
+
+      return {
+        success: true,
+        data: {
+          id: user.id,
+          user_id: user.id,
+          displayName: [user.first_name, user.last_name].filter(Boolean).join(' ') || profile?.display_name || '',
+          headline: finalHeadline,
+          bio: finalBio,
+          email: finalEmail,
+          phone: finalPhone,
+          gender: finalGender,
+          dob: finalDob,
+          location: finalLocation,
+          profilePhoto: finalProfilePhoto,
+          coverBanner: finalCoverBanner,
+          skills: finalSkills,
+          socialLinks: finalSocialLinks,
+          privacyPrefs: profile?.privacy_prefs || null
+        }
+      };
+    } catch (error: any) {
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to fetch profile' });
+    }
+  });
+
 };

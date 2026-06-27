@@ -3,7 +3,7 @@
    Samaagum Home — Notification center
    ============================================================ */
 
-const { useState } = React;
+const { useState, useEffect, useCallback } = React;
 
 const NTYPE = {
   join:        { ico:<I.groups style={{width:14,height:14}}/>, c:"linear-gradient(135deg,#6d5efc,#2a7fff)" },
@@ -12,14 +12,58 @@ const NTYPE = {
   message:     { ico:<I.msg style={{width:13,height:13}}/>,    c:"linear-gradient(135deg,#8b5cf6,#e5489d)" },
   forum:       { ico:<I.comment style={{width:13,height:13}}/>,c:"linear-gradient(135deg,#f59e0b,#ef6f53)" },
   registration:{ ico:<I.ticket style={{width:13,height:13}}/>, c:"linear-gradient(135deg,#0ea5a4,#3b82f6)" },
+  system:      { ico:<I.bell style={{width:13,height:13}}/>,   c:"linear-gradient(135deg,#f59e0b,#ef6f53)" },
 };
 
+const API_BASE = window.location.port === "8080" ? "http://localhost:3000" : "";
+
+function authHeaders() {
+  const token = localStorage.getItem('token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 function NotifRow({ n, st, go, onRead }) {
-  const meta = NTYPE[n.type];
+  const meta = NTYPE[n.type] || NTYPE.system;
   const avatarTypes = ["connect","message","forum"];
+  const [acted, setActed] = useState(null);
+  const [loading, setLoading] = useState(null);
+
+  const handleConnect = async (action) => {
+    if (!n.connectionId) {
+      st.toggleConnect?.(n.who);
+      setActed("accepted");
+      onRead();
+      return;
+    }
+    setLoading(action);
+    try {
+      const res = await fetch(`${API_BASE}/api/connections/${n.connectionId}/${action}`, {
+        method: 'POST',
+        headers: authHeaders()
+      });
+      const data = await res.json();
+      if (data.success) {
+        setActed(action);
+        onRead();
+        if (window.toast) {
+          const msgs = { accept: "Connection accepted! 🎉", decline: "Request declined." };
+          window.toast(msgs[action]);
+        }
+        if (st.fetchCounts) st.fetchCounts();
+        if (action === 'accept') st.toggleConnect?.(n.who);
+      } else {
+        if (window.toast) window.toast(data.message || "Something went wrong.");
+      }
+    } catch (err) {
+      if (window.toast) window.toast("Network error. Please try again.");
+    } finally {
+      setLoading(null);
+    }
+  };
+
   return (
-    <div className={`notif ${n.unread?"unread":""}`} onClick={onRead}>
-      <div className="nic" style={{ background: avatarTypes.includes(n.type)?"transparent":meta.c, color:"#fff" }}>
+    <div className={`notif ${n.unread && !acted ? "unread" : ""}`} onClick={acted ? undefined : onRead}>
+      <div className="nic" style={{ background: avatarTypes.includes(n.type) ? "transparent" : meta.c, color:"#fff" }}>
         {avatarTypes.includes(n.type)
           ? <><Avatar name={n.who} size={42}/><span className="tagico" style={{ background: meta.c }}>{meta.ico}</span></>
           : meta.ico}
@@ -27,17 +71,136 @@ function NotifRow({ n, st, go, onRead }) {
       <div className="nbody">
         <div className="nt" dangerouslySetInnerHTML={{ __html: n.text }} />
         <div className="ntime">{n.time}</div>
-        {n.action==="connect" && (
-          <div className="nacts">
-            <button className="hbtn hbtn--primary hbtn--sm" onClick={(e)=>{e.stopPropagation(); st.toggleConnect(n.who); onRead();}}><I.check/>Accept</button>
-            <button className="hbtn hbtn--ghost hbtn--sm" onClick={(e)=>e.stopPropagation()}>Decline</button>
+
+        {/* Connection Request Actions (from notification feed) */}
+        {n.action === "connect" && !acted && (
+          <div className="nacts" style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+            <button
+              className="hbtn hbtn--primary hbtn--sm"
+              disabled={!!loading}
+              onClick={(e) => { e.stopPropagation(); handleConnect("accept"); }}
+              style={{ opacity: loading === "accept" ? 0.7 : 1 }}
+            >
+              <I.check/>
+              {loading === "accept" ? "Accepting…" : "Accept"}
+            </button>
+            <button
+              className="hbtn hbtn--ghost hbtn--sm"
+              disabled={!!loading}
+              onClick={(e) => { e.stopPropagation(); handleConnect("decline"); }}
+              style={{ opacity: loading === "decline" ? 0.7 : 1 }}
+            >
+              {loading === "decline" ? "Declining…" : "Decline"}
+            </button>
           </div>
         )}
+
+        {/* Post-action badges */}
+        {n.action === "connect" && acted && (
+          <div style={{ marginTop: 8 }}>
+            {acted === "accepted" && (
+              <span style={{ display:"inline-flex", alignItems:"center", gap:6, background:"rgba(34,197,94,0.1)", color:"rgb(34,197,94)", padding:"4px 10px", borderRadius:"var(--r-pill)", fontSize:"12px", fontWeight:600 }}>
+                <I.check style={{width:12,height:12}}/> Connected
+              </span>
+            )}
+            {acted === "declined" && (
+              <span style={{ display:"inline-flex", alignItems:"center", gap:6, background:"rgba(0,0,0,0.05)", color:"var(--ink-3)", padding:"4px 10px", borderRadius:"var(--r-pill)", fontSize:"12px", fontWeight:600 }}>
+                Request declined
+              </span>
+            )}
+          </div>
+        )}
+
         {n.action==="ticket" && <div className="nacts"><button className="hbtn hbtn--soft hbtn--sm" onClick={(e)=>{e.stopPropagation(); go("event", FEATURED);}}><I.ticket/>View ticket</button></div>}
-        {n.action==="reply" && <div className="nacts"><button className="hbtn hbtn--soft hbtn--sm" onClick={(e)=>{e.stopPropagation(); go("messages");}}><I.msg/>Reply</button></div>}
-        {n.action==="view" && <div className="nacts"><button className="hbtn hbtn--ghost hbtn--sm" onClick={(e)=>e.stopPropagation()}>View</button></div>}
+        {n.action==="reply"  && <div className="nacts"><button className="hbtn hbtn--soft hbtn--sm" onClick={(e)=>{e.stopPropagation(); go("messages");}}><I.msg/>Reply</button></div>}
+        {n.action==="view"   && <div className="nacts"><button className="hbtn hbtn--ghost hbtn--sm" onClick={(e)=>e.stopPropagation()}>View</button></div>}
       </div>
-      {n.unread && <span className="udot"/>}
+      {n.unread && !acted && <span className="udot"/>}
+    </div>
+  );
+}
+
+/* ── Incoming connection requests card ── */
+function ConnRequestCard({ req, onActed }) {
+  const [acted, setActed] = useState(null);
+  const [loading, setLoading] = useState(null);
+  const name = req.requester?.display_name || req.requester?.email || "Unknown";
+
+  const handle = async (action) => {
+    setLoading(action);
+    try {
+      const res = await fetch(`${API_BASE}/api/connections/${req.id}/${action}`, {
+        method: 'POST',
+        headers: authHeaders()
+      });
+      const data = await res.json();
+      if (data.success) {
+        setActed(action);
+        const msgs = { accept: "Connection accepted! 🎉", decline: "Request declined." };
+        if (window.toast) window.toast(msgs[action]);
+        setTimeout(() => onActed(req.id), 600);
+      } else {
+        if (window.toast) window.toast(data.message || "Something went wrong.");
+      }
+    } catch {
+      if (window.toast) window.toast("Network error. Try again.");
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "16px",
+        background: acted ? "var(--surface-2)" : "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--r-md)",
+        transition: "opacity 0.3s ease",
+        opacity: acted ? 0.5 : 1,
+        gap: 12
+      }}
+    >
+      <div style={{ display:"flex", alignItems:"center", gap:12, flex:1, minWidth:0 }}>
+        <Avatar name={name} size={44}/>
+        <div style={{ minWidth:0 }}>
+          <div style={{ fontWeight:600, color:"var(--ink)", fontSize:"14.5px", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{name}</div>
+          <div style={{ fontSize:"12.5px", color:"var(--ink-3)", marginTop:2 }}>
+            {req.requester?.headline || "Sent you a connection request"}
+          </div>
+          <div style={{ fontSize:"11px", color:"var(--ink-3)", marginTop:2 }}>
+            {new Date(req.created_at).toLocaleDateString()}
+          </div>
+        </div>
+      </div>
+
+      {!acted ? (
+        <div style={{ display:"flex", gap:8, flexShrink:0 }}>
+          <button
+            className="hbtn hbtn--primary hbtn--sm"
+            disabled={!!loading}
+            onClick={() => handle("accept")}
+            style={{ opacity: loading === "accept" ? 0.7 : 1 }}
+          >
+            <I.check/>{loading === "accept" ? "…" : "Accept"}
+          </button>
+          <button
+            className="hbtn hbtn--ghost hbtn--sm"
+            disabled={!!loading}
+            onClick={() => handle("decline")}
+            style={{ opacity: loading === "decline" ? 0.7 : 1 }}
+          >
+            {loading === "decline" ? "…" : "Decline"}
+          </button>
+        </div>
+      ) : (
+        <span style={{ fontSize:"12px", color:"var(--ink-3)", flexShrink:0 }}>
+          {acted === "accept" ? "✅ Connected" : "Declined"}
+        </span>
+      )}
     </div>
   );
 }
@@ -45,145 +208,119 @@ function NotifRow({ n, st, go, onRead }) {
 function Notifications({ st, go, socket }) {
   const [tab, setTab] = useState("all");
   const [items, setItems] = useState(NOTIFS);
-  const [requests, setRequests] = useState([]);
+  const [connRequests, setConnRequests] = useState([]);
 
-  React.useEffect(() => {
+  /* ── Fetch general notifications ── */
+  const fetchNotifications = useCallback(() => {
+    fetch(`${API_BASE}/api/messaging/notifications`, { headers: authHeaders() })
+      .then(res => res.json())
+      .then(res => { if (res.success && res.data?.length > 0) setItems(res.data); })
+      .catch(err => console.error("Error fetching notifications:", err));
+  }, []);
+
+  /* ── Fetch connection requests ── */
+  const fetchConnRequests = useCallback(() => {
+    fetch(`${API_BASE}/api/connections/incoming`, { headers: authHeaders() })
+      .then(res => res.json())
+      .then(res => { if (res.success && res.data) setConnRequests(res.data); })
+      .catch(err => console.error("Error fetching connection requests:", err));
+  }, []);
+
+  useEffect(() => { fetchNotifications(); fetchConnRequests(); }, []);
+  useEffect(() => { fetchConnRequests(); }, [tab]);
+
+  /* ── Socket event listeners ── */
+  useEffect(() => {
     if (!socket) return;
-
-    const handleRequestReceived = () => {
-      fetchRequests();
+    const onConnRequest  = () => fetchConnRequests();
+    const onConnAccepted = () => { fetchConnRequests(); if (st.fetchCounts) st.fetchCounts(); };
+    const onConnDeclined = () => { fetchConnRequests(); if (st.fetchCounts) st.fetchCounts(); };
+    const onMsg = (payload) => {
+      const sender = payload.senderName || "Someone";
+      const text   = payload.content || payload.body || "";
+      setItems(prev => [{
+        id: payload.id || Math.random().toString(),
+        type: "message", who: sender, unread: true,
+        day: "Today", time: "Just now",
+        text: `<b>${sender}</b> sent you a message: "${text}"`,
+        action: "reply"
+      }, ...prev]);
     };
-    const handleRequestAccepted = () => {
-      fetchRequests();
-    };
-    const handleRequestDeclined = () => {
-      fetchRequests();
-    };
-
-    socket.on("request.received", handleRequestReceived);
-    socket.on("request.accepted", handleRequestAccepted);
-    socket.on("request.declined", handleRequestDeclined);
-
+    socket.on("connection.request.received", onConnRequest);
+    socket.on("connection.accepted", onConnAccepted);
+    socket.on("connection.declined", onConnDeclined);
+    socket.on("message.received", onMsg);
     return () => {
-      socket.off("request.received", handleRequestReceived);
-      socket.off("request.accepted", handleRequestAccepted);
-      socket.off("request.declined", handleRequestDeclined);
+      socket.off("connection.request.received", onConnRequest);
+      socket.off("connection.accepted", onConnAccepted);
+      socket.off("connection.declined", onConnDeclined);
+      socket.off("message.received", onMsg);
     };
-  }, [socket]);
-  
-  const read = (id) => setItems(arr => arr.map(n => n.id===id ? {...n, unread:false} : n));
-  const markAll = () => setItems(arr => arr.map(n => ({...n, unread:false})));
-  const unreadCount = items.filter(n=>n.unread).length;
+  }, [socket, fetchConnRequests]);
 
-  const fetchRequests = () => {
-    const token = localStorage.getItem('token');
-    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-    const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
-    fetch(`${apiBase}/api/messaging/requests/incoming`, { headers })
+  const read = (id) => setItems(arr => arr.map(n => n.id === id ? {...n, unread: false} : n));
+
+  const markAll = () => {
+    setItems(arr => arr.map(n => ({...n, unread: false})));
+    fetch(`${API_BASE}/api/messaging/notifications/mark-read`, { method: 'POST', headers: authHeaders() })
       .then(res => res.json())
-      .then(res => {
-        if (res.success && res.data) {
-          setRequests(res.data);
-        }
-      })
-      .catch(err => console.error("Error fetching requests for notifications page:", err));
+      .then(() => { if (st.fetchCounts) st.fetchCounts(); })
+      .catch(err => console.error("Error marking notifications read:", err));
   };
 
-  React.useEffect(() => {
-    fetchRequests();
-  }, [tab]);
-
-  const handleAcceptRequest = (reqId) => {
-    const token = localStorage.getItem('token');
-    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-    const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
-    fetch(`${apiBase}/api/messaging/requests/${reqId}/accept`, {
-      method: 'POST',
-      headers
-    })
-      .then(res => res.json())
-      .then(res => {
-        if (res.success) {
-          if (window.toast) window.toast("Messaging request accepted!");
-          fetchRequests();
-          if (st.fetchCounts) st.fetchCounts();
-        }
-      })
-      .catch(err => console.error("Error accepting request:", err));
-  };
-
-  const handleDeclineRequest = (reqId) => {
-    const token = localStorage.getItem('token');
-    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-    const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
-    fetch(`${apiBase}/api/messaging/requests/${reqId}/decline`, {
-      method: 'POST',
-      headers
-    })
-      .then(res => res.json())
-      .then(res => {
-        if (res.success) {
-          if (window.toast) window.toast("Messaging request declined.");
-          fetchRequests();
-          if (st.fetchCounts) st.fetchCounts();
-        }
-      })
-      .catch(err => console.error("Error declining request:", err));
-  };
-
-  const filtered = tab==="all" ? items
-    : tab==="unread" ? items.filter(n=>n.unread)
-    : items.filter(n=>n.type==="connect");
-
-  const days = [...new Set(filtered.map(n=>n.day))];
+  const unreadCount  = items.filter(n => n.unread).length;
+  const filtered     = tab === "all" ? items : tab === "unread" ? items.filter(n => n.unread) : items;
+  const days         = [...new Set(filtered.map(n => n.day))];
 
   return (
     <div className="scroll">
       <div className="view-enter notif-page">
         <div className="notif-head">
           <h1>Notifications</h1>
-          {unreadCount>0 && <button className="markall" onClick={markAll}><I.check/> Mark all read</button>}
+          {unreadCount > 0 && <button className="markall" onClick={markAll}><I.check/> Mark all read</button>}
         </div>
         <div className="notif-tabs">
-          <FilterChip active={tab==="all"} onClick={()=>setTab("all")}>All</FilterChip>
-          <FilterChip active={tab==="unread"} onClick={()=>setTab("unread")} count={unreadCount}>Unread</FilterChip>
-          <FilterChip active={tab==="requests"} onClick={()=>setTab("requests")} count={requests.length}>Requests</FilterChip>
+          <FilterChip active={tab === "all"}     onClick={() => setTab("all")}>All</FilterChip>
+          <FilterChip active={tab === "unread"}  onClick={() => setTab("unread")}  count={unreadCount}>Unread</FilterChip>
+          <FilterChip active={tab === "connections"} onClick={() => setTab("connections")} count={connRequests.length}>
+            Connections
+          </FilterChip>
         </div>
 
-        {tab === "requests" ? (
-          requests.length === 0 ? (
-            <Empty icon={<I.check/>} title="No pending requests" text="You don't have any incoming messaging requests at the moment." />
+        {/* ── Connection Requests Tab ── */}
+        {tab === "connections" && (
+          connRequests.length === 0 ? (
+            <Empty icon={<I.user/>} title="No pending connection requests" text="When someone wants to connect with you, you'll see their request here with options to accept or decline." />
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:12, padding:"16px 0" }}>
-              {requests.map(r => {
-                const displayName = r.sender?.profiles?.display_name || r.sender?.primary_email || "Unknown User";
-                const headline = r.sender?.profiles?.headline || "";
-                return (
-                  <div key={r.id} className="notif unread" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <Avatar name={displayName} size={42}/>
-                      <div>
-                        <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: "14.5px" }}>{displayName}</div>
-                        <div style={{ fontSize: "12.5px", color: "var(--ink-3)", marginTop: 2 }}>{headline || "Sent you a messaging request"}</div>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button className="hbtn hbtn--primary hbtn--sm" onClick={()=>handleAcceptRequest(r.id)}><I.check/> Accept</button>
-                      <button className="hbtn hbtn--ghost hbtn--sm" onClick={()=>handleDeclineRequest(r.id)}>Decline</button>
-                    </div>
-                  </div>
-                );
-              })}
+              <div style={{ fontSize:"13px", color:"var(--ink-3)", marginBottom:4 }}>
+                {connRequests.length} pending {connRequests.length === 1 ? "request" : "requests"}
+              </div>
+              {connRequests.map(req => (
+                <ConnRequestCard
+                  key={req.id}
+                  req={req}
+                  onActed={(id) => {
+                    setConnRequests(prev => prev.filter(r => r.id !== id));
+                    if (st.fetchCounts) st.fetchCounts();
+                  }}
+                />
+              ))}
             </div>
           )
-        ) : (
-          filtered.length===0 ? (
+        )}
+
+        {/* ── All / Unread Tabs ── */}
+        {tab !== "connections" && (
+          filtered.length === 0 ? (
             <Empty icon={<I.check/>} title="You're all caught up" text="No new notifications here. We'll let you know when something happens in your communities." />
           ) : days.map(day => (
             <div key={day}>
               <div className="notif-day">{day}</div>
               <div>
-                {filtered.filter(n=>n.day===day).map(n => <NotifRow key={n.id} n={n} st={st} go={go} onRead={()=>read(n.id)} />)}
+                {filtered.filter(n => n.day === day).map(n => (
+                  <NotifRow key={n.id} n={n} st={st} go={go} onRead={() => read(n.id)} />
+                ))}
               </div>
             </div>
           ))

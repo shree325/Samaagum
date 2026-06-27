@@ -25,6 +25,7 @@ import { seedPlatformSettings } from './settings-library/settingsSeeder';
 import { startMessaging, stopMessaging, getMessagingHealth } from './services/messagingSocket';
 import { messagingTestRoutes } from './controllers/messagingTestRoutes';
 import { messagingRoutes } from './controllers/messagingRoutes';
+import { connectionRoutes } from './controllers/connectionRoutes';
 
 
 dotenv.config();
@@ -125,6 +126,7 @@ import { publicRoutes } from './controllers/publicRoutes';
 fastify.register(publicRoutes, { prefix: '/api/public' });
 fastify.register(messagingTestRoutes, { prefix: '/api/test' });
 fastify.register(messagingRoutes, { prefix: '/api/messaging' });
+fastify.register(connectionRoutes, { prefix: '/api/connections' });
 
 // Health check route
 fastify.get('/health', async (request, reply) => {

@@ -3,6 +3,11 @@
    Samaagum Home — Messages, connections (DMs, upward, requests)
    ============================================================ */
 
+function ProfileName({ userId, name }) {
+  const p = I.useProfileSync ? I.useProfileSync(userId, { name }) : { name };
+  return <>{p.name || "null"}</>;
+}
+
 function Messages({ st, go, mobile, socket }) {
   const [seg, setSeg] = useState("messages");
   const [threads, setThreads] = useState([]);
@@ -19,6 +24,14 @@ function Messages({ st, go, mobile, socket }) {
   const [replyingTo, setReplyingTo] = useState(null);
 
   const [requestStatuses, setRequestStatuses] = useState({});
+
+  // Sync the currently active conversation ID to window so the shell's socket handler can check it
+  useEffect(() => {
+    window.activeConversationId = activeId;
+    return () => {
+      window.activeConversationId = null;
+    };
+  }, [activeId]);
 
   const checkCommonGroupOrEvent = (otherUser) => {
     if (!otherUser) return false;
@@ -152,6 +165,7 @@ function Messages({ st, go, mobile, socket }) {
         } else if (res.status === 403 && data.restriction === 'only_connected') {
           if (window.toast) window.toast("This user only allows messaging from connected users.");
           else alert("This user only allows messaging from connected users.");
+          go("public-profile", user);
         } else {
           alert(data.error || "Connection failed.");
         }
@@ -171,7 +185,24 @@ function Messages({ st, go, mobile, socket }) {
       headers,
       body: JSON.stringify({ targetId: user.id })
     })
-      .then(res => res.json())
+      .then(res => {
+        if (res.status === 403) {
+          return res.json().then(data => {
+            if (data.restriction === 'only_connected') {
+              if (window.toast) window.toast("This user only allows messaging from connected users.");
+              else alert("This user only allows messaging from connected users.");
+              go("public-profile", user);
+            } else if (data.restriction === 'no_one') {
+              if (window.toast) window.toast("This user has disabled direct messages.");
+              else alert("This user has disabled direct messages.");
+            } else {
+              alert(data.error || "Unable to start messaging.");
+            }
+            throw new Error("restricted");
+          });
+        }
+        return res.json();
+      })
       .then(res => {
         if (res.success && res.data) {
           const conv = res.data;
@@ -184,7 +215,11 @@ function Messages({ st, go, mobile, socket }) {
           setShowConv(true);
         }
       })
-      .catch(err => console.error("Error creating direct conversation:", err));
+      .catch(err => {
+        if (err.message !== "restricted") {
+          console.error("Error creating direct conversation:", err);
+        }
+      });
   };
 
   useEffect(() => {
@@ -681,7 +716,7 @@ socket.off("request.declined", handleRequestDeclined);
                         </div>
                         <div className="info" style={{ flex: 1, minWidth: 0 }}>
                           <div className="name" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
-                            {I.useProfileSync ? I.useProfileSync(user.id, { name: user.name }).name || "null" : (user.name || "null")}
+                            <ProfileName userId={user.id} name={user.name} />
                           </div>
                         </div>
                       </div>
@@ -699,7 +734,7 @@ socket.off("request.declined", handleRequestDeclined);
                         </div>
                         <div className="info" style={{ flex: 1, minWidth: 0 }}>
                           <div className="name" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
-                            {I.useProfileSync ? I.useProfileSync(user.id, { name: user.name }).name || "null" : (user.name || "null")}
+                            <ProfileName userId={user.id} name={user.name} />
                           </div>
                         </div>
                         <button 
@@ -800,19 +835,29 @@ socket.off("request.declined", handleRequestDeclined);
           <div className="msg-conv">
             <div className="conv-head">
               {mobile && <button className="hbtn hbtn--ghost hbtn--sm" style={{ padding:"7px 10px" }} onClick={()=>setShowConv(false)}><I.arrowL/></button>}
-              <div style={{ position:"relative" }}>
-                <I.Avatar userId={other?.userId || other?.id} name={displayName} size={40}/>
-                <span className={presenceStatus === "ONLINE" ? "online" : "offline"} style={{ position:"absolute", bottom:0, right:0, width:11, height:11, borderRadius:"50%", background: presenceStatus === "ONLINE" ? "#2bb673" : "#8e8e93", border:"2px solid var(--surface)" }}/>
-              </div>
-              <div className="ci">
-                <div className="n">{displayName}</div>
-                <div className="s">
-                  {presenceStatus === "ONLINE" && "Online"}
-                  {presenceStatus === "RECENTLY_ONLINE" && "Recently Online"}
-                  {presenceStatus === "OFFLINE" && "Offline"}
+              <div 
+                style={{ display: "flex", alignItems: "center", gap: 10, cursor: other ? "pointer" : "default" }}
+                onClick={() => {
+                  if (other) {
+                    go("public-profile", { id: other.userId || other.id });
+                  }
+                }}
+                title={other ? "View Profile" : undefined}
+              >
+                <div style={{ position:"relative" }}>
+                  <I.Avatar userId={other?.userId || other?.id} name={displayName} size={40}/>
+                  <span className={presenceStatus === "ONLINE" ? "online" : "offline"} style={{ position:"absolute", bottom:0, right:0, width:11, height:11, borderRadius:"50%", background: presenceStatus === "ONLINE" ? "#2bb673" : "#8e8e93", border:"2px solid var(--surface)" }}/>
+                </div>
+                <div className="ci">
+                  <div className="n">{displayName}</div>
+                  <div className="s">
+                    {presenceStatus === "ONLINE" && "Online"}
+                    {presenceStatus === "RECENTLY_ONLINE" && "Recently Online"}
+                    {presenceStatus === "OFFLINE" && "Offline"}
+                  </div>
                 </div>
               </div>
-              <div className="cact">
+              <div className="cact" style={{ marginLeft: "auto" }}>
                 <button className="tb-icon" style={{ width:36, height:36 }}><I.phone/></button>
                 <button className="tb-icon" style={{ width:36, height:36 }}><I.more/></button>
               </div>
@@ -838,6 +883,21 @@ socket.off("request.declined", handleRequestDeclined);
 
                 return (
                   <div key={m.id || i} id={`msg-item-${m.id}`} className={`msg-row ${isMe ? "me" : "them"}`}>
+                    {!isMe && (
+                      <div 
+                        className="msg-avatar-click" 
+                        onClick={() => {
+                          if (m.senderId && m.senderId !== "them") {
+                            go("public-profile", { id: m.senderId });
+                          }
+                        }}
+                        style={{ cursor: (m.senderId && m.senderId !== "them") ? "pointer" : "default", flexShrink: 0, order: 0, marginRight: 8 }}
+                        title={m.senderId && m.senderId !== "them" ? "View Profile" : undefined}
+                      >
+                        <I.Avatar userId={m.senderId} name={m.senderName || displayName} size={28} />
+                      </div>
+                    )}
+
                     {/* Hover Actions */}
                     {!isEditing && (
                       <div className="hover-actions">
@@ -976,6 +1036,21 @@ socket.off("request.declined", handleRequestDeclined);
                         </>
                       )}
                     </div>
+
+                    {isMe && (
+                      <div 
+                        className="msg-avatar-click" 
+                        onClick={() => {
+                          if (currentUserId && currentUserId !== "me") {
+                            go("public-profile", { id: currentUserId });
+                          }
+                        }}
+                        style={{ cursor: (currentUserId && currentUserId !== "me") ? "pointer" : "default", flexShrink: 0, order: 3, marginLeft: 8 }}
+                        title={currentUserId && currentUserId !== "me" ? "View Profile" : undefined}
+                      >
+                        <I.Avatar userId={currentUserId} name="Me" size={28} />
+                      </div>
+                    )}
                   </div>
                 );
               })}

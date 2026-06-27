@@ -28,7 +28,7 @@ function TabBar({ view, go, counts, chatSettings }) {
       ) : (
         <button key={t.k} className={`tab ${active(t.k) ? "on" : ""}`} onClick={() => go(t.k)}>
           <span className="ic">{t.ic}</span>{t.label}
-          {t.badge ? <span className="tdot" /> : null}
+          {t.badge ? <span className="badge">{t.badge}</span> : null}
         </button>
       ))}
     </div>
@@ -42,9 +42,9 @@ function MobileTop({ go, counts, city, chatSettings }) {
       <Mark size={26}/>
       <div className="m-search" onClick={()=>go("discover")}><I.search/> Search Samaagum</div>
       {showMessages && (
-        <button className="tb-icon" style={{ width:38, height:38 }} onClick={()=>go("messages")}><I.chat/>{counts.messages?<span className="dot"/>:null}</button>
+        <button className="tb-icon" style={{ width:38, height:38 }} onClick={()=>go("messages")}><I.chat/>{counts.messages?<span className="badge">{counts.messages}</span>:null}</button>
       )}
-      <button className="tb-icon" style={{ width:38, height:38 }} onClick={()=>go("notifications")}><I.bell/>{counts.notifs?<span className="dot"/>:null}</button>
+      <button className="tb-icon" style={{ width:38, height:38 }} onClick={()=>go("notifications")}><I.bell/>{counts.notifs?<span className="badge">{counts.notifs}</span>:null}</button>
     </div>
   );
 }
@@ -69,8 +69,36 @@ function App() {
   const [subscription, setSubscription] = useState({ plan: 'free', status: 'active' });
   const [socket, setSocket] = useState(null);
   const [counts, setCounts] = useState({ notifs: 0, messages: 0 });
+  const [toasts, setToasts] = useState([]);
+  const [ioLoaded, setIoLoaded] = useState(!!window.io);
+
+  useEffect(() => {
+    if (window.io) return;
+    const interval = setInterval(() => {
+      if (window.io) {
+        setIoLoaded(true);
+        clearInterval(interval);
+      }
+    }, 200);
+    return () => clearInterval(interval);
+  }, []);
 
   const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+
+  // Set up global toast helper and initial fetch
+  useEffect(() => {
+    window.toast = (message, type = 'info') => {
+      const id = Math.random().toString(36).substring(2, 9);
+      setToasts(prev => [...prev, { id, message, type }]);
+      setTimeout(() => {
+        setToasts(prev => prev.filter(t => t.id !== id));
+      }, 4000);
+    };
+    fetchCounts();
+    return () => {
+      delete window.toast;
+    };
+  }, []);
 
   const fetchCounts = () => {
     const token = localStorage.getItem('token');
@@ -126,19 +154,57 @@ function App() {
         fetchCounts();
       });
 
-      chatSocket.on("message.received", () => {
+      chatSocket.on("message.received", (payload) => {
         fetchCounts();
+        
+        // Show visual toast notification if recipient is not actively viewing this conversation
+        const isCurrentlyViewingConversation = curRef.current?.view === "messages" && window.activeConversationId === payload.conversationId;
+        if (!isCurrentlyViewingConversation && window.toast) {
+          const sender = payload.senderName || "New message";
+          const text = payload.content || payload.body || "";
+          window.toast(`${sender}: ${text}`, "message");
+        }
       });
 
-      chatSocket.on("request.received", () => {
+      chatSocket.on("request.received", (payload) => {
         fetchCounts();
+        if (window.toast) {
+          const senderName = payload.sender?.profiles?.display_name || payload.sender?.primary_email?.split('@')[0] || "Someone";
+          window.toast(`${senderName} sent you a chat request`, "info");
+        }
       });
 
-      chatSocket.on("request.accepted", () => {
+      chatSocket.on("request.accepted", (payload) => {
         fetchCounts();
+        if (window.toast && window.ME?.id === payload.senderId) {
+          window.toast(`Your chat request was accepted`, "success");
+        }
       });
 
-      chatSocket.on("request.declined", () => {
+      chatSocket.on("request.declined", (payload) => {
+        fetchCounts();
+        if (window.toast && window.ME?.id === payload.senderId) {
+          window.toast(`Your chat request was declined`, "warning");
+        }
+      });
+
+      // Connection request events (new system)
+      chatSocket.on("connection.request.received", (payload) => {
+        fetchCounts();
+        if (window.toast) {
+          const name = payload.requester?.display_name || "Someone";
+          window.toast(`${name} sent you a connection request 🤝`, "info");
+        }
+      });
+
+      chatSocket.on("connection.accepted", (payload) => {
+        fetchCounts();
+        if (window.toast && window.ME?.id === payload.requesterId) {
+          window.toast(`Your connection request was accepted! 🎉`, "success");
+        }
+      });
+
+      chatSocket.on("connection.declined", (payload) => {
         fetchCounts();
       });
 
@@ -175,7 +241,7 @@ function App() {
         chatSocket.disconnect();
       };
     }
-  }, []);
+  }, [ioLoaded]);
 
     useEffect(() => {
       const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
@@ -218,6 +284,10 @@ function App() {
       .then(res => res.json())
       .then(res => {
         if (res.success) {
+          if (res.data.privacyPrefs) {
+            ME.privacy = res.data.privacyPrefs;
+            localStorage.setItem("samaagum_privacy_prefs", JSON.stringify(res.data.privacyPrefs));
+          }
           if (res.data.email) {
             ME.email = res.data.email;
             ME.handle = `@${res.data.email.split('@')[0]}`;
@@ -269,6 +339,11 @@ function App() {
   // navigation stack
   const [stack, setStack] = useState([{ view: "home", param: null }]);
   const cur = stack[stack.length - 1];
+  const curRef = useRef(cur);
+  useEffect(() => {
+    curRef.current = cur;
+  }, [cur]);
+
   const go = useCallback((view, param = null) => {
     setStack(s => {
       if (view === "home") return [{ view: "home", param: null }];
@@ -460,9 +535,6 @@ function App() {
     if (v === "settings") return <SettingsPage st={st} go={go} />;
     if (v === "public-profile") return <PublicProfile profile={cur.param} go={go} socket={socket} />;
     if (v === "notifications") return <Notifications st={st} go={go} socket={socket} />;
-    if (v === "messages") return <Messages st={st} go={go} mobile={mobile} socket={socket} />;
-    if (v === "public-profile") return <PublicProfile profile={cur.param} go={go} />;
-    if (v === "notifications") return <Notifications st={st} go={go} />;
     if (v === "messages") {
       if (chatSettings.allowSiteMessaging === false) {
         setTimeout(() => go("home"), 0);
@@ -500,6 +572,25 @@ function App() {
         {renderView()}
         {mobile && <TabBar view={cur.view} go={go} counts={counts} chatSettings={chatSettings} />}
         <CityPicker open={cityOpen} onClose={() => setCityOpen(false)} city={city} onPick={setCity} />
+      </div>
+
+      {/* Visual Toast Notification Container */}
+      <div className="toast-container">
+        {toasts.map(toast => (
+          <div 
+            key={toast.id} 
+            className={`toast ${toast.type || ''}`}
+            onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
+          >
+            <div className="toast-content">
+              {toast.type === 'message' && <I.chat style={{ width: 16, height: 16, color: 'var(--accent-1)' }} />}
+              {toast.type === 'success' && <I.check style={{ width: 16, height: 16, color: '#10b981' }} />}
+              {toast.type === 'warning' && <I.warning style={{ width: 16, height: 16, color: '#f59e0b' }} />}
+              {(!toast.type || toast.type === 'info') && <I.bell style={{ width: 16, height: 16, color: '#6d5efc' }} />}
+              <span className="toast-msg">{toast.message}</span>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

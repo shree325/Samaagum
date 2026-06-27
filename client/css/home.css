@@ -1020,3 +1020,110 @@ html, body {
   border: 2px solid var(--surface);
   box-shadow: 0 0 0 2px var(--border);
 }
+
+/* ---------- Toast Notification ---------- */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  background: var(--surface);
+  border-left: 4px solid var(--accent-2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  padding: 14px 20px;
+  border-radius: var(--r-md, 12px);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  animation: toast-slide-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  max-width: 320px;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.toast:hover {
+  transform: translateY(-2px);
+}
+
+.toast.success { border-left-color: #10b981; }
+.toast.info { border-left-color: #6d5efc; }
+.toast.warning { border-left-color: #f59e0b; }
+.toast.message { border-left-color: var(--accent-1); }
+
+.toast-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.toast-msg {
+  flex-grow: 1;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@keyframes toast-slide-in {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* ---------- Navigation Count Badges ---------- */
+.tb-icon .badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--accent-1);
+  color: #fff;
+  border: 1.5px solid var(--surface);
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  box-sizing: border-box;
+  line-height: 1;
+  z-index: 2;
+}
+
+.tab .badge {
+  position: absolute;
+  top: 4px;
+  right: 10px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--accent-1);
+  color: #fff;
+  border: 1.5px solid var(--surface);
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  box-sizing: border-box;
+  line-height: 1;
+  z-index: 2;
+}

@@ -20,31 +20,111 @@ function SettingsPage({ st, go }) {
 
   // Privacy preferences (persisted in localStorage)
   const [privacy, setPrivacy] = useState(() => {
+    const defaultPrefs = {
+      profileVisibility: "public", // public, private
+      showActiveStatus: true,
+      searchIndexing: true,
+      directMessages: false,
+      twoStepVerification: true,
+      supportAccess: true,
+      privateProfileMode: "hide_all", // hide_all, custom_fields
+      visibleFields: {
+        email: false,
+        phone: false,
+        location: true,
+        gender: false,
+        dob: false,
+        socialLinks: true
+      }
+    };
+    if (ME.privacy) {
+      return { ...defaultPrefs, ...ME.privacy };
+    }
     try {
       const saved = localStorage.getItem("samaagum_privacy_prefs");
-      return saved ? JSON.parse(saved) : {
-        profileVisibility: "public", // public, private
-        showActiveStatus: true,
-        searchIndexing: true,
-        directMessages: false,
-        twoStepVerification: true,
-        supportAccess: true,
-      };
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return { ...defaultPrefs, ...parsed };
+      }
+      return defaultPrefs;
     } catch (e) {
-      return {
-        profileVisibility: "public",
-        showActiveStatus: true,
-        searchIndexing: true,
-        directMessages: false,
-        twoStepVerification: true,
-        supportAccess: true,
-      };
+      return defaultPrefs;
     }
   });
 
+  const syncPrivacyToServer = async (newPrefs) => {
+    try {
+      const api = window.location.port === "8080" ? "http://localhost:3000" : window.location.origin;
+      const token = localStorage.getItem('token');
+      await fetch(`${api}/api/admin/user/profile`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          privacyPrefs: newPrefs
+        })
+      });
+    } catch (e) {
+      console.error("Failed to sync privacy preferences to server", e);
+    }
+  };
+
   useEffect(() => {
     localStorage.setItem("samaagum_privacy_prefs", JSON.stringify(privacy));
+    ME.privacy = privacy;
+    syncPrivacyToServer(privacy);
   }, [privacy]);
+
+  const [sessions, setSessions] = useState([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+
+  const getLocalSession = () => {
+    const userAgent = navigator.userAgent;
+    let os = 'macOS';
+    if (userAgent.includes('Windows')) os = 'Windows';
+    else if (userAgent.includes('iPhone') || userAgent.includes('iPad')) os = 'iOS';
+    else if (userAgent.includes('Android')) os = 'Android';
+    else if (userAgent.includes('Linux')) os = 'Linux';
+
+    let browser = 'Chrome';
+    if (userAgent.includes('Firefox')) browser = 'Firefox';
+    else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) browser = 'Safari';
+    else if (userAgent.includes('Edge')) browser = 'Edge';
+
+    return {
+      id: 'current-session',
+      browser,
+      os,
+      ip: '127.0.0.1',
+      current: true,
+      lastActive: new Date().toISOString()
+    };
+  };
+
+  useEffect(() => {
+    if (activeTab === "session") {
+      setLoadingSessions(true);
+      setSessions([getLocalSession()]);
+
+      const api = window.location.port === "8080" ? "http://localhost:3000" : window.location.origin;
+      const token = localStorage.getItem('token');
+      fetch(`${api}/api/admin/user/sessions`, {
+        headers: {
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        }
+      })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.data && res.data.length > 0) {
+          setSessions(res.data);
+        }
+      })
+      .catch(err => console.error("Error fetching sessions:", err))
+      .finally(() => setLoadingSessions(false));
+    }
+  }, [activeTab]);
 
   const fileInputRef = useRef(null);
   const [saving, setSaving] = useState(false);
@@ -158,6 +238,7 @@ function SettingsPage({ st, go }) {
       items: [
         { id: "apps", label: "Apps", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8"/><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8"/></svg> },
         { id: "account", label: "Account", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="8.5" r="3.6" stroke="currentColor" strokeWidth="1.8"/><path d="M5 19.5c.8-3.4 3.6-5 7-5s6.2 1.6 7 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg> },
+        { id: "session", label: "Sessions", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><rect x="5" y="3" width="14" height="18" rx="2" stroke="currentColor" strokeWidth="1.8"/><line x1="12" y1="17" x2="12.01" y2="17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg> },
         { id: "notification", label: "Notification", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M6 9a6 6 0 0112 0c0 4 1.2 5.5 2 6.5H4c.8-1 2-2.5 2-6.5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/><path d="M10 19a2 2 0 004 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg> },
         { id: "language", label: "Language & Region", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="12" r="8.3" stroke="currentColor" strokeWidth="1.8"/><path d="M3.7 12h16.6M12 3.7c2.2 2.2 3.3 5 3.3 8.3S14.2 18.1 12 20.3c-2.2-2.2-3.3-5-3.3-8.3S9.8 5.9 12 3.7z" stroke="currentColor" strokeWidth="1.8"/></svg> },
       ]
@@ -234,235 +315,118 @@ function SettingsPage({ st, go }) {
 
           {/* Settings Main Panels */}
           <main style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", padding: 40, boxShadow: "var(--sh-sm)" }}>
-            
-            {activeTab !== "account" ? (
+                       {activeTab !== "account" && activeTab !== "session" ? (
               // Empty state for other sections
               <div style={{ textAlign: "center", padding: "64px 0", color: "var(--ink-3)" }}>
                 <div style={{ fontSize: "48px", marginBottom: 16 }}>⚙️</div>
                 <h3 style={{ fontSize: "18px", color: "var(--ink)", marginBottom: 8, fontWeight: 600 }}>{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Settings</h3>
                 <p style={{ fontSize: "14px", color: "var(--ink-3)", maxWidth: 360, margin: "0 auto" }}>
-                  This section is empty because this task only asks to make changes in Account Settings.
+                  This section is empty because this task only asks to make changes in Account & Session Settings.
                 </p>
+              </div>
+            ) : activeTab === "session" ? (
+              // Sessions Panel
+              <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+                <div>
+                  <h2 style={{ fontFamily: "var(--font-display)", fontSize: "20px", fontWeight: 600, color: "var(--ink)", marginBottom: 8 }}>
+                    Active Sessions & Login History
+                  </h2>
+                  <p style={{ fontSize: "14px", color: "var(--ink-3)", marginBottom: 24 }}>
+                    Manage and view your active sessions on other browsers and devices.
+                  </p>
+
+                  {loadingSessions ? (
+                    <div style={{ color: "var(--ink-3)", fontSize: "14px" }}>Loading session details...</div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                      {sessions.map(sess => (
+                        <div 
+                          key={sess.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "16px",
+                            borderRadius: "var(--r-md)",
+                            border: "1px solid var(--border)",
+                            background: sess.current ? "rgba(109, 94, 252, 0.04)" : "var(--surface-2)"
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                            <div style={{
+                              width: 40,
+                              height: 40,
+                              borderRadius: "50%",
+                              background: sess.current ? "rgba(109, 94, 252, 0.1)" : "var(--border)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: sess.current ? "var(--accent-2)" : "var(--ink-2)"
+                            }}>
+                              {sess.os === 'iOS' || sess.os === 'Android' ? (
+                                <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><rect x="5" y="2" width="14" height="20" rx="3" stroke="currentColor" strokeWidth="1.8"/><circle cx="12" cy="18" r="1" fill="currentColor"/></svg>
+                              ) : (
+                                <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><rect x="3" y="4" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="1.8"/><path d="M7 20h10M12 16v4" stroke="currentColor" strokeWidth="1.8"/></svg>
+                              )}
+                            </div>
+                            <div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--ink)" }}>
+                                  {sess.browser} on {sess.os}
+                                </span>
+                                {sess.current && (
+                                  <span style={{
+                                    background: "rgba(34, 197, 94, 0.1)",
+                                    color: "rgb(34, 197, 94)",
+                                    padding: "2px 8px",
+                                    borderRadius: "var(--r-pill)",
+                                    fontSize: "11px",
+                                    fontWeight: 600
+                                  }}>
+                                    This device
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
+                                <span style={{ fontSize: "12px", color: "var(--ink-3)" }}>IP: {sess.ip}</span>
+                                <span style={{ fontSize: "12px", color: "var(--ink-3)" }}>•</span>
+                                <span style={{ fontSize: "12px", color: "var(--ink-3)" }}>
+                                  {sess.current ? "Active now" : `Last login: ${new Date(sess.lastActive).toLocaleString()}`}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {!sess.current && (
+                            <button
+                              onClick={() => {
+                                setSessions(prev => prev.filter(s => s.id !== sess.id));
+                                if (window.toast) window.toast("Session revoked.");
+                              }}
+                              style={{
+                                background: "transparent",
+                                border: "1px solid var(--border)",
+                                color: "#e5484d",
+                                borderRadius: "var(--r-sm)",
+                                padding: "6px 12px",
+                                fontSize: "12px",
+                                fontWeight: 500,
+                                cursor: "pointer",
+                                transition: "all var(--t-fast)"
+                              }}
+                            >
+                              Revoke
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               // Account Settings Panel
               <div style={{ display: "flex", flexDirection: "column", gap: 40 }}>
-                
-                {/* 1. My Profile */}
-                <div>
-                  <h2 style={{ fontFamily: "var(--font-display)", fontSize: "20px", fontWeight: 600, color: "var(--ink)", marginBottom: 24 }}>
-                    My Profile
-                  </h2>
-
-                  {/* Avatar Upload */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 28 }}>
-                    <Avatar name={ME.name} img={profile.img} size={72} className="ring" />
-                    <div>
-                      <div style={{ display: "flex", gap: 12, marginBottom: 8 }}>
-                        <button 
-                          onClick={() => fileInputRef.current?.click()}
-                          style={{
-                            background: "var(--ink)",
-                            color: "var(--bg)",
-                            border: "none",
-                            borderRadius: "var(--r-pill)",
-                            padding: "8px 16px",
-                            fontSize: "13px",
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            transition: "opacity var(--t-fast)"
-                          }}
-                        >
-                          + Change Image
-                        </button>
-                        <button 
-                          onClick={handleRemoveImage}
-                          style={{
-                            background: "var(--surface-2)",
-                            color: "var(--ink)",
-                            border: "1px solid var(--border)",
-                            borderRadius: "var(--r-pill)",
-                            padding: "8px 16px",
-                            fontSize: "13px",
-                            fontWeight: 600,
-                            cursor: "pointer"
-                          }}
-                        >
-                          Remove Image
-                        </button>
-                        <input 
-                          type="file" 
-                          ref={fileInputRef} 
-                          hidden 
-                          accept="image/*" 
-                          onChange={handleImageChange} 
-                        />
-                      </div>
-                      <p style={{ fontSize: "12px", color: "var(--ink-3)" }}>
-                        We support PNGs, JPEGs and GIFs under 2MB
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Name Fields */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      <label style={{ fontSize: "13px", fontWeight: 600, color: "var(--ink-2)" }}>First Name</label>
-                      <input 
-                        className="cfield" 
-                        value={profile.firstName} 
-                        onChange={(e) => handleInputChange("firstName", e.target.value)} 
-                        style={{
-                          background: "var(--field)",
-                          border: "1px solid var(--border)",
-                          color: "var(--ink)",
-                          padding: "12px 16px",
-                          borderRadius: "var(--r-sm)",
-                          fontSize: "14px",
-                          outline: "none"
-                        }}
-                      />
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      <label style={{ fontSize: "13px", fontWeight: 600, color: "var(--ink-2)" }}>Last Name</label>
-                      <input 
-                        className="cfield" 
-                        value={profile.lastName} 
-                        onChange={(e) => handleInputChange("lastName", e.target.value)} 
-                        style={{
-                          background: "var(--field)",
-                          border: "1px solid var(--border)",
-                          color: "var(--ink)",
-                          padding: "12px 16px",
-                          borderRadius: "var(--r-sm)",
-                          fontSize: "14px",
-                          outline: "none"
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <hr style={{ border: "none", borderTop: "1px solid var(--border)" }} />
-
-                {/* 2. Account Security */}
-                <div>
-                  <h2 style={{ fontFamily: "var(--font-display)", fontSize: "20px", fontWeight: 600, color: "var(--ink)", marginBottom: 24 }}>
-                    Account Security
-                  </h2>
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-                    {/* Email Row */}
-                    <div style={{ display: "flex", alignItems: "flex-end", gap: 16 }}>
-                      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
-                        <label style={{ fontSize: "13px", fontWeight: 600, color: "var(--ink-2)" }}>Email</label>
-                        <input 
-                          className="cfield" 
-                          value={profile.email} 
-                          readOnly 
-                          style={{
-                            background: "var(--field)",
-                            border: "1px solid var(--border)",
-                            color: "var(--ink-3)",
-                            padding: "12px 16px",
-                            borderRadius: "var(--r-sm)",
-                            fontSize: "14px",
-                            outline: "none",
-                            cursor: "not-allowed"
-                          }}
-                        />
-                      </div>
-                      <button 
-                        onClick={() => window.toast ? window.toast("Email verification link sent!") : alert("Verification sent")}
-                        style={{
-                          background: "var(--surface-2)",
-                          color: "var(--ink)",
-                          border: "1.5px solid var(--border)",
-                          padding: "12px 20px",
-                          borderRadius: "var(--r-sm)",
-                          fontSize: "13.5px",
-                          fontWeight: 600,
-                          cursor: "pointer"
-                        }}
-                      >
-                        Change email
-                      </button>
-                    </div>
-
-                    {/* Password Row */}
-                    <div style={{ display: "flex", alignItems: "flex-end", gap: 16 }}>
-                      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
-                        <label style={{ fontSize: "13px", fontWeight: 600, color: "var(--ink-2)" }}>Password</label>
-                        <input 
-                          type="password"
-                          className="cfield" 
-                          value="••••••••••••" 
-                          readOnly
-                          style={{
-                            background: "var(--field)",
-                            border: "1px solid var(--border)",
-                            color: "var(--ink-3)",
-                            padding: "12px 16px",
-                            borderRadius: "var(--r-sm)",
-                            fontSize: "14px",
-                            outline: "none",
-                            cursor: "not-allowed"
-                          }}
-                        />
-                      </div>
-                      <button 
-                        onClick={() => window.toast ? window.toast("Password reset link sent to your email!") : alert("Reset link sent")}
-                        style={{
-                          background: "var(--surface-2)",
-                          color: "var(--ink)",
-                          border: "1.5px solid var(--border)",
-                          padding: "12px 20px",
-                          borderRadius: "var(--r-sm)",
-                          fontSize: "13.5px",
-                          fontWeight: 600,
-                          cursor: "pointer"
-                        }}
-                      >
-                        Change password
-                      </button>
-                    </div>
-
-                    {/* 2-Step Verification Toggle */}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 0", borderTop: "1px solid var(--border-2)" }}>
-                      <div style={{ maxWidth: "80%" }}>
-                        <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>2-Step Verifications</div>
-                        <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Add an additional layer of security to your account during login.</div>
-                      </div>
-                      <button 
-                        onClick={() => handleToggle("twoStepVerification")}
-                        style={{
-                          background: privacy.twoStepVerification ? "var(--accent-2)" : "var(--border-3, #ccc)",
-                          border: "none",
-                          width: 44,
-                          height: 24,
-                          borderRadius: 12,
-                          position: "relative",
-                          cursor: "pointer",
-                          transition: "background var(--t-fast)"
-                        }}
-                      >
-                        <span style={{
-                          width: 18,
-                          height: 18,
-                          borderRadius: "50%",
-                          background: "#fff",
-                          position: "absolute",
-                          top: 3,
-                          left: privacy.twoStepVerification ? 23 : 3,
-                          transition: "left var(--t-fast)"
-                        }} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <hr style={{ border: "none", borderTop: "1px solid var(--border)" }} />
-
                 {/* 3. Task Specific: Profile Visibility & Privacy Preferences */}
                 <div>
                   <h2 style={{ fontFamily: "var(--font-display)", fontSize: "20px", fontWeight: 600, color: "var(--ink)", marginBottom: 24 }}>
@@ -510,6 +474,112 @@ function SettingsPage({ st, go }) {
                         </button>
                       </div>
                     </div>
+
+                    {privacy.profileVisibility === "private" && (
+                      <div 
+                        className="view-enter"
+                        style={{
+                          background: "var(--surface-2)",
+                          border: "1px solid var(--border)",
+                          borderRadius: "var(--r-md)",
+                          padding: "20px",
+                          marginTop: "8px",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 16,
+                          animation: "fadeIn 0.2s ease-out"
+                        }}
+                      >
+                        <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
+                          Private Profile Settings
+                        </div>
+                        
+                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                          <label style={{ display: "flex", alignItems: "flex-start", gap: 12, cursor: "pointer" }}>
+                            <input 
+                              type="radio" 
+                              name="privateProfileMode" 
+                              value="hide_all"
+                              checked={privacy.privateProfileMode === "hide_all"}
+                              onChange={() => {
+                                setPrivacy(prev => ({ ...prev, privateProfileMode: "hide_all" }));
+                                if (window.toast) window.toast("Full profile hidden enabled");
+                              }}
+                              style={{ marginTop: "4px" }}
+                            />
+                            <div>
+                              <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--ink)" }}>Hide full profile</div>
+                              <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Your entire profile is hidden from non-connections. Only your name is visible.</div>
+                            </div>
+                          </label>
+
+                          <label style={{ display: "flex", alignItems: "flex-start", gap: 12, cursor: "pointer" }}>
+                            <input 
+                              type="radio" 
+                              name="privateProfileMode" 
+                              value="custom_fields"
+                              checked={privacy.privateProfileMode === "custom_fields"}
+                              onChange={() => {
+                                setPrivacy(prev => ({ ...prev, privateProfileMode: "custom_fields" }));
+                                if (window.toast) window.toast("Custom visibility enabled");
+                              }}
+                              style={{ marginTop: "4px" }}
+                            />
+                            <div>
+                              <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--ink)" }}>Custom visibility (Select visible fields)</div>
+                              <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Control exactly what fields are visible to visitors who are not connections.</div>
+                            </div>
+                          </label>
+                        </div>
+
+                        {privacy.privateProfileMode === "custom_fields" && (
+                          <div 
+                            style={{ 
+                              display: "grid", 
+                              gridTemplateColumns: "1fr 1fr", 
+                              gap: "12px 20px", 
+                              borderTop: "1px solid var(--border)", 
+                              paddingTop: "16px",
+                              marginTop: "8px" 
+                            }}
+                          >
+                            <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--ink-3)", gridColumn: "1 / -1", marginBottom: "4px" }}>
+                              Select fields to SHOW to visitors:
+                            </div>
+                            {[
+                              { key: "email", label: "Email Address" },
+                              { key: "phone", label: "Phone Number" },
+                              { key: "location", label: "Location" },
+                              { key: "gender", label: "Gender" },
+                              { key: "dob", label: "Date of Birth" },
+                              { key: "socialLinks", label: "Social Links & Socials" }
+                            ].map(field => (
+                              <label key={field.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "13px", color: "var(--ink)", cursor: "pointer" }}>
+                                <input 
+                                  type="checkbox" 
+                                  checked={privacy.visibleFields?.[field.key] || false}
+                                  onChange={() => {
+                                    setPrivacy(prev => ({
+                                      ...prev,
+                                      visibleFields: {
+                                        ...prev.visibleFields,
+                                        [field.key]: !prev.visibleFields?.[field.key]
+                                      }
+                                    }));
+                                  }}
+                                  style={{
+                                    width: "16px",
+                                    height: "16px",
+                                    accentColor: "var(--accent-2)"
+                                  }}
+                                />
+                                {field.label}
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Active Status Toggle */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 0", borderTop: "1px solid var(--border-2)" }}>
@@ -575,34 +645,126 @@ function SettingsPage({ st, go }) {
                       </button>
                     </div>
 
-                    {/* Direct Messaging Security */}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 0", borderTop: "1px solid var(--border-2)" }}>
-                      <div style={{ maxWidth: "70%" }}>
-                        <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>Who can start direct messages with you</div>
-                        <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Choose the level of privacy for your inbox.</div>
-                      </div>
-                      <select 
-                        value={profile.messagingRestriction}
-                        onChange={(e) => handleInputChange("messagingRestriction", e.target.value)}
-                        style={{
-                          background: "var(--surface)",
-                          border: "1px solid var(--border)",
-                          color: "var(--ink)",
-                          padding: "8px 12px",
-                          borderRadius: "var(--r-sm)",
-                          fontSize: "13.5px",
-                          outline: "none"
-                        }}
-                      >
-                        <option value="anyone">Anyone</option>
-                        <option value="only_connected">Only Connected Users</option>
-                        <option value="approval_required">Approval Required</option>
-                      </select>
-                    </div>
                   </div>
                 </div>
 
                 <hr style={{ border: "none", borderTop: "1px solid var(--border)" }} />
+
+                {/* Messaging Preferences — standalone section */}
+                <div>
+                  <h2 style={{ fontFamily: "var(--font-display)", fontSize: "20px", fontWeight: 600, color: "var(--ink)", marginBottom: 6 }}>
+                    Messaging Preferences
+                  </h2>
+                  <p style={{ fontSize: "13px", color: "var(--ink-3)", marginBottom: 24 }}>
+                    Control who is allowed to start a direct conversation with you.
+                  </p>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {[
+                      {
+                        value: "anyone",
+                        label: "Anyone",
+                        desc: "Any Samaagum member can send you a direct message, even without connecting first.",
+                        icon: (
+                          <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
+                            <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.8"/>
+                            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                          </svg>
+                        )
+                      },
+                      {
+                        value: "only_connected",
+                        label: "Only Connected Users",
+                        desc: "Only people you have accepted a connection with can start a conversation with you.",
+                        icon: (
+                          <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
+                            <path d="M17 20c0-2.76-2.24-5-5-5s-5 2.24-5 5M12 15a4 4 0 100-8 4 4 0 000 8zM22 11a3 3 0 11-6 0 3 3 0 016 0zM2 11a3 3 0 116 0 3 3 0 01-6 0z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                          </svg>
+                        )
+                      },
+                      {
+                        value: "no_one",
+                        label: "No One",
+                        desc: "Nobody can send you direct messages. The message icon is hidden from your profile entirely.",
+                        icon: (
+                          <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
+                            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+                            <line x1="4" y1="4" x2="20" y2="20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                          </svg>
+                        )
+                      }
+                    ].map(opt => {
+                      const active = (profile.messagingRestriction || "anyone") === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={() => handleInputChange("messagingRestriction", opt.value)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 16,
+                            padding: "14px 16px",
+                            borderRadius: "var(--r-md)",
+                            border: `1.5px solid ${active ? "var(--accent-2)" : "var(--border)"}`,
+                            background: active ? "var(--accent-soft)" : "transparent",
+                            color: "var(--ink)",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            transition: "all var(--t-std)"
+                          }}
+                        >
+                          <span style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: "50%",
+                            background: active ? "rgba(109,94,252,0.12)" : "var(--surface-2)",
+                            color: active ? "var(--accent-2)" : "var(--ink-2)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                            transition: "all var(--t-std)"
+                          }}>
+                            {opt.icon}
+                          </span>
+                          <span style={{ flex: 1 }}>
+                            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontWeight: 600, fontSize: "14px", color: active ? "var(--accent-2)" : "var(--ink)" }}>
+                                {opt.label}
+                              </span>
+                              {active && (
+                                <span style={{ background: "var(--accent-2)", color: "#fff", fontSize: "10px", fontWeight: 700, padding: "2px 7px", borderRadius: "var(--r-pill)", letterSpacing: "0.04em" }}>
+                                  ACTIVE
+                                </span>
+                              )}
+                            </span>
+                            <span style={{ display: "block", fontSize: "12px", color: "var(--ink-3)", marginTop: 3 }}>
+                              {opt.desc}
+                            </span>
+                          </span>
+                          <span style={{
+                            width: 18,
+                            height: 18,
+                            borderRadius: "50%",
+                            border: `2px solid ${active ? "var(--accent-2)" : "var(--border-2)"}`,
+                            background: active ? "var(--accent-2)" : "transparent",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                            transition: "all var(--t-std)"
+                          }}>
+                            {active && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff" }} />}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <hr style={{ border: "none", borderTop: "1px solid var(--border)" }} />
+
+
 
                 {/* 4. Support Access */}
                 <div>

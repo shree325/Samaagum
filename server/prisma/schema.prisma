@@ -1178,6 +1178,7 @@ model profiles {
   media_assets_profiles_cover_asset_idTomedia_assets media_assets? @relation("profiles_cover_asset_idTomedia_assets", fields: [cover_asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_profiles_cover")
   media_assets_profiles_photo_asset_idTomedia_assets media_assets? @relation("profiles_photo_asset_idTomedia_assets", fields: [photo_asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_profiles_photo")
   messaging_restriction                              String        @default("anyone")
+  privacy_prefs                                      Json?         @default("{}")
   tenants                                            tenants       @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   users                                              users         @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
