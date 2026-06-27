@@ -532,7 +532,7 @@ function App() {
     if (v === "event") return <EventDetail ev={cur.param} st={st} go={go} />;
     if (v === "group") return <GroupDetail group={cur.param} st={st} go={go} />;
     if (v === "profile") return <Profile st={st} go={go} />;
-    if (v === "settings") return <SettingsPage st={st} go={go} />;
+    if (v === "settings") return <SettingsPage st={st} go={go} activeTabParam={cur.param} />;
     if (v === "public-profile") return <PublicProfile profile={cur.param} go={go} socket={socket} />;
     if (v === "notifications") return <Notifications st={st} go={go} socket={socket} />;
     if (v === "messages") {

@@ -23,6 +23,7 @@ import { adminUserRoutes } from './controllers/adminUserRoutes';
 import { seedAdminRBAC } from './services/adminRbacSeeder';
 import { seedPlatformSettings } from './settings-library/settingsSeeder';
 import { startMessaging, stopMessaging, getMessagingHealth } from './services/messagingSocket';
+import { SubscriptionNotificationService } from './services/SubscriptionNotificationService';
 import { messagingTestRoutes } from './controllers/messagingTestRoutes';
 import { messagingRoutes } from './controllers/messagingRoutes';
 import { connectionRoutes } from './controllers/connectionRoutes';
@@ -185,6 +186,9 @@ const start = async () => {
         console.log('✅ Socket.IO server created.');
 
         await startMessaging(io);
+
+        // Start subscription expiration scheduler
+        SubscriptionNotificationService.startScheduler();
 
         await fastify.listen({ port: PORT, host: '0.0.0.0' });
         console.log(`🚀 Server is running on port ${PORT}`);
