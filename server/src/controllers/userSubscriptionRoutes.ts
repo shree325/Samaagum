@@ -45,6 +45,17 @@ export const userSubscriptionRoutes: FastifyPluginAsync = async (fastify: Fastif
         }
     });
 
+    // 1b. POST /check-expiring-test — Trigger manual check for expiring subscriptions (for admin / testing)
+    fastify.post('/check-expiring-test', async (request, reply) => {
+        try {
+            const { SubscriptionNotificationService } = await import('../services/SubscriptionNotificationService');
+            await SubscriptionNotificationService.checkExpiringSubscriptions();
+            return { success: true, message: 'Expiring subscriptions check triggered successfully' };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
     // 2. GET /status — Get active subscription status and details of the current logged-in user
     fastify.get('/status', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
         try {
@@ -578,6 +589,11 @@ export const userSubscriptionRoutes: FastifyPluginAsync = async (fastify: Fastif
             }
             const orders = await prisma.subscription_orders.findMany({
                 where: { user_id: userId },
+                include: {
+                    admin_subscription_plans: {
+                        select: { name: true }
+                    }
+                },
                 orderBy: { created_at: 'desc' }
             });
             return { success: true, data: orders };

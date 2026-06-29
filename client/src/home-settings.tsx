@@ -5,9 +5,15 @@
 
 const { useState, useEffect, useRef } = React;
 
-function SettingsPage({ st, go }) {
+function SettingsPage({ st, go, activeTabParam }) {
   // Navigation tabs in settings page
-  const [activeTab, setActiveTab] = useState("account");
+  const [activeTab, setActiveTab] = useState(activeTabParam || "account");
+
+  useEffect(() => {
+    if (activeTabParam) {
+      setActiveTab(activeTabParam);
+    }
+  }, [activeTabParam]);
 
   // Sync profile details from ME
   const [profile, setProfile] = useState({
@@ -34,7 +40,8 @@ function SettingsPage({ st, go }) {
         location: true,
         gender: false,
         dob: false,
-        socialLinks: true
+        socialLinks: true,
+        virtualCard: true
       }
     };
     if (ME.privacy) {
@@ -83,6 +90,10 @@ function SettingsPage({ st, go }) {
   const [sessions, setSessions] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
 
+  const [billingData, setBillingData] = useState(null);
+  const [billingOrders, setBillingOrders] = useState([]);
+  const [loadingBilling, setLoadingBilling] = useState(false);
+
   const getLocalSession = () => {
     const userAgent = navigator.userAgent;
     let os = 'macOS';
@@ -126,6 +137,35 @@ function SettingsPage({ st, go }) {
       })
       .catch(err => console.error("Error fetching sessions:", err))
       .finally(() => setLoadingSessions(false));
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === "billing") {
+      setLoadingBilling(true);
+      const api = window.location.port === "8080" ? "http://localhost:3000" : window.location.origin;
+      const token = localStorage.getItem('token');
+      
+      Promise.all([
+        fetch(`${api}/api/subscription/status`, {
+          headers: { ...(token ? { "Authorization": `Bearer ${token}` } : {}) }
+        }).then(res => res.json()),
+        fetch(`${api}/api/subscription/orders`, {
+          headers: { ...(token ? { "Authorization": `Bearer ${token}` } : {}) }
+        }).then(res => res.json())
+      ])
+      .then(([statusRes, ordersRes]) => {
+        if (statusRes.success && statusRes.data) {
+          setBillingData(statusRes.data.subscription);
+        } else {
+          setBillingData(null);
+        }
+        if (ordersRes.success && ordersRes.data) {
+          setBillingOrders(ordersRes.data);
+        }
+      })
+      .catch(err => console.error("Error fetching billing details:", err))
+      .finally(() => setLoadingBilling(false));
     }
   }, [activeTab]);
 
@@ -318,7 +358,7 @@ function SettingsPage({ st, go }) {
 
           {/* Settings Main Panels */}
           <main style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", padding: 40, boxShadow: "var(--sh-sm)" }}>
-                       {activeTab !== "account" && activeTab !== "session" ? (
+                       {activeTab !== "account" && activeTab !== "session" && activeTab !== "billing" ? (
               // Empty state for other sections
               <div style={{ textAlign: "center", padding: "64px 0", color: "var(--ink-3)" }}>
                 <div style={{ fontSize: "48px", marginBottom: 16 }}>⚙️</div>
@@ -427,6 +467,184 @@ function SettingsPage({ st, go }) {
                   )}
                 </div>
               </div>
+            ) : activeTab === "billing" ? (
+              // Billing Dashboard Panel
+              <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+                <div>
+                  <h2 style={{ fontFamily: "var(--font-display)", fontSize: "20px", fontWeight: 600, color: "var(--ink)", marginBottom: 8 }}>
+                    Billing & Subscriptions
+                  </h2>
+                  <p style={{ fontSize: "14px", color: "var(--ink-3)", marginBottom: 24 }}>
+                    Manage your plans, view subscription status, and check your order history.
+                  </p>
+
+                  {loadingBilling ? (
+                    <div style={{ color: "var(--ink-3)", fontSize: "14px", display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ display: "inline-block", width: 16, height: 16, border: "2px solid var(--border)", borderTopColor: "var(--accent-2)", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+                      Loading billing information...
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+                      {/* Subscription Status Card */}
+                      <div style={{
+                        background: "linear-gradient(135deg, var(--surface), var(--surface-2))",
+                        border: "1px solid var(--border)",
+                        borderRadius: "var(--r-lg)",
+                        padding: "24px",
+                        boxShadow: "var(--sh-sm)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 20
+                      }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+                          <div>
+                            <span style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--ink-3)", fontWeight: 600 }}>Current Plan</span>
+                            <h3 style={{ fontSize: "24px", fontWeight: 700, color: "var(--ink)", marginTop: 4 }}>
+                              {billingData && billingData.plan ? (billingData.plan.charAt(0).toUpperCase() + billingData.plan.slice(1)) : "Free Tier"}
+                            </h3>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <span style={{
+                              display: "inline-block",
+                              padding: "6px 12px",
+                              borderRadius: "var(--r-pill)",
+                              fontSize: "12px",
+                              fontWeight: 600,
+                              background: billingData?.status === "active" ? "rgba(34, 197, 94, 0.1)" : "rgba(100, 116, 139, 0.1)",
+                              color: billingData?.status === "active" ? "rgb(34, 197, 94)" : "var(--ink-3)"
+                            }}>
+                              {billingData && billingData.plan ? (billingData.status.toUpperCase()) : "FREE TIER"}
+                            </span>
+                            <button
+                              onClick={() => go("upgrade")}
+                              style={{
+                                background: "var(--accent-2)",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "var(--r-md)",
+                                padding: "8px 16px",
+                                fontSize: "13px",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                                transition: "all var(--t-fast)"
+                              }}
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" width="14" height="14" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+                              {billingData && billingData.plan ? "Renew / Upgrade" : "Upgrade Plan"}
+                            </button>
+                          </div>
+                        </div>
+
+                        {billingData && billingData.plan ? (
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 20, borderTop: "1px solid var(--border)", paddingTop: 20 }}>
+                             <div>
+                               <div style={{ fontSize: "12px", color: "var(--ink-3)", marginBottom: 4 }}>Billing Cycle</div>
+                               <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
+                                 {billingData.billingCycle === "yearly" ? "Yearly" : "Monthly"}
+                               </div>
+                             </div>
+                             <div>
+                               <div style={{ fontSize: "12px", color: "var(--ink-3)", marginBottom: 4 }}>Purchase Date</div>
+                               <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
+                                 {new Date(billingData.startDate).toLocaleDateString(undefined, { dateStyle: "medium" })}
+                               </div>
+                             </div>
+                             <div>
+                               <div style={{ fontSize: "12px", color: "var(--ink-3)", marginBottom: 4 }}>Expiry Date</div>
+                               <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
+                                 {new Date(billingData.endDate).toLocaleDateString(undefined, { dateStyle: "medium" })}
+                               </div>
+                             </div>
+                             <div>
+                               <div style={{ fontSize: "12px", color: "var(--ink-3)", marginBottom: 4 }}>Time Remaining</div>
+                               <div style={{ fontSize: "14px", fontWeight: 600, color: billingData?.endDate && Math.ceil((new Date(billingData.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) <= 5 ? "rgb(239, 68, 68)" : "var(--ink)" }}>
+                                 {(() => {
+                                   const days = Math.ceil((new Date(billingData.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                                   if (days < 0) return "Expired";
+                                   if (days === 0) return "Expires today";
+                                   return `${days} days left`;
+                                 })()}
+                               </div>
+                             </div>
+                          </div>
+                        ) : (
+                          <div style={{ color: "var(--ink-2)", fontSize: "14px", borderTop: "1px solid var(--border)", paddingTop: 20 }}>
+                            You do not have an active premium plan. Upgrade to a premium plan to unlock advanced networking, platform customizations, and more host features!
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Billing History Table */}
+                      <div>
+                        <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--ink)", marginBottom: 16 }}>Billing History</h3>
+                        {billingOrders.length === 0 ? (
+                          <div style={{
+                            textAlign: "center",
+                            padding: "32px",
+                            border: "1px dashed var(--border)",
+                            borderRadius: "var(--r-md)",
+                            color: "var(--ink-3)",
+                            fontSize: "14px"
+                          }}>
+                            No billing history or invoices found.
+                          </div>
+                        ) : (
+                          <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: "var(--r-md)" }}>
+                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px", textAlign: "left" }}>
+                              <thead>
+                                <tr style={{ background: "var(--surface-2)", borderBottom: "1px solid var(--border)" }}>
+                                  <th style={{ padding: "12px 16px", fontWeight: 600, color: "var(--ink-2)" }}>Order Number</th>
+                                  <th style={{ padding: "12px 16px", fontWeight: 600, color: "var(--ink-2)" }}>Plan</th>
+                                  <th style={{ padding: "12px 16px", fontWeight: 600, color: "var(--ink-2)" }}>Billing Cycle</th>
+                                  <th style={{ padding: "12px 16px", fontWeight: 600, color: "var(--ink-2)" }}>Date</th>
+                                  <th style={{ padding: "12px 16px", fontWeight: 600, color: "var(--ink-2)" }}>Total</th>
+                                  <th style={{ padding: "12px 16px", fontWeight: 600, color: "var(--ink-2)" }}>Payment Method</th>
+                                  <th style={{ padding: "12px 16px", fontWeight: 600, color: "var(--ink-2)" }}>Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {billingOrders.map(order => (
+                                  <tr key={order.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                                    <td style={{ padding: "12px 16px", fontWeight: 600, color: "var(--ink)" }}>{order.order_number}</td>
+                                    <td style={{ padding: "12px 16px", color: "var(--ink-2)" }}>
+                                      {order.admin_subscription_plans?.name || order.plan_id}
+                                    </td>
+                                    <td style={{ padding: "12px 16px", color: "var(--ink-2)", textTransform: "capitalize" }}>{order.plan_type}</td>
+                                    <td style={{ padding: "12px 16px", color: "var(--ink-3)" }}>
+                                      {new Date(order.completed_at || order.created_at).toLocaleDateString()}
+                                    </td>
+                                    <td style={{ padding: "12px 16px", fontWeight: 600, color: "var(--ink)" }}>
+                                      {order.currency} {parseFloat(order.total).toFixed(2)}
+                                    </td>
+                                    <td style={{ padding: "12px 16px", color: "var(--ink-3)" }}>{order.payment_method_title || order.payment_method}</td>
+                                    <td style={{ padding: "12px 16px" }}>
+                                      <span style={{
+                                        display: "inline-block",
+                                        padding: "2px 8px",
+                                        borderRadius: "var(--r-pill)",
+                                        fontSize: "11px",
+                                        fontWeight: 600,
+                                        background: order.status === "completed" ? "rgba(34, 197, 94, 0.1)" : order.status === "pending" ? "rgba(245, 158, 11, 0.1)" : "rgba(239, 68, 68, 0.1)",
+                                        color: order.status === "completed" ? "rgb(34, 197, 94)" : order.status === "pending" ? "rgb(245, 158, 11)" : "rgb(239, 68, 68)"
+                                      }}>
+                                        {order.status}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             ) : (
               // Account Settings Panel
               <div style={{ display: "flex", flexDirection: "column", gap: 40 }}>
@@ -473,7 +691,7 @@ function SettingsPage({ st, go }) {
                           }}
                         >
                           <div style={{ fontWeight: 600, fontSize: "14px", marginBottom: 4 }}>Private Profile</div>
-                          <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Only connections can see your details. Hidden from searches.</div>
+                          <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>You control exactly what every visitor can see. Hidden from searches.</div>
                         </button>
                       </div>
                     </div>
@@ -512,7 +730,7 @@ function SettingsPage({ st, go }) {
                             />
                             <div>
                               <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--ink)" }}>Hide full profile</div>
-                              <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Your entire profile is hidden from non-connections. Only your name is visible.</div>
+                              <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Your entire profile is hidden from everyone who visits it. Only your name is visible.</div>
                             </div>
                           </label>
 
@@ -530,7 +748,7 @@ function SettingsPage({ st, go }) {
                             />
                             <div>
                               <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--ink)" }}>Custom visibility (Select visible fields)</div>
-                              <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Control exactly what fields are visible to visitors who are not connections.</div>
+                              <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Control exactly what fields are visible to everyone who visits your profile.</div>
                             </div>
                           </label>
                         </div>
@@ -555,7 +773,8 @@ function SettingsPage({ st, go }) {
                               { key: "location", label: "Location" },
                               { key: "gender", label: "Gender" },
                               { key: "dob", label: "Date of Birth" },
-                              { key: "socialLinks", label: "Social Links & Socials" }
+                              { key: "socialLinks", label: "Social Links & Socials" },
+                              { key: "virtualCard", label: "Virtual Card" }
                             ].map(field => (
                               <label key={field.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "13px", color: "var(--ink)", cursor: "pointer" }}>
                                 <input 

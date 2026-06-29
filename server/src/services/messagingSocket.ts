@@ -794,3 +794,9 @@ export function emitProfileUpdate(userId: string, profileData: any) {
     chatNamespace.emit('profile.updated', { userId, ...profileData });
   }
 }
+
+export function sendNotificationToUser(userId: string, event: string, payload: any) {
+  if (chatNamespace) {
+    chatNamespace.to(`user:${userId}`).emit(event, payload);
+  }
+}

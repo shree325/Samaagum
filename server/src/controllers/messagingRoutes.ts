@@ -812,6 +812,19 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           }
         }
 
+        if (l.template_key === 'subscription_expiring_soon') {
+          return {
+            id: l.id,
+            type: "billing",
+            who: "Billing",
+            unread: l.status !== 'read',
+            day: dayLabel,
+            time: timeStr,
+            text: `Your subscription is expiring in 5 days. Click to renew!`,
+            action: "billing"
+          };
+        }
+
         return {
           id: l.id,
           type: "system",

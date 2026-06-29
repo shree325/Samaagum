@@ -371,6 +371,34 @@ function PublicProfile({ profile, go, socket }) {
     return [];
   }, [loadedProfile, p]);
 
+  // ─── Virtual card visibility + mapped data ──────────────────────────────────
+  // Server sends `showVirtualCard` after privacy filtering; before the DB load
+  // (demo state) we default to showing it.
+  const canShowVirtualCard = loadedProfile ? !!p.showVirtualCard : true;
+
+  const cardUser = React.useMemo(() => {
+    // Convert socialLinks array ({kind, value}) → object the VirtualCard expects.
+    const socialObj = {};
+    const list = p.socialLinks || [];
+    if (Array.isArray(list)) {
+      list.forEach(l => { if (l.kind && l.value) socialObj[l.kind.toLowerCase()] = l.value; });
+    } else if (list && typeof list === 'object') {
+      Object.assign(socialObj, list);
+    }
+    return {
+      id: targetId,
+      name: p.displayName,
+      full_name: p.displayName,
+      img: p.profilePhoto,
+      profilePhoto: p.profilePhoto,
+      role: p.headline,
+      headline: p.headline,
+      email: p.email,
+      phone: p.phone || p.mobile,
+      socialLinks: socialObj,
+    };
+  }, [p, targetId]);
+
   function getIconBg(icon) {
     const map = {
       linkedin:  "bg-[#0A66C2]",
@@ -1033,6 +1061,11 @@ function PublicProfile({ profile, go, socket }) {
                     ))}
                   </div>
                 </div>
+              )}
+
+              {/* Virtual Card (gated by privacy settings) */}
+              {canShowVirtualCard && window.VirtualCard && (
+                <window.VirtualCard user={cardUser} />
               )}
 
             </div>

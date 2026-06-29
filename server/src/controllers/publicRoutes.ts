@@ -149,34 +149,22 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
         coverBannerUrl = `data:image/jpeg;base64,${Buffer.from(profile.cover_image_data).toString('base64')}`;
       }
 
-      // Determine if requester is the user itself or is an accepted connection
-      let isOwnerOrConnected = false;
+      // Determine if the requester is the profile owner themselves.
+      // Privacy field-visibility applies to EVERY other visitor — connected or
+      // not — so only the owner ever sees their own unfiltered profile.
+      let isOwner = false;
       try {
         const header = request.headers.authorization || '';
         if (header.startsWith('Bearer ')) {
           const token = header.slice(7);
           const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
           const visitorUserId = payload.sub || payload.userId || payload.id;
-          if (visitorUserId) {
-            if (visitorUserId === userId) {
-              isOwnerOrConnected = true;
-            } else {
-              const conn = await prisma.connections.findFirst({
-                where: {
-                  OR: [
-                    { requester_user_id: visitorUserId, addressee_user_id: userId },
-                    { requester_user_id: userId, addressee_user_id: visitorUserId },
-                  ]
-                }
-              });
-              if (conn && conn.state === 'accepted') {
-                isOwnerOrConnected = true;
-              }
-            }
+          if (visitorUserId && visitorUserId === userId) {
+            isOwner = true;
           }
         }
       } catch (e) {
-        // Ignore token/database lookup errors
+        // Ignore token decode errors — treat as anonymous visitor
       }
 
       const privacyPrefs = (profile?.privacy_prefs as any) || {};
@@ -188,7 +176,8 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
         location: true,
         gender: false,
         dob: false,
-        socialLinks: true
+        socialLinks: true,
+        virtualCard: true
       };
 
       let finalEmail = user.primary_email || '';
@@ -202,8 +191,9 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
       let finalSocialLinks = user.profile_links || [];
       let finalProfilePhoto = profilePhotoUrl;
       let finalCoverBanner = coverBannerUrl;
+      let showVirtualCard = true;
 
-      if (!isOwnerOrConnected && profileVisibility === 'private') {
+      if (!isOwner && profileVisibility === 'private') {
         if (privateProfileMode === 'hide_all') {
           finalEmail = '';
           finalPhone = '';
@@ -216,6 +206,7 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
           finalSocialLinks = [];
           finalProfilePhoto = '';
           finalCoverBanner = '';
+          showVirtualCard = false;
         } else if (privateProfileMode === 'custom_fields') {
           if (!visibleFields.email) finalEmail = '';
           if (!visibleFields.phone) finalPhone = '';
@@ -223,6 +214,7 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
           if (!visibleFields.gender) finalGender = '';
           if (!visibleFields.dob) finalDob = '';
           if (!visibleFields.socialLinks) finalSocialLinks = [];
+          showVirtualCard = visibleFields.virtualCard !== false;
         }
       }
 
@@ -243,6 +235,7 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
           coverBanner: finalCoverBanner,
           skills: finalSkills,
           socialLinks: finalSocialLinks,
+          showVirtualCard,
           privacyPrefs: profile?.privacy_prefs || null
         }
       };
