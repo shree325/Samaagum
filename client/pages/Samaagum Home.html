@@ -30,7 +30,13 @@
 
   <script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"></script>
   <script>window.QRCodeLib = window.QRCode;</script>
-  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  <script>
+    (function() {
+      var apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+      var socketUrl = (apiBase || (window.location.protocol + '//' + window.location.host)) + '/socket.io/socket.io.js';
+      document.write('<script src="' + socketUrl + '"><\/script>');
+    })();
+  </script>
   <script src="../dist/ios-frame.js"></script>
   <script src="../dist/tweaks-panel.js"></script>
   <script src="../dist/home-icons.js"></script>

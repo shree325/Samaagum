@@ -224,13 +224,24 @@ function InviteLanding({ token, go }) {
         <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)", padding: 20 }}>
             <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", width: "100%", maxWidth: 420, overflow: "hidden", boxShadow: "var(--sh-lg)" }}>
                 <div style={{ position: "relative", height: 120, background: group.cover || "var(--accent-1)" }}>
-                    {group.banner && <img src={group.banner} alt="cover" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
-                    <Grain />
-                    <div style={{ position: "absolute", bottom: -24, left: 24, width: 64, height: 64, borderRadius: 16, background: group.cover || "var(--surface)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, boxShadow: "var(--sh-md)", border: "2px solid var(--surface)", overflow: "hidden" }}>
-                        {group.icon && (group.icon.startsWith("blob:") || group.icon.startsWith("http") || group.icon.includes("/")) ? (
-                            <img src={group.icon} alt="icon" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        ) : group.icon || "✺"}
-                    </div>
+                    {(() => {
+                        const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+                        const resolveImg = (url) => url && !url.startsWith('blob:') ? (url.startsWith('/api/') ? apiBase + url : url) : null;
+                        const bannerUrl = resolveImg(group.banner);
+                        const iconUrl = resolveImg(group.icon);
+                        const isCustomIcon = iconUrl && (iconUrl.startsWith("http") || iconUrl.startsWith("data:") || iconUrl.includes("/"));
+                        return (
+                            <>
+                                {bannerUrl && <img src={bannerUrl} alt="cover" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+                                <Grain />
+                                <div style={{ position: "absolute", bottom: -24, left: 24, width: 64, height: 64, borderRadius: 16, background: group.cover || "var(--surface)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, boxShadow: "var(--sh-md)", border: "2px solid var(--surface)", overflow: "hidden" }}>
+                                    {isCustomIcon ? (
+                                        <img src={iconUrl} alt="icon" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                    ) : group.icon || "✺"}
+                                </div>
+                            </>
+                        );
+                    })()}
                 </div>
 
                 <div style={{ padding: "40px 24px 24px 24px" }}>

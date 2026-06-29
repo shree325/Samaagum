@@ -1258,27 +1258,6 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
         }
     });
 
-    // PATCH /:id/posts/:postId
-    fastify.patch('/:id/posts/:postId', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
-        try {
-            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
-            const { id, postId } = request.params as any;
-            const { body } = request.body as any;
-
-            const post = await prisma.forum_posts.findUnique({ where: { id: postId, scope_type: 'group', scope_id: id } });
-            if (!post) return reply.status(404).send({ success: false, message: 'Post not found' });
-
-            const isAdmin = await verifyGroupAdmin(request.user.id, id);
-            if (!isAdmin && post.author_user_id !== request.user.id) {
-                return reply.status(403).send({ success: false, message: 'Forbidden' });
-            }
-
-            const updated = await prisma.forum_posts.update({ where: { id: postId }, data: { body } });
-            return { success: true, data: updated, message: 'Post updated' };
-        } catch (e: any) {
-            return reply.status(500).send({ success: false, message: e.message });
-        }
-    });
 
     // PATCH /:id/posts/:postId — edit thread (5-minute window)
     fastify.patch('/:id/posts/:postId', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {

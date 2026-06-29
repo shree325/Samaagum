@@ -128,7 +128,7 @@ function ThreadCard({ p, onOpen, voteData, onVote, reactions, onReact, isLiked, 
   );
 }
 
-function CommentItem({ c, depth, canReply, isOwner, currentUserId, replyingToId, inlineReplyDraft, submittingInlineReply, commentVotes, onVote, onDelete, onStartReply, onCancelReply, onInlineReplyChange, onSubmitInlineReply }) {
+function CommentItem({ c, depth, canReply, isOwner, currentUserId, replyingToId, inlineReplyDraft, submittingInlineReply, commentVotes, onVote, onDelete, onStartReply, onCancelReply, onInlineReplyChange, onSubmitInlineReply, canEdit, editingCommentId, editCommentDraft, onEditStart, onEditCancel, onEditChange, onEditSubmit }) {
   const timeStr = c.created_at ? getRelativeTime(c.created_at) : 'Just now';
   const votes = commentVotes[c.id] || {};
   const score = votes.score !== undefined ? votes.score : (c.vote_score || 0);
@@ -145,13 +145,36 @@ function CommentItem({ c, depth, canReply, isOwner, currentUserId, replyingToId,
             <span style={{ color: "var(--ink-3)", marginLeft: 6 }}>@{c.author_username || "unknown"}</span>
             <span style={{ color: "var(--ink-3)", marginLeft: 8 }}>· {timeStr}</span>
           </div>
-          {(isOwner || c.author_user_id === currentUserId) && (
-            <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => onDelete(c.id)} title="Delete" style={{ color: "var(--ink-3)", padding: "2px 6px" }}>
-              <I.trash style={{ width: 11, height: 11 }} />
-            </button>
-          )}
+          <div style={{ display: "flex", gap: 4 }}>
+            {c.author_user_id === currentUserId && canEdit && canEdit(c.created_at) && (
+              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => onEditStart(c)} title="Edit" style={{ color: "var(--ink-3)", padding: "2px 6px" }}>
+                <I.edit style={{ width: 11, height: 11 }} />
+              </button>
+            )}
+            {(isOwner || c.author_user_id === currentUserId) && (
+              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => onDelete(c.id)} title="Delete" style={{ color: "var(--ink-3)", padding: "2px 6px" }}>
+                <I.trash style={{ width: 11, height: 11 }} />
+              </button>
+            )}
+          </div>
         </div>
-        <div style={{ fontSize: 14, lineHeight: 1.6, color: "var(--ink)", whiteSpace: "pre-wrap", wordBreak: "break-word", marginBottom: 8 }}>{c.body}</div>
+        {editingCommentId === c.id ? (
+          <div style={{ marginBottom: 8 }}>
+            <textarea
+              autoFocus
+              value={editCommentDraft}
+              onChange={e => onEditChange(e.target.value)}
+              rows={2}
+              style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 14, fontFamily: "inherit", resize: "none", outline: "none", background: "var(--surface)", color: "var(--ink)", boxSizing: "border-box" }}
+            />
+            <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", marginTop: 4 }}>
+              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => onEditCancel(c.id)}>Cancel</button>
+              <button className="hbtn hbtn--primary hbtn--sm" onClick={() => onEditSubmit(c.id)}>Save</button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ fontSize: 14, lineHeight: 1.6, color: "var(--ink)", whiteSpace: "pre-wrap", wordBreak: "break-word", marginBottom: 8 }}>{c.body}</div>
+        )}
         <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 1 }}>
             <button onClick={() => onVote(c.id, userVote === 1 ? 0 : 1)} style={{ background: "none", border: "none", cursor: "pointer", fontWeight: 800, color: userVote === 1 ? "var(--accent-2)" : "var(--ink-3)", padding: "1px 4px", fontSize: 12 }}>▲</button>
@@ -184,7 +207,7 @@ function CommentItem({ c, depth, canReply, isOwner, currentUserId, replyingToId,
           </div>
         )}
         {replies.map(r => (
-          <CommentItem key={r.id} c={r} depth={depth + 1} canReply={canReply} isOwner={isOwner} currentUserId={currentUserId} replyingToId={replyingToId} inlineReplyDraft={inlineReplyDraft} submittingInlineReply={submittingInlineReply} commentVotes={commentVotes} onVote={onVote} onDelete={onDelete} onStartReply={onStartReply} onCancelReply={onCancelReply} onInlineReplyChange={onInlineReplyChange} onSubmitInlineReply={onSubmitInlineReply} />
+          <CommentItem key={r.id} c={r} depth={depth + 1} canReply={canReply} isOwner={isOwner} currentUserId={currentUserId} replyingToId={replyingToId} inlineReplyDraft={inlineReplyDraft} submittingInlineReply={submittingInlineReply} commentVotes={commentVotes} onVote={onVote} onDelete={onDelete} onStartReply={onStartReply} onCancelReply={onCancelReply} onInlineReplyChange={onInlineReplyChange} onSubmitInlineReply={onSubmitInlineReply} canEdit={canEdit} editingCommentId={editingCommentId} editCommentDraft={editCommentDraft} onEditStart={onEditStart} onEditCancel={onEditCancel} onEditChange={onEditChange} onEditSubmit={onEditSubmit} />
         ))}
       </div>
     </div>
@@ -1024,7 +1047,12 @@ function GroupDetail({ group, st, go }) {
   return (
     <div className="scroll">
       <div className="view-enter">
-        <div className="detail-cover" style={{ height: 200, backgroundImage: bannerSrc ? 'url("' + bannerSrc + '")' : undefined, background: bannerSrc ? undefined : g.cover, backgroundSize: "cover", backgroundPosition: "center" }}>
+        <div className="detail-cover" style={{
+          height: 200,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          ...(bannerSrc ? { backgroundImage: 'url("' + bannerSrc + '")' } : { background: g.cover })
+        }}>
           {!bannerSrc && <Grain />}
           <div className="scrim" />
           <button className="detail-back" onClick={() => go("home")}><I.arrowL />Back</button>
@@ -1181,7 +1209,23 @@ function GroupDetail({ group, st, go }) {
                           <span>{activeThread.created_at ? getRelativeTime(activeThread.created_at) : 'Just now'}</span>
                           {activeThread.view_count > 0 && <span>· {activeThread.view_count} views</span>}
                         </div>
-                        {activeThread.body && <div className="pbody" style={{ marginBottom: 12 }}>{activeThread.body}</div>}
+                        {editingPostId === activeThread.id ? (
+                          <div style={{ marginBottom: 12 }}>
+                            <textarea
+                              autoFocus
+                              value={editPostDraft}
+                              onChange={e => setEditPostDraft(e.target.value)}
+                              rows={4}
+                              style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 14, fontFamily: "inherit", resize: "vertical", outline: "none", background: "var(--surface)", color: "var(--ink)", boxSizing: "border-box" }}
+                            />
+                            <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", marginTop: 8 }}>
+                              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => { setEditingPostId(null); setEditPostDraft(""); }}>Cancel</button>
+                              <button className="hbtn hbtn--primary hbtn--sm" onClick={handleEditPost}>Save</button>
+                            </div>
+                          </div>
+                        ) : (
+                          activeThread.body && <div className="pbody" style={{ marginBottom: 12 }}>{activeThread.body}</div>
+                        )}
                         <EmojiBar counts={atReactions} onReact={emoji => handleReactThread(activeThread.id, emoji)} />
                         {isOwner && (
                           <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
@@ -1203,7 +1247,12 @@ function GroupDetail({ group, st, go }) {
                           </div>
                         )}
                         {(isOwner || activeThread.author_user_id === currentUserId) && (
-                          <div style={{ marginTop: 8 }}>
+                          <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+                            {canEdit(activeThread.created_at) && activeThread.author_user_id === currentUserId && (
+                              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => { setEditingPostId(activeThread.id); setEditPostDraft(activeThread.body); }}>
+                                <I.edit style={{ width: 13, height: 13 }} /> Edit thread
+                              </button>
+                            )}
                             <button className="hbtn hbtn--ghost hbtn--sm" style={{ color: "#e74c3c" }} title="Delete thread" onClick={() => { if (!confirm("Delete this thread and all replies?")) return; handleDeletePost(activeThread.id); setActiveThread(null); }}>
                               <I.trash style={{ width: 13, height: 13 }} /> Delete thread
                             </button>
@@ -1231,7 +1280,7 @@ function GroupDetail({ group, st, go }) {
 
                   {!loadingThread && (activeThread.comments || []).map(c => (
                     <div key={c.id} style={{ padding: "14px 16px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)" }}>
-                      <CommentItem c={c} depth={0} canReply={canReply && !activeThread.locked} isOwner={isOwner} currentUserId={currentUserId} replyingToId={replyingToId} inlineReplyDraft={inlineReplyDraft} submittingInlineReply={submittingInlineReply} commentVotes={commentVotes} onVote={handleVoteComment} onDelete={handleDeleteComment} onStartReply={handleStartReply} onCancelReply={handleCancelReply} onInlineReplyChange={setInlineReplyDraft} onSubmitInlineReply={handleSubmitInlineReply} />
+                      <CommentItem c={c} depth={0} canReply={canReply && !activeThread.locked} isOwner={isOwner} currentUserId={currentUserId} replyingToId={replyingToId} inlineReplyDraft={inlineReplyDraft} submittingInlineReply={submittingInlineReply} commentVotes={commentVotes} onVote={handleVoteComment} onDelete={handleDeleteComment} onStartReply={handleStartReply} onCancelReply={handleCancelReply} onInlineReplyChange={setInlineReplyDraft} onSubmitInlineReply={handleSubmitInlineReply} canEdit={canEdit} editingCommentId={editingCommentId} editCommentDraft={editCommentDraft} onEditStart={(c) => { setEditingCommentId(c.id); setEditCommentDraft(c.body); }} onEditCancel={() => { setEditingCommentId(null); setEditCommentDraft(""); }} onEditChange={v => setEditCommentDraft(v)} onEditSubmit={handleEditComment} />
                     </div>
                   ))}
 
@@ -1521,9 +1570,9 @@ function GroupDetail({ group, st, go }) {
                               Pending
                             </div>
                           )}
-                          {isOwner && (
+                          {(isOwner || item.user_id === currentUserId) && (
                             <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, display: "flex", gap: 4, padding: 6 }}>
-                              {item.status === 'pending' && (
+                              {isOwner && item.status === 'pending' && (
                                 <button className="hbtn hbtn--primary hbtn--sm" style={{ flex: 1, justifyContent: "center", fontSize: 11 }} onClick={async () => {
                                   const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
                                   const tkn = localStorage.getItem('token');

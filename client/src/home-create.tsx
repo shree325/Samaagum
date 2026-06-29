@@ -3520,14 +3520,14 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
                   borderRadius: "var(--r-md)",
                   border: banner ? "none" : "1.5px dashed var(--border)",
                   cursor: "pointer",
-                  ...(banner ? { backgroundImage: `url("${banner}")`, backgroundSize: "cover", backgroundPosition: "center", backgroundColor: "transparent" } : { background: cover })
+                  ...(banner ? { backgroundImage: `url("${banner.startsWith('/api/') ? (window.location.port === "8080" ? "http://localhost:3000" : "") + banner : banner}")`, backgroundSize: "cover", backgroundPosition: "center", backgroundColor: "transparent" } : { background: cover })
                 }}
                 onClick={() => document.getElementById("banner-upload").click()}
               >
                 <Grain />
                 <div style={{ position: "absolute", left: 16, bottom: -18, width: 44, height: 44, borderRadius: 12, background: cover, border: "2px solid var(--surface)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, boxShadow: "var(--sh-md)", zIndex: 3, overflow: "hidden" }}>
                   {icon && (icon.startsWith("blob:") || icon.startsWith("http") || icon.startsWith("data:") || icon.includes("/")) ? (
-                    <img src={icon} alt="icon" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <img src={icon.startsWith('/api/') ? (window.location.port === "8080" ? "http://localhost:3000" : "") + icon : icon} alt="icon" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   ) : icon}
                 </div>
                 {banner ? (
