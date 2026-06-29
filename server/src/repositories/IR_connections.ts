@@ -16,4 +16,6 @@ export interface IConnection {
 export interface IR_connections extends IBaseRepository<IConnection> {
   findByRequesterId(requesterId: string): Promise<IConnection[]>;
   findByAddresseeId(addresseeId: string): Promise<IConnection[]>;
+  countPending(userId: string): Promise<number>;
 }
+

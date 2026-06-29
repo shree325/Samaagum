@@ -56,7 +56,7 @@ function SettingsPage({ st, go }) {
     try {
       const api = window.location.port === "8080" ? "http://localhost:3000" : window.location.origin;
       const token = localStorage.getItem('token');
-      await fetch(`${api}/api/admin/user/profile`, {
+      const res = await fetch(`${api}/api/admin/user/profile`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -66,6 +66,9 @@ function SettingsPage({ st, go }) {
           privacyPrefs: newPrefs
         })
       });
+      if (res.ok && window.chatSocket) {
+        window.chatSocket.emit("privacy.update");
+      }
     } catch (e) {
       console.error("Failed to sync privacy preferences to server", e);
     }

@@ -34,31 +34,12 @@
   <script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"></script>
   <script>window.QRCodeLib = window.QRCode;</script>
   <script>
-    // Socket.io CDN Fallback
-    window.addEventListener('error', function(e) {
-      if (e.target && e.target.tagName === 'SCRIPT' && e.target.src.includes('socket.io')) {
-        console.warn('Socket.io CDN timed out. Loading from backend server fallback.');
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const apiBase = isLocalhost ? "http://localhost:3000" : window.location.origin;
-        const fallback = document.createElement('script');
-        fallback.src = apiBase + '/socket.io/socket.io.js';
-        document.head.appendChild(fallback);
-      }
-    }, true);
-  </script>
-  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
-  <script>
-    // Bulletproof: check if loaded, else load from local fallback after 1.5 seconds
-    setTimeout(function() {
-      if (!window.io) {
-        console.warn('Socket.io CDN load checked: Failed. Loading from backend server fallback...');
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const apiBase = isLocalhost ? "http://localhost:3000" : window.location.origin;
-        const fallback = document.createElement('script');
-        fallback.src = apiBase + '/socket.io/socket.io.js';
-        document.head.appendChild(fallback);
-      }
-    }, 1500);
+    // Load Socket.io client library directly from backend server synchronously
+    (function() {
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const apiBase = isLocalhost ? "http://localhost:3000" : window.location.origin;
+      document.write('<script src="' + apiBase + '/socket.io/socket.io.js"><\/script>');
+    })();
   </script>
   <script type="text/babel" data-presets="env,react,typescript" src="../src/ios-frame.tsx"></script>
   <script type="text/babel" data-presets="env,react,typescript" src="../src/tweaks-panel.tsx"></script>

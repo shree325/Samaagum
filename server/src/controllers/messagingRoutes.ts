@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import prisma from '../config/prisma';
 import { DEFAULT_CHAT_SETTINGS } from '../settings-library/settingsSeeder';
+import { conversationReadService } from '../services/ConversationReadService';
 
 // Helper to get active chat settings
 async function getChatSettings() {
@@ -104,7 +105,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
                 select: {
                   primary_email: true,
                   profiles: {
-                    select: { display_name: true }
+                    select: { display_name: true, messaging_restriction: true }
                   }
                 }
               }
@@ -144,7 +145,8 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           participants: c.conversation_participants.map(p => ({
             userId: p.user_id,
             role: p.role,
-            name: p.users?.profiles?.display_name || p.users?.primary_email || "Unknown User"
+            name: p.users?.profiles?.display_name || p.users?.primary_email || "Unknown User",
+            messagingRestriction: p.users?.profiles?.messaging_restriction || "anyone"
           }))
         };
       }));
@@ -288,7 +290,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
                 select: {
                   primary_email: true,
                   profiles: {
-                    select: { display_name: true }
+                    select: { display_name: true, messaging_restriction: true }
                   }
                 }
               }
@@ -310,7 +312,8 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             participants: existing.conversation_participants.map((p: any) => ({
               userId: p.user_id,
               role: p.role,
-              name: p.users?.profiles?.display_name || p.users?.primary_email || "Unknown User"
+              name: p.users?.profiles?.display_name || p.users?.primary_email || "Unknown User",
+              messagingRestriction: p.users?.profiles?.messaging_restriction || "anyone"
             }))
           }
         });
@@ -340,7 +343,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
                 select: {
                   primary_email: true,
                   profiles: {
-                    select: { display_name: true }
+                    select: { display_name: true, messaging_restriction: true }
                   }
                 }
               }
@@ -361,7 +364,8 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           participants: conversation.conversation_participants.map((p: any) => ({
             userId: p.user_id,
             role: p.role,
-            name: p.users?.profiles?.display_name || p.users?.primary_email || "Unknown User"
+            name: p.users?.profiles?.display_name || p.users?.primary_email || "Unknown User",
+            messagingRestriction: p.users?.profiles?.messaging_restriction || "anyone"
           }))
         }
       });
@@ -842,4 +846,62 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       return reply.status(500).send({ success: false, message: err.message });
     }
   });
+
+  // POST /api/messaging/conversations/:id/read
+  fastify.post<{ Params: { id: string } }>(
+    '/conversations/:id/read',
+    { preHandler: [(fastify as any).authenticate] },
+    async (request, reply) => {
+      const userId = request.user?.id;
+      if (!userId) {
+        return reply.status(401).send({ success: false, message: 'Unauthorized' });
+      }
+
+      const conversationId = request.params.id;
+
+      // Verify the conversation exists and the user is a participant
+      const participant = await prisma.conversation_participants.findUnique({
+        where: {
+          conversation_id_user_id: { conversation_id: conversationId, user_id: userId },
+        },
+      });
+      if (!participant) {
+        return reply.status(403).send({ success: false, message: 'Not a participant of this conversation' });
+      }
+
+      try {
+        const result = await conversationReadService.readConversation(userId, conversationId);
+
+        // Broadcast via Socket.IO so other open tabs / devices update instantly
+        const chatNamespace = (fastify as any).io?.of('/chat');
+        if (chatNamespace) {
+          if (result.receiptUpdates.length > 0) {
+            chatNamespace
+              .to(`conversation:${conversationId}`)
+              .emit('receipt.updated', result.receiptUpdates);
+          }
+
+          chatNamespace.to(`user:${userId}`).emit('notification:count', {
+            count: result.unreadCount,
+          });
+          chatNamespace.to(`user:${userId}`).emit('notification:updated', {
+            conversationId,
+            type:                'message_received',
+            notificationsSynced: result.notificationsSynced,
+          });
+        }
+
+        return reply.send({
+          success: true,
+          data: {
+            messagesMarkedRead:  result.messagesMarkedRead,
+            notificationsSynced: result.notificationsSynced,
+            unreadCount:         result.unreadCount,
+          },
+        });
+      } catch (err: any) {
+        return reply.status(500).send({ success: false, message: err.message });
+      }
+    }
+  );
 }

@@ -16,4 +16,7 @@ export interface IMessage {
 export interface IR_messages extends IBaseRepository<IMessage> {
   findByConversationId(conversationId: string): Promise<IMessage[]>;
   findBySenderUserId(senderUserId: string): Promise<IMessage[]>;
+  findUnreadMessages(userId: string, conversationId: string): Promise<{ id: string; created_at: Date }[]>;
+  markReceiptAsSeen(userId: string, messageId: string, now: Date): Promise<void>;
 }
+

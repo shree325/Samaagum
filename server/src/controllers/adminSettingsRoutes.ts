@@ -1120,10 +1120,10 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
       });
 
       // Broadcast real-time profile update if privacy settings changed
-      if (privacyPrefs !== undefined) {
+      if (privacyPrefs !== undefined || messagingRestriction !== undefined) {
         const io = (request.server as any).io;
         if (io) {
-          io.emit('profile.updated', { userId: dbUser.id, privacyPrefs });
+          io.of('/chat').emit('profile.updated', { userId: dbUser.id, privacyPrefs, messagingRestriction });
         }
       }
 
