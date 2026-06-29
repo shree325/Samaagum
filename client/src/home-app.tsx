@@ -236,9 +236,11 @@ function App() {
       });
 
       setSocket(chatSocket);
+      window.chatSocket = chatSocket;
 
       return () => {
         chatSocket.disconnect();
+        window.chatSocket = null;
       };
     }
   }, [ioLoaded]);

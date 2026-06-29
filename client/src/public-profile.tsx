@@ -43,6 +43,15 @@ function PublicProfile({ profile, go, socket }) {
   const [messaging,  setMessaging]  = React.useState(false);
   const [revoking,   setRevoking]   = React.useState(false);
 
+  // Network modal states
+  const [showNetworkModal, setShowNetworkModal] = React.useState(false);
+  const [networkData, setNetworkData] = React.useState({ mutual: [], new: [], totalCount: 0 });
+  const [networkSearch, setNetworkSearch] = React.useState("");
+  const [networkPage, setNetworkPage] = React.useState(1);
+  const [networkHasMore, setNetworkHasMore] = React.useState(false);
+  const [networkLoading, setNetworkLoading] = React.useState(false);
+  const [networkConnectStates, setNetworkConnectStates] = React.useState({}); // { [userId]: 'none'|'loading'|'requested'|'accepted' }
+
   const authHeaders = () => {
     const token = localStorage.getItem('token');
     return token ? { Authorization: `Bearer ${token}` } : {};
@@ -86,11 +95,19 @@ function PublicProfile({ profile, go, socket }) {
       .catch(err => console.error("Error loading profile details:", err));
   }, [targetId, apiBase]);
 
+  // ─── Reset profile details when navigating to a new profile ───────────────────
+  React.useEffect(() => {
+    setLoadedProfile(null);
+    setConnState('loading');
+    setConnId(null);
+  }, [profile?.user_id, profile?.id, profile?.userId]);
+
   // ─── Fetch all data on mount or target change ──────────────────────────────
   React.useEffect(() => {
     fetchProfileDetails();
     fetchConnectionStatus();
   }, [fetchProfileDetails, fetchConnectionStatus]);
+
 
   // ─── Real-time socket listeners ──────────────────────────────────────────────
   React.useEffect(() => {
@@ -132,6 +149,78 @@ function PublicProfile({ profile, go, socket }) {
       socket.off('profile.updated', onProfileUpdated);
     };
   }, [socket, targetId, fetchProfileDetails, fetchConnectionStatus]);
+
+  // ─── Network fetching & management ──────────────────────────────
+  const fetchNetwork = React.useCallback(async (search = "", page = 1, append = false) => {
+    if (!targetId) return;
+    setNetworkLoading(true);
+    try {
+      const res = await fetch(`${apiBase}/api/connections/network/${targetId}?q=${encodeURIComponent(search)}&page=${page}&limit=20`, { headers: authHeaders() });
+      const json = await res.json();
+      if (json.success) {
+        const data = json.data;
+        if (append) {
+          setNetworkData(prev => ({
+            totalCount: data.totalCount,
+            mutual: [...prev.mutual, ...data.mutual],
+            new: [...prev.new, ...data.new]
+          }));
+        } else {
+          setNetworkData({
+            totalCount: data.totalCount,
+            mutual: data.mutual || [],
+            new: data.new || []
+          });
+        }
+        setNetworkHasMore(data.pagination?.hasMore || false);
+        
+        // Populate networkConnectStates
+        const states = {};
+        [...(data.mutual || []), ...(data.new || [])].forEach(u => {
+          states[u.userId] = u.connectionState;
+        });
+        setNetworkConnectStates(prev => ({ ...prev, ...states }));
+      }
+    } catch (err) {
+      console.error("Error fetching network connections:", err);
+    } finally {
+      setNetworkLoading(false);
+    }
+  }, [targetId, apiBase]);
+
+  // Debounced search on networkSearch
+  React.useEffect(() => {
+    if (!showNetworkModal || !targetId) return;
+    const t = setTimeout(() => {
+      setNetworkPage(1);
+      fetchNetwork(networkSearch, 1, false);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [networkSearch, showNetworkModal, targetId, fetchNetwork]);
+
+  const handleConnectFromModal = async (userId: string, e: any) => {
+    e.stopPropagation(); // MUST NOT navigate to profile
+    if (networkConnectStates[userId] === "loading") return;
+    setNetworkConnectStates(prev => ({ ...prev, [userId]: "loading" }));
+    try {
+      const res = await fetch(`${apiBase}/api/connections/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ addresseeUserId: userId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNetworkConnectStates(prev => ({ ...prev, [userId]: "requested" }));
+        if (window.toast) window.toast("Connection request sent! 🤝");
+      } else {
+        setNetworkConnectStates(prev => ({ ...prev, [userId]: "none" }));
+        if (window.toast) window.toast(data.message || "Failed to send connection request.");
+      }
+    } catch {
+      setNetworkConnectStates(prev => ({ ...prev, [userId]: "none" }));
+      if (window.toast) window.toast("Network error. Please try again.");
+    }
+  };
 
   // ─── Action: Send connection request ────────────────────────────────────────
   const handleConnect = async () => {
@@ -558,7 +647,350 @@ function PublicProfile({ profile, go, socket }) {
                     {messaging ? 'Opening…' : 'Message'}
                   </button>
                 )}
+
+                {targetId && (
+                  <button
+                    onClick={() => {
+                      setShowNetworkModal(true);
+                      setNetworkSearch("");
+                      setNetworkPage(1);
+                      fetchNetwork("", 1, false);
+                    }}
+                    style={{
+                      padding: "14px 24px",
+                      borderRadius: 28,
+                      background: colors.pillBg,
+                      color: colors.textMain,
+                      border: `1.5px solid ${colors.pillBorder}`,
+                      fontSize: 15,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      boxShadow: colors.pillShadow,
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" width="18" height="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+                    Connections
+                  </button>
+                )}
               </div>
+
+              {/* Connected Users Modal */}
+              {showNetworkModal && (
+                <div style={{
+                  position: "fixed",
+                  inset: 0,
+                  zIndex: 9999,
+                  background: "rgba(0, 0, 0, 0.6)",
+                  backdropFilter: "blur(4px)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: 16
+                }} onClick={() => setShowNetworkModal(false)}>
+                  <div style={{
+                    width: "100%",
+                    maxWidth: 520,
+                    maxHeight: "85vh",
+                    background: colors.cardBg,
+                    borderRadius: 24,
+                    boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)",
+                    border: `1px solid ${colors.border}`,
+                    display: "flex",
+                    flexDirection: "column",
+                    overflow: "hidden",
+                    animation: "modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+                  }} onClick={(e) => e.stopPropagation()}>
+                    
+                    {/* Header */}
+                    <div style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "20px 24px 16px 24px",
+                      borderBottom: `1px solid ${colors.border}`
+                    }}>
+                      <div>
+                        <h3 style={{ fontSize: 18, fontWeight: 800, color: colors.textMain, margin: 0 }}>Connected Users</h3>
+                        <span style={{ fontSize: 13, color: colors.textMuted, marginTop: 2, display: "block" }}>
+                          {networkData.totalCount} {networkData.totalCount === 1 ? 'connection' : 'connections'}
+                        </span>
+                      </div>
+                      <button 
+                        onClick={() => setShowNetworkModal(false)}
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: "50%",
+                          background: colors.chipBg,
+                          border: `1px solid ${colors.chipBorder}`,
+                          color: colors.textMain,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                          padding: 0
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    {/* Search Bar */}
+                    <div style={{ padding: "16px 24px", borderBottom: `1px solid ${colors.border}` }}>
+                      <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                        <svg style={{ position: "absolute", left: 14, color: colors.textMuted }} viewBox="0 0 24 24" fill="none" width="16" height="16" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input 
+                          type="text" 
+                          placeholder="Search connections..." 
+                          value={networkSearch}
+                          onChange={(e) => setNetworkSearch(e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "10px 16px 10px 40px",
+                            borderRadius: 12,
+                            background: colors.chipBg,
+                            border: `1.5px solid ${colors.chipBorder}`,
+                            color: colors.textMain,
+                            fontSize: 14,
+                            outline: "none",
+                            transition: "border-color 0.2s"
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Scrollable list */}
+                    <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px" }} className="scroll">
+                      {networkLoading && networkData.mutual.length === 0 && networkData.new.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "40px 0", color: colors.textMuted, fontSize: 14 }}>
+                          Loading connections...
+                        </div>
+                      ) : (
+                        <>
+                          {networkData.totalCount === 0 && (
+                            <div style={{ textAlign: "center", padding: "40px 0", color: colors.textMuted, fontSize: 14 }}>
+                              No connections found.
+                            </div>
+                          )}
+
+                          {networkData.totalCount > 0 && networkData.mutual.length === 0 && networkData.new.length === 0 && (
+                            <div style={{ textAlign: "center", padding: "40px 0", color: colors.textMuted, fontSize: 14 }}>
+                              No matching connections found.
+                            </div>
+                          )}
+
+                          {/* Mutual Connections Section */}
+                          {networkData.mutual.length > 0 && (
+                            <div style={{ marginBottom: 24 }}>
+                              <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", color: colors.textMuted, letterSpacing: "0.5px", marginBottom: 12 }}>
+                                Mutual Connections ({networkData.mutual.length})
+                              </h4>
+                              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                                {networkData.mutual.map(user => (
+                                  <div 
+                                    key={user.userId} 
+                                    onClick={() => {
+                                      setShowNetworkModal(false);
+                                      go("public-profile", user);
+                                    }}
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "space-between",
+                                      padding: "8px 12px",
+                                      borderRadius: 12,
+                                      cursor: "pointer",
+                                      transition: "background 0.2s"
+                                    }}
+                                    className="hover:bg-gray-100/10"
+                                  >
+                                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                      <div style={{ width: 40, height: 40, borderRadius: "50%", overflow: "hidden", background: colors.chipBg, flexShrink: 0 }}>
+                                        {user.profilePhoto ? (
+                                          <img src={user.profilePhoto} alt={user.displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                        ) : (
+                                          <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyItems: "center", justifyContent: "center", background: "var(--bg-3)" }}>
+                                            <User style={{ width: 18, height: 18, color: colors.textMuted }} />
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div>
+                                        <div style={{ fontSize: 14, fontWeight: 700, color: colors.textMain }}>{user.displayName}</div>
+                                        <div style={{ fontSize: 12, color: colors.textMuted }}>@{user.username}</div>
+                                      </div>
+                                    </div>
+                                    <span style={{ fontSize: 11, fontWeight: 600, background: "rgba(16, 185, 129, 0.1)", color: "#10b981", padding: "4px 8px", borderRadius: 12 }}>
+                                      Mutual
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* New Connections Section */}
+                          {networkData.new.length > 0 && (
+                            <div style={{ marginBottom: 24 }}>
+                              <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", color: colors.textMuted, letterSpacing: "0.5px", marginBottom: 12 }}>
+                                New Connections ({networkData.new.length})
+                              </h4>
+                              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                                {networkData.new.map(user => {
+                                  const cState = networkConnectStates[user.userId] || user.connectionState;
+                                  return (
+                                    <div 
+                                      key={user.userId} 
+                                      onClick={() => {
+                                        setShowNetworkModal(false);
+                                        go("public-profile", user);
+                                      }}
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "space-between",
+                                        padding: "8px 12px",
+                                        borderRadius: 12,
+                                        cursor: "pointer",
+                                        transition: "background 0.2s"
+                                      }}
+                                      className="hover:bg-gray-100/10"
+                                    >
+                                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                        <div style={{ width: 40, height: 40, borderRadius: "50%", overflow: "hidden", background: colors.chipBg, flexShrink: 0 }}>
+                                          {user.profilePhoto ? (
+                                            <img src={user.profilePhoto} alt={user.displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                          ) : (
+                                            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyItems: "center", justifyContent: "center", background: "var(--bg-3)" }}>
+                                              <User style={{ width: 18, height: 18, color: colors.textMuted }} />
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div>
+                                          <div style={{ fontSize: 14, fontWeight: 700, color: colors.textMain }}>{user.displayName}</div>
+                                          <div style={{ fontSize: 12, color: colors.textMuted }}>@{user.username}</div>
+                                        </div>
+                                      </div>
+
+                                      {/* Connection Button */}
+                                      {cState === 'none' && (
+                                        <button 
+                                          onClick={(e) => handleConnectFromModal(user.userId, e)}
+                                          style={{
+                                            padding: "6px 14px",
+                                            borderRadius: 16,
+                                            background: "#6366f1",
+                                            color: "#fff",
+                                            border: "none",
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            cursor: "pointer",
+                                            transition: "background 0.2s"
+                                          }}
+                                        >
+                                          Connect
+                                        </button>
+                                      )}
+                                      {cState === 'loading' && (
+                                        <button 
+                                          disabled
+                                          style={{
+                                            padding: "6px 14px",
+                                            borderRadius: 16,
+                                            background: colors.chipBg,
+                                            border: `1.5px solid ${colors.chipBorder}`,
+                                            color: colors.textMuted,
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            cursor: "default"
+                                          }}
+                                        >
+                                          ...
+                                        </button>
+                                      )}
+                                      {cState === 'requested' && (
+                                        <button 
+                                          disabled
+                                          style={{
+                                            padding: "6px 14px",
+                                            borderRadius: 16,
+                                            background: "rgba(245, 158, 11, 0.1)",
+                                            border: "1.5px solid rgba(245, 158, 11, 0.2)",
+                                            color: "#f59e0b",
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            cursor: "default"
+                                          }}
+                                        >
+                                          Requested
+                                        </button>
+                                      )}
+                                      {cState === 'requested_by_them' && (
+                                        <button 
+                                          onClick={(e) => handleConnectFromModal(user.userId, e)}
+                                          style={{
+                                            padding: "6px 14px",
+                                            borderRadius: 16,
+                                            background: "#6366f1",
+                                            color: "#fff",
+                                            border: "none",
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            cursor: "pointer",
+                                            transition: "background 0.2s"
+                                          }}
+                                        >
+                                          Respond
+                                        </button>
+                                      )}
+                                      {cState === 'accepted' && (
+                                        <span style={{ fontSize: 11, fontWeight: 600, background: "rgba(16, 185, 129, 0.1)", color: "#10b981", padding: "4px 8px", borderRadius: 12 }}>
+                                          Connected ✓
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Pagination Load More button */}
+                          {networkHasMore && (
+                            <div style={{ display: "flex", justifyContent: "center", marginTop: 8 }}>
+                              <button 
+                                onClick={async () => {
+                                  const nextPage = networkPage + 1;
+                                  setNetworkPage(nextPage);
+                                  await fetchNetwork(networkSearch, nextPage, true);
+                                }}
+                                disabled={networkLoading}
+                                style={{
+                                  padding: "8px 16px",
+                                  borderRadius: 16,
+                                  background: colors.chipBg,
+                                  border: `1.5px solid ${colors.chipBorder}`,
+                                  color: colors.textMain,
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  cursor: networkLoading ? "default" : "pointer"
+                                }}
+                              >
+                                {networkLoading ? "Loading..." : "Load More"}
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                  </div>
+                </div>
+              )}
 
               {/* Bio Section */}
               {p.bio && (

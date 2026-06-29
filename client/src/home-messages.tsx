@@ -24,6 +24,9 @@ function Messages({ st, go, mobile, socket }) {
   const [replyingTo, setReplyingTo] = useState(null);
 
   const [requestStatuses, setRequestStatuses] = useState({});
+  const [contactsList, setContactsList] = useState([]);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [connectedUserIds, setConnectedUserIds] = useState(new Set());
 
   // Sync the currently active conversation ID to window so the shell's socket handler can check it
   useEffect(() => {
@@ -325,9 +328,55 @@ function Messages({ st, go, mobile, socket }) {
       });
   };
 
+  const fetchConnectedUserIds = async () => {
+    if (!currentUserId) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${apiBase}/api/connections/network/${currentUserId}?limit=1000`, {
+        headers: token ? { "Authorization": `Bearer ${token}` } : {}
+      });
+      const data = await res.json();
+      if (data.success) {
+        const ids = new Set([
+          ...(data.data.mutual || []),
+          ...(data.data.new || [])
+        ].filter(u => u.connectionState === 'accepted').map(u => u.userId));
+        setConnectedUserIds(ids);
+      }
+    } catch (err) {
+      console.error("Error fetching connected IDs:", err);
+    }
+  };
+
+  const fetchContactsList = async () => {
+    if (!currentUserId) return;
+    setContactsLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${apiBase}/api/connections/network/${currentUserId}?limit=100`, {
+        headers: token ? { "Authorization": `Bearer ${token}` } : {}
+      });
+      const data = await res.json();
+      if (data.success) {
+        const list = [
+          ...(data.data.mutual || []),
+          ...(data.data.new || [])
+        ].filter(u => u.userId !== currentUserId && u.connectionState === 'accepted');
+        setContactsList(list);
+      }
+    } catch (err) {
+      console.error("Error fetching contacts:", err);
+    } finally {
+      setContactsLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchConversations();
-    fetchIncomingRequests();
+    fetchConnectedUserIds();
+    if (seg === "contacts") {
+      fetchContactsList();
+    }
   }, [apiBase, seg]);
 
   // 2. Fetch presence of participants dynamically on thread list load/refresh
@@ -558,6 +607,28 @@ function Messages({ st, go, mobile, socket }) {
       fetchIncomingRequests();
       if (st.fetchCounts) st.fetchCounts();
     };
+    const handlePresenceUpdated = (payload) => {
+      if (payload && payload.userId) {
+        setPresenceMap(prev => ({
+          ...prev,
+          [payload.userId]: payload.status
+        }));
+      }
+    };
+
+    const handleProfileUpdated = (payload) => {
+      if (payload && payload.userId && payload.messagingRestriction !== undefined) {
+        setThreads(prev => prev.map(t => ({
+          ...t,
+          participants: t.participants?.map(p => {
+            if (p.userId === payload.userId || p.id === payload.userId) {
+              return { ...p, messagingRestriction: payload.messagingRestriction };
+            }
+            return p;
+          })
+        })));
+      }
+    };
 
     socket.on("message.created", handleMessageCreated);
     socket.on("message.updated", handleMessageUpdated);
@@ -566,6 +637,8 @@ function Messages({ st, go, mobile, socket }) {
     socket.on("request.received", handleRequestReceived);
     socket.on("request.accepted", handleRequestAccepted);
     socket.on("request.declined", handleRequestDeclined);
+    socket.on("presence.updated", handlePresenceUpdated);
+    socket.on("profile.updated", handleProfileUpdated);
 
     return () => {
       socket.off("message.created", handleMessageCreated);
@@ -574,7 +647,9 @@ function Messages({ st, go, mobile, socket }) {
       socket.off("receipt.updated", handleReceiptUpdated);
       socket.off("request.received", handleRequestReceived);
       socket.off("request.accepted", handleRequestAccepted);
-socket.off("request.declined", handleRequestDeclined);
+      socket.off("request.declined", handleRequestDeclined);
+      socket.off("presence.updated", handlePresenceUpdated);
+      socket.off("profile.updated", handleProfileUpdated);
     };
   }, [socket, activeId]);
 
@@ -592,7 +667,24 @@ socket.off("request.declined", handleRequestDeclined);
       socket.emit("message.send", { conversationId: activeId, content: currentInput, replyToMessageId: parentId }, (ack) => {
         if (ack && !ack.success) {
           console.error("Message send failed:", ack.error);
-          setInput(currentInput);
+          if (ack.error === "This user has disabled direct messages.") {
+            setThreads(prev => prev.map(t => {
+              if (t.id === activeId) {
+                return {
+                  ...t,
+                  participants: t.participants.map(p => {
+                    if (p.userId !== currentUserId && p.id !== currentUserId) {
+                      return { ...p, messagingRestriction: 'no_one' };
+                    }
+                    return p;
+                  })
+                };
+              }
+              return t;
+            }));
+          } else {
+            setInput(currentInput);
+          }
         }
       });
     } else {
@@ -649,7 +741,7 @@ socket.off("request.declined", handleRequestDeclined);
       <div className={`msg-list ${mobile && showConv ? "hide-m":""}`}>
         <div className="msg-list-head" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <h2>Messages</h2>
-          <div className="msg-search-box" style={{ position: "relative", width: "100%", padding: "0" }}>
+          <div className="msg-search-box" style={{ position: "relative", width: "100%", padding: "0", boxSizing: "border-box" }}>
             <I.search style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", width: 15, height: 15, color: "var(--ink-3)" }} />
             <input 
               type="text" 
@@ -658,6 +750,7 @@ socket.off("request.declined", handleRequestDeclined);
               onChange={e => setSearchQuery(e.target.value)}
               style={{
                 width: "100%",
+                boxSizing: "border-box",
                 padding: "8px 16px 8px 36px",
                 borderRadius: "20px",
                 border: "1px solid var(--border)",
@@ -688,7 +781,7 @@ socket.off("request.declined", handleRequestDeclined);
           </div>
           <div className="msg-seg">
             <button className={seg==="messages"?"on":""} onClick={()=>setSeg("messages")}>Chats</button>
-            <button className={seg==="requests"?"on":""} onClick={()=>setSeg("requests")}>Requests <span style={{ color:"var(--accent-1)" }}>{requests.length}</span></button>
+            <button className={seg==="contacts"?"on":""} onClick={()=>setSeg("contacts")}>Contacts</button>
           </div>
         </div>
         <div className="msg-threads">
@@ -701,18 +794,20 @@ socket.off("request.declined", handleRequestDeclined);
                 .filter(uid => uid !== currentUserId)
             );
             const searchedContacts = searchResults.filter(user => contactUserIds.has(user.id));
-            const searchedMoreAccounts = searchResults.filter(user => !contactUserIds.has(user.id));
+            const searchedConnected = searchResults.filter(user => !contactUserIds.has(user.id) && connectedUserIds.has(user.id));
             
             return (
               <div className="search-results-section" style={{ display: "flex", flexDirection: "column", gap: 6, padding: "8px 4px" }}>
                 {searchedContacts.length > 0 && (
                   <>
-                    <div className="search-group-title" style={{ fontSize: 11, textTransform: "uppercase", fontWeight: 700, color: "var(--ink-3)", margin: "8px 12px 4px" }}>Contacts</div>
+                    <div className="search-group-title" style={{ fontSize: 11, textTransform: "uppercase", fontWeight: 700, color: "var(--ink-3)", margin: "8px 12px 4px" }}>Message</div>
                     {searchedContacts.map(user => (
                       <div key={user.id} className="search-item" onClick={() => selectSearchResult(user)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: "8px", cursor: "pointer" }}>
                         <div style={{ position: "relative" }}>
                           <I.Avatar userId={user.id} name={user.name || "null"} size={40} />
-                          <span className="search-presence-dot" style={{ position: "absolute", bottom: 0, right: 0, width: 10, height: 10, borderRadius: "50%", background: presenceMap[user.id] === "ONLINE" ? "#2bb673" : "#8e8e93", border: "2px solid var(--surface)" }} />
+                          {presenceMap[user.id] && presenceMap[user.id] !== "HIDDEN" && (
+                            <span className="search-presence-dot" style={{ position: "absolute", bottom: 0, right: 0, width: 10, height: 10, borderRadius: "50%", background: presenceMap[user.id] === "ONLINE" ? "#2bb673" : "#8e8e93", border: "2px solid var(--surface)" }} />
+                          )}
                         </div>
                         <div className="info" style={{ flex: 1, minWidth: 0 }}>
                           <div className="name" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
@@ -723,14 +818,16 @@ socket.off("request.declined", handleRequestDeclined);
                     ))}
                   </>
                 )}
-                {searchedMoreAccounts.length > 0 && (
+                {searchedConnected.length > 0 && (
                   <>
-                    <div className="search-group-title" style={{ fontSize: 11, textTransform: "uppercase", fontWeight: 700, color: "var(--ink-3)", margin: "16px 12px 4px" }}>More Accounts</div>
-                    {searchedMoreAccounts.map(user => (
+                    <div className="search-group-title" style={{ fontSize: 11, textTransform: "uppercase", fontWeight: 700, color: "var(--ink-3)", margin: "16px 12px 4px" }}>Start Messaging</div>
+                    {searchedConnected.map(user => (
                       <div key={user.id} className="search-item" onClick={() => selectSearchResult(user)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: "8px", cursor: "pointer" }}>
                         <div style={{ position: "relative" }}>
                           <I.Avatar userId={user.id} name={user.name || "null"} size={40} />
-                          <span className="search-presence-dot" style={{ position: "absolute", bottom: 0, right: 0, width: 10, height: 10, borderRadius: "50%", background: presenceMap[user.id] === "ONLINE" ? "#2bb673" : "#8e8e93", border: "2px solid var(--surface)" }} />
+                          {presenceMap[user.id] && presenceMap[user.id] !== "HIDDEN" && (
+                            <span className="search-presence-dot" style={{ position: "absolute", bottom: 0, right: 0, width: 10, height: 10, borderRadius: "50%", background: presenceMap[user.id] === "ONLINE" ? "#2bb673" : "#8e8e93", border: "2px solid var(--surface)" }} />
+                          )}
                         </div>
                         <div className="info" style={{ flex: 1, minWidth: 0 }}>
                           <div className="name" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
@@ -738,7 +835,7 @@ socket.off("request.declined", handleRequestDeclined);
                           </div>
                         </div>
                         <button 
-                          onClick={(e) => handleConnectUser(user, e)}
+                          onClick={(e) => { e.stopPropagation(); selectSearchResult(user); }}
                           className="hbtn hbtn--primary hbtn--sm"
                           style={{
                             padding: "6px 12px",
@@ -747,7 +844,7 @@ socket.off("request.declined", handleRequestDeclined);
                             flexShrink: 0
                           }}
                         >
-                          {requestStatuses[user.id] === 'PENDING' ? 'Requested' : 'Connect'}
+                          Message
                         </button>
                       </div>
                     ))}
@@ -769,7 +866,7 @@ socket.off("request.declined", handleRequestDeclined);
                   <div key={t.id} className={`thread ${t.id===activeId && !mobile?"on":""}`} onClick={()=>openThread(t.id)}>
                     <div className="av" style={{ background:"transparent" }}>
                       <I.Avatar userId={other?.userId || other?.id} name={displayName} size={46}/>
-                      <span className={presenceStatus === "ONLINE" ? "online" : "offline"}/>
+                      {presenceStatus !== "HIDDEN" && <span className={presenceStatus === "ONLINE" ? "online" : "offline"}/>}
                     </div>
                     <div className="ti">
                       <div className="tr1">
@@ -789,28 +886,37 @@ socket.off("request.declined", handleRequestDeclined);
               )
             ) : (
               <div style={{ display:"flex", flexDirection:"column", gap:10, padding:"4px" }}>
-                {requests.map(r => {
-                  const displayName = r.sender?.profiles?.display_name || r.sender?.primary_email || "Unknown User";
-                  const headline = r.sender?.profiles?.headline || "";
-                  return (
-                    <div key={r.id} className="req-card">
-                      <I.Avatar userId={r.senderId || r.sender?.id} name={displayName} size={48}/>
-                      <div className="ri">
-                        <div className="n">{displayName}</div>
-                        <div className="d">{headline}</div>
+                {contactsLoading ? (
+                  <div style={{ textAlign: "center", color: "var(--ink-3)", padding: 20 }}>Loading...</div>
+                ) : contactsList.length > 0 ? (
+                  contactsList.map(c => (
+                    <div key={c.userId} className="search-item" onClick={() => selectSearchResult({ id: c.userId, name: c.displayName })} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: "8px", cursor: "pointer" }}>
+                      <div style={{ position: "relative" }}>
+                        <I.Avatar userId={c.userId} name={c.displayName} size={40}/>
+                        {presenceMap[c.userId] && presenceMap[c.userId] !== "HIDDEN" && (
+                          <span className="search-presence-dot" style={{ position: "absolute", bottom: 0, right: 0, width: 10, height: 10, borderRadius: "50%", background: presenceMap[c.userId] === "ONLINE" ? "#2bb673" : "#8e8e93", border: "2px solid var(--surface)" }} />
+                        )}
                       </div>
-                      <div className="ract" style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                        <button className="hbtn hbtn--primary hbtn--sm" onClick={()=>handleAcceptRequest(r.id)}><I.check/></button>
-                        <button className="hbtn hbtn--ghost hbtn--sm" onClick={()=>handleDeclineRequest(r.id)}><I.x/></button>
+                      <div className="info" style={{ flex: 1, minWidth: 0 }}>
+                        <div className="name" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{c.displayName}</div>
+                        <div className="headline" style={{ fontSize: 12, color: "var(--ink-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>{c.headline}</div>
                       </div>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); selectSearchResult({ id: c.userId, name: c.displayName }); }}
+                        className="hbtn hbtn--primary hbtn--sm"
+                        style={{ padding: "6px 12px", fontSize: "12px", borderRadius: "15px", flexShrink: 0 }}
+                      >
+                        Message
+                      </button>
                     </div>
-                  );
-                })}
-              <div style={{ fontSize:12.5, color:"var(--ink-3)", lineHeight:1.5, padding:"8px 6px" }}>
-                Messaging requests need your approval before you can start a conversation.
+                  ))
+                ) : (
+                  <div style={{ textAlign: "center", color: "var(--ink-3)", padding: "40px 20px", fontSize: "13.5px" }}>
+                    No contacts found.
+                  </div>
+                )}
               </div>
-            </div>
-          )
+            )
         )}
         </div>
       </div>
@@ -829,6 +935,7 @@ socket.off("request.declined", handleRequestDeclined);
         const isDM = active.type === "DIRECT" || active.type === "dm" || !active.type;
         const isDMRestricted = isDM && chatSettings.allowDirectMessaging === false;
         const shareCommon = other ? checkCommonGroupOrEvent(other) : false;
+        const isNoOne = isDM && other?.messagingRestriction === 'no_one';
         const hideCompose = isDMRestricted && !shareCommon;
 
         return (
@@ -846,7 +953,7 @@ socket.off("request.declined", handleRequestDeclined);
               >
                 <div style={{ position:"relative" }}>
                   <I.Avatar userId={other?.userId || other?.id} name={displayName} size={40}/>
-                  <span className={presenceStatus === "ONLINE" ? "online" : "offline"} style={{ position:"absolute", bottom:0, right:0, width:11, height:11, borderRadius:"50%", background: presenceStatus === "ONLINE" ? "#2bb673" : "#8e8e93", border:"2px solid var(--surface)" }}/>
+                  {presenceStatus !== "HIDDEN" && <span className={presenceStatus === "ONLINE" ? "online" : "offline"} style={{ position:"absolute", bottom:0, right:0, width:11, height:11, borderRadius:"50%", background: presenceStatus === "ONLINE" ? "#2bb673" : "#8e8e93", border:"2px solid var(--surface)" }}/>}
                 </div>
                 <div className="ci">
                   <div className="n">{displayName}</div>
@@ -901,7 +1008,7 @@ socket.off("request.declined", handleRequestDeclined);
                     {/* Hover Actions */}
                     {!isEditing && (
                       <div className="hover-actions">
-                        <button 
+                        <div 
                           className="hover-action-btn" 
                           data-tooltip="More"
                           onClick={(e) => {
@@ -945,7 +1052,7 @@ socket.off("request.declined", handleRequestDeclined);
                               )}
                             </div>
                           )}
-                        </button>
+                        </div>
                         <button className="hover-action-btn" data-tooltip="Reply" onClick={() => setReplyingTo(m)}>
                           <I.reply style={{ width: 14, height: 14 }} />
                         </button>
@@ -1092,7 +1199,11 @@ socket.off("request.declined", handleRequestDeclined);
               </div>
             )}
 
-            {hideCompose ? (
+            {isNoOne ? (
+              <div className="conv-compose" style={{ justifyContent: "center", color: "var(--ink-3)", fontStyle: "italic", fontSize: "13.5px" }}>
+                User no longer accept messages
+              </div>
+            ) : hideCompose ? (
               <div className="dm-restricted-banner" style={{
                 padding: "20px",
                 margin: "15px",

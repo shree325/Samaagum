@@ -1,6 +1,7 @@
 import { Server, Socket } from "socket.io";
 import prisma from "../config/prisma";
 import { DEFAULT_CHAT_SETTINGS } from "../settings-library/settingsSeeder";
+import { conversationReadService } from './ConversationReadService';
 
 let chatNamespace: any = null;
 
@@ -13,6 +14,77 @@ async function getChatSettings() {
   }
   return DEFAULT_CHAT_SETTINGS;
 }
+
+async function getEffectivePresence(userId: string): Promise<{ status: string; lastSeenAt: Date | null }> {
+  try {
+    const profile = await prisma.profiles.findUnique({
+      where: { user_id: userId },
+      select: { privacy_prefs: true }
+    });
+    const privacy = (profile?.privacy_prefs as any) || {};
+    const showActiveStatus = privacy.showActiveStatus !== false;
+
+    const presence = await prisma.presences.findUnique({
+      where: { user_id: userId },
+      select: { active_connections: true, last_seen_at: true }
+    });
+
+    const activeConnections = presence?.active_connections || 0;
+    const lastSeen = presence?.last_seen_at || null;
+
+    if (!showActiveStatus) {
+      return { status: "HIDDEN", lastSeenAt: null };
+    }
+
+    if (activeConnections > 0) {
+      return { status: "ONLINE", lastSeenAt: null };
+    }
+
+    return { status: "OFFLINE", lastSeenAt: lastSeen };
+  } catch (err) {
+    console.error(`❌ Error in getEffectivePresence for ${userId}:`, err);
+    return { status: "OFFLINE", lastSeenAt: null };
+  }
+}
+
+async function broadcastPresence(userId: string) {
+  if (!chatNamespace) return;
+  try {
+    const eff = await getEffectivePresence(userId);
+    
+    // Find all conversation IDs this user is in
+    const memberships = await prisma.conversation_participants.findMany({
+      where: { user_id: userId },
+      select: { conversation_id: true }
+    });
+    const conversationIds = memberships.map(m => m.conversation_id);
+
+    if (conversationIds.length > 0) {
+      // Find all distinct participants in those conversations (excluding the user themselves)
+      const peers = await prisma.conversation_participants.findMany({
+        where: {
+          conversation_id: { in: conversationIds },
+          user_id: { not: userId }
+        },
+        select: { user_id: true }
+      });
+      const peerIds = Array.from(new Set(peers.map(p => p.user_id)));
+
+      // Emit to each peer's private room
+      for (const peerId of peerIds) {
+        chatNamespace.to(`user:${peerId}`).emit("presence.updated", {
+          userId,
+          status: eff.status,
+          lastSeenAt: eff.lastSeenAt
+        });
+      }
+    }
+    console.log(`📡 Broadcasted effective presence for ${userId}: ${eff.status}`);
+  } catch (err) {
+    console.error(`❌ Error broadcasting presence for ${userId}:`, err);
+  }
+}
+
 
 async function getUserRoles(userId: string): Promise<string[]> {
   const roles = await prisma.$queryRawUnsafe<{ key: string }[]>(
@@ -132,6 +204,7 @@ export async function startMessaging(io: Server): Promise<void> {
     )
     .then(async () => {
       console.log(`✅ Presence on connect updated for user: ${userId}`);
+      await broadcastPresence(userId);
       
       // Mark undelivered messages as delivered
       try {
@@ -306,6 +379,25 @@ export async function startMessaging(io: Server): Promise<void> {
           isFeatureAllowed = settings.allowDirectMessaging;
           allowedRoles = settings.rolePermissions?.directMessaging || [];
           featureName = "Direct messaging";
+
+          // Enforce "No One" messaging preference for existing direct conversations
+          const otherParticipant = await prisma.conversation_participants.findFirst({
+            where: {
+              conversation_id: conversationId,
+              user_id: { not: userId }
+            }
+          });
+          
+          if (otherParticipant) {
+            const targetProfile = await prisma.profiles.findUnique({
+              where: { user_id: otherParticipant.user_id },
+              select: { messaging_restriction: true }
+            });
+            if (targetProfile?.messaging_restriction === 'no_one') {
+              if (callback) callback({ success: false, error: "This user has disabled direct messages." });
+              return;
+            }
+          }
 
           if (!isFeatureAllowed) {
             const isGroupEnabled = settings.allowGroupChat;
@@ -617,7 +709,7 @@ export async function startMessaging(io: Server): Promise<void> {
       }
     });
 
-    // Mark conversation messages as read
+    // Mark conversation messages as read + sync notifications
     socket.on("conversation.read", async (payload: { conversationId: string }, callback: any) => {
       try {
         const { conversationId } = payload;
@@ -626,58 +718,27 @@ export async function startMessaging(io: Server): Promise<void> {
           return;
         }
 
-        const now = new Date();
+        const result = await conversationReadService.readConversation(userId, conversationId);
 
-        const messagesToRead = await prisma.messages.findMany({
-          where: {
-            conversation_id: conversationId,
-            sender_user_id: { not: userId },
-            is_deleted: false
-          },
-          select: { id: true }
-        });
-
-        const updates = [];
-        if (messagesToRead.length > 0) {
-          for (const msg of messagesToRead) {
-            await prisma.message_receipts.upsert({
-              where: {
-                message_id_user_id: {
-                  message_id: msg.id,
-                  user_id: userId
-                }
-              },
-              create: {
-                message_id: msg.id,
-                user_id: userId,
-                delivered_at: now,
-                seen_at: now
-              },
-              update: {
-                seen_at: now
-              }
-            });
-
-            await prisma.$executeRawUnsafe(
-              `UPDATE message_receipts 
-               SET delivered_at = COALESCE(delivered_at, $1), seen_at = $1 
-               WHERE message_id = $2 AND user_id = $3`,
-              now, msg.id, userId
-            );
-
-            updates.push({
-              messageId: msg.id,
-              conversationId,
-              userId,
-              deliveredAt: now,
-              seenAt: now
-            });
-          }
-
-          chatNamespace.to(`conversation:${conversationId}`).emit("receipt.updated", updates);
+        // Emit read receipts to the conversation room
+        if (result.receiptUpdates.length > 0) {
+          chatNamespace
+            .to(`conversation:${conversationId}`)
+            .emit("receipt.updated", result.receiptUpdates);
         }
 
-        if (callback) callback({ success: true });
+        // Broadcast notification state to ALL of the user's sessions
+        // Targets user:{userId} so every connected device gets the update.
+        chatNamespace.to(`user:${userId}`).emit("notification:count", {
+          count: result.unreadCount,
+        });
+        chatNamespace.to(`user:${userId}`).emit("notification:updated", {
+          conversationId,
+          type: "message_received",
+          notificationsSynced: result.notificationsSynced,
+        });
+
+        if (callback) callback({ success: true, data: { unreadCount: result.unreadCount } });
       } catch (err: any) {
         if (callback) callback({ success: false, error: err.message });
       }
@@ -703,9 +764,16 @@ export async function startMessaging(io: Server): Promise<void> {
            WHERE user_id = $1`,
           userId
         );
+        await broadcastPresence(userId);
       } catch (err) {
         console.error(`❌ Error updating presence on disconnect for ${userId}:`, err);
       }
+    });
+
+    // Handle privacy update event
+    socket.on("privacy.update", async () => {
+      console.log(`🔒 Received privacy.update from user ${userId}`);
+      await broadcastPresence(userId);
     });
   });
 
