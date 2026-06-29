@@ -3,14 +3,15 @@ import { IBaseRepository } from "./IBaseRepository";
 export interface IGroup {
     entity_id: string;
     name: string;
-    slug: string;
-    join_mode: 'open' | 'approval_required' | 'invite_only';
+    slug: string | null;
+    description?: string | null;
+    category?: string | null;
+    icon?: string | null;
+    cover?: string | null;
+    banner?: string | null;
+    join_mode: 'open' | 'approval' | 'invite_only';
     join_form_id?: string | null;
-    listed: boolean;
-    subtype: 'community' | 'org' | 'group';
-    scope: 'public' | 'private';
-    created_at?: Date;
-    updated_at?: Date;
+    listed: 'listed' | 'unlisted';
 }
 
 export interface IR_groups extends IBaseRepository<IGroup> {

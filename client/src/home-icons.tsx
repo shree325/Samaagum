@@ -2,7 +2,7 @@
    Samaagum Home — icons, logo, avatar helpers
    Exports to window for use across view files.
    ============================================================ */
-const { useState, useRef, useEffect, useCallback, useMemo, Fragment } = React;
+var { useState, useRef, useEffect, useCallback, useMemo, Fragment } = React;
 
 /* ---------------- Icons (stroke 1.8, 24 grid) ---------------- */
 const I = {
@@ -29,6 +29,7 @@ const I = {
   bookmarkF:(p)=> <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" {...p}><path d="M6 4h12v16l-6-4-6 4z"/></svg>,
   share:   (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><circle cx="6" cy="12" r="2.4" stroke="currentColor" strokeWidth="1.8"/><circle cx="17" cy="6" r="2.4" stroke="currentColor" strokeWidth="1.8"/><circle cx="17" cy="18" r="2.4" stroke="currentColor" strokeWidth="1.8"/><path d="M8.2 11l6.6-3.6M8.2 13l6.6 3.6" stroke="currentColor" strokeWidth="1.8"/></svg>,
   check:   (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M5 12.5l4.5 4.5L19 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  trash:   (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   x:       (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>,
   msg:     (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H9l-4 3.5V16H6a2 2 0 01-2-2z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/></svg>,
   comment: (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H9l-4 3.5V16H6a2 2 0 01-2-2z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"/></svg>,

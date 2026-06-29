@@ -18,6 +18,66 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
     }
   });
 
+  // Get all active cities/locations
+  fastify.get('/cities', async (request, reply) => {
+    try {
+      const cities = await prisma.city_controls.findMany({
+        where: { is_active: true },
+        orderBy: { city_name: 'asc' },
+        select: {
+          geoname_id: true,
+          city_name: true,
+          state_name: true,
+          country_name: true,
+          latitude: true,
+          longitude: true
+        }
+      });
+      return {
+        success: true,
+        data: cities.map(c => ({
+          ...c,
+          geoname_id: c.geoname_id.toString()
+        }))
+      };
+    } catch (error: any) {
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to fetch cities.' });
+    }
+  });
+
+  // Groups hierarchy for access control selector
+  fastify.get('/groups-hierarchy', async (request, reply) => {
+    try {
+      const groups = await prisma.groups.findMany({
+        where: { entities: { visibility: 'public' } },
+        include: { entities: { select: { visibility: true } } },
+        orderBy: { name: 'asc' }
+      });
+
+      const published = groups.filter((g: any) => {
+        const s = (g.settings as any) || {};
+        return !s.isDraft && !s.isArchived;
+      });
+
+      const byCategory: { [key: string]: any[] } = {};
+      for (const g of published) {
+        const cat = g.category || 'General';
+        if (!byCategory[cat]) byCategory[cat] = [];
+        byCategory[cat].push({ id: g.entity_id, name: g.name });
+      }
+
+      const communities = Object.entries(byCategory).map(([name, grps]) => ({
+        id: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        name,
+        groups: grps
+      }));
+
+      return { success: true, data: { communities } };
+    } catch (error: any) {
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to fetch groups hierarchy' });
+    }
+  });
+
   // Virtual Card fetch
   fastify.get('/card/:username', async (request: any, reply: any) => {
     try {

@@ -65,4 +65,35 @@ export const uploadRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
       return reply.status(500).send({ success: false, message: 'Upload failure error or Database update failure error', error: error.message });
     }
   });
+
+  fastify.post('/upload-group-media', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+    try {
+      if (!request.user || !request.user.id) {
+        return reply.status(401).send({ success: false, message: 'Unauthorized' });
+      }
+
+      const data = await request.file();
+      if (!data) {
+        return reply.status(400).send({ success: false, message: 'Missing file error' });
+      }
+
+      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!validTypes.includes(data.mimetype)) {
+        return reply.status(400).send({ success: false, message: 'Invalid image format error' });
+      }
+
+      const buffer = await data.toBuffer();
+      const base64Str = buffer.toString('base64');
+      const imageUrl = `data:${data.mimetype};base64,${base64Str}`;
+
+      return {
+        success: true,
+        message: 'Upload successful',
+        imageUrl
+      };
+    } catch (error: any) {
+      console.error('Group Media Upload Error:', error);
+      return reply.status(500).send({ success: false, message: 'Upload failed', error: error.message });
+    }
+  });
 };

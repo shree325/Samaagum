@@ -8,14 +8,15 @@ export class R_groups extends PostgresBaseRepository<IGroup> implements IR_group
     }
 
     async findBySlug(slug: string): Promise<IGroup | null> {
-        const query = `SELECT * FROM groups WHERE slug = $1 LIMIT 1`;
-        const { rows } = await prisma.query(query, [slug]);
-        return rows[0] || null;
+        return (this.dbModel as any).findFirst({
+            where: { slug }
+        });
     }
 
     async getPublicGroups(): Promise<IGroup[]> {
-        const query = `SELECT * FROM groups WHERE scope = 'public' AND listed = true`;
-        const { rows } = await prisma.query(query);
-        return rows;
+        return (this.dbModel as any).findMany({
+            where: { listed: 'listed' },
+            include: { entities: { select: { visibility: true } } }
+        });
     }
 }

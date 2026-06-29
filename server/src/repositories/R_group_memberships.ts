@@ -5,73 +5,56 @@ export class R_group_memberships implements IR_group_memberships {
   constructor(private db: PrismaClient) {}
 
   async create(gm: IGroupMembership): Promise<IGroupMembership> {
-    const query = `
-      INSERT INTO group_memberships (bu_id, par_row_id, user_id, role, status, x_data, created_by, last_upd_by)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING *;
-    `;
-    const values = [
-      gm.bu_id, gm.par_row_id, gm.user_id, gm.role || 'member', gm.status || 'active',
-      gm.x_data ? JSON.stringify(gm.x_data) : null, gm.created_by || null, gm.last_upd_by || null
-    ];
-    const { rows } = await this.db.query(query, values);
-    return rows[0];
+    const data: any = {
+      tenant_id: gm.tenant_id,
+      group_id: gm.group_id,
+      user_id: gm.user_id,
+      state: gm.state || 'pending',
+      form_response_id: gm.form_response_id || null,
+      joined_at: gm.joined_at || null,
+    };
+    return (this.db.group_memberships as any).create({ data });
   }
 
-  async getById(rowId: string): Promise<IGroupMembership | null> {
-    const { rows } = await this.db.query(`SELECT * FROM group_memberships WHERE row_id = $1`, [rowId]);
-    return rows[0] || null;
+  async getById(id: string): Promise<IGroupMembership | null> {
+    return (this.db.group_memberships as any).findUnique({ where: { id } });
   }
 
-  async getByGroupAndUser(groupId: string, userId: string): Promise<IGroupMembership | null> {
-    const { rows } = await this.db.query(
-      `SELECT * FROM group_memberships WHERE par_row_id = $1 AND user_id = $2`,
-      [groupId, userId]
-    );
-    return rows[0] || null;
+  async getByGroupAndUser(group_id: string, user_id: string): Promise<IGroupMembership | null> {
+    return (this.db.group_memberships as any).findUnique({
+      where: {
+        group_id_user_id: { group_id, user_id }
+      }
+    });
   }
 
-  async getByGroup(groupId: string): Promise<IGroupMembership[]> {
-    const { rows } = await this.db.query(
-      `SELECT * FROM group_memberships WHERE par_row_id = $1 ORDER BY created DESC`,
-      [groupId]
-    );
-    return rows;
+  async getByGroup(group_id: string): Promise<IGroupMembership[]> {
+    return (this.db.group_memberships as any).findMany({
+      where: { group_id },
+      orderBy: { created_at: 'desc' }
+    });
   }
 
-  async getByUser(userId: string): Promise<IGroupMembership[]> {
-    const { rows } = await this.db.query(
-      `SELECT * FROM group_memberships WHERE user_id = $1 ORDER BY created DESC`,
-      [userId]
-    );
-    return rows;
+  async getByUser(user_id: string): Promise<IGroupMembership[]> {
+    return (this.db.group_memberships as any).findMany({
+      where: { user_id },
+      orderBy: { created_at: 'desc' }
+    });
   }
 
-  async update(rowId: string, gm: Partial<IGroupMembership>): Promise<IGroupMembership | null> {
-    const query = `
-      UPDATE group_memberships
-      SET role = COALESCE($1, role),
-          status = COALESCE($2, status),
-          x_data = COALESCE($3, x_data),
-          last_upd = now(),
-          last_upd_by = $4,
-          modification_num = modification_num + 1
-      WHERE row_id = $5
-      RETURNING *;
-    `;
-    const values = [
-      gm.role || null,
-      gm.status || null,
-      gm.x_data ? JSON.stringify(gm.x_data) : null,
-      gm.last_upd_by || null,
-      rowId
-    ];
-    const { rows } = await this.db.query(query, values);
-    return rows[0] || null;
+  async update(id: string, gm: Partial<IGroupMembership>): Promise<IGroupMembership | null> {
+    return (this.db.group_memberships as any).update({
+      where: { id },
+      data: gm
+    });
   }
 
-  async delete(rowId: string): Promise<boolean> {
-    const result = await this.db.query(`DELETE FROM group_memberships WHERE row_id = $1`, [rowId]);
-    return (result.rowCount ?? 0) > 0;
+  async delete(id: string): Promise<boolean> {
+    try {
+      await (this.db.group_memberships as any).delete({ where: { id } });
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

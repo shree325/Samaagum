@@ -163,7 +163,23 @@ function App() {
   }, []);
 
   // navigation stack
-  const [stack, setStack] = useState([{ view: "home", param: null }]);
+  const [stack, setStack] = useState(() => {
+    const path = window.location.pathname;
+    const hash = window.location.hash;
+    
+    // Support path-based invite routing
+    if (path.startsWith('/groups/invite/')) {
+       const token = path.split('/groups/invite/')[1];
+       if (token) return [{ view: "invite", param: token }];
+    }
+    // Support hash-based invite routing as fallback
+    if (hash.startsWith('#/groups/invite/')) {
+       const token = hash.split('#/groups/invite/')[1];
+       if (token) return [{ view: "invite", param: token }];
+    }
+    
+    return [{ view: "home", param: null }];
+  });
   const cur = stack[stack.length - 1];
   const go = useCallback((view, param = null) => {
     setStack(s => {
@@ -181,8 +197,6 @@ function App() {
 
   // engagement state
   const [saved, toggleSave] = useSet([]);
-  const [joined, toggleJoin] = useSet(["g1","g2","g4"]);
-  const [pending, togglePending] = useSet([]);
   const [connected, toggleConnect] = useSet([]);
   const [registered, , registerAdd] = useSet(["e1", "e2", "e4"]);
   const [myTickets, setMyTickets] = useState(MY_TICKETS);
@@ -245,7 +259,6 @@ function App() {
   }, []);
 
   const [createdEvents, setCreatedEvents] = useState(() => [EVENTS[0]]);
-  const [createdGroups, setCreatedGroups] = useState(() => [GROUPS[1]]);
 
   const addCreatedEvent = useCallback((ev) => {
     setCreatedEvents(prev => {
@@ -256,29 +269,12 @@ function App() {
     });
   }, []);
 
-  const addCreatedGroup = useCallback((g) => {
-    setCreatedGroups(prev => {
-      if (prev.some(x => x.id === g.id)) {
-        return prev.map(x => x.id === g.id ? g : x);
-      }
-      return [g, ...prev];
-    });
-  }, []);
-
-  const handleJoin = useCallback((g) => {
-    if (g.joinMode === "approval") {
-      togglePending(g.id);
-    } else {
-      toggleJoin(g.id);
-    }
-  }, [toggleJoin, togglePending]);
-
   const counts = { notifs: 3, messages: 2 };
   const st = {
-    saved, toggleSave, joined, pending, toggleJoin: handleJoin, connected, toggleConnect, registered, register, city,
+    saved, toggleSave, connected, toggleConnect, registered, register, city,
     myTickets, setMyTickets, waitlisted, toggleWaitlist, addClaimedTicket,
-    createdEvents, setCreatedEvents, createdGroups, setCreatedGroups,
-    addCreatedEvent, addCreatedGroup,
+    createdEvents, setCreatedEvents,
+    addCreatedEvent,
     subscription, setSubscription
   };
 
@@ -303,10 +299,11 @@ function App() {
 
   const renderView = () => {
     const v = cur.view;
+    if (v === "invite") return <InviteLanding token={cur.param} go={go} />;
     if (v === "home") return <HomeFeed st={st} go={go} />;
     if (v === "discover") return <Discover st={st} go={go} />;
     if (v === "events") return <MyTickets st={st} go={go} />;
-    if (v === "groups") return <MyGroups st={st} go={go} />;
+    if (v === "groups") return <MyGroups st={st} go={go} param={cur.param} />;
     if (v === "event") return <EventDetail ev={cur.param} st={st} go={go} />;
     if (v === "group") return <GroupDetail group={cur.param} st={st} go={go} />;
     if (v === "profile") return <Profile st={st} go={go} />;
@@ -316,9 +313,8 @@ function App() {
     if (v === "create-event") return <CreateEvent go={go} mobile={mobile} st={st} />;
     if (v === "edit-event") return <CreateEvent editEv={cur.param} go={go} mobile={mobile} st={st} />;
     if (v === "create-group") return <CreateGroup go={go} mobile={mobile} st={st} />;
-    if (v === "edit-group") return <CreateGroup editGroup={cur.param} go={go} mobile={mobile} st={st} />;
+    if (v === "edit-group") return <CreateGroup mode="edit" editGroup={cur.param} go={go} mobile={mobile} st={st} />;
     if (v === "event-dashboard") return <EventDashboard ev={cur.param} st={st} go={go} />;
-    if (v === "group-dashboard") return <GroupDashboard group={cur.param} st={st} go={go} />;
     if (v === "ticket") return <TicketDetail tkt={cur.param} st={st} go={go} />;
     if (v === "waitlist") return <Waitlist ev={cur.param} st={st} go={go} />;
     if (v === "claim") return <ClaimFlow st={st} go={go} />;

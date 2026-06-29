@@ -5102,32 +5102,39 @@ function CategoriesView({ categories, setCategories, tags, setTags, showToast, l
     });
   };
 
-  const toggleStatus = (id, e) => {
+  const toggleStatus = async (id, e) => {
     e.stopPropagation();
     const cat = categories.find(c => c.id === id);
     if (!cat) return;
 
     setLoadingToggles(prev => ({ ...prev, [id]: true }));
 
-    setTimeout(() => {
-      const oldStatus = cat.status;
-      const nextStatus = cat.status === 'active' ? 'inactive' : 'active';
+    const oldStatus = cat.status;
+    const nextStatus = cat.status === 'active' ? 'inactive' : 'active';
 
-      setCategories(prev => prev.map(c => c.id === id ? { ...c, status: nextStatus } : c));
-      setLoadingToggles(prev => ({ ...prev, [id]: false }));
+    try {
+      const res = await adminApi.categories.saveCategory({ status: nextStatus }, id);
+      if (res && res.success) {
+        setCategories(prev => prev.map(c => c.id === id ? { ...c, status: nextStatus } : c));
+        logAction(user?.email || 'Admin', `Updated category ${cat.name} status from ${oldStatus} to ${nextStatus}`);
+        showToast(`${cat.name} is now ${nextStatus}`, 'success');
 
-      logAction(user?.email || 'Admin', `Updated category ${cat.name} status from ${oldStatus} to ${nextStatus}`);
-      showToast(`${cat.name} is now ${nextStatus}`, 'success');
-
-      const updatedList = categories.map(c => c.id === id ? { ...c, status: nextStatus } : c);
-      localStorage.setItem('samaagum_admin_categories', JSON.stringify(updatedList));
-      if (nextStatus === 'inactive' && tags && setTags) {
-        const updatedTags = tags.map(t => t.category === cat.name ? { ...t, status: 'inactive' } : t);
-        setTags(updatedTags);
-        localStorage.setItem('samaagum_admin_tags', JSON.stringify(updatedTags));
-        logAction('System', `Disabled all child tags under inactive category "${cat.name}".`);
+        const updatedList = categories.map(c => c.id === id ? { ...c, status: nextStatus } : c);
+        localStorage.setItem('samaagum_admin_categories', JSON.stringify(updatedList));
+        if (nextStatus === 'inactive' && tags && setTags) {
+          const updatedTags = tags.map(t => t.category === cat.name ? { ...t, status: 'inactive' } : t);
+          setTags(updatedTags);
+          localStorage.setItem('samaagum_admin_tags', JSON.stringify(updatedTags));
+          logAction('System', `Disabled all child tags under inactive category "${cat.name}".`);
+        }
+      } else {
+        showToast("Failed to update status in database", "warning");
       }
-    }, 500);
+    } catch (err) {
+      showToast("Error updating category: " + err.message, "danger");
+    } finally {
+      setLoadingToggles(prev => ({ ...prev, [id]: false }));
+    }
   };
 
   const openPanel = (cat = null) => {

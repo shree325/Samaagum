@@ -1,28 +1,21 @@
 export interface IGroupMembership {
-  row_id?: string;
-  bu_id: string;
-  par_row_id: string; // Group ID
+  id?: string;
+  tenant_id: string;
+  group_id: string;
   user_id: string;
-  role?: string;
-  status?: string;
-  x_data?: Record<string, unknown> | null;
-
-  created?: Date;
-  created_by?: string | null;
-  last_upd?: Date;
-  last_upd_by?: string | null;
-  modification_num?: number;
-  conflict_id?: string;
-  db_last_upd?: Date;
-  db_last_upd_src?: string;
+  state: 'pending' | 'active' | 'rejected' | 'left' | 'removed';
+  form_response_id?: string | null;
+  joined_at?: Date | null;
+  created_at?: Date;
+  updated_at?: Date;
 }
 
 export interface IR_group_memberships {
   create(membership: IGroupMembership): Promise<IGroupMembership>;
-  getById(rowId: string): Promise<IGroupMembership | null>;
+  getById(id: string): Promise<IGroupMembership | null>;
   getByGroupAndUser(groupId: string, userId: string): Promise<IGroupMembership | null>;
   getByGroup(groupId: string): Promise<IGroupMembership[]>;
   getByUser(userId: string): Promise<IGroupMembership[]>;
-  update(rowId: string, membership: Partial<IGroupMembership>): Promise<IGroupMembership | null>;
-  delete(rowId: string): Promise<boolean>;
+  update(id: string, membership: Partial<IGroupMembership>): Promise<IGroupMembership | null>;
+  delete(id: string): Promise<boolean>;
 }

@@ -50,7 +50,7 @@ function FeedFilters({ cat, setCat, quick, setQuick }) {
 function HomeFeed({ st, go }) {
   const [cat, setCat] = useState("All");
   const [quick, setQuick] = useState([]);
-  const { saved, toggleSave, joined, toggleJoin, connected, toggleConnect, registered, city } = st;
+  const { saved, toggleSave, connected, toggleConnect, registered, city } = st;
 
   const filtered = EVENTS.filter(e => {
     if (cat!=="All" && e.cat!==cat) return false;
@@ -110,7 +110,7 @@ function HomeFeed({ st, go }) {
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
               {TRENDING.filter(g => g.visibility !== "hidden").map((g,i) => (
                 <GroupRow key={g.id} g={g} rank={i+1} onOpen={(g)=>go("group", g)}
-                  joined={joined.has(g.id) ? true : st.pending.has(g.id) ? "pending" : false} onJoin={()=>toggleJoin(g)} />
+                  joined={false} onJoin={()=>go("group", g)} />
               ))}
             </div>
           </div>
@@ -120,7 +120,7 @@ function HomeFeed({ st, go }) {
         <div className="section">
           <SectionBar title="Communities near you" onMore={()=>go("discover")} />
           <div className="ev-grid">
-            {NEAR.filter(g => g.visibility !== "hidden").map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={joined.has(g.id) ? true : st.pending.has(g.id) ? "pending" : false} onJoin={()=>toggleJoin(g)} />)}
+            {NEAR.filter(g => g.visibility !== "hidden").map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={false} onJoin={()=>go("group", g)} />)}
           </div>
         </div>
 
@@ -138,11 +138,56 @@ function HomeFeed({ st, go }) {
 
 /* ---------------- Discover (browse) ---------------- */
 function Discover({ st, go }) {
-  const [tab, setTab] = useState("events");
+  const [tab, setTab] = useState("groups");
   const [cat, setCat] = useState("All");
-  const { saved, toggleSave, joined, pending, toggleJoin, registered } = st;
+  const { saved, toggleSave, registered } = st;
   const evs = EVENTS.filter(e => cat==="All" || e.cat===cat);
-  const grps = GROUPS.filter(g => g.visibility !== "hidden" && (cat==="All" || g.cat===cat));
+
+  const [dbGroups, setDbGroups] = useState([]);
+  const [categoriesList, setCategoriesList] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+    
+    const fetchCategories = async () => {
+      try {
+        const res = await fetch(`${apiBase}/api/public/categories`);
+        const data = await res.json();
+        if (data.success && data.data) {
+          setCategoriesList(data.data.filter((c: any) => c.status === 'active' && !c.is_deleted));
+        }
+      } catch (e) {
+        console.error("Failed to fetch categories", e);
+      }
+    };
+    fetchCategories();
+
+    const fetchGroups = async () => {
+      try {
+        const res = await fetch(`${apiBase}/api/groups`);
+        const data = await res.json();
+        if (data.success) {
+          setDbGroups(data.data || []);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchGroups();
+
+    if (window.io) {
+      const socketUrl = apiBase ? `${apiBase}/groups` : "/groups";
+      const socket = window.io(socketUrl, { transports: ['websocket', 'polling'] });
+      socket.on('groups_updated', () => fetchGroups());
+      return () => socket.disconnect();
+    }
+  }, []);
+
+  const grps = dbGroups.filter(g => g.visibility !== "hidden" && (cat==="All" || g.category===cat || g.cat===cat));
+
   return (
     <div className="scroll">
       <div className="page wide view-enter">
@@ -157,7 +202,12 @@ function Discover({ st, go }) {
           <button className={tab==="groups"?"on":""} onClick={()=>setTab("groups")}>Groups</button>
         </div>
         <div className="filterbar" style={{ marginBottom:24 }}>
-          {CATS.map(([name]) => <FilterChip key={name} active={cat===name} onClick={()=>setCat(name)}>{name}</FilterChip>)}
+          <FilterChip active={cat==="All"} onClick={()=>setCat("All")}>All</FilterChip>
+          {categoriesList.map((c: any) => (
+            <FilterChip key={c.id} active={cat===c.name} onClick={()=>setCat(c.name)}>
+              {c.icon_value ? `${c.icon_value} ` : ""}{c.name}
+            </FilterChip>
+          ))}
         </div>
         {tab==="events" ? (
           <div className="ev-grid">
@@ -165,7 +215,7 @@ function Discover({ st, go }) {
           </div>
         ) : (
           <div className="ev-grid">
-            {grps.map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={joined.has(g.id) ? true : pending.has(g.id) ? "pending" : false} onJoin={()=>toggleJoin(g)} />)}
+            {loading ? <div style={{ color: "var(--ink-3)", padding: 20 }}>Loading groups...</div> : grps.map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={false} onJoin={()=>go("group", g)} />)}
           </div>
         )}
       </div>
