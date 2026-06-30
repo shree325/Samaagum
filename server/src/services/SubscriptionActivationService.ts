@@ -112,7 +112,7 @@ export class SubscriptionActivationService {
                             state: 'active'
                         },
                         data: {
-                            state: 'inactive',
+                            state: 'cancelled',
                             updated_at: new Date()
                         }
                     });
@@ -288,7 +288,7 @@ export class SubscriptionActivationService {
                     // Deactivate existing active subscriptions
                     await tx.subscriptions.updateMany({
                         where: { owner_entity_id: userEntity.id, state: 'active' },
-                        data: { state: 'inactive', updated_at: new Date() }
+                        data: { state: 'cancelled', updated_at: new Date() }
                     });
 
                     // Create new active subscription mirroring the target order dates
