@@ -219,7 +219,6 @@ function GroupDetail({ group, st, go }) {
   const { joined, pending, toggleJoin } = st;
   const isJoined = joined.has(g.id);
   const isPending = pending.has(g.id);
-  const isOwner = ME.name === g.owner;
 
   const chatSettings = st.chatSettings || {
     allowSiteMessaging: true,

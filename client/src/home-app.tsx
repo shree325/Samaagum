@@ -420,6 +420,9 @@ function App() {
 
   // engagement state
   const [saved, toggleSave] = useSet([]);
+  const [joined, toggleJoin] = useSet(["g1", "g2", "g4"]);
+  const [pending, togglePending] = useSet([]);
+  const [createdGroups, setCreatedGroups] = useState(() => [GROUPS[1]]);
   const [connected, toggleConnect] = useSet([]);
   const [registered, , registerAdd] = useSet(["e1", "e2", "e4"]);
   const [myTickets, setMyTickets] = useState(MY_TICKETS);
@@ -510,7 +513,7 @@ function App() {
   }, [toggleJoin, togglePending]);
 
   const st = {
-    saved, toggleSave, connected, toggleConnect, registered, register, city,
+    saved, toggleSave, joined, pending, toggleJoin: handleJoin, connected, toggleConnect, registered, register, city,
     myTickets, setMyTickets, waitlisted, toggleWaitlist, addClaimedTicket,
     createdEvents, setCreatedEvents, createdGroups, setCreatedGroups,
     addCreatedEvent, addCreatedGroup,

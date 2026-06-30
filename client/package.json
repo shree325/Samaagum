@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "npx -y kill-port 8080 && npx -y serve -l 8080",
-    "start": "npx -y kill-port 8080 && npx -y serve -l 8080",
-    "build": "echo 'No build step required for client'"
+    "dev": "npx -y kill-port 8080 && npm run build && npx concurrently \"npx esbuild \\\"src/**/*.tsx\\\" \\\"src/**/*.ts\\\" --outdir=dist --watch\" \"npx -y serve -l 8080\"",
+    "start": "npx -y kill-port 8080 && npm run build && npx -y serve -l 8080",
+    "build": "npx esbuild \"src/**/*.tsx\" \"src/**/*.ts\" --outdir=dist"
   },
   "dependencies": {
     "qrcode": "^1.5.4",
