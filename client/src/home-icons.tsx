@@ -62,7 +62,7 @@ const I = {
   sun:     (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.8"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
   moon:    (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M20 13a8 8 0 11-9-9 6 6 0 009 9z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/></svg>,
   google:  (p) => <svg viewBox="0 0 24 24" width="18" height="18" {...p}><path fill="#EA4335" d="M12 10.2v3.9h5.5c-.24 1.4-1.7 4.1-5.5 4.1-3.3 0-6-2.7-6-6.1s2.7-6.1 6-6.1c1.9 0 3.1.8 3.9 1.5l2.6-2.6C17.1 2.6 14.8 1.6 12 1.6 6.7 1.6 2.4 5.9 2.4 12s4.3 10.4 9.6 10.4c5.5 0 9.2-3.9 9.2-9.4 0-.6-.1-1.1-.2-1.6H12z"/></svg>,
-  lock:    (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><rect x="5" y="11" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.8"/><path d="M12 17v-2M8 11V7a4 4 0 018 0v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
+  lock:    (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><rect x="5" y="11" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.8"/><path d="M8 11V7a4 4 0 118 0v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   eyeOff:  (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24M1 1l22 22" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>,
 };
 
@@ -101,17 +101,55 @@ function Wordmark({ size = 20, color }) {
 
 /* ---------------- Avatar ---------------- */
 function gradFor(seed) {
-  let h = 0; for (let i = 0; i < (seed||"").length; i++) h = seed.charCodeAt(i) + ((h << 5) - h);
+  const seedStr = typeof seed === 'string' ? seed : (seed ? String(seed) : "");
+  let h = 0; for (let i = 0; i < seedStr.length; i++) h = seedStr.charCodeAt(i) + ((h << 5) - h);
   const a = Math.abs(h) % 360, b = (a + 38) % 360;
   return `linear-gradient(135deg, hsl(${a} 68% 60%), hsl(${b} 70% 50%))`;
 }
-function initials(name) { return (name||"").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase(); }
-function Avatar({ name, size = 40, img, className = "", style = {} }) {
+function initials(name) {
+  const nameStr = typeof name === 'string' ? name : (name ? String(name) : "");
+  return nameStr.split(" ").map(w => w ? w[0] : "").join("").slice(0, 2).toUpperCase();
+}
+const useProfileSync = (userId, initialData) => {
+  const [data, setData] = React.useState(initialData);
+
+  // Sync if parent updates props
+  React.useEffect(() => {
+    setData(initialData);
+  }, [initialData.name, initialData.img, initialData.bio, initialData.location]);
+
+  React.useEffect(() => {
+    if (!userId) return;
+    const handler = (e) => {
+      const payload = e.detail;
+      if (payload.userId === userId) {
+        setData((prev) => ({
+          ...prev,
+          name: payload.name || prev.name,
+          img: payload.profilePhoto || prev.img,
+          bio: payload.bio || prev.bio,
+          location: payload.location || prev.location
+        }));
+      }
+    };
+    window.addEventListener('samaagum:profileSync', handler);
+    return () => window.removeEventListener('samaagum:profileSync', handler);
+  }, [userId]);
+
+  return data;
+};
+
+// Export hook and Avatar so it can be used globally from Icons/I
+Object.assign(I, { useProfileSync, Avatar });
+
+function Avatar({ userId, name, size = 40, img, className = "", style = {} }) {
+  const p = useProfileSync(userId, { name, img });
+  
   return (
     <div className={`avatar av ${className}`} style={{
       width: size, height: size, fontSize: size * 0.36,
-      background: img ? `url("${img}") center / cover no-repeat` : gradFor(name), ...style,
-    }}>{!img && initials(name)}</div>
+      background: p.img ? `url("${p.img}") center / cover no-repeat` : gradFor(p.name), ...style,
+    }}>{!p.img && initials(p.name)}</div>
   );
 }
 

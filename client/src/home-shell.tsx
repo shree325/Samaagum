@@ -37,8 +37,9 @@ function CreateMenu({ onPick }) {
 }
 
 /* ---------------- Sidebar ---------------- */
-function Sidebar({ view, go, counts }) {
+function Sidebar({ view, go, counts, chatSettings }) {
   const [createOpen, setCreateOpen] = useState(false);
+  const showMessages = chatSettings?.allowSiteMessaging !== false;
   const main = [
     { k:"home", ic:<I.home/>, label:"Home" },
     { k:"discover", ic:<I.compass/>, label:"Discover" },
@@ -46,7 +47,7 @@ function Sidebar({ view, go, counts }) {
     { k:"groups", ic:<I.groups/>, label:"My Groups" },
   ];
   const social = [
-    { k:"messages", ic:<I.chat/>, label:"Messages", badge: counts.messages },
+    ...(showMessages ? [{ k:"messages", ic:<I.chat/>, label:"Messages", badge: counts.messages }] : []),
     { k:"notifications", ic:<I.bell/>, label:"Notifications", badge: counts.notifs },
     { k:"profile", ic:<I.user/>, label:"Profile" },
   ];
@@ -78,7 +79,7 @@ function Sidebar({ view, go, counts }) {
       </nav>
       <div className="sb-foot">
         <button className="sb-user" onClick={()=>go("profile")}>
-          <Avatar name={ME.name} img={ME.img} size={36} className="ring" />
+          <I.Avatar userId={window.ME?.id} name={ME.name} img={ME.img} size={36} className="ring" />
           <span className="meta"><span className="n">{ME.name}</span><span className="h">{ME.handle}</span></span>
           <I.chevD style={{ color:"var(--ink-3)" }} />
         </button>
@@ -88,9 +89,10 @@ function Sidebar({ view, go, counts }) {
 }
 
 /* ---------------- Topbar (desktop) ---------------- */
-function Topbar({ go, counts, dark, onToggleTheme, city, onCity }) {
+function Topbar({ go, counts, dark, onToggleTheme, city, onCity, chatSettings }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const showMessages = chatSettings?.allowSiteMessaging !== false;
   return (
     <header className="topbar">
       <div className="tb-search">
@@ -98,9 +100,11 @@ function Topbar({ go, counts, dark, onToggleTheme, city, onCity }) {
         <input placeholder="Search events, groups, people, interests…" />
         <kbd>/</kbd>
       </div>
-      <button className="tb-loc" onClick={onCity}>
-        <I.pin style={{ color:"var(--accent-2)" }} /> {city} <I.chevD style={{ color:"var(--ink-3)" }} />
-      </button>
+      {window.featureSettings?.location_active !== false && (
+        <button className="tb-loc" onClick={onCity}>
+          <I.pin style={{ color:"var(--accent-2)" }} /> {city} <I.chevD style={{ color:"var(--ink-3)" }} />
+        </button>
+      )}
       <div className="tb-spacer" />
       <div style={{ position:"relative" }}>
         <button className="tb-icon" onClick={()=>setCreateOpen(v=>!v)} title="Create"><I.plus/></button>
@@ -109,15 +113,17 @@ function Topbar({ go, counts, dark, onToggleTheme, city, onCity }) {
         </Popover>
       </div>
       <button className="tb-icon" onClick={onToggleTheme} title="Toggle theme">{dark? <I.sun/> : <I.moon/>}</button>
-      <button className="tb-icon" onClick={()=>go("messages")} title="Messages">
-        <I.chat/>{counts.messages ? <span className="dot" /> : null}
-      </button>
+      {showMessages && (
+        <button className="tb-icon" onClick={()=>go("messages")} title="Messages">
+          <I.chat/>{counts.messages ? <span className="badge">{counts.messages}</span> : null}
+        </button>
+      )}
       <button className="tb-icon" onClick={()=>go("notifications")} title="Notifications">
-        <I.bell/>{counts.notifs ? <span className="dot" /> : null}
+        <I.bell/>{counts.notifs ? <span className="badge">{counts.notifs}</span> : null}
       </button>
       <div style={{ position:"relative" }}>
         <button className="tb-icon" style={{ padding:0, border:"none" }} onClick={()=>setProfileOpen(v=>!v)}>
-          <Avatar name={ME.name} img={ME.img} size={40} className="ring" />
+          <I.Avatar userId={window.ME?.id} name={ME.name} img={ME.img} size={40} className="ring" />
         </button>
         <Popover open={profileOpen} onClose={()=>setProfileOpen(false)} style={{ top:"calc(100% + 8px)", right:0, width:248 }}>
           <ProfileMenu go={(k)=>{ setProfileOpen(false); go(k); }} dark={dark} onToggleTheme={onToggleTheme} />
@@ -139,7 +145,7 @@ function ProfileMenu({ go, dark, onToggleTheme }) {
   return (
     <div className="pmenu">
       <div className="pmenu-head">
-        <Avatar name={ME.name} img={ME.img} size={42} />
+        <I.Avatar userId={window.ME?.id} name={ME.name} img={ME.img} size={42} />
         <div><div className="n">{ME.name}</div><div className="h">{ME.handle}</div></div>
       </div>
       <div className="pmenu-list">
@@ -204,103 +210,97 @@ function Empty({ icon, title, text, action }) {
 
 /* ---------------- City picker sheet ---------------- */
 function CityPicker({ open, onClose, city, onPick }) {
-  const [cities, setCities] = useState([]);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState(
+    window.ME?.locationLat && window.ME?.locationLng ? {
+      location_name: city,
+      address: window.ME.address || window.ME.location || city,
+      latitude: window.ME.locationLat,
+      longitude: window.ME.locationLng
+    } : (city && city !== "Global" ? { location_name: city, address: city, latitude: 0, longitude: 0 } : null)
+  );
 
-  useEffect(() => {
-    if (!open) return;
-    const fetchCities = async () => {
-      setLoading(true);
-      try {
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
-        const res = await fetch(`${apiBase}/api/location/cities?page=${page}&limit=20&search=${encodeURIComponent(search)}`);
-        const json = await res.json();
-        if (json.success) {
-          if (page === 1) {
-            setCities(json.data);
-          } else {
-            setCities(prev => [...prev, ...json.data]);
-          }
-          setTotal(json.total || 0);
-          setHasMore(page < (json.totalPages || 1));
-        }
-      } catch (err) {
-        console.error("Failed to load cities", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    // debounce search
-    const timer = setTimeout(() => {
-      fetchCities();
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [open, search, page]);
-
-  // Reset page when search changes
-  useEffect(() => {
-    setPage(1);
-  }, [search]);
+  const [activeCities, setActiveCities] = useState([]);
+  React.useEffect(() => {
+    if (window.getActiveCities) {
+      window.getActiveCities().then(data => {
+        if (data && data.length) setActiveCities(data);
+      });
+    }
+  }, []);
 
   if (!open) return null;
+
+  const handleSelect = async (loc) => {
+    setSelectedLocation(loc);
+    if (loc) {
+      onPick(loc.location_name);
+      
+      try {
+        const token = localStorage.getItem('token');
+        if (token) {
+          const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+          const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+          await fetch(`${apiBase}/api/admin/user/profile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({
+              location: loc.address,
+              preferredLocation: loc.address,
+              locationName: loc.location_name,
+              locationLat: loc.latitude,
+              locationLng: loc.longitude,
+              address: loc.address
+            })
+          });
+        }
+        if (window.ME) {
+          window.ME.location = loc.location_name;
+          window.ME.address = loc.address;
+          window.ME.locationLat = loc.latitude;
+          window.ME.locationLng = loc.longitude;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+      
+      setTimeout(() => onClose(), 800);
+    }
+  };
+
   return (
-    <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={e=>e.stopPropagation()}>
-        <div className="sheet-head">
-          <h3>Choose your city</h3>
-          <button className="sheet-x" onClick={onClose}><I.x/></button>
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000 }} onClick={onClose}>
+      <div 
+        style={{
+          position: "absolute", top: "72px", left: "50%", transform: "translateX(-50%)",
+          width: "90%", maxWidth: "360px", background: "var(--bg-1, #ffffff)", borderRadius: "24px",
+          boxShadow: "0 16px 48px rgba(0,0,0,0.2)", border: "1px solid var(--border)", display: "flex", flexDirection: "column"
+        }} 
+        onClick={e=>e.stopPropagation()}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px 8px" }}>
+          <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: "var(--ink-1)" }}>Choose your location</h3>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--ink-3)", padding: 4 }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </button>
         </div>
-        <p className="sheet-sub">Discovery is biased to events near you. <span style={{color: "var(--ink-3)", fontSize: "12px", float: "right"}}>{total} cities available</span></p>
+        <p style={{ margin: "0 24px", fontSize: "13px", color: "var(--ink-2)" }}>Discovery is biased to events near you.</p>
         
-        <div style={{ padding: "0 24px 12px" }}>
-          <div style={{ display: "flex", alignItems: "center", background: "var(--surface-2)", borderRadius: "8px", padding: "8px 12px" }}>
-            <I.search style={{ color: "var(--ink-3)", marginRight: "8px" }} />
-            <input 
-              type="text" 
-              placeholder="Search cities..." 
-              value={search} 
-              onChange={e => setSearch(e.target.value)}
-              style={{ border: "none", background: "transparent", outline: "none", flex: 1, fontSize: "15px", color: "var(--ink-1)" }}
+        <div style={{ padding: "20px 24px 24px" }}>
+          {window.LocationSelector && (
+            <window.LocationSelector 
+              value={selectedLocation}
+              onChange={handleSelect}
+              placeholder="Search a new location..."
             />
-          </div>
-        </div>
-
-        <div className="city-list" style={{ maxHeight: "300px", overflowY: "auto", padding: "0 24px 24px" }}>
-          {cities.map(c => {
-            const isMatch = city === c.city_name;
-            return (
-              <button key={c.geoname_id} className={`city-opt ${isMatch?"on":""}`} onClick={()=>{ onPick(c.city_name); onClose(); }} style={{ display: "flex", alignItems: "flex-start", padding: "12px", width: "100%", background: "transparent", border: "none", cursor: "pointer", borderBottom: "1px solid var(--border)", textAlign: "left" }}>
-                <I.pin style={{ color: isMatch?"var(--accent-2)":"var(--ink-3)", marginTop: "2px", flexShrink: 0 }} />
-                <div style={{ marginLeft: "12px", flex: 1 }}>
-                  <div style={{ fontWeight: isMatch ? "600" : "500", color: isMatch ? "var(--accent-2)" : "var(--ink-1)", fontSize: "15px" }}>{c.city_name}</div>
-                  <div style={{ fontSize: "13px", color: "var(--ink-3)", marginTop: "2px" }}>{c.state_name}, {c.country_name}</div>
-                </div>
-                {isMatch && <I.check style={{ color:"var(--accent-2)", flexShrink: 0, marginTop: "2px" }} />}
-              </button>
-            )
-          })}
-          
-          {loading && <div style={{ textAlign: "center", padding: "16px", color: "var(--ink-3)", fontSize: "14px" }}>Loading...</div>}
-          
-          {!loading && cities.length === 0 && (
-            <div style={{ textAlign: "center", padding: "32px 16px", color: "var(--ink-3)", fontSize: "14px" }}>
-              No cities found matching "{search}"
-            </div>
           )}
-
-          {!loading && hasMore && (
-            <button 
-              onClick={() => setPage(p => p + 1)}
-              style={{ width: "100%", padding: "12px", background: "var(--surface-2)", border: "none", borderRadius: "8px", marginTop: "12px", color: "var(--ink-2)", cursor: "pointer", fontWeight: "500" }}
-            >
-              Load more cities
-            </button>
+          {selectedLocation?.location_name && activeCities.length > 0 && !activeCities.some(ac => {
+            const ln = selectedLocation.location_name.toLowerCase().trim();
+            return ln === ac || ln === ac + " city" || ac === ln + " city";
+          }) && (
+            <div style={{ background: "var(--danger-soft, #fee2e2)", color: "var(--danger, #ef4444)", padding: 12, borderRadius: 8, fontSize: 13, marginTop: 12, display: "flex", alignItems: "center", gap: 8 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <span>This location is currently unavailable. Please select an active city.</span>
+            </div>
           )}
         </div>
       </div>

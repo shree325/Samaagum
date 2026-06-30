@@ -13,6 +13,21 @@ function VirtualCard({ user }) {
 
   // Try to find a handle or extract from email
   const handle = user?.handle || `@${user?.email?.split('@')[0] || user?.primary_email?.split('@')[0] || displayName.replace(/\s+/g, '').toLowerCase() || 'user'}`;
+  
+  // Handle dynamic real-time profile updates using the global hook
+  // Assuming `user.id` or `user.user_id` is passed. If not, it just uses fallback.
+  const userId = user?.id || user?.user_id;
+  const p = I.useProfileSync ? I.useProfileSync(userId, { 
+    name: displayName, 
+    img: photo, 
+    bio: role, 
+    location: null 
+  }) : { name: displayName, img: photo, bio: role, location: null };
+
+  const syncedDisplayName = p.name;
+  const syncedPhoto = p.img;
+  const syncedRole = p.bio;
+
   const username = handle.replace('@', '');
   
   const apiBase = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? "http://localhost:8080" : window.location.origin;
@@ -100,16 +115,16 @@ function VirtualCard({ user }) {
           
           {/* User Profile Info */}
           <div style={{ display: "flex", alignItems: "center", gap: 20, flex: "1 1 auto", minWidth: 0 }}>
-            {photo && photo.length > 10 && photo !== "null" ? (
-              <img src={photo} alt={displayName} style={{ width: 90, height: 90, borderRadius: "50%", objectFit: "cover", border: "3px solid var(--bg-1)", boxShadow: "0 8px 16px rgba(0,0,0,0.1)" }} onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }} />
+            {syncedPhoto && syncedPhoto.length > 10 && syncedPhoto !== "null" ? (
+              <img src={syncedPhoto} alt={syncedDisplayName} style={{ width: 90, height: 90, borderRadius: "50%", objectFit: "cover", border: "3px solid var(--bg-1)", boxShadow: "0 8px 16px rgba(0,0,0,0.1)" }} onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }} />
             ) : null}
-            <div style={{ display: (photo && photo.length > 10 && photo !== "null") ? 'none' : 'flex', width: 90, height: 90, borderRadius: "50%", background: "var(--accent-grad, linear-gradient(135deg, #3b82f6, #8b5cf6))", color: "#fff", alignItems: "center", justifyContent: "center", fontSize: 36, fontWeight: "bold", border: "3px solid var(--bg-1)", boxShadow: "0 8px 16px rgba(0,0,0,0.1)", textTransform: "uppercase" }}>
-              {(displayName || 'U')[0]}
+            <div style={{ display: (syncedPhoto && syncedPhoto.length > 10 && syncedPhoto !== "null") ? 'none' : 'flex', width: 90, height: 90, borderRadius: "50%", background: "var(--accent-grad, linear-gradient(135deg, #3b82f6, #8b5cf6))", color: "#fff", alignItems: "center", justifyContent: "center", fontSize: 36, fontWeight: "bold", border: "3px solid var(--bg-1)", boxShadow: "0 8px 16px rgba(0,0,0,0.1)", textTransform: "uppercase" }}>
+              {(syncedDisplayName || 'U')[0]}
             </div>
             
             <div style={{ minWidth: 0, overflow: "hidden" }}>
-              <h3 style={{ fontSize: 24, fontWeight: 800, margin: "0 0 4px 0", color: "var(--ink)", letterSpacing: "-0.5px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayName}</h3>
-              {role && <div style={{ fontSize: 16, color: "var(--accent-1)", fontWeight: 600, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{role}</div>}
+              <h3 style={{ fontSize: 24, fontWeight: 800, margin: "0 0 4px 0", color: "var(--ink)", letterSpacing: "-0.5px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{syncedDisplayName}</h3>
+              {syncedRole && <div style={{ fontSize: 16, color: "var(--accent-1)", fontWeight: 600, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{syncedRole}</div>}
               {email && <div style={{ fontSize: 14, color: "var(--ink-2)", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
                 <a href={`mailto:${email}`} style={{ overflow: "hidden", textOverflow: "ellipsis", color: "inherit", textDecoration: "none" }}>{email}</a>

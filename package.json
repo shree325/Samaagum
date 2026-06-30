@@ -4,6 +4,7 @@
   "description": "Samaagum Full-Stack Monorepo",
   "scripts": {
     "generate:api": "npx openapi-typescript shared/openapi/admin.yaml -o client/src/generated/api-types.ts",
+    "generate:messaging": "npx openapi-typescript shared/openapi/messaging.yaml -o client/src/generated/messaging-types.ts",
     "generate:api:watch": "npx openapi-typescript shared/openapi/admin.yaml -o client/src/generated/api-types.ts --watch",
     "dev:server": "npm --prefix server run dev",
     "dev:client": "npm --prefix client run dev",

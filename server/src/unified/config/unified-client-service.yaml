@@ -1,0 +1,46 @@
+version: "1.0"
+
+# 1. Active Providers Configuration for End-User Services
+# Defines whether a service resolves from 'database' (direct PostgreSQL integration) or 'localstorage' (local caching / mock context fallback)
+providers:
+  activeProviders:
+    conversations: database
+    messages: database
+    messagingRequests: database
+
+  definitions:
+    database:
+      id: database
+      name: PostgreSQL Database
+      enabled: true
+      priority: 1
+      timeout: 5000
+    localstorage:
+      id: localstorage
+      name: Browser LocalStorage Cache Fallback
+      enabled: true
+      priority: 2
+      timeout: 1000
+
+# 2. Redis Cache & Data Sync Configurations
+cache:
+  enabled: true
+  persistent: true
+  keyPatterns:
+    conversations: "uds:client:conversations:{userId}:{conversationId}"
+    messages: "uds:client:messages:{conversationId}:{messageId}"
+    messagingRequests: "uds:client:requests:{userId}:{requestId}"
+
+# 3. Dynamic Attribute Mapping Registry
+mappings:
+  basePath: ../mappings
+  hotReload:
+    enabled: true
+    watchInterval: 5000
+  files:
+    conversations:
+      database: conversations-db-mapping.yaml
+    messages:
+      database: messages-db-mapping.yaml
+    messagingRequests:
+      database: messaging-requests-db-mapping.yaml

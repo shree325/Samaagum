@@ -3637,6 +3637,110 @@
   font-size: 12px;
 }
 
+/* ============================================================
+   Redesigned Subscription CTA Buttons
+   ============================================================ */
+
+.btn-sub-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  height: 48px;
+  padding: 12px 24px;
+  border-radius: 12px; /* 10-14px requirement */
+  border: 1px solid transparent;
+  cursor: pointer;
+  width: 100%;
+  transition: all var(--t-fast) var(--ease-out);
+  text-decoration: none;
+  -webkit-user-select: none;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.btn-sub-cta:active {
+  transform: scale(0.97);
+}
+
+.btn-sub-cta:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Get Basic Member - Secondary CTA */
+.btn-sub-basic {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1.5px solid var(--border);
+  color: var(--ink);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.btn-sub-basic:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--ink-2);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3), 0 0 8px rgba(255, 255, 255, 0.05);
+}
+
+/* Get Pro Member - Primary Featured CTA */
+.btn-sub-pro {
+  background: var(--accent-grad);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 8px 24px color-mix(in oklch, var(--accent-2) 30%, transparent), 
+              inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.btn-sub-pro:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 32px color-mix(in oklch, var(--accent-2) 45%, transparent), 
+              0 0 15px color-mix(in oklch, var(--accent-1) 30%, transparent),
+              inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+/* Pay & Activate Access - Secure Payment Checkout CTA */
+.btn-sub-pay {
+  background: linear-gradient(135deg, var(--accent-2) 0%, #8b5cf6 100%);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(109, 94, 252, 0.3),
+              inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-sub-pay:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, color-mix(in oklch, var(--accent-2) 85%, #fff) 0%, #9065f7 100%);
+  box-shadow: 0 12px 30px rgba(109, 94, 252, 0.45),
+              0 0 20px rgba(139, 92, 246, 0.25);
+}
+
+/* Loading/Processing State for Payment Button */
+.btn-sub-pay.loading {
+  background: linear-gradient(135deg, #4b3ebd 0%, #6d41c8 100%);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: wait;
+}
+
+.btn-sub-pay.loading .spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Message Hover Actions & Context Dropdown */
 .msg-row {
   display: flex;
@@ -3791,6 +3895,3 @@
   border-bottom: 1px solid #333336;
   margin-bottom: 4px;
 }
-
-
-

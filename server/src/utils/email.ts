@@ -1,23 +1,16 @@
 import nodemailer from 'nodemailer';
 import prisma from '../config/prisma';
 
-export async function sendInvitationEmail(
-  to: string,
-  token: string,
-  role: string = 'Participant',
-  inviterName: string = 'Admin'
-) {
-  const appBaseUrl = process.env.APP_BASE_URL || 'http://localhost:3000';
-  const inviteLink = `${appBaseUrl}/api/admin/accept-invite?token=${token}`;
-
-  const html = `
-    <p>Hello,</p>
-    <p>${inviterName} has invited you to join as <strong>${role}</strong> on Samaagum.</p>
-    <p>Click the link below to accept the invitation (valid for 24 hours):</p>
-    <p><a href="${inviteLink}">Accept Invitation</a></p>
-    <p>If you did not expect this email, you can safely ignore it.</p>
-  `;
-
+export async function sendEmail({
+  to,
+  subject,
+  html
+}: {
+  to: string;
+  subject: string;
+  html: string;
+}) {
+  const inviterName = 'Admin';
   // 1. Fetch communication settings from database
   let commSettings: any = null;
   try {
@@ -40,7 +33,7 @@ export async function sendInvitationEmail(
           const payload = {
             to: [{ email: to }],
             sender: { name: commSettings.senderName || inviterName, email: commSettings.senderEmail || 'no-reply@samaagum.com' },
-            subject: 'You are invited to join Samaagum',
+            subject,
             htmlContent: html,
           };
           const response = await fetch('https://api.brevo.com/v3/smtp/email', {
@@ -77,7 +70,7 @@ export async function sendInvitationEmail(
         const info = await transporter.sendMail({
           from: `${commSettings.senderName || inviterName} <${commSettings.senderEmail || commSettings.smtpUser || 'no-reply@samaagum.com'}>`,
           to,
-          subject: 'You are invited to join Samaagum',
+          subject,
           html,
         });
         console.log(`Email successfully sent via DB SMTP: ${info.messageId}`);
@@ -102,17 +95,36 @@ export async function sendInvitationEmail(
     const info = await transporter.sendMail({
       from: `${inviterName} <${process.env.SMTP_USER || 'no-reply@samaagum.com'}>`,
       to,
-      subject: 'You are invited to join Samaagum',
+      subject,
       html,
     });
     console.log(`Email successfully sent via env SMTP: ${info.messageId}`);
   } catch (err: any) {
-    console.warn('All email sending methods failed. Falling back to console log invitation link:', err.message);
+    console.warn('All email sending methods failed. Falling back to console log:', err.message);
     console.log(`======================================================================`);
-    console.log(`✉️  SIMULATED INVITATION EMAIL TO: ${to}`);
-    console.log(`👤 Inviter: ${inviterName}`);
-    console.log(`🏷️  Role: ${role}`);
-    console.log(`🔗 Link: ${inviteLink}`);
+    console.log(`✉️  SIMULATED EMAIL TO: ${to}`);
+    console.log(`Subject: ${subject}`);
+    console.log(`HTML: ${html}`);
     console.log(`======================================================================`);
   }
+}
+
+export async function sendInvitationEmail(
+  to: string,
+  token: string,
+  role: string = 'Participant',
+  inviterName: string = 'Admin'
+) {
+  const appBaseUrl = process.env.APP_BASE_URL || 'http://localhost:3000';
+  const inviteLink = `${appBaseUrl}/api/admin/accept-invite?token=${token}`;
+
+  const html = `
+    <p>Hello,</p>
+    <p>${inviterName} has invited you to join as <strong>${role}</strong> on Samaagum.</p>
+    <p>Click the link below to accept the invitation (valid for 24 hours):</p>
+    <p><a href="${inviteLink}">Accept Invitation</a></p>
+    <p>If you did not expect this email, you can safely ignore it.</p>
+  `;
+
+  return sendEmail({ to, subject: 'You are invited to join Samaagum', html });
 }

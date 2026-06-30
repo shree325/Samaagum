@@ -215,13 +215,22 @@ function CommentItem({ c, depth, canReply, isOwner, currentUserId, replyingToId,
 }
 
 function GroupDetail({ group, st, go }) {
-  const [fullGroup, setFullGroup] = useState(null);
-  const g = fullGroup || group || GROUPS[0];
-  const [membershipState, setMembershipState] = useState(null);
-  const isJoined = membershipState === 'active';
-  const isPending = membershipState === 'pending';
-  const [accessDenied, setAccessDenied] = useState(false);
-  const [accessDeniedMsg, setAccessDeniedMsg] = useState("");
+  const g = group || GROUPS[0];
+  const { joined, pending, toggleJoin } = st;
+  const isJoined = joined.has(g.id);
+  const isPending = pending.has(g.id);
+  const isOwner = ME.name === g.owner;
+
+  const chatSettings = st.chatSettings || {
+    allowSiteMessaging: true,
+    allowDirectMessaging: true,
+    allowGroupChat: true,
+    allowEventChat: true
+  };
+  const showChatButton = chatSettings.allowSiteMessaging !== false && (
+    chatSettings.allowDirectMessaging ||
+    (chatSettings.allowGroupChat || chatSettings.allowEventChat)
+  );
   const [tab, setTab] = useState("discussion");
   const [draft, setDraft] = useState("");
   const [posts, setPosts] = useState([]);
@@ -960,7 +969,12 @@ function GroupDetail({ group, st, go }) {
         console.error(e);
       }
     } else if (action === "message") {
-      alert("Opening direct chat with user...");
+      const req = joinRequests.find(r => r.id === reqId);
+      if (req && req.name && window.initiateChatWithName) {
+        window.initiateChatWithName(req.name);
+      } else {
+        alert("Opening direct chat with user...");
+      }
     }
   };
 
@@ -1328,6 +1342,21 @@ function GroupDetail({ group, st, go }) {
                           <button className="hbtn hbtn--primary hbtn--sm" style={{ marginLeft: "auto" }} disabled={!replyDraft.trim() || submittingReply} onClick={handleSubmitReply}>
                             {submittingReply ? 'Posting…' : 'Reply'}
                           </button>
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {showChatButton && mName !== ME.name && (
+                            <button 
+                              className="hbtn hbtn--ghost hbtn--sm"
+                              onClick={() => {
+                                if (window.initiateChatWithName) {
+                                  window.initiateChatWithName(mName);
+                                }
+                              }}
+                            >
+                              <I.chat style={{ width: 14, height: 14 }} />
+                            </button>
+                          )}
+                          <button className="hbtn hbtn--ghost hbtn--sm">View</button>
                         </div>
                       </div>
                     </div>

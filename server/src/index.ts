@@ -23,9 +23,10 @@ import { adminUserRoutes } from './controllers/adminUserRoutes';
 import { seedAdminRBAC } from './services/adminRbacSeeder';
 import { seedPlatformSettings } from './settings-library/settingsSeeder';
 import { startMessaging, stopMessaging, getMessagingHealth } from './services/messagingSocket';
+import { SubscriptionNotificationService } from './services/SubscriptionNotificationService';
 import { messagingTestRoutes } from './controllers/messagingTestRoutes';
 import { messagingRoutes } from './controllers/messagingRoutes';
-import { startGroupsSocket } from './services/groupSocket';
+import { connectionRoutes } from './controllers/connectionRoutes';
 
 
 dotenv.config();
@@ -94,6 +95,7 @@ fastify.decorate('authenticate', async (request: any, reply: any) => {
 // Register admin validation decorator
 fastify.decorate('requireAdmin', async (request: any, reply: any) => {
     if (!request.user) {
+        console.log('requireAdmin: No request.user');
         return reply.status(401).send({
             success: false,
             message: 'Unauthorized: Authentication required'
@@ -129,8 +131,7 @@ import { publicRoutes } from './controllers/publicRoutes';
 fastify.register(publicRoutes, { prefix: '/api/public' });
 fastify.register(messagingTestRoutes, { prefix: '/api/test' });
 fastify.register(messagingRoutes, { prefix: '/api/messaging' });
-import { groupRoutes } from './controllers/groupRoutes';
-fastify.register(groupRoutes, { prefix: '/api/groups' });
+fastify.register(connectionRoutes, { prefix: '/api/connections' });
 
 // Health check route
 fastify.get('/health', async (request, reply) => {
@@ -191,10 +192,13 @@ const start = async () => {
         await startMessaging(io);
         await startGroupsSocket(io);
 
-        await fastify.listen({ port: PORT, host: '::' });
+        // Start subscription expiration scheduler
+        SubscriptionNotificationService.startScheduler();
+
+        await fastify.listen({ port: PORT, host: '0.0.0.0' });
         console.log(`🚀 Server is running on port ${PORT}`);
         console.log(`🔗 Health check available at http://localhost:${PORT}/health`);
-        // Trigger reload comment - restart 2
+        // Trigger reload comment - restart 3
     } catch (err) {
         fastify.log.error(err);
         process.exit(1);

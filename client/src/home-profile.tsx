@@ -21,12 +21,18 @@ function EditProfileForm({ profile, onCancel }) {
     handle: profile.handle || "",
     bio: profile.bio || "",
     location: profile.location || "",
+    locationName: profile.locationName || "",
+    locationLat: profile.locationLat || undefined,
+    locationLng: profile.locationLng || undefined,
+    address: profile.address || "",
     gender: profile.gender || "",
     dob: profile.dob || "",
     phone: profile.phone || "",
     profilePhoto: profile.img || "",
     coverBanner: profile.coverBanner || ""
   });
+
+
 
   const coverRef = React.useRef(null);
   const avatarRef = React.useRef(null);
@@ -52,6 +58,10 @@ function EditProfileForm({ profile, onCancel }) {
       formData.append("headline", form.role || "");
       formData.append("bio", form.bio || "");
       formData.append("location", form.location || "");
+      formData.append("locationName", form.locationName || "");
+      if (form.locationLat !== undefined) formData.append("locationLat", form.locationLat);
+      if (form.locationLng !== undefined) formData.append("locationLng", form.locationLng);
+      formData.append("address", form.address || "");
       formData.append("gender", form.gender || "");
       formData.append("dob", form.dob || "");
       formData.append("phone", form.phone || "");
@@ -71,7 +81,7 @@ function EditProfileForm({ profile, onCancel }) {
       if (form.profilePhoto && form.profilePhoto !== profile.img && form.profilePhoto.startsWith("data:")) {
         formData.append("profilePhoto", base64ToBlob(form.profilePhoto), "profile.jpg");
       }
-      
+
       if (form.coverBanner && form.coverBanner !== profile.coverBanner && form.coverBanner.startsWith("data:")) {
         formData.append("coverBanner", base64ToBlob(form.coverBanner), "cover.jpg");
       } else if (form.coverBanner === "") {
@@ -89,6 +99,15 @@ function EditProfileForm({ profile, onCancel }) {
       if (res.ok) {
         Object.assign(profile, form);
         if (form.profilePhoto) profile.img = form.profilePhoto;
+        if (form.locationName) profile.locationName = form.locationName;
+        if (form.locationLat !== undefined) profile.locationLat = form.locationLat;
+        if (form.locationLng !== undefined) profile.locationLng = form.locationLng;
+        if (form.address) profile.address = form.address;
+
+        if (window.ME) {
+          window.ME.location = form.location || form.locationName || window.ME.location;
+        }
+
         if (window.toast) window.toast("Profile saved to database!");
         onCancel();
       } else {
@@ -179,10 +198,37 @@ function EditProfileForm({ profile, onCancel }) {
                 <label style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-2)" }}>Role / Headline</label>
                 <input className="cfield" value={form.role} onChange={(e) => set("role")(e.target.value)} placeholder="e.g. Software Engineer" style={{ background: "var(--bg-1)", border: "1px solid var(--border)", color: "var(--ink-1)", padding: "12px 16px", borderRadius: 10, fontSize: 15, outline: "none", width: "100%", boxSizing: "border-box", transition: "border-color 0.2s ease" }} />
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <label style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-2)" }}>Location</label>
-                <input className="cfield" value={form.location} onChange={(e) => set("location")(e.target.value)} placeholder="e.g. Bengaluru" style={{ background: "var(--bg-1)", border: "1px solid var(--border)", color: "var(--ink-1)", padding: "12px 16px", borderRadius: 10, fontSize: 15, outline: "none", width: "100%", boxSizing: "border-box", transition: "border-color 0.2s ease" }} />
-              </div>
+              {window.featureSettings?.location_active !== false && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, position: "relative" }}>
+                  <label style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-2)" }}>Location</label>
+                  {window.LocationSelector && (
+                    <window.LocationSelector
+                      value={{
+                        location_name: form.locationName || form.location,
+                        address: form.address || form.location,
+                        latitude: form.locationLat,
+                        longitude: form.locationLng
+                      }}
+                      onChange={(loc) => {
+                        if (loc) {
+                          set("locationName")(loc.location_name);
+                          set("location")(loc.location_name);
+                          set("address")(loc.address);
+                          set("locationLat")(loc.latitude);
+                          set("locationLng")(loc.longitude);
+                        } else {
+                          set("locationName")("");
+                          set("location")("");
+                          set("address")("");
+                          set("locationLat")(undefined);
+                          set("locationLng")(undefined);
+                        }
+                      }}
+                      placeholder="e.g. Bengaluru"
+                    />
+                  )}
+                </div>
+              )}
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <label style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-2)" }}>Gender</label>
                 <div style={{ position: "relative" }}>
@@ -228,6 +274,15 @@ function Profile({ st, go }) {
   const tabs = [["about", "About"], ["events", "Events"], ["groups", "Groups"]];
   const myEvents = [EVENTS[0], EVENTS[5], EVENTS[1]];
   const myGroups = [GROUPS[0], GROUPS[1], GROUPS[3]];
+  
+  // Network connections state
+  const [showNetworkModal, setShowNetworkModal] = useState(false);
+  const [networkSearch, setNetworkSearch] = useState("");
+  const [networkPage, setNetworkPage] = useState(1);
+  const [networkData, setNetworkData] = useState({ mutual: [], new: [], totalCount: 0 });
+  const [networkLoading, setNetworkLoading] = useState(false);
+  const [networkHasMore, setNetworkHasMore] = useState(false);
+  const [networkConnectStates, setNetworkConnectStates] = useState({});
   const [isEditing, setIsEditing] = useState(false);
   const [theme, setTheme] = useState("light");
 
@@ -246,6 +301,66 @@ function Profile({ st, go }) {
   const [interestsForm, setInterestsForm] = useState(ME.skills || []);
   const [newInterest, setNewInterest] = useState("");
   const [savingInterests, setSavingInterests] = useState(false);
+
+  const fetchNetwork = async (search = "", page = 1, append = false) => {
+    if (!window.ME?.id) return;
+    setNetworkLoading(true);
+    try {
+      const api = window.location.port === "8080" ? "http://localhost:3000" : window.location.origin;
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${api}/api/connections/network/${window.ME.id}?search=${encodeURIComponent(search)}&page=${page}&limit=20`, {
+        headers: token ? { "Authorization": `Bearer ${token}` } : {}
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNetworkData(prev => ({
+          mutual: append ? [...prev.mutual, ...(data.data.mutual || [])] : (data.data.mutual || []),
+          new: append ? [...prev.new, ...(data.data.new || [])] : (data.data.new || []),
+          totalCount: data.data.totalCount || 0
+        }));
+        setNetworkHasMore(data.data.hasMore);
+      }
+    } catch (err) {
+      console.error("Error fetching network:", err);
+    } finally {
+      setNetworkLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      if (showNetworkModal) fetchNetwork(networkSearch, 1, false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [networkSearch, showNetworkModal]);
+
+  const handleConnectFromModal = async (targetId, e) => {
+    e.stopPropagation();
+    setNetworkConnectStates(prev => ({ ...prev, [targetId]: 'loading' }));
+    try {
+      const api = window.location.port === "8080" ? "http://localhost:3000" : window.location.origin;
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${api}/api/connections/${targetId}/request`, {
+        method: 'POST',
+        headers: token ? { "Authorization": `Bearer ${token}` } : {}
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (data.message === "Connected successfully") {
+          setNetworkConnectStates(prev => ({ ...prev, [targetId]: 'accepted' }));
+        } else {
+          setNetworkConnectStates(prev => ({ ...prev, [targetId]: 'requested' }));
+        }
+        if (window.toast) window.toast(data.message || "Request sent");
+      } else {
+        setNetworkConnectStates(prev => ({ ...prev, [targetId]: 'none' }));
+        if (window.toast) window.toast(data.message || "Failed to connect");
+      }
+    } catch {
+      setNetworkConnectStates(prev => ({ ...prev, [targetId]: 'none' }));
+      if (window.toast) window.toast("Network error");
+    }
+  };
 
   const handleAddInterest = (e) => {
     if (e && e.type === "keydown" && e.key !== "Enter") return;
@@ -379,7 +494,7 @@ function Profile({ st, go }) {
               <button onClick={() => setIsEditing(true)} style={{ width: 44, height: 44, borderRadius: "50%", background: colors.navBg, backdropFilter: "blur(4px)", color: colors.textMain, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(0,0,0,0.05)", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
                 <I.edit style={{ width: 18, height: 18 }} />
               </button>
-              <button style={{ width: 44, height: 44, borderRadius: "50%", background: colors.navBg, backdropFilter: "blur(4px)", color: colors.textMain, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(0,0,0,0.05)", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+              <button onClick={() => go("settings")} style={{ width: 44, height: 44, borderRadius: "50%", background: colors.navBg, backdropFilter: "blur(4px)", color: colors.textMain, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(0,0,0,0.05)", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }} title="Settings">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
               </button>
             </div>
@@ -391,7 +506,7 @@ function Profile({ st, go }) {
           {/* User Info (overlaid on cover) */}
           <div style={{ padding: "0 40px 32px 40px", maxWidth: 880, margin: "0 auto", width: "100%", display: "flex", alignItems: "flex-end", gap: 24 }}>
             <div style={{ position: "relative", zIndex: 2 }}>
-              <Avatar name={ME.name} img={ME.img} size={116} style={{ border: `4px solid ${colors.bgContainer}`, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }} />
+              <I.Avatar userId={window.ME?.id} name={ME.name} img={ME.img} size={116} style={{ border: `4px solid ${colors.bgContainer}`, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }} />
               <button onClick={() => setIsEditing(true)} style={{ position: "absolute", bottom: 0, right: 0, background: colors.pillBg, backdropFilter: "blur(8px)", border: `1px solid ${colors.pillBorder}`, color: colors.textMain, borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: colors.pillShadow }}>
                 <I.edit style={{ width: 16, height: 16 }} />
               </button>
@@ -433,6 +548,349 @@ function Profile({ st, go }) {
                 </div>
               </div>
 
+              {/* Connections Button */}
+              <div style={{ marginTop: 24, display: "flex", justifyContent: "center" }}>
+                <button
+                  onClick={() => {
+                    setShowNetworkModal(true);
+                    setNetworkSearch("");
+                    setNetworkPage(1);
+                    fetchNetwork("", 1, false);
+                  }}
+                  style={{
+                    padding: "14px 24px",
+                    borderRadius: 28,
+                    background: colors.pillBg,
+                    color: colors.textMain,
+                    border: `1.5px solid ${colors.pillBorder}`,
+                    fontSize: 15,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    boxShadow: colors.pillShadow,
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" width="18" height="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+                  Connected
+                </button>
+              </div>
+
+              {/* Connected Users Modal */}
+              {showNetworkModal && (
+                <div style={{
+                  position: "fixed",
+                  inset: 0,
+                  zIndex: 9999,
+                  background: "rgba(0, 0, 0, 0.6)",
+                  backdropFilter: "blur(4px)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: 16
+                }} onClick={() => setShowNetworkModal(false)}>
+                  <div style={{
+                    width: "100%",
+                    maxWidth: 520,
+                    maxHeight: "85vh",
+                    background: colors.cardBg,
+                    borderRadius: 24,
+                    boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)",
+                    border: `1px solid ${colors.border}`,
+                    display: "flex",
+                    flexDirection: "column",
+                    overflow: "hidden",
+                    animation: "modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
+                  }} onClick={(e) => e.stopPropagation()}>
+                    
+                    {/* Header */}
+                    <div style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "20px 24px 16px 24px",
+                      borderBottom: `1px solid ${colors.border}`
+                    }}>
+                      <div>
+                        <h3 style={{ fontSize: 18, fontWeight: 800, color: colors.textMain, margin: 0 }}>Connected Users</h3>
+                        <span style={{ fontSize: 13, color: colors.textMuted, marginTop: 2, display: "block" }}>
+                          {networkData.totalCount} {networkData.totalCount === 1 ? 'connection' : 'connections'}
+                        </span>
+                      </div>
+                      <button 
+                        onClick={() => setShowNetworkModal(false)}
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: "50%",
+                          background: colors.chipBg,
+                          border: `1px solid ${colors.chipBorder}`,
+                          color: colors.textMain,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                          padding: 0
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    {/* Search Bar */}
+                    <div style={{ padding: "16px 24px", borderBottom: `1px solid ${colors.border}` }}>
+                      <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                        <svg style={{ position: "absolute", left: 14, color: colors.textMuted }} viewBox="0 0 24 24" fill="none" width="16" height="16" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input 
+                          type="text" 
+                          placeholder="Search connections..." 
+                          value={networkSearch}
+                          onChange={(e) => setNetworkSearch(e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "10px 16px 10px 40px",
+                            borderRadius: 12,
+                            background: colors.chipBg,
+                            border: `1.5px solid ${colors.chipBorder}`,
+                            color: colors.textMain,
+                            fontSize: 14,
+                            outline: "none",
+                            transition: "border-color 0.2s"
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Scrollable list */}
+                    <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px" }} className="scroll">
+                      {networkLoading && networkData.mutual.length === 0 && networkData.new.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "40px 0", color: colors.textMuted, fontSize: 14 }}>
+                          Loading connections...
+                        </div>
+                      ) : (
+                        <>
+                          {networkData.totalCount === 0 && (
+                            <div style={{ textAlign: "center", padding: "40px 0", color: colors.textMuted, fontSize: 14 }}>
+                              No connections found.
+                            </div>
+                          )}
+
+                          {networkData.totalCount > 0 && networkData.mutual.length === 0 && networkData.new.length === 0 && (
+                            <div style={{ textAlign: "center", padding: "40px 0", color: colors.textMuted, fontSize: 14 }}>
+                              No matching connections found.
+                            </div>
+                          )}
+
+                          {/* Mutual Connections Section */}
+                          {networkData.mutual.length > 0 && (
+                            <div style={{ marginBottom: 24 }}>
+                              <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", color: colors.textMuted, letterSpacing: "0.5px", marginBottom: 12 }}>
+                                Mutual Connections ({networkData.mutual.length})
+                              </h4>
+                              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                                {networkData.mutual.map(user => (
+                                  <div 
+                                    key={user.userId} 
+                                    onClick={() => {
+                                      setShowNetworkModal(false);
+                                      go("public-profile", user);
+                                    }}
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "space-between",
+                                      padding: "8px 12px",
+                                      borderRadius: 12,
+                                      cursor: "pointer",
+                                      transition: "background 0.2s"
+                                    }}
+                                    className="hover:bg-gray-100/10"
+                                  >
+                                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                      <div style={{ width: 40, height: 40, borderRadius: "50%", overflow: "hidden", background: colors.chipBg, flexShrink: 0 }}>
+                                        {user.profilePhoto ? (
+                                          <img src={user.profilePhoto} alt={user.displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                        ) : (
+                                          <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyItems: "center", justifyContent: "center", background: "var(--bg-3)" }}>
+                                            <UserIcon style={{ width: 18, height: 18, color: colors.textMuted }} />
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div>
+                                        <div style={{ fontSize: 14, fontWeight: 700, color: colors.textMain }}>{user.displayName}</div>
+                                        <div style={{ fontSize: 12, color: colors.textMuted }}>@{user.username}</div>
+                                      </div>
+                                    </div>
+                                    <span style={{ fontSize: 11, fontWeight: 600, background: "rgba(16, 185, 129, 0.1)", color: "#10b981", padding: "4px 8px", borderRadius: 12 }}>
+                                      Mutual
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* New Connections Section */}
+                          {networkData.new.length > 0 && (
+                            <div style={{ marginBottom: 24 }}>
+                              <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", color: colors.textMuted, letterSpacing: "0.5px", marginBottom: 12 }}>
+                                New Connections ({networkData.new.length})
+                              </h4>
+                              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                                {networkData.new.map(user => {
+                                  const cState = networkConnectStates[user.userId] || user.connectionState;
+                                  return (
+                                    <div 
+                                      key={user.userId} 
+                                      onClick={() => {
+                                        setShowNetworkModal(false);
+                                        go("public-profile", user);
+                                      }}
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "space-between",
+                                        padding: "8px 12px",
+                                        borderRadius: 12,
+                                        cursor: "pointer",
+                                        transition: "background 0.2s"
+                                      }}
+                                      className="hover:bg-gray-100/10"
+                                    >
+                                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                        <div style={{ width: 40, height: 40, borderRadius: "50%", overflow: "hidden", background: colors.chipBg, flexShrink: 0 }}>
+                                          {user.profilePhoto ? (
+                                            <img src={user.profilePhoto} alt={user.displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                          ) : (
+                                            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyItems: "center", justifyContent: "center", background: "var(--bg-3)" }}>
+                                              <UserIcon style={{ width: 18, height: 18, color: colors.textMuted }} />
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div>
+                                          <div style={{ fontSize: 14, fontWeight: 700, color: colors.textMain }}>{user.displayName}</div>
+                                          <div style={{ fontSize: 12, color: colors.textMuted }}>@{user.username}</div>
+                                        </div>
+                                      </div>
+
+                                      {/* Connection Button */}
+                                      {cState === 'none' && (
+                                        <button 
+                                          onClick={(e) => handleConnectFromModal(user.userId, e)}
+                                          style={{
+                                            padding: "6px 14px",
+                                            borderRadius: 16,
+                                            background: "#6366f1",
+                                            color: "#fff",
+                                            border: "none",
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            cursor: "pointer",
+                                            transition: "background 0.2s"
+                                          }}
+                                        >
+                                          Connect
+                                        </button>
+                                      )}
+                                      {cState === 'loading' && (
+                                        <button 
+                                          disabled
+                                          style={{
+                                            padding: "6px 14px",
+                                            borderRadius: 16,
+                                            background: colors.chipBg,
+                                            border: `1.5px solid ${colors.chipBorder}`,
+                                            color: colors.textMuted,
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            cursor: "default"
+                                          }}
+                                        >
+                                          ...
+                                        </button>
+                                      )}
+                                      {cState === 'requested' && (
+                                        <button 
+                                          disabled
+                                          style={{
+                                            padding: "6px 14px",
+                                            borderRadius: 16,
+                                            background: "rgba(245, 158, 11, 0.1)",
+                                            border: "1.5px solid rgba(245, 158, 11, 0.2)",
+                                            color: "#f59e0b",
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            cursor: "default"
+                                          }}
+                                        >
+                                          Requested
+                                        </button>
+                                      )}
+                                      {cState === 'requested_by_them' && (
+                                        <button 
+                                          onClick={(e) => handleConnectFromModal(user.userId, e)}
+                                          style={{
+                                            padding: "6px 14px",
+                                            borderRadius: 16,
+                                            background: "#6366f1",
+                                            color: "#fff",
+                                            border: "none",
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            cursor: "pointer",
+                                            transition: "background 0.2s"
+                                          }}
+                                        >
+                                          Respond
+                                        </button>
+                                      )}
+                                      {cState === 'accepted' && (
+                                        <span style={{ fontSize: 11, fontWeight: 600, background: "rgba(16, 185, 129, 0.1)", color: "#10b981", padding: "4px 8px", borderRadius: 12 }}>
+                                          Connected ✓
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Pagination Load More button */}
+                          {networkHasMore && (
+                            <div style={{ display: "flex", justifyContent: "center", marginTop: 8 }}>
+                              <button 
+                                onClick={async () => {
+                                  const nextPage = networkPage + 1;
+                                  setNetworkPage(nextPage);
+                                  await fetchNetwork(networkSearch, nextPage, true);
+                                }}
+                                disabled={networkLoading}
+                                style={{
+                                  padding: "8px 16px",
+                                  borderRadius: 16,
+                                  background: colors.chipBg,
+                                  border: `1.5px solid ${colors.chipBorder}`,
+                                  color: colors.textMain,
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  cursor: networkLoading ? "default" : "pointer"
+                                }}
+                              >
+                                {networkLoading ? "Loading..." : "Load More"}
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Premium Upgrade Card */}
               <div style={{ background: colors.premiumBg, borderRadius: 24, padding: 32, marginTop: 32, color: colors.premiumText, boxShadow: "0 12px 30px rgba(0,0,0,0.12)" }}>
                 <h3 style={{ fontSize: 20, fontWeight: 800, margin: 0, color: colors.premiumText }}>Samaagum+</h3>
@@ -452,7 +910,7 @@ function Profile({ st, go }) {
                     <I.plus style={{ width: 20, height: 20 }} />
                   </button>
                 </h2>
-                
+
                 {isEditingInterests ? (
                   <div style={{ marginTop: 24, background: colors.cardBg, border: `1px solid ${colors.border}`, padding: 24, borderRadius: 20 }}>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>
@@ -465,15 +923,15 @@ function Profile({ st, go }) {
                         </div>
                       ))}
                     </div>
-                    
+
                     <div style={{ display: "flex", gap: 12 }}>
-                      <input 
-                        className="cfield" 
-                        placeholder="Add a new interest..." 
-                        value={newInterest} 
-                        onChange={(e) => setNewInterest(e.target.value)} 
+                      <input
+                        className="cfield"
+                        placeholder="Add a new interest..."
+                        value={newInterest}
+                        onChange={(e) => setNewInterest(e.target.value)}
                         onKeyDown={handleAddInterest}
-                        style={{ background: colors.bgContainer, border: `1px solid ${colors.border}`, color: colors.textMain, padding: "12px 16px", borderRadius: 10, fontSize: 15, outline: "none", flex: 1, boxSizing: "border-box" }} 
+                        style={{ background: colors.bgContainer, border: `1px solid ${colors.border}`, color: colors.textMain, padding: "12px 16px", borderRadius: 10, fontSize: 15, outline: "none", flex: 1, boxSizing: "border-box" }}
                       />
                       <button onClick={handleAddInterest} style={{ background: "var(--accent-1)", color: "white", border: "none", padding: "0 20px", borderRadius: 10, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
                         <I.plus style={{ width: 18, height: 18 }} /> Add

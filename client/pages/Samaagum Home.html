@@ -31,31 +31,35 @@
   <script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"></script>
   <script>window.QRCodeLib = window.QRCode;</script>
   <script>
+    // Load Socket.io client library directly from backend server synchronously
     (function() {
-      var apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
-      var socketUrl = (apiBase || (window.location.protocol + '//' + window.location.host)) + '/socket.io/socket.io.js';
-      document.write('<script src="' + socketUrl + '"><\/script>');
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const apiBase = isLocalhost ? "http://localhost:3000" : window.location.origin;
+      document.write('<script src="' + apiBase + '/socket.io/socket.io.js"><\/script>');
     })();
   </script>
-  <script src="../dist/ios-frame.js"></script>
-  <script src="../dist/tweaks-panel.js"></script>
-  <script src="../dist/home-icons.js"></script>
-  <script src="../dist/home-data.js"></script>
-  <script src="../dist/home-shell.js"></script>
-  <script src="../dist/home-cards.js"></script>
-  <script src="../dist/home-feed.js"></script>
-  <script src="../dist/home-event.js"></script>
-  <script src="../dist/home-group.js"></script>
-  <script src="../dist/home-profile.js"></script>
-  <script src="../dist/VirtualCard.js"></script>
-  <script src="../dist/home-notifications.js"></script>
-  <script src="../dist/home-messages.js"></script>
-  <script src="../dist/home-create.js"></script>
-  <script src="../dist/home-tickets.js"></script>
-  <script src="../dist/home-waitlist.js"></script>
-  <script src="../dist/home-subscription.js"></script>
-  <script src="../dist/home-invite.js"></script>
-  <script src="../dist/home-app.js"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/ios-frame.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/tweaks-panel.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/components.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-icons.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-data.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-shell.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-cards.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-feed.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-event.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-group.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-profile.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-settings.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/VirtualCard.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-notifications.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/api/messaging-client.ts"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-messages.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-create.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-tickets.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-waitlist.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-subscription.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/public-profile.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-app.tsx"></script>
 </body>
 
 </html>
