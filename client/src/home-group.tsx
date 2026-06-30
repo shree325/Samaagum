@@ -215,10 +215,18 @@ function CommentItem({ c, depth, canReply, isOwner, currentUserId, replyingToId,
 }
 
 function GroupDetail({ group, st, go }) {
-  const g = group || GROUPS[0];
+  const [fullGroup, setFullGroup] = useState(null);
+  const [membershipState, setMembershipState] = useState(null);
+  const g = fullGroup || group || GROUPS[0];
+
+  React.useEffect(() => {
+    setFullGroup(null);
+    setMembershipState(null);
+  }, [group?.id]);
+
   const { joined, pending, toggleJoin } = st;
-  const isJoined = joined.has(g.id);
-  const isPending = pending.has(g.id);
+  const isJoined = joined.has(g.id) || membershipState === 'active';
+  const isPending = pending.has(g.id) || membershipState === 'pending';
 
   const chatSettings = st.chatSettings || {
     allowSiteMessaging: true,
@@ -259,6 +267,8 @@ function GroupDetail({ group, st, go }) {
   const [inlineReplyDraft, setInlineReplyDraft] = useState("");
   const [submittingInlineReply, setSubmittingInlineReply] = useState(false);
   const [myLikes, setMyLikes] = useState(new Set());
+  const [accessDenied, setAccessDenied] = useState(false);
+  const [accessDeniedMsg, setAccessDeniedMsg] = useState("");
 
   // Edit state
   const [editingPostId, setEditingPostId] = useState(null);
@@ -1341,21 +1351,6 @@ function GroupDetail({ group, st, go }) {
                           <button className="hbtn hbtn--primary hbtn--sm" style={{ marginLeft: "auto" }} disabled={!replyDraft.trim() || submittingReply} onClick={handleSubmitReply}>
                             {submittingReply ? 'Posting…' : 'Reply'}
                           </button>
-                        </div>
-                        <div style={{ display: "flex", gap: 8 }}>
-                          {showChatButton && mName !== ME.name && (
-                            <button 
-                              className="hbtn hbtn--ghost hbtn--sm"
-                              onClick={() => {
-                                if (window.initiateChatWithName) {
-                                  window.initiateChatWithName(mName);
-                                }
-                              }}
-                            >
-                              <I.chat style={{ width: 14, height: 14 }} />
-                            </button>
-                          )}
-                          <button className="hbtn hbtn--ghost hbtn--sm">View</button>
                         </div>
                       </div>
                     </div>

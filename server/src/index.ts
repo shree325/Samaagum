@@ -28,6 +28,7 @@ import { SubscriptionNotificationService } from './services/SubscriptionNotifica
 import { messagingTestRoutes } from './controllers/messagingTestRoutes';
 import { messagingRoutes } from './controllers/messagingRoutes';
 import { connectionRoutes } from './controllers/connectionRoutes';
+import { groupRoutes } from './controllers/groupRoutes';
 
 
 dotenv.config();
@@ -133,6 +134,7 @@ fastify.register(publicRoutes, { prefix: '/api/public' });
 fastify.register(messagingTestRoutes, { prefix: '/api/test' });
 fastify.register(messagingRoutes, { prefix: '/api/messaging' });
 fastify.register(connectionRoutes, { prefix: '/api/connections' });
+fastify.register(groupRoutes, { prefix: '/api/groups' });
 
 // Health check route
 fastify.get('/health', async (request, reply) => {
