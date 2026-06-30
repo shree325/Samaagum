@@ -5,7 +5,7 @@
    Depends on components.jsx (globals)
    ============================================================ */
 
-const { useState, useEffect, useRef } = React;
+var { useState, useEffect, useRef } = React;
 
 /* ---------------- State machine ---------------- */
 const ORDER = {

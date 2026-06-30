@@ -1,9 +1,10 @@
+// @ts-nocheck
 /* ============================================================
    Samaagum landing — core engine, atoms, data
    Scroll model mirrors Framer Motion: Reveal≈whileInView,
    useScrub≈useScroll+useTransform, useTilt≈motion 3D.
    ============================================================ */
-const { useState, useRef, useEffect, useLayoutEffect } = React;
+var { useState, useRef, useEffect, useLayoutEffect } = React;
 
 const REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 

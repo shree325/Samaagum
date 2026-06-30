@@ -1,60 +1,84 @@
-import { PrismaClient } from '@prisma/client';
+import { PostgresBaseRepository } from "./PostgresBaseRepository";
 import { IGroupMembership, IR_group_memberships } from "./IR_group_memberships";
 
-export class R_group_memberships implements IR_group_memberships {
-  constructor(private db: PrismaClient) {}
+import prisma from '../config/prisma';
 
-  async create(gm: IGroupMembership): Promise<IGroupMembership> {
-    const data: any = {
-      tenant_id: gm.tenant_id,
-      group_id: gm.group_id,
-      user_id: gm.user_id,
-      state: gm.state || 'pending',
-      form_response_id: gm.form_response_id || null,
-      joined_at: gm.joined_at || null,
-    };
-    return (this.db.group_memberships as any).create({ data });
-  }
-
-  async getById(id: string): Promise<IGroupMembership | null> {
-    return (this.db.group_memberships as any).findUnique({ where: { id } });
+export class R_group_memberships extends PostgresBaseRepository<IGroupMembership> implements IR_group_memberships {
+  constructor(dbClient?: any) {
+    super('group_memberships', 'id', dbClient);
   }
 
   async getByGroupAndUser(group_id: string, user_id: string): Promise<IGroupMembership | null> {
-    return (this.db.group_memberships as any).findUnique({
-      where: {
-        group_id_user_id: { group_id, user_id }
-      }
+    return (this.dbModel as any).findFirst({
+      where: { group_id, user_id }
     });
   }
 
   async getByGroup(group_id: string): Promise<IGroupMembership[]> {
-    return (this.db.group_memberships as any).findMany({
+    return (this.dbModel as any).findMany({
       where: { group_id },
       orderBy: { created_at: 'desc' }
     });
   }
 
   async getByUser(user_id: string): Promise<IGroupMembership[]> {
-    return (this.db.group_memberships as any).findMany({
+    return (this.dbModel as any).findMany({
       where: { user_id },
       orderBy: { created_at: 'desc' }
     });
   }
 
-  async update(id: string, gm: Partial<IGroupMembership>): Promise<IGroupMembership | null> {
-    return (this.db.group_memberships as any).update({
-      where: { id },
-      data: gm
+  async findFirstActive(userId: string, orConditions: any[]): Promise<IGroupMembership | null> {
+    return await prisma.group_memberships.findFirst({
+      where: { user_id: userId, state: 'active', OR: orConditions }
     });
   }
 
-  async delete(id: string): Promise<boolean> {
+  async findFirstActiveByCategory(userId: string, cats: string[]): Promise<IGroupMembership | null> {
+    return await prisma.group_memberships.findFirst({
+      where: { user_id: userId, state: 'active', entities: { groups: { category: { in: cats } } } }
+    });
+  }
+
+  async getMembershipCounts(groupIds: string[]): Promise<any[]> {
+    return await (prisma.group_memberships.groupBy as any)({
+      by: ['group_id'],
+      where: { group_id: { in: groupIds }, state: 'active' },
+      _count: { _all: true }
+    });
+  }
+
+  async getMembershipCountsAll(): Promise<any[]> {
+    return await (prisma.group_memberships.groupBy as any)({
+      by: ['group_id'],
+      where: { state: 'active' },
+      _count: { _all: true }
+    });
+  }
+
+  async deleteMembership(groupId: string, userId: string): Promise<boolean> {
     try {
-      await (this.db.group_memberships as any).delete({ where: { id } });
+      await prisma.group_memberships.deleteMany({
+        where: { group_id: groupId, user_id: userId }
+      });
       return true;
     } catch {
       return false;
     }
+  }
+
+  async leaveGroupTx(groupId: string, userId: string): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+      await tx.role_assignments.deleteMany({
+        where: { user_id: userId, scope_entity_id: groupId }
+      });
+      await tx.group_memberships.deleteMany({
+        where: { group_id: groupId, user_id: userId }
+      });
+      await tx.$executeRawUnsafe(
+        `DELETE FROM forum_member_permissions WHERE group_id=$1::uuid AND user_id=$2::uuid`,
+        groupId, userId
+      );
+    });
   }
 }

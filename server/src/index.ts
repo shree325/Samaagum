@@ -80,6 +80,9 @@ fastify.decorate('authenticate', async (request: any, reply: any) => {
             const parts = token.split('.');
             if (parts.length === 3) {
                 const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+                if (payload && !payload.tenantId) {
+                    payload.tenantId = '00000000-0000-0000-0000-000000000000';
+                }
                 request.user = payload;
             }
         } catch (err) {
@@ -188,7 +191,7 @@ const start = async () => {
         await startMessaging(io);
         await startGroupsSocket(io);
 
-        await fastify.listen({ port: PORT, host: '0.0.0.0' });
+        await fastify.listen({ port: PORT, host: '::' });
         console.log(`🚀 Server is running on port ${PORT}`);
         console.log(`🔗 Health check available at http://localhost:${PORT}/health`);
         // Trigger reload comment - restart 2

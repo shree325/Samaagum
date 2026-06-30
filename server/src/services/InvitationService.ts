@@ -1,6 +1,11 @@
 import prisma from '../config/prisma';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
+import { R_users } from '../repositories/R_users';
+import { R_profiles } from '../repositories/R_profiles';
+import { R_groups } from '../repositories/R_groups';
+import { R_group_memberships } from '../repositories/R_group_memberships';
+import { R_group_invitations } from '../repositories/R_group_invitations';
 
 interface InviteTarget {
     email?: string;
@@ -19,21 +24,32 @@ export class InvitationService {
      */
     static async createInvitations(groupId: string, inviterId: string, targets: InviteTarget[]) {
         const results = [];
+        const groupRepo = new R_groups();
+        const userRepo = new R_users(prisma);
+        const profileRepo = new R_profiles();
+        const groupMembershipsRepo = new R_group_memberships();
+        const groupInvitationsRepo = new R_group_invitations();
+
+        const group = await groupRepo.getById(groupId);
+        if (!group) throw new Error("Group not found");
+        const entity = await prisma.entities.findUnique({
+            where: { id: group.entity_id }
+        });
+        if (!entity) throw new Error("Group entity not found");
+        const tenantId = entity.tenant_id;
         
         for (const target of targets) {
             // Check if user is already a member
             let existingUser = null;
             if (target.email) {
-                existingUser = await prisma.users.findFirst({ where: { primary_email: target.email } });
+                existingUser = await userRepo.getByEmail(tenantId, target.email);
             } else if (target.username) {
-                const p = await prisma.profiles.findFirst({ where: { user_name: target.username } });
-                if (p) existingUser = await prisma.users.findFirst({ where: { id: p.user_id } });
+                const p = await profileRepo.findOne({ user_name: target.username });
+                if (p) existingUser = await userRepo.getById(p.user_id);
             }
 
             if (existingUser) {
-                const membership = await prisma.group_memberships.findUnique({
-                    where: { group_id_user_id: { group_id: groupId, user_id: existingUser.id } }
-                });
+                const membership = await groupMembershipsRepo.getByGroupAndUser(groupId, existingUser.id!);
                 if (membership && membership.state === 'active') {
                     results.push({ target, success: false, message: 'Already a member' });
                     continue;
@@ -41,15 +57,13 @@ export class InvitationService {
             }
 
             // Check for existing pending invitation
-            const existingInvite = await prisma.group_invitations.findFirst({
-                where: {
-                    group_id: groupId,
-                    status: 'pending',
-                    OR: [
-                        { email: target.email || undefined },
-                        { username: target.username || undefined }
-                    ]
-                }
+            const existingInvite = await groupInvitationsRepo.findOne({
+                group_id: groupId,
+                status: 'pending',
+                OR: [
+                    { email: target.email || undefined },
+                    { username: target.username || undefined }
+                ]
             });
 
             if (existingInvite) {
@@ -58,16 +72,15 @@ export class InvitationService {
             }
 
             const token = this.generateToken();
-            const invite = await prisma.group_invitations.create({
-                data: {
-                    group_id: groupId,
-                    email: target.email || null,
-                    username: target.username || null,
-                    token,
-                    status: 'pending',
-                    link_type: 'single_use',
-                    invited_by: inviterId
-                }
+            const invite = await groupInvitationsRepo.create({
+                group_id: groupId,
+                email: target.email || null,
+                username: target.username || null,
+                token,
+                status: 'pending',
+                link_type: 'single_use',
+                uses_count: 0,
+                invited_by: inviterId
             });
 
             const inviteLink = `${process.env.APP_URL || 'http://app.samaagum.com'}/groups/invite/${token}`;
@@ -104,17 +117,17 @@ export class InvitationService {
     static async createShareableLink(groupId: string, inviterId: string, config: { maxUses?: number, expiryHours?: number }) {
         const token = this.generateToken();
         const expiresAt = config.expiryHours ? new Date(Date.now() + config.expiryHours * 60 * 60 * 1000) : null;
+        const groupInvitationsRepo = new R_group_invitations();
         
-        const invite = await prisma.group_invitations.create({
-            data: {
-                group_id: groupId,
-                token,
-                status: 'pending',
-                link_type: config.maxUses === 1 ? 'single_use' : 'multi_use',
-                max_uses: config.maxUses || null,
-                expires_at: expiresAt,
-                invited_by: inviterId
-            }
+        const invite = await groupInvitationsRepo.create({
+            group_id: groupId,
+            token,
+            status: 'pending',
+            link_type: config.maxUses === 1 ? 'single_use' : 'multi_use',
+            max_uses: config.maxUses || null,
+            uses_count: 0,
+            expires_at: expiresAt,
+            invited_by: inviterId
         });
 
         return invite;
@@ -124,17 +137,19 @@ export class InvitationService {
      * Validate an invitation token
      */
     static async validateInvite(token: string, userId?: string) {
-        const invite = await prisma.group_invitations.findUnique({
-            where: { token },
-            include: { groups: true, users: true }
-        });
+        const groupInvitationsRepo = new R_group_invitations();
+        const userRepo = new R_users(prisma);
+        const profileRepo = new R_profiles();
+        const groupMembershipsRepo = new R_group_memberships();
+
+        const invite = await groupInvitationsRepo.findByTokenWithRelations(token);
 
         if (!invite) return { valid: false, message: 'Invalid invitation token' };
         if (invite.status === 'revoked') return { valid: false, message: 'Invitation was revoked' };
         if (invite.status === 'expired' || (invite.expires_at && invite.expires_at < new Date())) {
             // Update status to expired
             if (invite.status !== 'expired') {
-                await prisma.group_invitations.update({ where: { id: invite.id }, data: { status: 'expired' } });
+                await groupInvitationsRepo.update(invite.id, { status: 'expired' });
             }
             return { valid: false, message: 'Invitation has expired' };
         }
@@ -147,25 +162,25 @@ export class InvitationService {
 
         // If target-specific, ensure the logged-in user matches the target
         if (userId) {
-            const user = await prisma.users.findUnique({ where: { id: userId } });
+            const user = await userRepo.getById(userId);
             if (!user) return { valid: false, message: 'User not found' };
 
             if (invite.email && invite.email !== user.primary_email) {
                 return { valid: false, message: 'This invitation is for a different email address' };
             }
             if (invite.username) {
-                const profile = await prisma.profiles.findFirst({ where: { user_id: userId } });
+                const profile = await profileRepo.getByUserId(userId);
                 if (!profile || invite.username !== profile.user_name) {
                     return { valid: false, message: 'This invitation is for a different username' };
                 }
             }
 
             // Check if user is already a member
-            const membership = await prisma.group_memberships.findUnique({
-                where: { group_id_user_id: { group_id: invite.group_id, user_id: userId } }
-            });
-            if (membership && membership.state === 'active') {
-                return { valid: false, message: 'You are already a member of this group' };
+            const membership = await groupMembershipsRepo.getByGroupAndUser(invite.group_id, userId);
+            if (membership) {
+                if (membership.state === 'active' || membership.state === 'pending') {
+                    return { valid: true, invite, isAlreadyMember: true, membershipState: membership.state };
+                }
             }
         }
 
@@ -181,6 +196,10 @@ export class InvitationService {
         const validation = await this.validateInvite(token, userId);
         if (!validation.valid || !validation.invite) {
             throw new Error(validation.message || 'Invalid invitation');
+        }
+
+        if ((validation as any).isAlreadyMember) {
+            return { membershipState: (validation as any).membershipState };
         }
 
         const invite = validation.invite;
@@ -201,23 +220,26 @@ export class InvitationService {
 
         const result = await prisma.$transaction(async (tx) => {
             const answersData = (answers && Object.keys(answers).length > 0) ? (answers as any) : undefined;
+            const txGroupMembershipsRepo = new R_group_memberships(tx);
+            const txGroupInvitationsRepo = new R_group_invitations(tx);
 
-            const membership = await tx.group_memberships.upsert({
-                where: { group_id_user_id: { group_id: invite.group_id, user_id: userId } },
-                update: {
+            let membership = await txGroupMembershipsRepo.getByGroupAndUser(invite.group_id, userId);
+            if (membership) {
+                membership = await txGroupMembershipsRepo.update(membership.id!, {
                     state: memberState as any,
                     ...(memberState === 'active' ? { joined_at: new Date() } : {}),
                     ...(answersData ? { answers: answersData } : {})
-                },
-                create: {
+                });
+            } else {
+                membership = await txGroupMembershipsRepo.create({
                     tenant_id: tenantId,
                     group_id: invite.group_id,
                     user_id: userId,
                     state: memberState as any,
                     ...(memberState === 'active' ? { joined_at: new Date() } : {}),
                     ...(answersData ? { answers: answersData } : {})
-                }
-            });
+                });
+            }
 
             // Update invitation uses
             const newUsesCount = invite.uses_count + 1;
@@ -227,13 +249,10 @@ export class InvitationService {
                 newStatus = 'accepted';
             }
 
-            await tx.group_invitations.update({
-                where: { id: invite.id },
-                data: {
-                    uses_count: newUsesCount,
-                    status: newStatus,
-                    accepted_at: new Date()
-                }
+            await txGroupInvitationsRepo.update(invite.id, {
+                uses_count: newUsesCount,
+                status: newStatus,
+                accepted_at: new Date()
             });
 
             return { membership, inviteGroupId: invite.group_id };

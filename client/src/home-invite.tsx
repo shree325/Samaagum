@@ -23,6 +23,9 @@ function InviteLanding({ token, go }) {
                 const data = await res.json();
                 if (data.success) {
                     setInviteData(data.data);
+                    if (data.data.isAlreadyMember) {
+                        setJoinResult({ state: data.data.membershipState || 'active', groupId: data.data.group.id });
+                    }
                 } else {
                     setError(data.message || "Invalid or expired invitation.");
                 }

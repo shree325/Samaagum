@@ -1,7 +1,12 @@
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import { R_users } from '../repositories/R_users';
+import { R_profiles } from '../repositories/R_profiles';
 import prisma from '../config/prisma';
 
 export const uploadRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
+
+  const userRepo = new R_users(prisma);
+  const profileRepo = new R_profiles();
 
   fastify.post('/upload-profile-photo', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
     try {
@@ -24,35 +29,31 @@ export const uploadRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
       const base64Str = buffer.toString('base64');
       const imageUrl = `data:${data.mimetype};base64,${base64Str}`;
 
-      const dbUser = await prisma.users.findUnique({
-        where: { id: request.user.id }
-      });
+      const dbUser = await userRepo.getById(request.user.id);
 
-      if (dbUser) {
+      if (dbUser && dbUser.id) {
         // Store image bytes directly on the users row
-        await prisma.users.update({
-          where: { id: dbUser.id },
-          data: {
-            profile_image_data: buffer,
-            updated_at: new Date()
-          }
-        });
+        await userRepo.update(dbUser.id, {
+          profile_image_data: buffer as any,
+          updated_at: new Date()
+        } as any);
 
         // Also keep profiles.profile_image_data in sync
-        await prisma.profiles.upsert({
-          where: { user_id: dbUser.id },
-          update: {
-            profile_image_data: buffer,
+        const existingProfile = await profileRepo.getByUserId(dbUser.id);
+        if (existingProfile) {
+          await profileRepo.update(dbUser.id, {
+            profile_image_data: buffer as any,
             updated_at: new Date()
-          },
-          create: {
+          } as any);
+        } else {
+          await profileRepo.create({
             user_id: dbUser.id,
             tenant_id: dbUser.tenant_id,
-            profile_image_data: buffer,
+            profile_image_data: buffer as any,
             created_at: new Date(),
             updated_at: new Date()
-          }
-        });
+          } as any);
+        }
       }
 
       return {

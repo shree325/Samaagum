@@ -3,7 +3,7 @@
    Samaagum — showcase app (desktop + mobile + tweaks)
    ============================================================ */
 
-const { useState, useEffect } = React;
+var { useState, useEffect } = React;
 
 // ── Handle Google OAuth redirect ─────────────────────────────────────────────
 // After Google login, the backend redirects back here with ?token=...&auth=google

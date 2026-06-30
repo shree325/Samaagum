@@ -1,14 +1,23 @@
 import { FastifyInstance } from 'fastify';
+import { R_categories } from '../repositories/R_categories';
+import { R_cityControls } from '../repositories/R_cityControls';
+import { R_groups } from '../repositories/R_groups';
+import { R_users } from '../repositories/R_users';
 import prisma from '../config/prisma';
 
 export const publicRoutes = async (fastify: FastifyInstance) => {
 
+  const categoryRepo = new R_categories();
+  const cityRepo = new R_cityControls();
+  const groupRepo = new R_groups();
+  const userRepo = new R_users(prisma);
+
   // Get all categories/interests
   fastify.get('/categories', async (request, reply) => {
     try {
-      const categories = await prisma.categories.findMany({
-        orderBy: { name: 'asc' }
-      });
+      const categories = await categoryRepo.findAll();
+      // Sort alphabetically in JS since findAll doesn't accept order directly
+      categories.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       return {
         success: true,
         data: categories
@@ -21,23 +30,17 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
   // Get all active cities/locations
   fastify.get('/cities', async (request, reply) => {
     try {
-      const cities = await prisma.city_controls.findMany({
-        where: { is_active: true },
-        orderBy: { city_name: 'asc' },
-        select: {
-          geoname_id: true,
-          city_name: true,
-          state_name: true,
-          country_name: true,
-          latitude: true,
-          longitude: true
-        }
-      });
+      const result = await cityRepo.findAll({ status: 'active', limit: 1000 });
+      const cities = result.data;
       return {
         success: true,
         data: cities.map(c => ({
-          ...c,
-          geoname_id: c.geoname_id.toString()
+          geoname_id: c.geoname_id.toString(),
+          city_name: c.city_name,
+          state_name: c.state_name,
+          country_name: c.country_name,
+          latitude: c.latitude,
+          longitude: c.longitude
         }))
       };
     } catch (error: any) {
@@ -48,11 +51,7 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
   // Groups hierarchy for access control selector
   fastify.get('/groups-hierarchy', async (request, reply) => {
     try {
-      const groups = await prisma.groups.findMany({
-        where: { entities: { visibility: 'public' } },
-        include: { entities: { select: { visibility: true } } },
-        orderBy: { name: 'asc' }
-      });
+      const groups = await groupRepo.getPublicGroupsForHierarchy();
 
       const published = groups.filter((g: any) => {
         const s = (g.settings as any) || {};
@@ -83,17 +82,7 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
     try {
       const { username } = request.params;
       // Find user by primary_email starting with username@
-      const user = await prisma.users.findFirst({
-        where: {
-          primary_email: {
-            startsWith: `${username}@`
-          }
-        },
-        include: {
-          profiles: true,
-          profile_links: true,
-        }
-      });
+      const user = await userRepo.findByUsernamePrefixWithProfile(username);
 
       if (!user) {
         return reply.status(404).send({ success: false, message: 'User not found' });

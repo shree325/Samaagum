@@ -1,5 +1,5 @@
 // @ts-nocheck
-const { useState, useEffect } = React;
+var { useState, useEffect } = React;
 
 function VirtualCardPage() {
   const [userData, setUserData] = useState(null);

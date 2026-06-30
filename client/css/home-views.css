@@ -556,7 +556,7 @@
   position: relative;
   z-index: 3;
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 18px;
 }
 
@@ -576,6 +576,7 @@
 
 .grp-head .gh-meta {
   flex: 1;
+  margin-top: 48px; /* Push the text below the cover image edge */
   padding-bottom: 6px;
   min-width: 0;
 }
@@ -601,6 +602,7 @@
 .grp-head .gh-act {
   display: flex;
   gap: 10px;
+  margin-top: 48px;
   padding-bottom: 8px;
 }
 

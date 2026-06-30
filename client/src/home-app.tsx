@@ -79,7 +79,7 @@ function App() {
     if (userId && window.io) {
       const chatSocket = window.io(apiBase ? `${apiBase}/chat` : "/chat", {
         auth: { token: userId },
-        transports: ["websocket", "polling"]
+        transports: ["websocket"]
       });
 
       chatSocket.on("connect", () => {

@@ -165,7 +165,10 @@ function Discover({ st, go }) {
 
     const fetchGroups = async () => {
       try {
-        const res = await fetch(`${apiBase}/api/groups`);
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${apiBase}/api/groups`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
         const data = await res.json();
         if (data.success) {
           setDbGroups(data.data || []);
@@ -180,7 +183,7 @@ function Discover({ st, go }) {
 
     if (window.io) {
       const socketUrl = apiBase ? `${apiBase}/groups` : "/groups";
-      const socket = window.io(socketUrl, { transports: ['websocket', 'polling'] });
+      const socket = window.io(socketUrl, { transports: ['websocket'] });
       socket.on('groups_updated', () => fetchGroups());
       return () => socket.disconnect();
     }

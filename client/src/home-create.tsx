@@ -1010,13 +1010,6 @@ function CapacitySettingsModal({ open, onClose, limitCap, setLimitCap, maxCap, s
   );
 }
 
-const ACCESS_OPTIONS = {
-  communities: ["SGSITS", "MANIT", "LNCT", "IIT Bombay", "BITS Pilani"],
-  subCommunities: ["CSE", "ECE", "Mechanical", "Civil", "Biotech"],
-  groups: ["Placement Preparation", "Hackathon Team", "Startup Founders", "Design Systems Guild", "Slow Food Club"],
-  members: ["Mira Shah", "Vivek Rao", "Riya Thomas", "Karan Sethi", "Aanya Reddy", "Kabir Anand", "Dev Kapoor", "Sana B", "Arjun V"]
-};
-
 function getDynamicHierarchy(apiData = null) {
   // If real data from API is available, build from it
   if (apiData && apiData.communities && apiData.communities.length > 0) {
@@ -1029,76 +1022,7 @@ function getDynamicHierarchy(apiData = null) {
     }
     return tree;
   }
-
-  const relationMap = {
-    "CSE": "SGSITS",
-    "ECE": "SGSITS",
-    "Mechanical": "LNCT",
-    "Civil": "LNCT",
-    "Biotech": "BITS Pilani",
-
-    // Fallbacks/others
-    "Design": "MANIT",
-    "IT": "SGSITS",
-
-    // Group parents
-    "Hackathon Team": "CSE",
-    "Placement Preparation": "CSE",
-    "Startup Founders": "ECE",
-    "Design Systems Guild": "Design",
-    "Slow Food Club": "Biotech",
-    "Robotics Club": "Mechanical",
-    "Coding Club": "CSE"
-  };
-
-  const tree = [];
-
-  // 1. Build communities
-  const communitiesList = ACCESS_OPTIONS.communities || [];
-  const communities = communitiesList.map(name => {
-    const id = `c-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-    return {
-      id,
-      name,
-      type: "community",
-      parentId: null
-    };
-  });
-  tree.push(...communities);
-
-  // 2. Build sub-communities
-  const subCommunitiesList = ACCESS_OPTIONS.subCommunities || [];
-  const subCommunities = subCommunitiesList.map(name => {
-    const parentName = relationMap[name] || communitiesList[0] || "SGSITS";
-    const parentComm = communities.find(c => c.name === parentName);
-    const parentId = parentComm ? parentComm.id : `c-${parentName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-    const id = `s-${parentId}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-    return {
-      id,
-      name,
-      type: "subCommunity",
-      parentId
-    };
-  });
-  tree.push(...subCommunities);
-
-  // 3. Build groups
-  const groupsList = ACCESS_OPTIONS.groups || [];
-  const groups = groupsList.map(name => {
-    const parentSubCommName = relationMap[name] || subCommunitiesList[0] || "CSE";
-    const parentSub = subCommunities.find(s => s.name === parentSubCommName);
-    const parentId = parentSub ? parentSub.id : `s-c-sgsits-${parentSubCommName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-    const id = `g-${parentId}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-    return {
-      id,
-      name,
-      type: "group",
-      parentId
-    };
-  });
-  tree.push(...groups);
-
-  return tree;
+  return [];
 };
 
 const getHierarchyContext = (id, tree) => {
@@ -1144,15 +1068,7 @@ function AccessControlModal({ open, onClose, mode, selectedAccess, setSelectedAc
 
   // Unified Tree Selector state (must be at the top level unconditionally)
   const [treeSearch, setTreeSearch] = React.useState("");
-  const [expanded, setExpanded] = React.useState({
-    "c-sgsits": true,
-    "c-manit": true,
-    "c-lnct": true,
-    "s-c-sgsits-cse": true,
-    "s-c-sgsits-ece": true,
-    "s-c-manit-design": true,
-    "s-c-lnct-mechanical": true
-  });
+  const [expanded, setExpanded] = React.useState({});
 
   const dynamicTree = React.useMemo(() => {
     const fullTree = getDynamicHierarchy(hierarchyData);
@@ -1172,13 +1088,13 @@ function AccessControlModal({ open, onClose, mode, selectedAccess, setSelectedAc
   const dynamicCommunities = React.useMemo(() =>
     hierarchyData && hierarchyData.communities && hierarchyData.communities.length > 0
       ? hierarchyData.communities.map(c => c.name)
-      : ACCESS_OPTIONS.communities,
+      : [],
   [hierarchyData]);
 
   const dynamicGroups = React.useMemo(() =>
     hierarchyData && hierarchyData.communities && hierarchyData.communities.length > 0
       ? hierarchyData.communities.flatMap(c => (c.groups || []).map(g => g.name))
-      : ACCESS_OPTIONS.groups,
+      : [],
   [hierarchyData]);
 
   React.useEffect(() => {
@@ -1661,10 +1577,21 @@ function AccessControlModal({ open, onClose, mode, selectedAccess, setSelectedAc
     // RESTRICTED ACCESS - UNIFIED HIERARCHICAL TREE SELECTION
 
     const currentRestricted = selectedAccess.restricted || { communities: [], subCommunities: [], groups: [] };
+
+    // Map stored names back to tree node IDs for the UI checkboxes (backwards-compatible: also handles old ID-stored data)
     const selectedIds = [
-      ...(currentRestricted.communities || []),
-      ...(currentRestricted.subCommunities || []),
-      ...(currentRestricted.groups || [])
+      ...(currentRestricted.communities || []).flatMap(nameOrId => {
+        const node = dynamicTree.find(n => n.type === "community" && (n.name === nameOrId || n.id === nameOrId));
+        return node ? [node.id] : [];
+      }),
+      ...(currentRestricted.subCommunities || []).flatMap(nameOrId => {
+        const node = dynamicTree.find(n => n.type === "subCommunity" && (n.name === nameOrId || n.id === nameOrId));
+        return node ? [node.id] : [];
+      }),
+      ...(currentRestricted.groups || []).flatMap(nameOrId => {
+        const node = dynamicTree.find(n => n.type === "group" && (n.name === nameOrId || n.id === nameOrId));
+        return node ? [node.id] : [];
+      }),
     ];
 
     const setSelectedIds = (newSelectedIds) => {
@@ -1675,9 +1602,10 @@ function AccessControlModal({ open, onClose, mode, selectedAccess, setSelectedAc
       newSelectedIds.forEach(id => {
         const item = dynamicTree.find(x => x.id === id);
         if (item) {
-          if (item.type === "community") newComms.push(id);
-          else if (item.type === "subCommunity") newSubs.push(id);
-          else if (item.type === "group") newGroups.push(id);
+          // Store names so backend can query by group/community name
+          if (item.type === "community") newComms.push(item.name);
+          else if (item.type === "subCommunity") newSubs.push(item.name);
+          else if (item.type === "group") newGroups.push(item.name);
         }
       });
 
@@ -2847,15 +2775,17 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
 
   // Options Modals
   const [visModal, setVisModal] = useState(false);
-  const [visibility, setVisibility] = useState(isEdit ? (editGroup.entities?.visibility || "public") : (savedDraft.visibility || "public"));
+  const [visibility, setVisibility] = useState(isEdit ? (editGroup.visibility || "public") : (savedDraft.visibility || "public"));
 
-  const [joinElig, setJoinElig] = useState(isEdit ? (editGroup.joinMode === 'open' ? 'anyone' : editGroup.joinMode === 'invite_only' ? 'invite' : 'communities') : (savedDraft.joinElig || "anyone")); // anyone, communities, invite
-  const [selectedComms, setSelectedComms] = useState(savedDraft.selectedComms || []);
-  const [commSearch, setCommSearch] = useState("");
-  const availableComms = ["SGSITS", "MANIT", "LNCT", "IIT Bombay", "BITS Pilani"];
+  const [joinElig, setJoinElig] = useState(isEdit ? (() => {
+    const sje = editGroup.settings?.joinElig;
+    if (sje === 'restricted' || sje === 'communities' || editGroup.joinMode === 'restricted') return 'restricted';
+    if (sje === 'invite' || editGroup.joinMode === 'invite_only') return 'invite';
+    return 'anyone';
+  })() : (savedDraft.joinElig || "anyone")); // anyone, restricted, invite
   const [accessModal, setAccessModal] = useState(false);
   const [selectedAccess, setSelectedAccess] = useState(() => {
-    const d = savedDraft.selectedAccess || {};
+    const d = isEdit ? (editGroup.settings?.restrictedAccess?.join || {}) : (savedDraft.selectedAccess || {});
 
     // For restricted mode, we want a flat object structure
     let restrictedData = { communities: [], subCommunities: [], groups: [] };
@@ -2906,7 +2836,7 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
   });
 
   const [visibilityAccess, setVisibilityAccess] = useState(() => {
-    const d = savedDraft.visibilityAccess;
+    const d = isEdit ? (editGroup.settings?.restrictedAccess?.visibility || {}) : savedDraft.visibilityAccess;
     if (d) {
       return {
         communities: Array.isArray(d.communities) ? d.communities : [],
@@ -2914,7 +2844,7 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
         groups: Array.isArray(d.groups) ? d.groups : []
       };
     }
-    const currentRestricted = (savedDraft.selectedAccess && savedDraft.selectedAccess.restricted) || {};
+    const currentRestricted = isEdit ? {} : ((savedDraft.selectedAccess && savedDraft.selectedAccess.restricted) || {});
     return {
       communities: Array.isArray(currentRestricted.communities) ? [...currentRestricted.communities] : [],
       subCommunities: Array.isArray(currentRestricted.subCommunities) ? [...currentRestricted.subCommunities] : [],
@@ -2928,24 +2858,24 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
   const [maxCap, setMaxCap] = useState(isEdit ? (editGroup.settings?.capacity?.max?.toString() || "") : (savedDraft.maxCap || ""));
   const [waitlist, setWaitlist] = useState(isEdit ? (editGroup.settings?.capacity?.waitlist || false) : (savedDraft.waitlist || false));
   
-  const [approval, setApproval] = useState(savedDraft.approval || false);
+  const [approval, setApproval] = useState(isEdit ? (editGroup.joinMode === 'approval') : (savedDraft.approval || false));
 
   // Advanced Settings Toggles
   const [questionnaire, setQuestionnaire] = useState(isEdit ? (editGroup.settings?.questionnaires?.length > 0) : (savedDraft.questionnaire || false));
   const [questions, setQuestions] = useState(isEdit ? (editGroup.settings?.questionnaires || []) : (savedDraft.questions || []));
   const [qModal, setQModal] = useState(false);
 
-  const [forums, setForums] = useState(savedDraft.forums || false);
-  const [threadPerm, setThreadPerm] = useState(savedDraft.threadPerm || "everyone");
-  const [replyPerm, setReplyPerm] = useState(savedDraft.replyPerm || "everyone");
+  const [forums, setForums] = useState(isEdit ? (editGroup.settings?.forums?.enabled || false) : (savedDraft.forums || false));
+  const [threadPerm, setThreadPerm] = useState(isEdit ? (editGroup.settings?.forums?.threadPerm || "everyone") : (savedDraft.threadPerm || "everyone"));
+  const [replyPerm, setReplyPerm] = useState(isEdit ? (editGroup.settings?.forums?.replyPerm || "everyone") : (savedDraft.replyPerm || "everyone"));
   const [forumModal, setForumModal] = useState(false);
 
-  const [gallery, setGallery] = useState(savedDraft.gallery || false);
+  const [gallery, setGallery] = useState(isEdit ? (editGroup.settings?.gallery?.enabled || false) : (savedDraft.gallery || false));
   const [galleryModal, setGalleryModal] = useState(false);
-  const [galleryAllow, setGalleryAllow] = useState(savedDraft.galleryAllow !== undefined ? savedDraft.galleryAllow : true);
-  const [galleryImageOnly, setGalleryImageOnly] = useState(savedDraft.galleryImageOnly || false);
-  const [galleryVideoOnly, setGalleryVideoOnly] = useState(savedDraft.galleryVideoOnly || false);
-  const [galleryApprove, setGalleryApprove] = useState(savedDraft.galleryApprove || false);
+  const [galleryAllow, setGalleryAllow] = useState(isEdit ? (editGroup.settings?.gallery?.allow !== false) : (savedDraft.galleryAllow !== undefined ? savedDraft.galleryAllow : true));
+  const [galleryImageOnly, setGalleryImageOnly] = useState(isEdit ? (editGroup.settings?.gallery?.imageOnly || false) : (savedDraft.galleryImageOnly || false));
+  const [galleryVideoOnly, setGalleryVideoOnly] = useState(isEdit ? (editGroup.settings?.gallery?.videoOnly || false) : (savedDraft.galleryVideoOnly || false));
+  const [galleryApprove, setGalleryApprove] = useState(isEdit ? (editGroup.settings?.gallery?.approve || false) : (savedDraft.galleryApprove || false));
 
   const [saveAsDraft, setSaveAsDraft] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -2979,63 +2909,16 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
   // Autosave
   React.useEffect(() => {
     localStorage.setItem(draftKey, JSON.stringify({
-      name, icon, cover, banner, cat, desc, visibility, joinElig, selectedComms,
+      name, icon, cover, banner, cat, desc, visibility, joinElig,
       limitCap, maxCap, waitlist, questionnaire, questions, forums, threadPerm, replyPerm, gallery,
       galleryAllow, galleryImageOnly, galleryVideoOnly, galleryApprove,
       locationType, venueName, address, city, platform, meetingLink,
       selectedAccess, visibilityAccess, approval
     }));
-  }, [name, icon, cover, banner, cat, desc, visibility, joinElig, selectedComms, limitCap, maxCap, waitlist, questionnaire, questions, forums, threadPerm, replyPerm, gallery, galleryAllow, galleryImageOnly, galleryVideoOnly, galleryApprove, locationType, venueName, address, city, platform, meetingLink, selectedAccess, visibilityAccess, approval]);
+  }, [name, icon, cover, banner, cat, desc, visibility, joinElig, limitCap, maxCap, waitlist, questionnaire, questions, forums, threadPerm, replyPerm, gallery, galleryAllow, galleryImageOnly, galleryVideoOnly, galleryApprove, locationType, venueName, address, city, platform, meetingLink, selectedAccess, visibilityAccess, approval]);
 
   const [loading, setLoading] = useState(false);
 
-  React.useEffect(() => {
-    if (isEdit && editGroup.id) {
-      const fetchLatest = async () => {
-        try {
-          const token = localStorage.getItem('token');
-          const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
-          const res = await fetch(`${apiBase}/api/groups/${editGroup.id}`, {
-            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-          });
-          const data = await res.json();
-          if (data.success && data.data) {
-            const g = data.data;
-            setName(g.name || "");
-            setIcon(g.icon || "👥");
-            setCover(g.cover || COVERS.violet);
-            setBanner(g.banner || "");
-            setCat(g.category || "Design");
-            setDesc(g.description || "");
-            setVisibility(g.entities?.visibility || "public");
-            setJoinElig(g.joinMode === 'open' ? 'anyone' : g.joinMode === 'invite_only' ? 'invite' : 'communities');
-            setApproval(g.joinMode === 'approval');
-            // Advanced settings
-            setLimitCap(g.settings?.capacity?.limit || false);
-            setMaxCap(g.settings?.capacity?.max?.toString() || "");
-            setWaitlist(g.settings?.capacity?.waitlist || false);
-            setQuestionnaire(g.settings?.questionnaires?.length > 0 || false);
-            setQuestions(g.settings?.questionnaires || []);
-            setForums(g.settings?.forums?.enabled || false);
-            setThreadPerm(g.settings?.forums?.threadPerm || "everyone");
-            setReplyPerm(g.settings?.forums?.replyPerm || "everyone");
-            setGallery(g.settings?.gallery?.enabled || false);
-            setGalleryAllow(g.settings?.gallery?.allow !== false);
-            setGalleryImageOnly(g.settings?.gallery?.imageOnly || false);
-            setGalleryVideoOnly(g.settings?.gallery?.videoOnly || false);
-            setGalleryApprove(g.settings?.gallery?.approve || false);
-            if (g.settings?.restrictedAccess) {
-              setSelectedAccess(g.settings.restrictedAccess.join || { restricted: { communities: [], subCommunities: [], groups: [] }, selectedMembers: [] });
-              setVisibilityAccess(g.settings.restrictedAccess.visibility || { communities: [], subCommunities: [], groups: [] });
-            }
-          }
-        } catch (e) {
-          console.error("Failed to fetch latest group data", e);
-        }
-      };
-      fetchLatest();
-    }
-  }, [isEdit, editGroup]);
 
   const handleCreateGroup = async (isDraftSubmit = false) => {
     setLoading(true);
@@ -3048,12 +2931,12 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
         icon,
         cover,
         banner,
-        joinMode: approval ? "approval" : joinElig === "invite" ? "invite_only" : "open",
+        joinMode: approval ? "approval" : joinElig === "invite" ? "invite_only" : joinElig === "communities" ? "restricted" : "open",
         visibility,
         listed: isDraftSubmit ? "unlisted" : "listed",
         settings: {
           isDraft: isDraftSubmit,
-          joinElig,
+          joinElig: joinElig === "communities" ? "restricted" : joinElig,
           restrictedAccess: {
             join: selectedAccess,
             visibility: visibilityAccess
@@ -3154,7 +3037,7 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
               setShareLinkForModal(shareLink);
               setPendingNav(navDest);
               setShowShareModal(true);
-              await navigator.clipboard.writeText(shareLink).catch(() => {});
+              await copyText(shareLink);
               return; // navigation happens when user clicks Done in the modal
             }
           } catch (err) {
@@ -3327,33 +3210,45 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
 
       {/* Forum Settings Modal */}
       {forumModal && (
-        <div className="modal-backdrop" onClick={() => setForumModal(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div className="setting-modal" onClick={e => e.stopPropagation()}>
-            <div style={{ padding: 20, borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between" }}>
-              <h3 style={{ margin: 0 }}>Forum Settings</h3>
-              <button onClick={() => setForumModal(false)} style={{ background: "var(--field)", border: "none", width: 32, height: 32, borderRadius: 16, cursor: "pointer" }}><I.x style={{ width: 16 }} /></button>
-            </div>
-            <div style={{ padding: 20 }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <div className="cfield">
-                  <label>Who can create threads?</label>
-                  <select value={threadPerm} onChange={e => setThreadPerm(e.target.value)}>
-                    <option value="everyone">Everyone</option>
-                    <option value="admins">Admins & Moderators Only</option>
-                    <option value="selected">Selected Members</option>
-                  </select>
-                </div>
-
-                <div className="cfield">
-                  <label>Who can reply?</label>
-                  <select value={replyPerm} onChange={e => setReplyPerm(e.target.value)}>  
-                    <option value="everyone">Everyone</option>
-                    <option value="admins">Admins & Moderators Only</option>
-                    <option value="selected">Selected Members</option>
-                  </select>
-                </div>
+        <div className="modal-backdrop" onClick={() => setForumModal(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)", animation: "fadeIn 0.2s ease" }}>
+          <div className="setting-modal" onClick={e => e.stopPropagation()} style={{ background: "var(--bg)", width: "100%", maxWidth: 420, borderRadius: "var(--r-xl)", overflow: "hidden", border: "1px solid var(--border)", boxShadow: "0 24px 48px rgba(0,0,0,0.2)", transform: "translateY(0)", animation: "slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)" }}>
+            <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--surface)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "var(--ink)" }}>Forum Settings</h3>
               </div>
-              <button className="hbtn hbtn--primary" style={{ width: "100%", marginTop: 24, justifyContent: "center" }} onClick={() => setForumModal(false)}>Confirm</button>
+              <button onClick={() => setForumModal(false)} style={{ background: "var(--field)", border: "none", width: 32, height: 32, borderRadius: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-2)", transition: "all 0.2s" }} onMouseOver={e => { e.currentTarget.style.background = "var(--border)"; e.currentTarget.style.color = "var(--ink)"; }} onMouseOut={e => { e.currentTarget.style.background = "var(--field)"; e.currentTarget.style.color = "var(--ink-2)"; }}>
+                <I.x style={{ width: 16 }} />
+              </button>
+            </div>
+            
+            <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 24 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Who can create threads?</label>
+                <div style={{ position: "relative" }}>
+                  <select className="cinput" style={{ width: "100%", cursor: "pointer", background: "var(--field)", border: "1px solid var(--border)", color: "var(--ink)", fontWeight: 500, padding: "12px 16px", borderRadius: "var(--r-md)", fontSize: 15, transition: "border-color 0.2s" }} value={threadPerm} onChange={e => setThreadPerm(e.target.value)}>
+                    <option value="everyone">Everyone (All Members)</option>
+                    <option value="admins">Admins & Moderators Only</option>
+                    <option value="selected">Selected Members Only</option>
+                  </select>
+                </div>
+                <p style={{ margin: "4px 0 0 0", fontSize: 12.5, color: "var(--ink-3)" }}>Determines who has permission to start new discussions.</p>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Who can reply?</label>
+                <div style={{ position: "relative" }}>
+                  <select className="cinput" style={{ width: "100%", cursor: "pointer", background: "var(--field)", border: "1px solid var(--border)", color: "var(--ink)", fontWeight: 500, padding: "12px 16px", borderRadius: "var(--r-md)", fontSize: 15, transition: "border-color 0.2s" }} value={replyPerm} onChange={e => setReplyPerm(e.target.value)}>  
+                    <option value="everyone">Everyone (All Members)</option>
+                    <option value="admins">Admins & Moderators Only</option>
+                    <option value="selected">Selected Members Only</option>
+                  </select>
+                </div>
+                <p style={{ margin: "4px 0 0 0", fontSize: 12.5, color: "var(--ink-3)" }}>Determines who can comment on existing threads.</p>
+              </div>
+              
+              <div style={{ paddingTop: 8 }}>
+                <button className="hbtn hbtn--primary" style={{ width: "100%", justifyContent: "center", padding: "12px", fontSize: 15, fontWeight: 600, borderRadius: "var(--r-md)", background: "var(--accent-1)", boxShadow: "0 4px 12px rgba(var(--accent-1-rgb), 0.25)" }} onClick={() => setForumModal(false)}>Save Settings</button>
+              </div>
             </div>
           </div>
         </div>
@@ -3650,7 +3545,7 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
                     {unlistedLink && (
                       <div style={{ marginTop: 8, display: "flex", gap: 6, alignItems: "center" }}>
                         <input readOnly value={unlistedLink} className="cinput" style={{ flex: 1, padding: "6px 10px", fontSize: 11 }} onClick={e => (e.target as HTMLInputElement).select()} />
-                        <button type="button" className="hbtn hbtn--soft hbtn--sm" onClick={() => { navigator.clipboard.writeText(unlistedLink); }}>Copy</button>
+                        <button type="button" className="hbtn hbtn--soft hbtn--sm" onClick={() => { copyText(unlistedLink); }}>Copy</button>
                       </div>
                     )}
                   </div>
@@ -4034,7 +3929,7 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
                 className="hbtn hbtn--soft"
                 style={{ whiteSpace: "nowrap", minWidth: 80 }}
                 onClick={() => {
-                  navigator.clipboard.writeText(shareLinkForModal).then(() => {
+                  copyText(shareLinkForModal).then(() => {
                     setShareCopied(true);
                     setTimeout(() => setShareCopied(false), 2000);
                   });

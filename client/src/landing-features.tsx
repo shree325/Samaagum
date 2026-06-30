@@ -1,7 +1,8 @@
+// @ts-nocheck
 /* ============================================================
    Samaagum landing — Communities, Events
    ============================================================ */
-const { useState } = React;
+var { useState } = React;
 const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
 
 /* ---------------- Communities (scatter → arc) ---------------- */
