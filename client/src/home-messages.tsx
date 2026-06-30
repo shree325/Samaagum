@@ -23,6 +23,63 @@ function Messages({ st, go, mobile, socket }) {
   const [searchResults, setSearchResults] = useState([]);
   const [replyingTo, setReplyingTo] = useState(null);
 
+  const scrollRef = useRef(null);
+  const prevActiveIdRef = useRef(null);
+  const prevMsgLengthRef = useRef(0);
+
+  useEffect(() => {
+    if (!scrollRef.current) return;
+
+    const isSameThread = prevActiveIdRef.current === activeId;
+    const msgLength = messages ? messages.length : 0;
+    const isNewMessage = isSameThread && msgLength > prevMsgLengthRef.current;
+
+    if (isNewMessage) {
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    } else {
+      const firstUnread = messages.find(m => 
+        m.senderId !== currentUserId && 
+        m.senderId !== 'me' && 
+        !m.me && 
+        !(m.receipts || []).some(r => r.userId === currentUserId && r.seenAt !== null)
+      );
+
+      if (firstUnread) {
+        setTimeout(() => {
+          const element = document.getElementById(`msg-item-${firstUnread.id}`);
+          if (element) {
+            element.scrollIntoView({ behavior: 'auto', block: 'start' });
+          } else if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+        }, 0);
+      } else {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
+    }
+
+    prevActiveIdRef.current = activeId;
+    prevMsgLengthRef.current = msgLength;
+  }, [activeId, messages, currentUserId]);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      if (activeId && socket) {
+        socket.emit("conversation.read", { conversationId: activeId }, () => {
+          fetchConversations();
+          if (st.fetchCounts) st.fetchCounts();
+        });
+      }
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [activeId, socket, fetchConversations]);
+
   const [requestStatuses, setRequestStatuses] = useState({});
   const [contactsList, setContactsList] = useState([]);
   const [contactsLoading, setContactsLoading] = useState(false);
@@ -91,71 +148,65 @@ function Messages({ st, go, mobile, socket }) {
       return;
     }
 
-    const token = localStorage.getItem('token');
-    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+    const controller = new AbortController();
 
     const delayDebounceFn = setTimeout(() => {
-      fetch(`${apiBase}/api/messaging/users/search?q=${encodeURIComponent(searchQuery)}`, { headers })
-        .then(res => res.json())
+      messagingApi.searchUsers(searchQuery, controller.signal)
         .then(res => {
           if (res.success && res.data) {
             setSearchResults(res.data);
             res.data.forEach(user => {
-              fetch(`${apiBase}/api/messaging/requests/status/${user.id}`, { headers })
-                .then(r => r.json())
+              messagingApi.getRequestStatus(user.id)
                 .then(rJson => {
                   if (rJson.success && rJson.data) {
                     setRequestStatuses(prev => ({ ...prev, [user.id]: rJson.data.status }));
                   }
                 })
-                .catch(e => console.error("Error fetching request status:", e));
+                .catch(e => {
+                  if (e.name !== 'AbortError') {
+                    console.error("Error fetching request status:", e);
+                  }
+                });
             });
           }
         })
-        .catch(err => console.error("Error searching users:", err));
+        .catch(err => {
+          if (err.name !== 'AbortError') {
+            console.error("Error searching users:", err);
+          }
+        });
     }, 300);
 
-    return () => clearTimeout(delayDebounceFn);
-  }, [searchQuery, apiBase]);
+    return () => {
+      clearTimeout(delayDebounceFn);
+      controller.abort();
+    };
+  }, [searchQuery]);
 
   const handleConnectUser = (user, e) => {
     if (e) e.stopPropagation();
-    const token = localStorage.getItem('token');
-    const headers = { 
-      'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-    };
 
-    fetch(`${apiBase}/api/messaging/conversations/direct`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ targetId: user.id })
-    })
-      .then(async res => {
-        const data = await res.json();
-        if (res.ok) {
-          const conv = data.data;
-          setThreads(prev => {
-            if (prev.some(t => t.id === conv.id)) return prev;
-            return [conv, ...prev];
-          });
-          setActiveId(conv.id);
-          setSearchQuery("");
-          setShowConv(true);
-          setRequestStatuses(prev => ({ ...prev, [user.id]: 'CONNECTED' }));
-        } else if (res.status === 403 && data.restriction === 'approval_required') {
-          if (data.hasPending) {
+    messagingApi.getOrCreateDirectConversation({ targetId: user.id })
+      .then(res => {
+        const conv = res.data;
+        setThreads(prev => {
+          if (prev.some(t => t.id === conv.id)) return prev;
+          return [conv, ...prev];
+        });
+        setActiveId(conv.id);
+        setSearchQuery("");
+        setShowConv(true);
+        setRequestStatuses(prev => ({ ...prev, [user.id]: 'CONNECTED' }));
+      })
+      .catch(err => {
+        if (err.status === 403 && err.details?.restriction === 'approval_required') {
+          if (err.details.hasPending) {
             if (window.toast) window.toast("Messaging request is already pending.");
             else alert("Messaging request is already pending.");
             setRequestStatuses(prev => ({ ...prev, [user.id]: 'PENDING' }));
             return;
           }
-          fetch(`${apiBase}/api/messaging/requests`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({ targetId: user.id })
-          })
-            .then(r => r.json())
+          messagingApi.sendMessageRequest({ targetId: user.id })
             .then(rData => {
               if (rData.success) {
                 setRequestStatuses(prev => ({ ...prev, [user.id]: 'PENDING' }));
@@ -164,48 +215,22 @@ function Messages({ st, go, mobile, socket }) {
               } else {
                 alert(rData.error || "Failed to send request.");
               }
+            })
+            .catch(reqErr => {
+              alert(reqErr.message || "Failed to send request.");
             });
-        } else if (res.status === 403 && data.restriction === 'only_connected') {
+        } else if (err.status === 403 && err.details?.restriction === 'only_connected') {
           if (window.toast) window.toast("This user only allows messaging from connected users.");
           else alert("This user only allows messaging from connected users.");
           go("public-profile", user);
         } else {
-          alert(data.error || "Connection failed.");
+          alert(err.message || "Connection failed.");
         }
-      })
-      .catch(err => console.error("Error connecting user:", err));
+      });
   };
 
   const selectSearchResult = (user) => {
-    const token = localStorage.getItem('token');
-    const headers = { 
-      'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-    };
-
-    fetch(`${apiBase}/api/messaging/conversations/direct`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ targetId: user.id })
-    })
-      .then(res => {
-        if (res.status === 403) {
-          return res.json().then(data => {
-            if (data.restriction === 'only_connected') {
-              if (window.toast) window.toast("This user only allows messaging from connected users.");
-              else alert("This user only allows messaging from connected users.");
-              go("public-profile", user);
-            } else if (data.restriction === 'no_one') {
-              if (window.toast) window.toast("This user has disabled direct messages.");
-              else alert("This user has disabled direct messages.");
-            } else {
-              alert(data.error || "Unable to start messaging.");
-            }
-            throw new Error("restricted");
-          });
-        }
-        return res.json();
-      })
+    messagingApi.getOrCreateDirectConversation({ targetId: user.id })
       .then(res => {
         if (res.success && res.data) {
           const conv = res.data;
@@ -219,7 +244,19 @@ function Messages({ st, go, mobile, socket }) {
         }
       })
       .catch(err => {
-        if (err.message !== "restricted") {
+        if (err.status === 403) {
+          const data = err.details;
+          if (data?.restriction === 'only_connected') {
+            if (window.toast) window.toast("This user only allows messaging from connected users.");
+            else alert("This user only allows messaging from connected users.");
+            go("public-profile", user);
+          } else if (data?.restriction === 'no_one') {
+            if (window.toast) window.toast("This user has disabled direct messages.");
+            else alert("This user has disabled direct messages.");
+          } else {
+            alert(data?.error || "Unable to start messaging.");
+          }
+        } else {
           console.error("Error creating direct conversation:", err);
         }
       });
@@ -253,10 +290,7 @@ function Messages({ st, go, mobile, socket }) {
   const [requests, setRequests] = useState([]);
 
   const fetchIncomingRequests = () => {
-    const token = localStorage.getItem('token');
-    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-    fetch(`${apiBase}/api/messaging/requests/incoming`, { headers })
-      .then(res => res.json())
+    messagingApi.getIncomingRequests()
       .then(res => {
         if (res.success && res.data) {
           setRequests(res.data);
@@ -266,13 +300,7 @@ function Messages({ st, go, mobile, socket }) {
   };
 
   const handleAcceptRequest = (reqId) => {
-    const token = localStorage.getItem('token');
-    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-    fetch(`${apiBase}/api/messaging/requests/${reqId}/accept`, {
-      method: 'POST',
-      headers
-    })
-      .then(res => res.json())
+    messagingApi.acceptRequest(reqId)
       .then(res => {
         if (res.success) {
           if (window.toast) window.toast("Messaging request accepted!");
@@ -285,13 +313,7 @@ function Messages({ st, go, mobile, socket }) {
   };
 
   const handleDeclineRequest = (reqId) => {
-    const token = localStorage.getItem('token');
-    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-    fetch(`${apiBase}/api/messaging/requests/${reqId}/decline`, {
-      method: 'POST',
-      headers
-    })
-      .then(res => res.json())
+    messagingApi.declineRequest(reqId)
       .then(res => {
         if (res.success) {
           if (window.toast) window.toast("Messaging request declined.");
@@ -303,11 +325,7 @@ function Messages({ st, go, mobile, socket }) {
   };
 
   const fetchConversations = () => {
-    const token = localStorage.getItem('token');
-    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-
-    fetch(`${apiBase}/api/messaging/conversations`, { headers })
-      .then(res => res.json())
+    messagingApi.getConversations()
       .then(res => {
         if (res.success && res.data) {
           setThreads(res.data);
@@ -433,11 +451,7 @@ function Messages({ st, go, mobile, socket }) {
     }
 
     // Load message logs from API
-    const token = localStorage.getItem('token');
-    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-
-    fetch(`${apiBase}/api/messaging/conversations/${activeId}/messages?limit=100`, { headers })
-      .then(res => res.json())
+    messagingApi.getConversationMessages(activeId, { limit: 100 })
       .then(res => {
         if (res.success && res.data) {
           setMessages(res.data);
@@ -464,7 +478,7 @@ function Messages({ st, go, mobile, socket }) {
           createdAt: new Date().toISOString()
         })) : []);
       });
-  }, [activeId, socket, apiBase, currentUserId]);
+  }, [activeId, socket, currentUserId]);
 
   // 4. Listen for live incoming socket messages, updates and deletions
   useEffect(() => {
@@ -513,10 +527,13 @@ function Messages({ st, go, mobile, socket }) {
 
       setThreads(prevThreads => prevThreads.map(t => {
         if (t.id === msg.conversationId) {
+          const isWindowFocused = typeof document !== 'undefined' ? document.hasFocus() : true;
+          const isUnread = msg.senderId !== currentUserId && (msg.conversationId !== activeId || !isWindowFocused);
           return {
             ...t,
             preview: msg.body || msg.content,
-            updatedAt: msg.createdAt
+            updatedAt: msg.createdAt,
+            unread: isUnread ? (t.unread || 0) + 1 : 0
           };
         }
         return t;
@@ -976,7 +993,7 @@ function Messages({ st, go, mobile, socket }) {
               </div>
             )}
 
-            <div className="conv-scroll">
+            <div className="conv-scroll" ref={scrollRef}>
               <div className="conv-date">Today</div>
               {messages.map((m, i) => {
                 const isMe = m.senderId === currentUserId || m.senderId === "me" || m.me === true;

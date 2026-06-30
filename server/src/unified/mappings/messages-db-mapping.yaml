@@ -1,0 +1,50 @@
+version: "1.0"
+provider: database
+dataType: messages
+canonical: Message
+
+fieldMappings:
+  id:
+    source: id
+    type: string
+    required: true
+
+  conversationId:
+    source: conversation_id
+    type: string
+    required: true
+
+  senderId:
+    source: sender_user_id
+    type: string
+    required: true
+
+  body:
+    source: body
+    type: string
+    required: false
+
+  content:
+    source: body
+    type: string
+    required: false
+
+  createdAt:
+    source: created_at
+    type: string
+    required: true
+
+  status:
+    source: status
+    type: string
+    required: false
+
+  isEdited:
+    source: is_edited
+    type: boolean
+    default: false
+
+  replyToMessageId:
+    source: reply_to_message_id
+    type: string
+    required: false

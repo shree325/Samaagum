@@ -193,7 +193,7 @@ const start = async () => {
         await fastify.listen({ port: PORT, host: '0.0.0.0' });
         console.log(`🚀 Server is running on port ${PORT}`);
         console.log(`🔗 Health check available at http://localhost:${PORT}/health`);
-        // Trigger reload comment - restart 2
+        // Trigger reload comment - restart 3
     } catch (err) {
         fastify.log.error(err);
         process.exit(1);
