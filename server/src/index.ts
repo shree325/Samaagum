@@ -23,6 +23,7 @@ import { adminUserRoutes } from './controllers/adminUserRoutes';
 import { seedAdminRBAC } from './services/adminRbacSeeder';
 import { seedPlatformSettings } from './settings-library/settingsSeeder';
 import { startMessaging, stopMessaging, getMessagingHealth } from './services/messagingSocket';
+import { startGroupsSocket } from './services/groupSocket';
 import { SubscriptionNotificationService } from './services/SubscriptionNotificationService';
 import { messagingTestRoutes } from './controllers/messagingTestRoutes';
 import { messagingRoutes } from './controllers/messagingRoutes';

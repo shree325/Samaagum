@@ -26,7 +26,7 @@ export class InvitationService {
         const results = [];
         const groupRepo = new R_groups();
         const userRepo = new R_users(prisma);
-        const profileRepo = new R_profiles();
+        const profileRepo = new R_profiles(prisma);
         const groupMembershipsRepo = new R_group_memberships();
         const groupInvitationsRepo = new R_group_invitations();
 
@@ -44,7 +44,7 @@ export class InvitationService {
             if (target.email) {
                 existingUser = await userRepo.getByEmail(tenantId, target.email);
             } else if (target.username) {
-                const p = await profileRepo.findOne({ user_name: target.username });
+                const p = await profileRepo.findByUsername(target.username);
                 if (p) existingUser = await userRepo.getById(p.user_id);
             }
 
@@ -139,7 +139,7 @@ export class InvitationService {
     static async validateInvite(token: string, userId?: string) {
         const groupInvitationsRepo = new R_group_invitations();
         const userRepo = new R_users(prisma);
-        const profileRepo = new R_profiles();
+        const profileRepo = new R_profiles(prisma);
         const groupMembershipsRepo = new R_group_memberships();
 
         const invite = await groupInvitationsRepo.findByTokenWithRelations(token);

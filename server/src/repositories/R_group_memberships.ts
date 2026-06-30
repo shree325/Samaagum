@@ -36,7 +36,7 @@ export class R_group_memberships extends PostgresBaseRepository<IGroupMembership
 
   async findFirstActiveByCategory(userId: string, cats: string[]): Promise<IGroupMembership | null> {
     return await prisma.group_memberships.findFirst({
-      where: { user_id: userId, state: 'active', entities: { groups: { category: { in: cats } } } }
+      where: { user_id: userId, state: 'active', entities: { groups: { is: { category: { in: cats } } } } }
     });
   }
 

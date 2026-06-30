@@ -3,10 +3,16 @@ import { R_categories } from '../repositories/R_categories';
 import { R_cityControls } from '../repositories/R_cityControls';
 import { R_groups } from '../repositories/R_groups';
 import { R_users } from '../repositories/R_users';
+import { ICategory } from '../repositories/IR_categories';
+import { ICityControl } from '../repositories/ICityControl';
 import prisma from '../config/prisma';
 import { locationService } from '../services/locationService';
 
 export const publicRoutes = async (fastify: FastifyInstance) => {
+  const categoryRepo = new R_categories();
+  const cityRepo = new R_cityControls();
+  const groupRepo = new R_groups();
+  const userRepo = new R_users(prisma);
 
   // Location search
   fastify.get('/locations/search', async (request: any, reply: any) => {
@@ -61,7 +67,7 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
     try {
       const categories = await categoryRepo.findAll();
       // Sort alphabetically in JS since findAll doesn't accept order directly
-      categories.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      categories.sort((a: ICategory, b: ICategory) => (a.name || '').localeCompare(b.name || ''));
       return {
         success: true,
         data: categories
@@ -78,7 +84,7 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
       const cities = result.data;
       return {
         success: true,
-        data: cities.map(c => ({
+        data: cities.map((c: ICityControl) => ({
           geoname_id: c.geoname_id.toString(),
           city_name: c.city_name,
           state_name: c.state_name,

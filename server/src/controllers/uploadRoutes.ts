@@ -6,7 +6,7 @@ import prisma from '../config/prisma';
 export const uploadRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
 
   const userRepo = new R_users(prisma);
-  const profileRepo = new R_profiles();
+  const profileRepo = new R_profiles(prisma);
 
   fastify.post('/upload-profile-photo', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
     try {
