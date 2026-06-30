@@ -4,7 +4,7 @@
    High-fidelity, interactive sandbox for 94 screens.
    ============================================================ */
 
-const { useState, useEffect, useRef, useMemo, useCallback } = React;
+var { useState, useEffect, useRef, useMemo, useCallback } = React;
 
 const SCREENS_SPEC = [
   { id: "S-001", name: "Authenticated app shell", area: "Shell", exp: "Shared", purpose: "Nav + entry after login", state: "L,X", phase: "MVP-0", action: { type: "native", view: "home" } },

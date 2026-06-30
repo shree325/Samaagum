@@ -307,10 +307,34 @@ const WAITLIST_ME = {
   claimWindowMins: 15,
 };
 
+// Robust clipboard copy: navigator.clipboard throws NotAllowedError when the
+// document isn't focused (e.g. right after an alert/devtools), so fall back to
+// the legacy execCommand path which works without focus.
+async function copyText(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext && document.hasFocus()) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (e) { /* fall through to legacy path */ }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch (e) {
+    return false;
+  }
+}
+
 Object.assign(window, {
   ME, PLAN_CONFIG, CATS, COVERS, FEATURED, EVENTS, UPCOMING, GROUPS, NEAR, TRENDING,
   PEOPLE, DISCUSSIONS, NOTIFS, THREADS, REQUESTS, JOIN_REQUESTS, INTERESTS_ME, LINKS_ME, SOCIALS,
-  ME, CATS, COVERS, FEATURED, EVENTS, UPCOMING, GROUPS, NEAR, TRENDING,
-  PEOPLE, DISCUSSIONS, NOTIFS, THREADS, REQUESTS, INTERESTS_ME, LINKS_ME, SOCIALS,
-  MY_TICKETS, WAITLIST_ME,
+  MY_TICKETS, WAITLIST_ME, copyText,
 });

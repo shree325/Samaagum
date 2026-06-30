@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { PrismaClient } from '@prisma/client';
 import { IUser, IR_users } from './IR_users';
 
@@ -78,5 +79,31 @@ export class R_users implements IR_users {
         profile_completed: true
       }
     }) as any;
+  }
+
+  async findByUsernamePrefixWithProfile(usernamePrefix: string): Promise<any | null> {
+    return this.db.users.findFirst({
+      where: {
+        primary_email: {
+          startsWith: `${usernamePrefix}@`
+        }
+      },
+      include: {
+        profiles: true,
+        profile_links: true,
+      }
+    });
+  }
+
+  async findAll(filter?: any): Promise<any[]> {
+    return this.db.users.findMany({
+      where: filter || {}
+    });
+  }
+
+  async findOne(filter?: any): Promise<any | null> {
+    return this.db.users.findFirst({
+      where: filter
+    });
   }
 }

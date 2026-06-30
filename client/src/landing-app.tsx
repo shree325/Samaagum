@@ -1,7 +1,8 @@
+// @ts-nocheck
 /* ============================================================
    Samaagum landing — App composition + mount
    ============================================================ */
-const { useEffect: useEffectApp } = React;
+var { useEffect: useEffectApp } = React;
 
 function App() {
   useEffectApp(() => {

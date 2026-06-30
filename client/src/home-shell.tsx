@@ -44,7 +44,7 @@ function Sidebar({ view, go, counts, chatSettings }) {
     { k:"home", ic:<I.home/>, label:"Home" },
     { k:"discover", ic:<I.compass/>, label:"Discover" },
     { k:"events", ic:<I.ticket/>, label:"My Events" },
-    { k:"groups", ic:<I.groups/>, label:"Groups" },
+    { k:"groups", ic:<I.groups/>, label:"My Groups" },
   ];
   const social = [
     ...(showMessages ? [{ k:"messages", ic:<I.chat/>, label:"Messages", badge: counts.messages }] : []),

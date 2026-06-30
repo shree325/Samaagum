@@ -1,5 +1,5 @@
 // @ts-nocheck
-const { useState, useEffect } = React;
+var { useState, useEffect } = React;
 
 function VirtualCard({ user }) {
   const [qrCodeUrl, setQrCodeUrl] = useState('');
@@ -35,23 +35,23 @@ function VirtualCard({ user }) {
   const profileUrl = `${apiBase}/pages/VirtualCardPage.html?u=${encodeURIComponent(username)}`;
 
   useEffect(() => {
-    if (window.QRCodeLib) {
-      window.QRCodeLib.toDataURL(profileUrl, {
-        width: 200,
-        margin: 2,
-        color: {
-          dark: '#111827',
-          light: '#ffffff'
-        }
-      }).then(url => {
+    // Generate QR code using the bundled QRCode library
+    QRCode.toDataURL(profileUrl, {
+      width: 200,
+      margin: 2,
+      color: {
+        dark: '#111827',
+        light: '#ffffff'
+      }
+    })
+      .then(url => {
         setQrCodeUrl(url);
-      }).catch(err => {
+      })
+      .catch(err => {
         console.error('Error generating QR Code', err);
+        // Fallback to quickchart if library fails
+        setQrCodeUrl(`https://quickchart.io/qr?text=${encodeURIComponent(profileUrl)}&size=200&dark=111827&light=ffffff&margin=2`);
       });
-    } else {
-      // Fallback if library didn't load
-      setQrCodeUrl(`https://quickchart.io/qr?text=${encodeURIComponent(profileUrl)}&size=200&dark=111827&light=ffffff&margin=2`);
-    }
   }, [profileUrl]);
 
 

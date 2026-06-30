@@ -428,6 +428,7 @@ export async function seedAdminRBAC(): Promise<void> {
         if (key === 'community_moderator') return 80;
         if (key === 'group_owner') return 100;
         if (key === 'group_admin') return 110;
+        if (key === 'group_moderator') return 120;
         if (key === 'event_owner') return 200;
         if (key === 'event_manager') return 300;
         if (key === 'co_host') return 400;

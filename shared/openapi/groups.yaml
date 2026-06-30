@@ -1,0 +1,2063 @@
+openapi: 3.0.0
+info:
+  title: Samaagum Groups API
+  version: 1.0.0
+  description: >
+    Complete OpenAPI contract for the Samaagum Groups module.
+    Covers group CRUD, membership management, forum posts & comments,
+    voting, reactions, tags, gallery, invitations, and the unified listing endpoint.
+
+servers:
+  - url: http://localhost:3000
+    description: Local development backend server
+
+tags:
+  - name: Groups
+    description: Group creation, listing, and management
+  - name: Membership
+    description: Joining, leaving, approving, and role management
+  - name: Forum
+    description: Posts, comments, votes, reactions, tags
+  - name: Gallery
+    description: Group media gallery
+  - name: Invitations
+    description: Invite links and tokens
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Security
+# ─────────────────────────────────────────────────────────────────────────────
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Reusable schemas
+  # ───────────────────────────────────────────────────────────────────────────
+  schemas:
+
+    # ── Core group DTO ───────────────────────────────────────────────────────
+    Group:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        category:
+          type: string
+          nullable: true
+        icon:
+          type: string
+          nullable: true
+          description: URL or /api/groups/{id}/icon
+        cover:
+          type: string
+          nullable: true
+        banner:
+          type: string
+          nullable: true
+          description: URL or /api/groups/{id}/banner
+        joinMode:
+          type: string
+          enum: [open, approval, invite_only]
+        joinFormId:
+          type: string
+          nullable: true
+        listed:
+          type: string
+          enum: [listed, unlisted]
+        visibility:
+          type: string
+          enum: [public, private]
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          nullable: true
+        settings:
+          type: object
+          nullable: true
+
+    # ── Unified group item (GET /unified response) ───────────────────────────
+    UnifiedGroupItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [group]
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        slug:
+          type: string
+          nullable: true
+        category:
+          type: string
+          nullable: true
+        icon:
+          type: string
+          nullable: true
+        banner:
+          type: string
+          nullable: true
+        visibility:
+          type: string
+          enum: [public, private]
+          nullable: true
+        joinMode:
+          type: string
+          enum: [open, approval, invite_only]
+        listed:
+          type: string
+          enum: [listed, unlisted]
+        memberCount:
+          type: integer
+        isOwner:
+          type: boolean
+        membershipState:
+          type: string
+          enum: [active, pending, rejected]
+          nullable: true
+        isJoined:
+          type: boolean
+        isPending:
+          type: boolean
+        isArchived:
+          type: boolean
+        isDraft:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+
+    # ── Membership ───────────────────────────────────────────────────────────
+    GroupMembership:
+      type: object
+      properties:
+        id:
+          type: string
+        group_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum: [active, pending, rejected]
+        joined_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    # ── Forum post ───────────────────────────────────────────────────────────
+    ForumPost:
+      type: object
+      properties:
+        id:
+          type: string
+        group_id:
+          type: string
+          format: uuid
+        author_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        body:
+          type: string
+          nullable: true
+        type:
+          type: string
+          enum: [discussion, question, announcement, poll]
+        vote_score:
+          type: integer
+        pinned:
+          type: boolean
+        locked:
+          type: boolean
+        solved:
+          type: boolean
+        archived:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/ForumTag'
+        reactions:
+          type: object
+          additionalProperties:
+            type: integer
+
+    ForumComment:
+      type: object
+      properties:
+        id:
+          type: string
+        post_id:
+          type: string
+        author_id:
+          type: string
+          format: uuid
+        body:
+          type: string
+        vote_score:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    ForumTag:
+      type: object
+      properties:
+        id:
+          type: string
+        group_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        color:
+          type: string
+          nullable: true
+
+    # ── Gallery ──────────────────────────────────────────────────────────────
+    GalleryItem:
+      type: object
+      properties:
+        id:
+          type: string
+        group_id:
+          type: string
+          format: uuid
+        uploader_id:
+          type: string
+          format: uuid
+        url:
+          type: string
+        approved:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    # ── Invitation ───────────────────────────────────────────────────────────
+    Invitation:
+      type: object
+      properties:
+        id:
+          type: string
+        group_id:
+          type: string
+          format: uuid
+        token:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        max_uses:
+          type: integer
+          nullable: true
+        uses:
+          type: integer
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    # ── Dashboard stats ──────────────────────────────────────────────────────
+    DashboardStats:
+      type: object
+      properties:
+        memberCount:
+          type: integer
+        pendingCount:
+          type: integer
+        postCount:
+          type: integer
+        commentCount:
+          type: integer
+
+    # ── Shared success wrapper ───────────────────────────────────────────────
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paths
+# ─────────────────────────────────────────────────────────────────────────────
+paths:
+
+  # ── Group listing & creation ────────────────────────────────────────────────
+  /api/groups:
+    get:
+      tags: [Groups]
+      summary: List public groups
+      operationId: listGroups
+      description: Returns all non-draft, non-archived public groups. Optionally enriched with membership info when a Bearer token is present.
+      security: []
+      responses:
+        '200':
+          description: List of groups
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/Group'
+                        - type: object
+                          properties:
+                            members:
+                              type: integer
+
+    post:
+      tags: [Groups]
+      summary: Create a group
+      operationId: createGroup
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                slug:
+                  type: string
+                description:
+                  type: string
+                category:
+                  type: string
+                icon:
+                  type: string
+                  description: URL or base64 data URI
+                banner:
+                  type: string
+                  description: URL or base64 data URI
+                joinMode:
+                  type: string
+                  enum: [open, approval, invite_only]
+                  default: open
+                listed:
+                  type: string
+                  enum: [listed, unlisted]
+                  default: unlisted
+                visibility:
+                  type: string
+                  enum: [public, private]
+                  default: public
+                settings:
+                  type: object
+      responses:
+        '201':
+          description: Group created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Group'
+                  message:
+                    type: string
+        '400':
+          description: Name is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+
+  # ── Unified listing (must be declared before /{id}) ─────────────────────────
+  /api/groups/unified:
+    get:
+      tags: [Groups]
+      summary: Unified group listing
+      operationId: getUnifiedGroups
+      description: >
+        Paginated, filtered, sorted group listing for UI consumption.
+        Returns membership state and owner flag when a Bearer token is present.
+        User-scoped filters (myGroups, owned, joined, pending) require authentication.
+      security: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: search
+          in: query
+          description: Case-insensitive match on name or description
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: visibility
+          in: query
+          schema:
+            type: string
+            enum: [public, private]
+            default: public
+        - name: joinMode
+          in: query
+          schema:
+            type: string
+            enum: [open, approval, invite_only]
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [newest, oldest, name_asc, name_desc, members_desc]
+            default: newest
+        - name: myGroups
+          in: query
+          description: All groups where the authenticated user has any membership (requires auth)
+          schema:
+            type: boolean
+        - name: owned
+          in: query
+          description: Only groups owned by the authenticated user (requires auth)
+          schema:
+            type: boolean
+        - name: joined
+          in: query
+          description: Only groups with active membership (requires auth)
+          schema:
+            type: boolean
+        - name: pending
+          in: query
+          description: Only groups with pending membership (requires auth)
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Paginated group list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/UnifiedGroupItem'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── User-scoped listing ──────────────────────────────────────────────────────
+  /api/groups/my:
+    get:
+      tags: [Groups]
+      summary: Get current user's groups
+      operationId: getMyGroups
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User's group memberships
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Group'
+        '401':
+          description: Unauthorized
+
+  /api/groups/my-managed:
+    get:
+      tags: [Groups]
+      summary: Get groups managed by current user
+      operationId: getMyManagedGroups
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Managed groups
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Group'
+        '401':
+          description: Unauthorized
+
+  # ── Single group ─────────────────────────────────────────────────────────────
+  /api/groups/{id}:
+    get:
+      tags: [Groups]
+      summary: Get group details
+      operationId: getGroup
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        '200':
+          description: Group details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Group'
+        '403':
+          description: Not publicly accessible or access denied
+        '404':
+          description: Group not found
+
+    put:
+      tags: [Groups]
+      summary: Update a group
+      operationId: updateGroup
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                category:
+                  type: string
+                icon:
+                  type: string
+                banner:
+                  type: string
+                joinMode:
+                  type: string
+                  enum: [open, approval, invite_only]
+                listed:
+                  type: string
+                  enum: [listed, unlisted]
+                visibility:
+                  type: string
+                  enum: [public, private]
+                settings:
+                  type: object
+      responses:
+        '200':
+          description: Group updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Group'
+        '403':
+          description: Only owners can edit
+        '404':
+          description: Group not found
+
+    delete:
+      tags: [Groups]
+      summary: Delete a group
+      operationId: deleteGroup
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        '200':
+          description: Group deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Only owners can delete
+        '404':
+          description: Group not found
+
+  # ── Group media ───────────────────────────────────────────────────────────────
+  /api/groups/{id}/icon:
+    get:
+      tags: [Groups]
+      summary: Get group icon image
+      operationId: getGroupIcon
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        '200':
+          description: Icon image binary
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '302':
+          description: Redirect to external icon URL
+        '404':
+          description: No icon
+
+  /api/groups/{id}/banner:
+    get:
+      tags: [Groups]
+      summary: Get group banner image
+      operationId: getGroupBanner
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        '200':
+          description: Banner image binary
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '302':
+          description: Redirect to external banner URL
+        '404':
+          description: No banner
+
+  # ── Group state ────────────────────────────────────────────────────────────────
+  /api/groups/{id}/visibility:
+    patch:
+      tags: [Groups]
+      summary: Update group visibility
+      operationId: updateGroupVisibility
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [visibility]
+              properties:
+                visibility:
+                  type: string
+                  enum: [public, private]
+      responses:
+        '200':
+          description: Visibility updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Forbidden
+
+  /api/groups/{id}/settings:
+    patch:
+      tags: [Groups]
+      summary: Update group settings
+      operationId: updateGroupSettings
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [settings]
+              properties:
+                settings:
+                  type: object
+      responses:
+        '200':
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Forbidden
+
+  /api/groups/{id}/archive:
+    post:
+      tags: [Groups]
+      summary: Archive a group
+      operationId: archiveGroup
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        '200':
+          description: Group archived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Only owners can archive
+        '404':
+          description: Group not found
+
+  /api/groups/{id}/unarchive:
+    post:
+      tags: [Groups]
+      summary: Unarchive a group
+      operationId: unarchiveGroup
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        '200':
+          description: Group unarchived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Only owners can unarchive
+        '404':
+          description: Group not found
+
+  /api/groups/{id}/dashboard-stats:
+    get:
+      tags: [Groups]
+      summary: Get group dashboard statistics
+      operationId: getDashboardStats
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        '200':
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/DashboardStats'
+        '403':
+          description: Forbidden
+
+  # ── Membership ────────────────────────────────────────────────────────────────
+  /api/groups/{id}/join:
+    post:
+      tags: [Membership]
+      summary: Join a group
+      operationId: joinGroup
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                answers:
+                  type: object
+                  description: Join form answers keyed by field ID
+      responses:
+        '200':
+          description: Joined or request submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/GroupMembership'
+                  message:
+                    type: string
+        '400':
+          description: Already requested or group at capacity
+        '403':
+          description: Invite only or does not meet join requirements
+        '404':
+          description: Group not found
+
+  /api/groups/{id}/leave:
+    post:
+      tags: [Membership]
+      summary: Leave a group
+      operationId: leaveGroup
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        '200':
+          description: Left group successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Not a member or owner cannot leave
+
+  /api/groups/{id}/members:
+    get:
+      tags: [Membership]
+      summary: Get group members
+      operationId: getGroupMembers
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - name: state
+          in: query
+          schema:
+            type: string
+            enum: [active, pending, rejected]
+      responses:
+        '200':
+          description: List of members
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GroupMembership'
+        '403':
+          description: Members are hidden or only admins can view
+        '404':
+          description: Group not found
+
+  /api/groups/{id}/memberships/{memberId}/approve:
+    post:
+      tags: [Membership]
+      summary: Approve a membership request
+      operationId: approveMembership
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/MemberId'
+      responses:
+        '200':
+          description: Membership approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Forbidden
+
+  /api/groups/{id}/memberships/{memberId}/reject:
+    post:
+      tags: [Membership]
+      summary: Reject a membership request
+      operationId: rejectMembership
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/MemberId'
+      responses:
+        '200':
+          description: Membership rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Forbidden
+
+  /api/groups/{id}/memberships/{memberId}/role:
+    patch:
+      tags: [Membership]
+      summary: Update a member's role
+      operationId: updateMemberRole
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/MemberId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [group_admin, group_moderator, group_member]
+      responses:
+        '200':
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Invalid role
+        '403':
+          description: Cannot modify / Forbidden / Admins cannot demote each other
+
+  /api/groups/{id}/memberships/{memberId}:
+    delete:
+      tags: [Membership]
+      summary: Remove a member from a group
+      operationId: removeMember
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/MemberId'
+      responses:
+        '200':
+          description: Member removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Cannot remove / Forbidden
+
+  # ── Forum posts ───────────────────────────────────────────────────────────────
+  /api/groups/{id}/posts:
+    get:
+      tags: [Forum]
+      summary: List group posts
+      operationId: getGroupPosts
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [new, hot, top, pinned]
+            default: new
+        - name: tag
+          in: query
+          schema:
+            type: string
+        - name: q
+          in: query
+          description: Full-text search on title and body
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated list of posts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ForumPost'
+        '403':
+          description: Private group posts are hidden
+        '404':
+          description: Group not found
+
+    post:
+      tags: [Forum]
+      summary: Create a post in a group
+      operationId: createGroupPost
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                body:
+                  type: string
+                type:
+                  type: string
+                  enum: [discussion, question, announcement, poll]
+                  default: discussion
+                tags:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Post created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/ForumPost'
+        '403':
+          description: Forum disabled or no permission to post
+        '404':
+          description: Group not found
+
+  /api/groups/{id}/posts/{postId}:
+    get:
+      tags: [Forum]
+      summary: Get a single post
+      operationId: getGroupPost
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/PostId'
+      responses:
+        '200':
+          description: Post details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/ForumPost'
+        '404':
+          description: Thread not found
+
+    patch:
+      tags: [Forum]
+      summary: Edit a post
+      operationId: editGroupPost
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/PostId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                body:
+                  type: string
+      responses:
+        '200':
+          description: Post updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Only author can edit / edit window expired
+        '404':
+          description: Post not found
+
+    delete:
+      tags: [Forum]
+      summary: Delete a post
+      operationId: deleteGroupPost
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/PostId'
+      responses:
+        '200':
+          description: Post deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Forbidden
+        '404':
+          description: Post not found
+
+  # ── Post actions ──────────────────────────────────────────────────────────────
+  /api/groups/{id}/posts/{postId}/vote:
+    post:
+      tags: [Forum]
+      summary: Vote on a post
+      operationId: voteGroupPost
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/PostId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vote]
+              properties:
+                vote:
+                  type: integer
+                  enum: [1, -1, 0]
+      responses:
+        '200':
+          description: Vote recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      vote_score:
+                        type: integer
+
+  /api/groups/{id}/posts/{postId}/react:
+    post:
+      tags: [Forum]
+      summary: React to a post with an emoji
+      operationId: reactGroupPost
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/PostId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [emoji]
+              properties:
+                emoji:
+                  type: string
+      responses:
+        '200':
+          description: Reaction toggled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      reactions:
+                        type: object
+                        additionalProperties:
+                          type: integer
+
+  /api/groups/{id}/posts/{postId}/solve:
+    patch:
+      tags: [Forum]
+      summary: Mark/unmark a post as solved
+      operationId: solveGroupPost
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/PostId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [solved]
+              properties:
+                solved:
+                  type: boolean
+      responses:
+        '200':
+          description: Solved state updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Forbidden
+        '404':
+          description: Post not found
+
+  /api/groups/{id}/posts/{postId}/pin:
+    patch:
+      tags: [Forum]
+      summary: Pin/unpin a post
+      operationId: pinGroupPost
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/PostId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pinned]
+              properties:
+                pinned:
+                  type: boolean
+      responses:
+        '200':
+          description: Pin state updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Forbidden
+
+  /api/groups/{id}/posts/{postId}/lock:
+    patch:
+      tags: [Forum]
+      summary: Lock/unlock a post
+      operationId: lockGroupPost
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/PostId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [locked]
+              properties:
+                locked:
+                  type: boolean
+      responses:
+        '200':
+          description: Lock state updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Forbidden
+
+  /api/groups/{id}/posts/{postId}/archive:
+    patch:
+      tags: [Forum]
+      summary: Archive/unarchive a post
+      operationId: archiveGroupPost
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/PostId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [archived]
+              properties:
+                archived:
+                  type: boolean
+      responses:
+        '200':
+          description: Archive state updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Forbidden
+
+  # ── Comments ──────────────────────────────────────────────────────────────────
+  /api/groups/{id}/posts/{postId}/comments:
+    post:
+      tags: [Forum]
+      summary: Add a comment to a post
+      operationId: createGroupComment
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/PostId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body:
+                  type: string
+      responses:
+        '201':
+          description: Comment added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/ForumComment'
+        '400':
+          description: Reply cannot be empty
+        '403':
+          description: Post is locked, forum disabled, or no permission to reply
+        '404':
+          description: Thread not found
+
+  /api/groups/{id}/posts/{postId}/comments/{commentId}:
+    patch:
+      tags: [Forum]
+      summary: Edit a comment
+      operationId: editGroupComment
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/PostId'
+        - $ref: '#/components/parameters/CommentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body:
+                  type: string
+      responses:
+        '200':
+          description: Comment updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Only author can edit / edit window expired
+        '404':
+          description: Comment not found
+
+    delete:
+      tags: [Forum]
+      summary: Delete a comment
+      operationId: deleteGroupComment
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/PostId'
+        - $ref: '#/components/parameters/CommentId'
+      responses:
+        '200':
+          description: Comment deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Forbidden
+        '404':
+          description: Comment not found
+
+  /api/groups/{id}/posts/{postId}/comments/{commentId}/vote:
+    post:
+      tags: [Forum]
+      summary: Vote on a comment
+      operationId: voteGroupComment
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - $ref: '#/components/parameters/PostId'
+        - $ref: '#/components/parameters/CommentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vote]
+              properties:
+                vote:
+                  type: integer
+                  enum: [1, -1, 0]
+      responses:
+        '200':
+          description: Vote recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      vote_score:
+                        type: integer
+
+  # ── Tags ──────────────────────────────────────────────────────────────────────
+  /api/groups/{id}/tags:
+    get:
+      tags: [Forum]
+      summary: List group tags
+      operationId: listGroupTags
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        '200':
+          description: List of tags
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ForumTag'
+
+    post:
+      tags: [Forum]
+      summary: Create a group tag
+      operationId: createGroupTag
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                color:
+                  type: string
+      responses:
+        '201':
+          description: Tag created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/ForumTag'
+        '403':
+          description: Forbidden
+
+  /api/groups/{id}/tags/{tagId}:
+    delete:
+      tags: [Forum]
+      summary: Delete a group tag
+      operationId: deleteGroupTag
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - name: tagId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tag deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Forbidden
+
+  # ── Forum member permissions ──────────────────────────────────────────────────
+  /api/groups/{id}/forum-members:
+    get:
+      tags: [Forum]
+      summary: List forum member permissions
+      operationId: getForumMembers
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        '200':
+          description: Forum member permissions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '403':
+          description: Forbidden
+
+    post:
+      tags: [Forum]
+      summary: Grant a forum member permission
+      operationId: addForumMemberPermission
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId:
+                  type: string
+                permission:
+                  type: string
+      responses:
+        '201':
+          description: Permission granted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Forbidden
+
+  /api/groups/{id}/forum-members/{userId}/{permType}:
+    delete:
+      tags: [Forum]
+      summary: Revoke a forum member permission
+      operationId: removeForumMemberPermission
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: permType
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Permission revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Forbidden
+
+  # ── Gallery ───────────────────────────────────────────────────────────────────
+  /api/groups/{id}/gallery:
+    get:
+      tags: [Gallery]
+      summary: Get group gallery
+      operationId: getGroupGallery
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        '200':
+          description: Gallery items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GalleryItem'
+
+    post:
+      tags: [Gallery]
+      summary: Upload an item to the gallery
+      operationId: uploadToGallery
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  description: Base64 data URI or public URL
+      responses:
+        '200':
+          description: Item uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/GalleryItem'
+        '403':
+          description: Members only
+
+  /api/groups/{id}/gallery/{itemId}/approve:
+    patch:
+      tags: [Gallery]
+      summary: Approve a gallery item
+      operationId: approveGalleryItem
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Item approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Admins only
+
+  /api/groups/{id}/gallery/{itemId}:
+    delete:
+      tags: [Gallery]
+      summary: Delete a gallery item
+      operationId: deleteGalleryItem
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Item deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Forbidden
+
+  # ── Invitations ───────────────────────────────────────────────────────────────
+  /api/groups/{id}/invites:
+    get:
+      tags: [Invitations]
+      summary: List group invitations
+      operationId: getGroupInvites
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      responses:
+        '200':
+          description: List of invitations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Invitation'
+        '403':
+          description: Forbidden
+
+    post:
+      tags: [Invitations]
+      summary: Send invitations to users or emails
+      operationId: createGroupInvites
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                targets:
+                  type: array
+                  items:
+                    type: string
+                  description: User IDs or email addresses
+      responses:
+        '200':
+          description: Invitations created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Invitation'
+        '403':
+          description: Forbidden
+
+  /api/groups/{id}/invites/link:
+    post:
+      tags: [Invitations]
+      summary: Generate a shareable invite link
+      operationId: createShareableInviteLink
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                maxUses:
+                  type: integer
+                  nullable: true
+                expiryHours:
+                  type: integer
+                  nullable: true
+      responses:
+        '200':
+          description: Shareable invite link created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Invitation'
+        '403':
+          description: Forbidden
+
+  /api/groups/{id}/invites/{inviteId}:
+    delete:
+      tags: [Invitations]
+      summary: Revoke an invitation
+      operationId: revokeGroupInvite
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/GroupId'
+        - name: inviteId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Invitation revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '403':
+          description: Forbidden
+
+  /api/groups/invite/{token}:
+    get:
+      tags: [Invitations]
+      summary: Validate an invite token
+      operationId: validateInviteToken
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Token validation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      invite:
+                        $ref: '#/components/schemas/Invitation'
+                      group:
+                        $ref: '#/components/schemas/Group'
+                      isAlreadyMember:
+                        type: boolean
+                      membershipState:
+                        type: string
+                        nullable: true
+
+  /api/groups/invite/{token}/accept:
+    post:
+      tags: [Invitations]
+      summary: Accept an invite via token
+      operationId: acceptInviteToken
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                answers:
+                  type: object
+                  description: Join form answers if a questionnaire is required
+      responses:
+        '200':
+          description: Invitation accepted or questionnaire required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  requiresQuestionnaire:
+                    type: boolean
+                  data:
+                    type: object
+                  message:
+                    type: string
+        '400':
+          description: Invalid or expired token
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Reusable parameters
+# ─────────────────────────────────────────────────────────────────────────────
+  parameters:
+    GroupId:
+      name: id
+      in: path
+      required: true
+      description: Group entity UUID
+      schema:
+        type: string
+        format: uuid
+    MemberId:
+      name: memberId
+      in: path
+      required: true
+      description: Membership record UUID
+      schema:
+        type: string
+        format: uuid
+    PostId:
+      name: postId
+      in: path
+      required: true
+      description: Forum post UUID
+      schema:
+        type: string
+    CommentId:
+      name: commentId
+      in: path
+      required: true
+      description: Forum comment UUID
+      schema:
+        type: string

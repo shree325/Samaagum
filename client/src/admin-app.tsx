@@ -4,7 +4,7 @@
    Requires React, ReactDOM, and Babel in browser.
    ============================================================ */
 
-const { useState, useEffect, useRef } = React;
+var { useState, useEffect, useRef } = React;
 
 // --- INLINE SVG ICONS ---
 const Icons = {
@@ -17,8 +17,6 @@ const Icons = {
   key: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" /></svg>,
   chevronUp: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="18 15 12 9 6 15" /></svg>,
   chevronDown: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="6 9 12 15 18 9" /></svg>,
-  tag: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>,
-  credit: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="1" y="4" width="22" height="16" rx="2" ry="2" /><line x1="1" y1="10" x2="23" y2="10" /></svg>,
   tag: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></svg>,
   credit: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="1" y="4" width="22" height="16" rx="2" ry="2" /><line x1="1" y1="10" x2="23" y2="10" /></svg>,
   settings: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>,
@@ -5115,32 +5113,39 @@ function CategoriesView({ categories, setCategories, tags, setTags, showToast, l
     });
   };
 
-  const toggleStatus = (id, e) => {
+  const toggleStatus = async (id, e) => {
     e.stopPropagation();
     const cat = categories.find(c => c.id === id);
     if (!cat) return;
 
     setLoadingToggles(prev => ({ ...prev, [id]: true }));
 
-    setTimeout(() => {
-      const oldStatus = cat.status;
-      const nextStatus = cat.status === 'active' ? 'inactive' : 'active';
+    const oldStatus = cat.status;
+    const nextStatus = cat.status === 'active' ? 'inactive' : 'active';
 
-      setCategories(prev => prev.map(c => c.id === id ? { ...c, status: nextStatus } : c));
-      setLoadingToggles(prev => ({ ...prev, [id]: false }));
+    try {
+      const res = await adminApi.categories.saveCategory({ status: nextStatus }, id);
+      if (res && res.success) {
+        setCategories(prev => prev.map(c => c.id === id ? { ...c, status: nextStatus } : c));
+        logAction(user?.email || 'Admin', `Updated category ${cat.name} status from ${oldStatus} to ${nextStatus}`);
+        showToast(`${cat.name} is now ${nextStatus}`, 'success');
 
-      logAction(user?.email || 'Admin', `Updated category ${cat.name} status from ${oldStatus} to ${nextStatus}`);
-      showToast(`${cat.name} is now ${nextStatus}`, 'success');
-
-      const updatedList = categories.map(c => c.id === id ? { ...c, status: nextStatus } : c);
-      localStorage.setItem('samaagum_admin_categories', JSON.stringify(updatedList));
-      if (nextStatus === 'inactive' && tags && setTags) {
-        const updatedTags = tags.map(t => t.category === cat.name ? { ...t, status: 'inactive' } : t);
-        setTags(updatedTags);
-        localStorage.setItem('samaagum_admin_tags', JSON.stringify(updatedTags));
-        logAction('System', `Disabled all child tags under inactive category "${cat.name}".`);
+        const updatedList = categories.map(c => c.id === id ? { ...c, status: nextStatus } : c);
+        localStorage.setItem('samaagum_admin_categories', JSON.stringify(updatedList));
+        if (nextStatus === 'inactive' && tags && setTags) {
+          const updatedTags = tags.map(t => t.category === cat.name ? { ...t, status: 'inactive' } : t);
+          setTags(updatedTags);
+          localStorage.setItem('samaagum_admin_tags', JSON.stringify(updatedTags));
+          logAction('System', `Disabled all child tags under inactive category "${cat.name}".`);
+        }
+      } else {
+        showToast("Failed to update status in database", "warning");
       }
-    }, 500);
+    } catch (err) {
+      showToast("Error updating category: " + err.message, "danger");
+    } finally {
+      setLoadingToggles(prev => ({ ...prev, [id]: false }));
+    }
   };
 
   const openPanel = (cat = null) => {

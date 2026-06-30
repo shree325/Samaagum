@@ -1,7 +1,7 @@
 /* ============================================================
    Samaagum landing — Nav, Hero, Trust marquee
    ============================================================ */
-const { useState, useEffect } = React;
+var { useState, useEffect } = React;
 const AUTH = "pages/Samaagum Auth.html";
 
 /* ---------------- Nav ---------------- */

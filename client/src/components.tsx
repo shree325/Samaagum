@@ -1,7 +1,7 @@
 /* ============================================================
    Samaagum — shared atoms, icons, data, immersive panel
    ============================================================ */
-const { useState, useRef, useEffect, useCallback } = React;
+var { useState, useRef, useEffect, useCallback } = React;
 
 /* ---------------- Icons ---------------- */
 const Ic = {

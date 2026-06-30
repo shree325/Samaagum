@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS group_memberships (
     state                 membership_state_enum NOT NULL DEFAULT 'pending',
     joined_at             TIMESTAMPTZ NULL,
     form_response_id      UUID NULL,
+    answers               JSONB NULL,
     invited_by_user_id    UUID NULL,
     accepted_by_user_id   UUID NULL,
     responded_at          TIMESTAMPTZ NULL,
