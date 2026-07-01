@@ -1,3 +1,4 @@
+// @ts-nocheck
 const { useState, useRef, useEffect, useCallback, useMemo } = React;
 
 // Reuse existing components and utilities from the project

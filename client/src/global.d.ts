@@ -28,6 +28,11 @@ declare global {
   const clamp: any;
   const range: any;
   const EVENTS: any;
+  const COVERS: any;
+  const GROUPS: any;
+  const EventCard: any;
+  const Grain: any;
+  const ME: any;
 }
 
 export {};
