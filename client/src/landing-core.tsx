@@ -1,11 +1,14 @@
+// @ts-nocheck
 /* ============================================================
    Samaagum landing — core engine, atoms, data
    Scroll model mirrors Framer Motion: Reveal≈whileInView,
    useScrub≈useScroll+useTransform, useTilt≈motion 3D.
    ============================================================ */
-const { useState, useRef, useEffect, useLayoutEffect } = React;
+var { useState, useRef, useEffect, useLayoutEffect } = React;
 
 const REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+declare const Lenis: any;
 
 /* ---------- Smooth scroll (Lenis) ---------- */
 function initLenis() {
@@ -15,7 +18,8 @@ function initLenis() {
   requestAnimationFrame(raf);
   // anchor links
   document.addEventListener("click", (e) => {
-    const a = e.target.closest('a[href^="#"]');
+    const target = e.target as HTMLElement;
+    const a = target.closest('a[href^="#"]');
     if (!a) return;
     const id = a.getAttribute("href");
     if (id.length < 2) return;
@@ -26,7 +30,7 @@ function initLenis() {
 }
 
 /* ---------- Scrub engine (continuous, rAF, imperative) ---------- */
-const scrubs = new Set();
+const scrubs = new Set<any>();
 let rafId = null;
 function tick() {
   const vh = window.innerHeight;
@@ -55,7 +59,7 @@ const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const range = (p, a, b) => clamp((p - a) / (b - a));
 
 /* ---------- Reveal (whileInView) ---------- */
-function Reveal({ children, y = 26, delay = 0, once = true, className = "", style, as = "div" }) {
+function Reveal({ children, y = 26, delay = 0, once = true, className = "", style, as = "div" }: any) {
   const ref = useRef(null);
   const [show, setShow] = useState(REDUCED);
   useEffect(() => {
@@ -85,7 +89,7 @@ function Reveal({ children, y = 26, delay = 0, once = true, className = "", styl
   );
 }
 /* stagger helper: wraps an array of nodes each in Reveal with incremental delay */
-function Stagger({ items, step = 80, base = 0, y = 26, render }) {
+function Stagger({ items, step = 80, base = 0, y = 26, render }: any) {
   return items.map((it, i) => (
     <Reveal key={i} delay={base + i * step} y={y}>{render(it, i)}</Reveal>
   ));
@@ -205,11 +209,7 @@ const ACTIVITY = [
   { who: "Sara I", t: "joined", obj: "Indie Hackers", ago: "24m" },
   { who: "Noah F", t: "RSVP'd to", obj: "AI Builders Demo Day", ago: "31m" },
 ];
-const CITIES = [
-  { n: "Bengaluru", x: 64, y: 60 }, { n: "Mumbai", x: 52, y: 52 }, { n: "Delhi", x: 56, y: 36 },
-  { n: "London", x: 30, y: 28 }, { n: "New York", x: 14, y: 38 }, { n: "Singapore", x: 76, y: 66 },
-  { n: "Dubai", x: 48, y: 46 },
-];
+const CITIES = []; // Dynamically fetched in Activity
 
 Object.assign(window, {
   initLenis, useScrub, useTilt, Reveal, Stagger, CountUp, Mark, Wordmark, gradFor, initials, I,

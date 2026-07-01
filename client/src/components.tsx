@@ -1,7 +1,7 @@
 /* ============================================================
    Samaagum — shared atoms, icons, data, immersive panel
    ============================================================ */
-const { useState, useRef, useEffect, useCallback } = React;
+var { useState, useRef, useEffect, useCallback } = React;
 
 /* ---------------- Icons ---------------- */
 const Ic = {
@@ -19,6 +19,7 @@ const Ic = {
   mic: (p) => <svg width="17" height="17" viewBox="0 0 24 24" fill="none" {...p}><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="1.7"/><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>,
   compass: (p) => <svg width="17" height="17" viewBox="0 0 24 24" fill="none" {...p}><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7"/><path d="M15.5 8.5l-2 5-5 2 2-5z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"/></svg>,
   google: (p) => <svg width="19" height="19" viewBox="0 0 24 24" {...p}><path fill="#EA4335" d="M12 10.2v3.9h5.5c-.24 1.4-1.7 4.1-5.5 4.1-3.3 0-6-2.7-6-6.1s2.7-6.1 6-6.1c1.9 0 3.1.8 3.9 1.5l2.6-2.6C17.1 2.6 14.8 1.6 12 1.6 6.7 1.6 2.4 5.9 2.4 12s4.3 10.4 9.6 10.4c5.5 0 9.2-3.9 9.2-9.4 0-.6-.1-1.1-.2-1.6H12z"/><path fill="#34A853" d="M3.9 7.3l3.2 2.3C8 7.7 9.8 6.4 12 6.4c1.9 0 3.1.8 3.9 1.5l2.6-2.6C17.1 3.4 14.8 2.4 12 2.4 8 2.4 4.6 4.7 3.9 7.3z" opacity="0"/></svg>,
+  linkedin: (p) => <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.779-1.75-1.75s.784-1.75 1.75-1.75 1.75.779 1.75 1.75-.784 1.75-1.75 1.75zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>,
 };
 
 /* ---------------- Logo ---------------- */
@@ -136,11 +137,7 @@ const INTERESTS = [
 const ROLES = [
   ["Founder", "briefcase"], ["Creator", "mic"], ["Investor", "spark"], ["Explorer", "compass"],
 ];
-const CITIES = [
-  ["Bengaluru", "India", "🇮🇳"], ["Mumbai", "India", "🇮🇳"], ["San Francisco", "USA", "🇺🇸"],
-  ["New York", "USA", "🇺🇸"], ["London", "UK", "🇬🇧"], ["Singapore", "SG", "🇸🇬"],
-  ["Dubai", "UAE", "🇦🇪"], ["Berlin", "Germany", "🇩🇪"],
-];
+const CITIES = [];
 const EVENTS = [
   { t: "Founders & Funders Mixer", d: "Thu · Indiranagar", tag: "Networking", thumb: "linear-gradient(135deg,#ff6b4a,#ff4d8d)", going: 3 },
   { t: "Design Systems Night", d: "Sat · WeWork Galaxy", tag: "Design", thumb: "linear-gradient(135deg,#6d5efc,#2a7fff)", going: 5 },
@@ -293,8 +290,285 @@ function useCountdown(start, dep) {
   return [n, () => setN(start)];
 }
 
+/* ---------------- LocationPreview ---------------- */
+function LocationPreview({ city, lat, lng, address }) {
+  if (!city || lat === undefined || lng === undefined) return null;
+  
+  const latitude = parseFloat(lat);
+  const longitude = parseFloat(lng);
+  
+  const mapSrc = `https://www.openstreetmap.org/export/embed.html?bbox=${
+    longitude - 0.01
+  },${
+    latitude - 0.01
+  },${
+    longitude + 0.01
+  },${
+    latitude + 0.01
+  }&marker=${latitude},${longitude}`;
+
+  return (
+    <div style={{
+      background: "var(--surface-1)",
+      border: "1px solid var(--accent-1)",
+      borderRadius: "16px",
+      padding: "16px",
+      marginTop: "16px",
+      marginBottom: "16px",
+      boxShadow: "0 4px 12px rgba(0,0,0,0.05)"
+    }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", marginBottom: "12px" }}>
+        <div style={{ color: "var(--accent-2)", marginTop: "2px" }}>
+          <Ic.pin />
+        </div>
+        <div>
+          <div style={{ fontSize: "12px", color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600 }}>Current location</div>
+          <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-1)", marginTop: "2px" }}>{city}</div>
+          {address && <div style={{ fontSize: "13px", color: "var(--text-2)", marginTop: "4px", lineHeight: 1.4 }}>{address}</div>}
+        </div>
+      </div>
+      <iframe
+        src={mapSrc}
+        width="100%"
+        height="220"
+        loading="lazy"
+        style={{
+          border: 0,
+          borderRadius: "16px",
+          overflow: "hidden",
+          display: "block"
+        }}
+      />
+    </div>
+  );
+}
+
+let activeCitiesCache = null;
+let activeCitiesPromise = null;
+let activeCitiesTimestamp = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function getActiveCities(returnFullObjects = false) {
+  const now = Date.now();
+  if (activeCitiesCache && (now - activeCitiesTimestamp < CACHE_TTL)) {
+    return returnFullObjects ? activeCitiesCache.full : activeCitiesCache.names;
+  }
+  
+  if (!activeCitiesPromise || (now - activeCitiesTimestamp >= CACHE_TTL)) {
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+    
+    activeCitiesPromise = fetch(`${apiBase}/api/public/locations/active`)
+      .then(r => r.json())
+      .then(res => {
+        if (res.success && res.data) {
+          activeCitiesCache = {
+            full: res.data,
+            names: res.data.flatMap((c: any) => {
+              const names = [];
+              if (c.city_name && c.city_name !== 'Unknown') names.push(c.city_name.toLowerCase().trim());
+              if (c.state_name) names.push(c.state_name.toLowerCase().trim());
+              return names;
+            })
+          };
+          activeCitiesTimestamp = Date.now();
+          return returnFullObjects ? activeCitiesCache.full : activeCitiesCache.names;
+        }
+        return [];
+      })
+      .catch(err => {
+        console.error('Failed to fetch active cities', err);
+        return [];
+      });
+  }
+  return activeCitiesPromise;
+}
+
+/* ---------------- LocationSelector ---------------- */
+function LocationSelector({ value, onChange, placeholder = "Search for a location...", style = {} }) {
+  const normalizedValue = React.useMemo(() => {
+    if (!value) return null;
+    if (Array.isArray(value)) {
+      return {
+        location_name: value[0],
+        address: value[5] || `${value[0]}, ${value[1]}`,
+        latitude: parseFloat(value[3]),
+        longitude: parseFloat(value[4])
+      };
+    }
+    return {
+      ...value,
+      latitude: parseFloat(value.latitude),
+      longitude: parseFloat(value.longitude)
+    };
+  }, [value]);
+
+  const [query, setQuery] = useState(normalizedValue?.address || normalizedValue?.location_name || "");
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    if (normalizedValue?.address || normalizedValue?.location_name) {
+      setQuery(normalizedValue.address || normalizedValue.location_name);
+    }
+  }, [normalizedValue?.address, normalizedValue?.location_name]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (!query || query === normalizedValue?.address || query === normalizedValue?.location_name) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const [res, activeCities] = await Promise.all([
+          fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=jsonv2`),
+          getActiveCities()
+        ]);
+        const data = await res.json();
+        
+        // Filter Nominatim results against the admin active cities list
+        const filteredData = data.filter(item => {
+          const locationName = (item.name || item.display_name.split(',')[0]).toLowerCase().trim();
+          return activeCities.some(ac => {
+            return locationName === ac || 
+                   locationName === ac + " city" || 
+                   ac === locationName + " city";
+          });
+        });
+        
+        setResults(filteredData);
+        setShowDropdown(true);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setSearching(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [query, normalizedValue?.address, normalizedValue?.location_name]);
+
+  const handleSelect = (item) => {
+    const locationName = item.name || item.display_name.split(',')[0];
+    const newLocation = {
+      location_name: locationName,
+      address: item.display_name,
+      latitude: parseFloat(item.lat),
+      longitude: parseFloat(item.lon)
+    };
+    setQuery(item.display_name);
+    setShowDropdown(false);
+    onChange(newLocation);
+  };
+
+  const handleClear = () => {
+    setQuery("");
+    onChange(null);
+  }
+
+  return (
+    <div style={{ position: "relative", ...style }} ref={wrapperRef}>
+      <div style={{ position: "relative" }}>
+        <input
+          type="text"
+          className="field-input"
+          placeholder={placeholder}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => { if (results.length > 0) setShowDropdown(true); }}
+          style={{ 
+            width: "100%",
+            boxSizing: "border-box",
+            paddingTop: "12px",
+            paddingBottom: "12px",
+            paddingRight: normalizedValue ? "36px" : "16px",
+            paddingLeft: "16px",
+            borderRadius: "24px", 
+            border: "2px solid var(--border)", 
+            background: "var(--bg-1, #ffffff)",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+            outline: "none",
+            transition: "all 0.2s ease",
+            position: "relative",
+            zIndex: 10,
+            fontSize: "15px"
+          }}
+          onMouseOver={(e) => e.target.style.borderColor = "var(--accent-1)"}
+          onMouseOut={(e) => e.target.style.borderColor = "var(--border)"}
+        />
+        {normalizedValue && (
+          <button 
+            type="button"
+            onClick={handleClear}
+            style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", background: "var(--bg-2, #f5f5f5)", border: "none", cursor: "pointer", color: "var(--ink-2)", padding: "4px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", width: "24px", height: "24px", zIndex: 11 }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </button>
+        )}
+      </div>
+
+      {showDropdown && results.length > 0 && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, right: 0, zIndex: 1000,
+          background: "var(--bg-1, #ffffff)", border: "1px solid var(--border)", borderRadius: "16px",
+          marginTop: "8px", maxHeight: "240px", overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,0.15)"
+        }}>
+          {results.map((item, i) => (
+            <button
+              key={item.place_id || i}
+              type="button"
+              onClick={() => handleSelect(item)}
+              style={{
+                width: "100%", padding: "12px 16px", textAlign: "left", background: "transparent",
+                border: "none", borderBottom: i < results.length - 1 ? "1px solid var(--border)" : "none",
+                cursor: "pointer", fontSize: "14px", color: "var(--ink-1)", display: "block",
+                transition: "background 0.2s"
+              }}
+              onMouseOver={(e) => e.currentTarget.style.background = "var(--bg-2, #f5f5f5)"}
+              onMouseOut={(e) => e.currentTarget.style.background = "transparent"}
+            >
+              <div style={{ fontWeight: 600 }}>{item.name || item.display_name.split(',')[0]}</div>
+              <div style={{ fontSize: "12px", color: "var(--ink-3)", marginTop: "2px" }}>
+                {item.display_name}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {normalizedValue?.latitude !== undefined && !isNaN(normalizedValue.latitude) && normalizedValue?.longitude !== undefined && !isNaN(normalizedValue.longitude) && (
+        <div style={{ marginTop: "16px" }}>
+          <iframe
+            src={`https://www.openstreetmap.org/export/embed.html?bbox=${normalizedValue.longitude - 0.01},${normalizedValue.latitude - 0.01},${normalizedValue.longitude + 0.01},${normalizedValue.latitude + 0.01}&marker=${normalizedValue.latitude},${normalizedValue.longitude}`}
+            width="100%"
+            height="220"
+            style={{ border: 0, borderRadius: "16px", background: "var(--bg-2, #f5f5f5)", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}
+            loading="lazy"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 Object.assign(window, {
-  Ic, Mark, Wordmark, SBtn, Field, OTPInput, FloatCard, LeftPanel, MeshBg, Confetti, Reveal,
+  Ic, Mark, Wordmark, SBtn, Field, OTPInput, FloatCard, LeftPanel, MeshBg, Confetti, Reveal, LocationPreview, LocationSelector,
   gradFor, initials, useCountdown,
   INTERESTS, ROLES, CITIES, EVENTS, PEOPLE,
+  getActiveCities,
 });

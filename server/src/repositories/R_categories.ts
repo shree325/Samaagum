@@ -4,18 +4,18 @@ import prisma from '../config/prisma';
 
 export class R_categories extends PostgresBaseRepository<ICategory> implements IR_categories {
   constructor() {
-    super('categories', 'category_id');
+    super('categories', 'id');
   }
 
   async findBySlug(slug: string): Promise<ICategory | null> {
-    const query = `SELECT * FROM categories WHERE slug = $1`;
-    const { rows } = await prisma.query(query, [slug]);
-    return rows[0] || null;
+    return await prisma.categories.findFirst({
+      where: { slug }
+    }) as ICategory | null;
   }
 
   async findByParentId(parentId: string): Promise<ICategory[]> {
-    const query = `SELECT * FROM categories WHERE parent_id = $1`;
-    const { rows } = await prisma.query(query, [parentId]);
-    return rows;
+    return await prisma.categories.findMany({
+      where: { parent_id: parentId }
+    }) as ICategory[];
   }
 }

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import prisma from '../config/prisma';
 import { PostgresBaseRepository } from './PostgresBaseRepository';
 import { IRole, IR_roles } from './IR_roles';

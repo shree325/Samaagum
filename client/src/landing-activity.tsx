@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* ============================================================
    Samaagum landing — Discussions, Activity, CTA, Footer
    ============================================================ */
@@ -46,6 +47,21 @@ function ActivityItem({ a }) {
   );
 }
 function PlatformActivity() {
+  const [dynamicCities, setDynamicCities] = React.useState(window.CITIES || []);
+  React.useEffect(() => {
+    if (window.getActiveCities) {
+      window.getActiveCities(true).then(data => {
+        if (data && data.length) {
+          setDynamicCities(data.map(c => ({
+            n: c.city_name,
+            x: Math.max(10, Math.min(90, (c.longitude + 180) / 360 * 100)),
+            y: Math.max(10, Math.min(90, (90 - c.latitude) / 180 * 100))
+          })));
+        }
+      });
+    }
+  }, []);
+
   const feed = [...ACTIVITY, ...ACTIVITY];
   const STATS = [
     { n: 240, sfx: "k+", l: "Members worldwide", c1: "#ff6b4a", c2: "#ff4d8d" },
@@ -86,10 +102,10 @@ function PlatformActivity() {
             <div className="glass-card map-card">
               <div className="map-dots" />
               <div className="sec-glow" style={{ width: 300, height: 300, background: "var(--accent-1)", top: "20%", left: "30%", opacity: 0.18 }} />
-              {CITIES.map((c) => (
+              {dynamicCities.map((c) => (
                 <div key={c.n} className="map-pin2" style={{ left: c.x + "%", top: c.y + "%" }}>
                   <span className="ring" /><span className="core" />
-                  {["Bengaluru", "London", "New York"].includes(c.n) && <span className="lbl">{c.n}</span>}
+                  {["Bengaluru", "London", "New York", c.n].includes(c.n) && <span className="lbl">{c.n}</span>}
                 </div>
               ))}
               <div style={{ position: "absolute", left: 22, bottom: 20, zIndex: 3 }}>
@@ -152,7 +168,9 @@ function Footer() {
           {cols.map(([h, links]) => (
             <div key={h}>
               <h5>{h}</h5>
-              {links.map(l => <a key={l} href={AUTH}>{l}</a>)}
+              {links.map(l => (
+                <a key={l} href={AUTH}>{l}</a>
+              ))}
             </div>
           ))}
         </div>

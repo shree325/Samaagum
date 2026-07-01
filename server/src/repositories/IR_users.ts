@@ -26,4 +26,7 @@ export interface IR_users {
   update(id: string, user: Partial<IUser>): Promise<IUser | null>;
   softDelete(id: string): Promise<IUser | null>;
   activate(id: string): Promise<IUser | null>;
+  findByUsernamePrefixWithProfile(usernamePrefix: string): Promise<any | null>;
+  findAll(filter?: any): Promise<any[]>;
+  findOne(filter?: any): Promise<any | null>;
 }

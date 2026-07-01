@@ -74,22 +74,40 @@ function FeatureCard({ ev, onOpen, saved, onSave }) {
 
 /* ---------------- Group card ---------------- */
 function GroupCard({ g, onOpen, joined, onJoin }) {
+  const _apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+  const _resolveImg = (url) => url && !url.startsWith('blob:') ? (url.startsWith('/api/') ? _apiBase + url : url) : null;
+  const bannerSrc = _resolveImg(g.banner);
+  const iconSrc = _resolveImg(g.icon);
+  const isCustomIcon = iconSrc && (iconSrc.startsWith("http") || iconSrc.startsWith("data:") || iconSrc.includes("/"));
   return (
     <div className="gcard rise" onClick={()=>onOpen(g)}>
-      <div className="gcov" style={{ background: g.cover }}><Grain/></div>
-      <div className="gicon" style={{ background: g.cover }}>{g.icon}</div>
+      <div className="gcov" style={{
+          backgroundImage: bannerSrc ? `url("${bannerSrc}")` : undefined,
+          backgroundColor: g.cover,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}><Grain/></div>
+      <div className="gicon" style={{ background: g.cover, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+        {isCustomIcon ? <img src={iconSrc} alt="icon" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }} /> : g.icon}
+      </div>
       <div className="gbody">
-        <div className="gname">{g.name}</div>
-        <div className="gdsc">{g.desc}</div>
-        <div className="gstats">
-          <span><b style={{ color:"var(--ink-2)" }}>{g.members.toLocaleString()}</b> members</span>
-          <span className="live"><span className="d"/>{g.online} online</span>
+        <div className="gname" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {g.name}
+          {g.visibility === "private" && <I.lock style={{ width: 14, height: 14, color: "var(--ink-3)" }} title="Private Group" />}
+          {g.visibility === "hidden" && <I.eyeOff style={{ width: 14, height: 14, color: "var(--ink-3)" }} title="Hidden Group" />}
+        </div>
+        <div className="gdsc">{g.description || g.desc}</div>
+        <div className="gstats" style={{ display: "flex", flexWrap: "wrap", gap: "8px 12px", alignItems: "center" }}>
+          <span><b style={{ color:"var(--ink-2)" }}>{(g.members || 1).toLocaleString()}</b> members</span>
+          <span className="live"><span className="d"/>{g.online || 1} online</span>
+          {g.location && <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><I.pin style={{ width: 13, height: 13 }} /> {g.location}</span>}
+          <span style={{ fontSize: 11, fontWeight: 600, background: "var(--surface-2)", color: "var(--ink-2)", padding: "2px 6px", borderRadius: 4 }}>Free</span>
         </div>
         <div className="gfoot">
-          <div className="stack">{g.memberNames.slice(0,4).map((n,i)=><Avatar key={i} name={n} size={26}/>)}</div>
-          <button className={`hbtn hbtn--sm ${joined?"hbtn--ghost":"hbtn--soft"}`} style={{ marginLeft:"auto" }}
+          <div className="stack">{(g.memberNames || []).slice(0,4).map((m,i)=><Avatar key={i} name={typeof m === 'object' ? m.name : m} size={26}/>)}</div>
+          <button className={`hbtn hbtn--sm ${joined ? "hbtn--ghost" : "hbtn--soft"}`} style={{ marginLeft:"auto" }}
             onClick={(e)=>{ e.stopPropagation(); onJoin(g); }}>
-            {joined ? <><I.check/>Joined</> : "Join"}
+            {joined === "pending" ? <><I.clock style={{ width: 14, height: 14 }}/>Requested</> : joined ? <><I.check/>Joined</> : "Join"}
           </button>
         </div>
       </div>
@@ -99,17 +117,26 @@ function GroupCard({ g, onOpen, joined, onJoin }) {
 
 /* ---------------- Group row (trending list) ---------------- */
 function GroupRow({ g, rank, onOpen, joined, onJoin }) {
+  const _apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+  const _resolveImg = (url) => url && !url.startsWith('blob:') ? (url.startsWith('/api/') ? _apiBase + url : url) : null;
+  const iconSrc = _resolveImg(g.icon);
+  const isCustomIcon = iconSrc && (iconSrc.startsWith("http") || iconSrc.startsWith("data:") || iconSrc.includes("/"));
   return (
     <div className="grow" onClick={()=>onOpen(g)}>
       {rank!=null && <span className="rank">{rank}</span>}
-      <div className="gicon2" style={{ background: g.cover }}>{g.icon}</div>
-      <div className="gi">
-        <div className="n">{g.name}</div>
-        <div className="s">{g.members.toLocaleString()} members · {g.cat}</div>
+      <div className="gicon2" style={{ background: g.cover, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+        {isCustomIcon ? <img src={iconSrc} alt="icon" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }} /> : g.icon}
       </div>
-      <button className={`hbtn hbtn--sm ${joined?"hbtn--ghost":"hbtn--soft"}`}
+      <div className="gi">
+        <div className="n" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {g.name}
+          {g.visibility === "private" && <I.lock style={{ width: 12, height: 12, color: "var(--ink-3)" }} />}
+        </div>
+        <div className="s">{(g.members || 1).toLocaleString()} members · {g.category || g.cat || "Community"}</div>
+      </div>
+      <button className={`hbtn hbtn--sm ${joined ? "hbtn--ghost" : "hbtn--soft"}`}
         onClick={(e)=>{ e.stopPropagation(); onJoin(g); }}>
-        {joined ? <><I.check/>Joined</> : "Join"}
+        {joined === "pending" ? <><I.clock style={{ width: 14, height: 14 }}/>Requested</> : joined ? <><I.check/>Joined</> : "Join"}
       </button>
     </div>
   );

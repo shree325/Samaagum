@@ -1,0 +1,45 @@
+version: "1.0"
+provider: database
+dataType: conversations
+canonical: Conversation
+
+fieldMappings:
+  id:
+    source: id
+    type: string
+    required: true
+
+  type:
+    source: type
+    type: string
+    required: true
+
+  title:
+    source: title
+    type: string
+    required: false
+
+  createdAt:
+    source: created_at
+    type: string
+    required: true
+
+  updatedAt:
+    source: updated_at
+    type: string
+    required: true
+
+  lastActivityAt:
+    source: last_activity_at
+    type: string
+    required: false
+
+  dmKey:
+    source: dm_key
+    type: string
+    required: false
+
+  eventId:
+    source: event_id
+    type: string
+    required: false

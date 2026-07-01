@@ -1,3 +1,4 @@
+/// <reference path="../types/prisma.d.ts" />
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
@@ -10,7 +11,11 @@ if (!connectionString) {
   throw new Error('DATABASE_URL environment variable is missing.');
 }
 
-const pool = new pg.Pool({ connectionString });
+const pool = new pg.Pool({
+  connectionString,
+  max: 50,
+  idleTimeoutMillis: 1000
+});
 const adapter = new PrismaPg(pool);
 
 export const prisma = new PrismaClient({ adapter });

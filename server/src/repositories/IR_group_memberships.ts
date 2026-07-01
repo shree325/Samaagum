@@ -1,28 +1,26 @@
-export interface IGroupMembership {
-  row_id?: string;
-  bu_id: string;
-  par_row_id: string; // Group ID
-  user_id: string;
-  role?: string;
-  status?: string;
-  x_data?: Record<string, unknown> | null;
+import { IBaseRepository } from "./IBaseRepository";
 
-  created?: Date;
-  created_by?: string | null;
-  last_upd?: Date;
-  last_upd_by?: string | null;
-  modification_num?: number;
-  conflict_id?: string;
-  db_last_upd?: Date;
-  db_last_upd_src?: string;
+export interface IGroupMembership {
+  id?: string;
+  tenant_id: string;
+  group_id: string;
+  user_id: string;
+  state: 'pending' | 'active' | 'rejected' | 'left' | 'removed';
+  form_response_id?: string | null;
+  joined_at?: Date | null;
+  created_at?: Date;
+  updated_at?: Date;
+  answers?: any;
 }
 
-export interface IR_group_memberships {
-  create(membership: IGroupMembership): Promise<IGroupMembership>;
-  getById(rowId: string): Promise<IGroupMembership | null>;
+export interface IR_group_memberships extends IBaseRepository<IGroupMembership> {
   getByGroupAndUser(groupId: string, userId: string): Promise<IGroupMembership | null>;
   getByGroup(groupId: string): Promise<IGroupMembership[]>;
   getByUser(userId: string): Promise<IGroupMembership[]>;
-  update(rowId: string, membership: Partial<IGroupMembership>): Promise<IGroupMembership | null>;
-  delete(rowId: string): Promise<boolean>;
+  findFirstActive(userId: string, orConditions: any[]): Promise<IGroupMembership | null>;
+  findFirstActiveByCategory(userId: string, cats: string[]): Promise<IGroupMembership | null>;
+  getMembershipCounts(groupIds: string[]): Promise<any[]>;
+  getMembershipCountsAll(): Promise<any[]>;
+  deleteMembership(groupId: string, userId: string): Promise<boolean>;
+  leaveGroupTx(groupId: string, userId: string): Promise<void>;
 }

@@ -1,0 +1,24 @@
+{
+  "name": "samaagum-monorepo",
+  "version": "1.0.0",
+  "description": "Samaagum Full-Stack Monorepo",
+  "scripts": {
+    "generate:api": "npx openapi-typescript shared/openapi/admin.yaml -o client/src/generated/api-types.ts",
+    "generate:messaging": "npx openapi-typescript shared/openapi/messaging.yaml -o client/src/generated/messaging-types.ts",
+    "generate:api:watch": "npx openapi-typescript shared/openapi/admin.yaml -o client/src/generated/api-types.ts --watch",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "seed": "npm --prefix server run seed"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.13.0",
+    "playwright": "^1.61.0",
+    "tsx": "^4.22.4"
+  },
+  "dependencies": {
+    "@babel/core": "^8.0.1",
+    "@babel/preset-react": "^8.0.1",
+    "@maxmind/geoip2-node": "^6.3.4",
+    "pg": "^8.21.0"
+  }
+}

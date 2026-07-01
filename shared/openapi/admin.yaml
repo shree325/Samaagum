@@ -1,0 +1,2124 @@
+openapi: 3.0.0
+info:
+  title: Samaagum Admin Unified API
+  version: 1.0.0
+  description: Type-safe Unified API contract for all Samaagum Admin Console services (RBAC, plans, coupons, users, KYC, disputes, moderation, tenants, feature flags, and audit logs).
+
+servers:
+  - url: http://localhost:3000
+    description: Local development backend server
+
+paths:
+  # ── RBAC paths ─────────────────────────────────────────────────────────────
+  /api/admin/rbac/roles:
+    get:
+      summary: Retrieve all roles
+      operationId: getRoles
+      responses:
+        '200':
+          description: A list of roles
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Role'
+    post:
+      summary: Create a role
+      operationId: createRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleInput'
+      responses:
+        '201':
+          description: Role created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /api/admin/rbac/roles/{id}:
+    put:
+      summary: Update a role
+      operationId: updateRole
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleInput'
+      responses:
+        '200':
+          description: Role updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+    delete:
+      summary: Delete a role
+      operationId: deleteRole
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Role deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /api/admin/rbac/responsibilities:
+    get:
+      summary: Retrieve all responsibilities
+      operationId: getResponsibilities
+      responses:
+        '200':
+          description: A list of responsibilities
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Responsibility'
+    post:
+      summary: Create a responsibility
+      operationId: createResponsibility
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResponsibilityInput'
+      responses:
+        '201':
+          description: Responsibility created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /api/admin/rbac/responsibilities/{id}:
+    put:
+      summary: Update a responsibility
+      operationId: updateResponsibility
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResponsibilityInput'
+      responses:
+        '200':
+          description: Responsibility updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+    delete:
+      summary: Delete a responsibility
+      operationId: deleteResponsibility
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Responsibility deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /api/admin/rbac/positions:
+    get:
+      summary: Retrieve all positions
+      operationId: getPositions
+      responses:
+        '200':
+          description: A list of positions
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Position'
+    post:
+      summary: Create a position
+      operationId: createPosition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PositionInput'
+      responses:
+        '201':
+          description: Position created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /api/admin/rbac/positions/{id}:
+    put:
+      summary: Update a position
+      operationId: updatePosition
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PositionInput'
+      responses:
+        '200':
+          description: Position updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+    delete:
+      summary: Delete a position
+      operationId: deletePosition
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Position deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  # ── Subscription Plans paths ────────────────────────────────────────────────
+  /api/admin/plans:
+    get:
+      summary: Retrieve all plans
+      operationId: getPlans
+      responses:
+        '200':
+          description: A list of plans
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      plans:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Plan'
+    post:
+      summary: Create a plan
+      operationId: createPlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanInput'
+      responses:
+        '201':
+          description: Plan created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /api/admin/plans/{id}:
+    put:
+      summary: Update a plan
+      operationId: updatePlan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanInput'
+      responses:
+        '200':
+          description: Plan updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+    delete:
+      summary: Delete a plan
+      operationId: deletePlan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Plan deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  # ── Coupons paths ──────────────────────────────────────────────────────────
+  /api/admin/coupons:
+    get:
+      summary: Retrieve all coupons
+      operationId: getCoupons
+      responses:
+        '200':
+          description: A list of coupons
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      coupons:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Coupon'
+    post:
+      summary: Create a coupon
+      operationId: createCoupon
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CouponInput'
+      responses:
+        '201':
+          description: Coupon created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /api/admin/coupons/{id}:
+    put:
+      summary: Update a coupon
+      operationId: updateCoupon
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CouponInput'
+      responses:
+        '200':
+          description: Coupon updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+    delete:
+      summary: Delete a coupon
+      operationId: deleteCoupon
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Coupon deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  # ── Users paths ────────────────────────────────────────────────────────────
+  /api/admin/users:
+    get:
+      summary: Retrieve all users
+      operationId: getUsers
+      responses:
+        '200':
+          description: A list of users
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+    post:
+      summary: Save or invite a user
+      operationId: saveUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserInput'
+      responses:
+        '200':
+          description: User saved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  # ── KYC paths ──────────────────────────────────────────────────────────────
+  /api/admin/kyc:
+    get:
+      summary: Retrieve KYC records
+      operationId: getKycRecords
+      responses:
+        '200':
+          description: A list of KYC verifications
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/KycRecord'
+    post:
+      summary: Save or update KYC state
+      operationId: saveKyc
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KycInput'
+      responses:
+        '200':
+          description: KYC state saved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  # ── Disputes paths ─────────────────────────────────────────────────────────
+  /api/admin/disputes:
+    get:
+      summary: Retrieve dispute tickets
+      operationId: getDisputes
+      responses:
+        '200':
+          description: A list of dispute cases
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Dispute'
+    post:
+      summary: Save or update dispute state
+      operationId: saveDispute
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisputeInput'
+      responses:
+        '200':
+          description: Dispute saved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  # ── Moderation paths ───────────────────────────────────────────────────────
+  /api/admin/moderation:
+    get:
+      summary: Retrieve flagged content
+      operationId: getModerationItems
+      responses:
+        '200':
+          description: A list of moderation items
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ModerationItem'
+    post:
+      summary: Save or resolve content moderation flags
+      operationId: saveModeration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModerationInput'
+      responses:
+        '200':
+          description: Moderation action saved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  # ── Tenants paths ──────────────────────────────────────────────────────────
+  /api/admin/tenants:
+    get:
+      summary: Retrieve white-label tenants
+      operationId: getTenants
+      responses:
+        '200':
+          description: A list of tenants
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Tenant'
+    post:
+      summary: Save or provision a tenant
+      operationId: saveTenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantInput'
+      responses:
+        '200':
+          description: Tenant provisioned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  # ── Audit logs paths ───────────────────────────────────────────────────────
+  /api/admin/audit:
+    get:
+      summary: Retrieve system audit logs
+      operationId: getAuditLogs
+      responses:
+        '200':
+          description: A list of system logs
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLog'
+    post:
+      summary: Add an audit log entry
+      operationId: addLog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditLogInput'
+      responses:
+        '200':
+          description: Log added successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  # ── Feature Flags paths ────────────────────────────────────────────────────
+  /api/admin/feature-flags:
+    get:
+      summary: Retrieve feature flags
+      operationId: getFeatureFlags
+      responses:
+        '200':
+          description: A list of feature flags
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FeatureFlag'
+    post:
+      summary: Update feature flags configuration
+      operationId: saveFeatureFlags
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/FeatureFlag'
+      responses:
+        '200':
+          description: Feature flags saved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  # ── Settings paths ─────────────────────────────────────────────────────────
+  /api/admin/settings/auth:
+    get:
+      summary: Retrieve authentication integration settings
+      operationId: getAuthSettings
+      responses:
+        '200':
+          description: Enriched auth settings object
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+    post:
+      summary: Save authentication settings
+      operationId: saveAuthSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Auth settings saved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+
+  /api/admin/settings/communication:
+    get:
+      summary: Retrieve communication credentials settings
+      operationId: getCommunicationSettings
+      responses:
+        '200':
+          description: Enriched communication settings object
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+    post:
+      summary: Save communication settings
+      operationId: saveCommunicationSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Communication settings saved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+
+  /api/admin/settings/communication/test:
+    post:
+      summary: Verify mailer configuration by sending test email
+      operationId: testCommunication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+      responses:
+        '200':
+          description: Test email routed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+
+  /api/admin/settings/chat:
+    get:
+      summary: Retrieve chat controls and governance configurations
+      operationId: getChatSettings
+      responses:
+        '200':
+          description: Enriched chat settings object
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/ChatSettings'
+    post:
+      summary: Save chat controls and governance configurations
+      operationId: saveChatSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatSettings'
+      responses:
+        '200':
+          description: Chat settings saved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+
+  # ------------------------------------------------------------------------
+  # Geo Management APIs
+  # Unified CRUD endpoints for Geo Locations, IPv4 Blocks and IPv6 Blocks.
+  #
+  # dataset values:
+  # - locations
+  # - ipv4
+  # - ipv6
+  #
+  # Active/Inactive status is managed through city_controls and is shared
+  # across Geo Locations, IPv4 and IPv6 management screens.
+  # ------------------------------------------------------------------------
+  /api/admin/geo/filters:
+    get:
+      summary: Retrieve unique countries and states for filters
+      operationId: getGeoFilters
+      parameters:
+        - in: query
+          name: country
+          schema:
+            type: string
+          description: Optional country name to filter subdivision states
+      responses:
+        '200':
+          description: Success response with filter values
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required: [countries, states]
+                    properties:
+                      countries:
+                        type: array
+                        items:
+                          type: string
+                      states:
+                        type: array
+                        items:
+                          type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+
+  /api/admin/geo/{dataset}:
+    get:
+      summary: Retrieve a paginated list of Geo data
+      operationId: getGeoData
+      parameters:
+        - in: path
+          name: dataset
+          required: true
+          schema:
+            type: string
+            enum: [locations, ipv4, ipv6]
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [all, active, inactive]
+        - in: query
+          name: country
+          schema:
+            type: string
+        - in: query
+          name: state
+          schema:
+            type: string
+        - in: query
+          name: sortBy
+          schema:
+            type: string
+        - in: query
+          name: sortOrder
+          schema:
+            type: string
+            enum: [asc, desc]
+      responses:
+        '200':
+          description: A list of geo data items
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      oneOf:
+                        - $ref: '#/components/schemas/GeoLocation'
+                        - $ref: '#/components/schemas/GeoIpBlock'
+                  meta:
+                    type: object
+                    required: [total, page, limit, totalPages]
+                    properties:
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      totalPages:
+                        type: integer
+        '400':
+          description: Invalid dataset
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+    post:
+      summary: Create a new Geo data item
+      operationId: createGeoData
+      parameters:
+        - in: path
+          name: dataset
+          required: true
+          schema:
+            type: string
+            enum: [locations, ipv4, ipv6]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/GeoLocationInput'
+                - $ref: '#/components/schemas/GeoIpBlockInput'
+      responses:
+        '200':
+          description: Success response
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+        '400':
+          description: Invalid dataset
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+    put:
+      summary: Update a Geo data item
+      operationId: updateGeoData
+      parameters:
+        - in: path
+          name: dataset
+          required: true
+          schema:
+            type: string
+            enum: [locations, ipv4, ipv6]
+        - in: query
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/GeoLocationInput'
+                - $ref: '#/components/schemas/GeoIpBlockInput'
+      responses:
+        '200':
+          description: Success response
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+        '400':
+          description: Invalid dataset
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+    delete:
+      summary: Delete a Geo data item
+      operationId: deleteGeoData
+      parameters:
+        - in: path
+          name: dataset
+          required: true
+          schema:
+            type: string
+            enum: [locations, ipv4, ipv6]
+        - in: query
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success response
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+        '400':
+          description: Invalid dataset
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+
+  /api/admin/geo/{dataset}/export:
+    get:
+      summary: Export Geo data to CSV file
+      operationId: exportGeoData
+      parameters:
+        - in: path
+          name: dataset
+          required: true
+          schema:
+            type: string
+            enum: [locations, ipv4, ipv6]
+        - in: query
+          name: visibleCols
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [all, active, inactive]
+        - in: query
+          name: country
+          schema:
+            type: string
+        - in: query
+          name: state
+          schema:
+            type: string
+        - in: query
+          name: sortBy
+          schema:
+            type: string
+        - in: query
+          name: sortOrder
+          schema:
+            type: string
+            enum: [asc, desc]
+      responses:
+        '200':
+          description: Exported CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid dataset
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+
+  /api/admin/geo/{dataset}/detail:
+    get:
+      summary: Get details of a single Geo data item
+      operationId: getGeoDataDetail
+      parameters:
+        - in: path
+          name: dataset
+          required: true
+          schema:
+            type: string
+            enum: [locations, ipv4, ipv6]
+        - in: query
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Item details
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/GeoLocation'
+                  - $ref: '#/components/schemas/GeoIpBlock'
+        '400':
+          description: Invalid dataset
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message]
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '404':
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+
+components:
+  schemas:
+    Role:
+      type: object
+      required:
+        - id
+        - name
+        - key
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        key:
+          type: string
+        display_name:
+          type: string
+        description:
+          type: string
+        responsibility_ids:
+          type: array
+          items:
+            type: string
+        default_position_id:
+          type: string
+        hierarchy_level:
+          type: number
+        is_active:
+          type: boolean
+        is_default:
+          type: boolean
+
+    RoleInput:
+      type: object
+      required:
+        - name
+        - displayName
+      properties:
+        name:
+          type: string
+        displayName:
+          type: string
+        description:
+          type: string
+        responsibilities:
+          type: array
+          items:
+            type: string
+        defaultPosition:
+          type: string
+        hierarchyLevel:
+          type: number
+        isActive:
+          type: boolean
+        isDefault:
+          type: boolean
+
+    Responsibility:
+      type: object
+      required:
+        - id
+        - name
+        - route_path
+        - component_name
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        display_name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        route_path:
+          type: string
+        component_name:
+          type: string
+        icon_name:
+          type: string
+        required_features:
+          type: array
+          items:
+            type: string
+        sort_order:
+          type: number
+        is_active:
+          type: boolean
+
+    ResponsibilityInput:
+      type: object
+      required:
+        - name
+        - displayName
+        - routePath
+        - componentName
+      properties:
+        name:
+          type: string
+        displayName:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        routePath:
+          type: string
+        componentName:
+          type: string
+        iconName:
+          type: string
+        requiredFeatures:
+          type: array
+          items:
+            type: string
+        sortOrder:
+          type: number
+        isActive:
+          type: boolean
+
+    Position:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        display_name:
+          type: string
+        description:
+          type: string
+        hierarchy_level:
+          type: number
+        data_access_level:
+          type: string
+        custom_conditions:
+          type: array
+          items:
+            type: string
+        data_access_limits:
+          type: object
+        is_active:
+          type: boolean
+
+    PositionInput:
+      type: object
+      required:
+        - name
+        - displayName
+      properties:
+        name:
+          type: string
+        displayName:
+          type: string
+        description:
+          type: string
+        hierarchyLevel:
+          type: number
+        dataAccessLevel:
+          type: string
+        customConditions:
+          type: array
+          items:
+            type: string
+        dataAccessLimits:
+          type: object
+        isActive:
+          type: boolean
+
+    Plan:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        display_name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        plan_type:
+          type: string
+        is_active:
+          type: boolean
+        is_popular:
+          type: boolean
+        group_name:
+          type: string
+        pricing:
+          type: object
+        metadata:
+          type: object
+        trial:
+          type: object
+        visibility:
+          type: object
+        rbac_role_id:
+          type: string
+        rbac_position_id:
+          type: string
+        rbac_auto_assign:
+          type: boolean
+
+    PlanInput:
+      type: object
+      required:
+        - name
+        - displayName
+      properties:
+        name:
+          type: string
+        displayName:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        planType:
+          type: string
+        isActive:
+          type: boolean
+        isPopular:
+          type: boolean
+        groupName:
+          type: string
+        pricing:
+          type: object
+        metadata:
+          type: object
+        trial:
+          type: object
+        visibility:
+          type: object
+        rbac:
+          type: object
+
+    Coupon:
+      type: object
+      required:
+        - id
+        - code
+        - discount_type
+        - amount
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        description:
+          type: string
+        discount_type:
+          type: string
+        amount:
+          type: number
+        date_expires:
+          type: string
+        is_active:
+          type: boolean
+        free_shipping:
+          type: boolean
+        usage_restrictions:
+          type: object
+        usage_limits:
+          type: object
+        email_settings:
+          type: object
+
+    CouponInput:
+      type: object
+      required:
+        - code
+        - discountType
+        - amount
+      properties:
+        code:
+          type: string
+        description:
+          type: string
+        discountType:
+          type: string
+        amount:
+          type: number
+        dateExpires:
+          type: string
+        isActive:
+          type: boolean
+        freeShipping:
+          type: boolean
+        usageRestrictions:
+          type: object
+        usageLimits:
+          type: object
+        emailSettings:
+          type: object
+
+    User:
+      type: object
+      required:
+        - id
+        - name
+        - email
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        status:
+          type: string
+        organization:
+          type: string
+
+    UserInput:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        status:
+          type: string
+        organization:
+          type: string
+
+    KycRecord:
+      type: object
+      required:
+        - id
+        - name
+        - status
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        documentType:
+          type: string
+        documentNumber:
+          type: string
+        submittedAt:
+          type: string
+        status:
+          type: string
+        notes:
+          type: string
+
+    KycInput:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+        notes:
+          type: string
+
+    Dispute:
+      type: object
+      required:
+        - id
+        - title
+        - status
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+        maker:
+          type: string
+        checker:
+          type: string
+        createdAt:
+          type: string
+
+    DisputeInput:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+        maker:
+          type: string
+        checker:
+          type: string
+
+    ModerationItem:
+      type: object
+      required:
+        - id
+        - content
+        - reason
+        - status
+      properties:
+        id:
+          type: string
+        contentType:
+          type: string
+        content:
+          type: string
+        reason:
+          type: string
+        reportedBy:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+
+    ModerationInput:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+
+    Tenant:
+      type: object
+      required:
+        - id
+        - name
+        - slug
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        plan:
+          type: string
+        entitlements:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+
+    TenantInput:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        plan:
+          type: string
+        entitlements:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+
+    AuditLog:
+      type: object
+      required:
+        - id
+        - timestamp
+        - action
+      properties:
+        id:
+          type: string
+        timestamp:
+          type: string
+        actor:
+          type: string
+        action:
+          type: string
+        details:
+          type: string
+
+    AuditLogInput:
+      type: object
+      required:
+        - action
+      properties:
+        actor:
+          type: string
+        action:
+          type: string
+        details:
+          type: string
+
+    FeatureFlag:
+      type: object
+      required:
+        - id
+        - name
+        - active
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        desc:
+          type: string
+        active:
+          type: boolean
+
+    ChatSettings:
+      type: object
+      required:
+        - allowSiteMessaging
+        - allowDirectMessaging
+        - allowGroupChat
+        - allowEventChat
+        - rolePermissions
+        - communicationPolicies
+      properties:
+        allowSiteMessaging:
+          type: boolean
+        allowDirectMessaging:
+          type: boolean
+        allowGroupChat:
+          type: boolean
+        allowEventChat:
+          type: boolean
+        rolePermissions:
+          $ref: '#/components/schemas/ChatRolePermissions'
+        communicationPolicies:
+          $ref: '#/components/schemas/ChatCommunicationPolicies'
+
+    ChatRolePermissions:
+      type: object
+      required:
+        - directMessaging
+        - groupChat
+        - eventChat
+        - moderate
+        - pinMessages
+        - banUsers
+      properties:
+        directMessaging:
+          type: array
+          items:
+            type: string
+        groupChat:
+          type: array
+          items:
+            type: string
+        eventChat:
+          type: array
+          items:
+            type: string
+        moderate:
+          type: array
+          items:
+            type: string
+        pinMessages:
+          type: array
+          items:
+            type: string
+        banUsers:
+          type: array
+          items:
+            type: string
+
+    ChatCommunicationPolicies:
+      type: object
+      required:
+        - allowLinks
+        - allowMedia
+        - maxMessageLength
+        - directMessagesEnabled
+        - dmWhoCanSend
+        - dmRequestApproval
+        - dmAllowMedia
+        - groupChatsEnabled
+        - groupWhoCanCreate
+        - groupModerationMode
+        - groupAllowMedia
+        - eventChatsEnabled
+        - eventDefaultModerationMode
+        - eventAutoArchive
+        - eventOrganizerOverride
+        - profanityFilter
+        - reportReviewQueue
+        - linkPreviews
+        - maxMessagesPerMin
+        - maxDmsPerDay
+        - maxGroupParticipants
+      properties:
+        allowLinks:
+          type: boolean
+        allowMedia:
+          type: boolean
+        maxMessageLength:
+          type: integer
+        directMessagesEnabled:
+          type: boolean
+        dmWhoCanSend:
+          type: string
+        dmRequestApproval:
+          type: boolean
+        dmAllowMedia:
+          type: boolean
+        groupChatsEnabled:
+          type: boolean
+        groupWhoCanCreate:
+          type: string
+        groupModerationMode:
+          type: string
+        groupAllowMedia:
+          type: boolean
+        eventChatsEnabled:
+          type: boolean
+        eventDefaultModerationMode:
+          type: string
+        eventAutoArchive:
+          type: boolean
+        eventOrganizerOverride:
+          type: boolean
+        profanityFilter:
+          type: string
+        reportReviewQueue:
+          type: boolean
+        linkPreviews:
+          type: boolean
+        maxMessagesPerMin:
+          type: integer
+        maxDmsPerDay:
+          type: integer
+        maxGroupParticipants:
+          type: integer
+
+    GeoLocation:
+      type: object
+      properties:
+        geoname_id:
+          type: integer
+        locale_code:
+          type: string
+        continent_code:
+          type: string
+        continent_name:
+          type: string
+        country_iso_code:
+          type: string
+        country_name:
+          type: string
+        subdivision_1_iso_code:
+          type: string
+        subdivision_1_name:
+          type: string
+        subdivision_2_iso_code:
+          type: string
+        subdivision_2_name:
+          type: string
+        city_name:
+          type: string
+        metro_code:
+          type: integer
+        time_zone:
+          type: string
+        utc_offset:
+          type: string
+        is_in_european_union:
+          type: integer
+        status:
+          type: boolean
+          nullable: true
+
+    GeoLocationInput:
+      type: object
+      properties:
+        geoname_id:
+          type: integer
+        locale_code:
+          type: string
+        continent_code:
+          type: string
+        continent_name:
+          type: string
+        country_iso_code:
+          type: string
+        country_name:
+          type: string
+        subdivision_1_iso_code:
+          type: string
+        subdivision_1_name:
+          type: string
+        subdivision_2_iso_code:
+          type: string
+        subdivision_2_name:
+          type: string
+        city_name:
+          type: string
+        metro_code:
+          type: integer
+        time_zone:
+          type: string
+        is_in_european_union:
+          type: integer
+
+    GeoIpBlock:
+      type: object
+      properties:
+        network:
+          type: string
+        geoname_id:
+          type: integer
+        registered_country_geoname_id:
+          type: integer
+        represented_country_geoname_id:
+          type: integer
+        is_anonymous_proxy:
+          type: integer
+        is_satellite_provider:
+          type: integer
+        postal_code:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        accuracy_radius:
+          type: integer
+        is_anycast:
+          type: integer
+        country_name:
+          type: string
+        state_name:
+          type: string
+        status:
+          type: boolean
+          nullable: true
+
+    GeoIpBlockInput:
+      type: object
+      properties:
+        network:
+          type: string
+        geoname_id:
+          type: integer
+        registered_country_geoname_id:
+          type: integer
+        represented_country_geoname_id:
+          type: integer
+        is_anonymous_proxy:
+          type: integer
+        is_satellite_provider:
+          type: integer
+        postal_code:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        accuracy_radius:
+          type: integer
+        is_anycast:
+          type: integer

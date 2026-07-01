@@ -6,11 +6,11 @@ export class PostgresBaseRepository<T> implements IBaseRepository<T> {
   protected pkName: string;
   protected dbModel: any;
 
-  constructor(tableName: string, pkName: string = 'id') {
+  constructor(tableName: string, pkName: string = 'id', dbClient: any = prisma) {
     this.tableName = tableName;
     this.pkName = pkName;
     // Direct Prisma model delegation
-    this.dbModel = (prisma as any)[tableName];
+    this.dbModel = dbClient[tableName];
   }
 
   async getById(id: string | number): Promise<T | null> {
@@ -59,5 +59,12 @@ export class PostgresBaseRepository<T> implements IBaseRepository<T> {
     } catch {
       return false;
     }
+  }
+
+  async count(filter?: object): Promise<number> {
+    if (!this.dbModel) throw new Error(`Model ${this.tableName} not found in Prisma`);
+    return this.dbModel.count({
+      where: filter || {}
+    });
   }
 }

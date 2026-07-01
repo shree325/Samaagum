@@ -1,0 +1,30 @@
+version: "1.0"
+provider: database
+dataType: messagingRequests
+canonical: MessagingRequest
+
+fieldMappings:
+  id:
+    source: id
+    type: string
+    required: true
+
+  requesterId:
+    source: requester_user_id
+    type: string
+    required: true
+
+  addresseeId:
+    source: addressee_user_id
+    type: string
+    required: true
+
+  status:
+    source: state
+    type: string
+    required: true
+
+  createdAt:
+    source: created_at
+    type: string
+    required: true

@@ -8,18 +8,39 @@
 <link rel="stylesheet" href="css/landing.css" />
 </head>
 <body class="landing">
+  <!-- Handle Google OAuth redirect: ?token=...&auth=google → save token → go to home -->
+  <script>
+    (function() {
+      var params = new URLSearchParams(window.location.search);
+      var token = params.get('token');
+      var auth  = params.get('auth');
+      var err   = params.get('auth_error');
+      if (err) {
+        // Strip error param and stay on landing so user sees the page
+        window.history.replaceState({}, '', '/');
+        return;
+      }
+      if (token && auth) {
+        localStorage.setItem('token', decodeURIComponent(token));
+        localStorage.setItem('samaagum_admin_token', decodeURIComponent(token));
+        // Redirect to home app
+        window.location.replace('pages/Samaagum Home.html');
+      }
+    })();
+  </script>
+
   <div id="root"></div>
 
   <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
   <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.14/dist/lenis.min.js"></script>
 
-  <script type="text/babel" data-presets="env,react,typescript" src="src/landing-core.tsx"></script>
-  <script type="text/babel" data-presets="env,react,typescript" src="src/landing-hero.tsx"></script>
-  <script type="text/babel" data-presets="env,react,typescript" src="src/landing-features.tsx"></script>
-  <script type="text/babel" data-presets="env,react,typescript" src="src/landing-features2.tsx"></script>
-  <script type="text/babel" data-presets="env,react,typescript" src="src/landing-activity.tsx"></script>
-  <script type="text/babel" data-presets="env,react,typescript" src="src/landing-app.tsx"></script>
+  <script src="dist/landing-core.js"></script>
+  <script src="dist/landing-hero.js"></script>
+  <script src="dist/landing-features.js"></script>
+  <script src="dist/landing-features2.js"></script>
+  <script src="dist/landing-activity.js"></script>
+  <script src="dist/landing-app.js"></script>
 </body>
 </html>
