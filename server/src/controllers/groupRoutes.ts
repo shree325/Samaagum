@@ -592,6 +592,9 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const { id, postId } = request.params as any;
             const { solved } = request.body as any;
             await GroupService.solveGroupPost(id, postId, request.user, solved);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_solved', { groupId: id, postId, solved });
+            }
             return { success: true, message: solved ? 'Marked as solved' : 'Unmarked as solved' };
         } catch (e: any) {
             if (e.message.includes('Post not found')) return reply.status(404).send({ success: false, message: e.message });
@@ -607,6 +610,9 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const { id, postId } = request.params as any;
             const { archived } = request.body as any;
             await GroupService.archiveGroupPost(id, postId, request.user, archived);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_archived', { groupId: id, postId, archived });
+            }
             return { success: true, message: archived ? 'Thread archived' : 'Thread unarchived' };
         } catch (e: any) {
             if (e.message.includes('Forbidden')) return reply.status(403).send({ success: false, message: e.message });
@@ -621,6 +627,9 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const { id, postId } = request.params as any;
             const { pinned } = request.body as any;
             await GroupService.pinGroupPost(id, postId, request.user, pinned);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_pinned', { groupId: id, postId, pinned });
+            }
             return { success: true, message: pinned ? 'Post pinned' : 'Post unpinned' };
         } catch (e: any) {
             if (e.message.includes('Forbidden')) return reply.status(403).send({ success: false, message: e.message });
@@ -635,6 +644,9 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const { id, postId } = request.params as any;
             const { locked } = request.body as any;
             await GroupService.lockGroupPost(id, postId, request.user, locked);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_locked', { groupId: id, postId, locked });
+            }
             return { success: true, message: locked ? 'Post locked' : 'Post unlocked' };
         } catch (e: any) {
             if (e.message.includes('Forbidden')) return reply.status(403).send({ success: false, message: e.message });
@@ -787,6 +799,9 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const { id } = request.params as any;
             const { settings } = request.body as any;
             await GroupService.updateSettings(id, settings, request.user);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('dashboard_updated', { action: 'settings_update' });
+            }
             return { success: true, message: 'Settings updated' };
         } catch (e: any) {
             if (e.message.includes('Forbidden')) return reply.status(403).send({ success: false, message: e.message });
@@ -897,6 +912,15 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             }
             const memberState = (result as any).membershipState;
             const message = memberState === 'pending' ? 'Join request submitted for approval' : 'Invitation accepted';
+            
+            if ((fastify as any).io && (result as any).inviteGroupId) {
+                const id = (result as any).inviteGroupId;
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('dashboard_updated', { action: 'join' });
+                if (memberState === 'pending') {
+                    (fastify as any).io.of('/groups').to(`group_${id}`).emit('new_join_request', { groupId: id });
+                }
+            }
+
             return { success: true, data: result, message };
         } catch (e: any) {
             return reply.status(400).send({ success: false, message: e.message });

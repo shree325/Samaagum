@@ -37,7 +37,7 @@ function CreateMenu({ onPick }) {
 }
 
 /* ---------------- Sidebar ---------------- */
-function Sidebar({ view, go, counts, collapsed, onToggleCollapse }) {
+function Sidebar({ view, go, counts, collapsed, onToggleCollapse, chatSettings }) {
   const [createOpen, setCreateOpen] = useState(false);
   const showMessages = chatSettings?.allowSiteMessaging !== false;
   const main = [

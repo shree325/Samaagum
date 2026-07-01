@@ -534,6 +534,9 @@ function App() {
     chatSettings, setChatSettings
   };
 
+  // sidebar collapsed state
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
   // responsive window width check
   const [width, setWidth] = useState(window.innerWidth);
   useEffect(() => {
@@ -595,7 +598,7 @@ function App() {
 
   return (
     <div className={`app ${mobile?"mobile":""} ${sidebarCollapsed?"collapsed":""}`}>
-      {!mobile && <Sidebar view={navKey} go={go} counts={counts} collapsed={sidebarCollapsed} onToggleCollapse={()=>setSidebarCollapsed(v=>!v)} />}
+      {!mobile && <Sidebar view={navKey} go={go} counts={counts} collapsed={sidebarCollapsed} onToggleCollapse={()=>setSidebarCollapsed(v=>!v)} chatSettings={chatSettings} />}
       <div className="content">
         {mobile ? <MobileTop go={go} counts={counts} city={city} chatSettings={chatSettings} />
           : <Topbar go={go} counts={counts} dark={t.dark} onToggleTheme={() => setTweak("dark", !t.dark)} city={city} onCity={() => setCityOpen(true)} chatSettings={chatSettings} />}
