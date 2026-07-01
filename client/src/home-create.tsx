@@ -22,9 +22,9 @@ function CoverPicker({ value, onPick }) {
 
 function Toggle({ on, onClick }) { return <button className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
 
-/* ---------------- Create Event ---------------- */
-function CreateEvent({ go, mobile }) {
-  const [title, setTitle] = useState("");
+function CreateGroup({ go, mobile }) {
+  const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
   const [cover, setCover] = useState(COVERS.sunset);
   const [type, setType] = useState("paid");
   const [cat, setCat] = useState("Startups"); const [city, setCity] = useState("Bengaluru");
@@ -3955,4 +3955,4 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
   );
 }
 
-Object.assign(window, { CreateEvent, CreateGroup });
+Object.assign(window, { CreateGroup });

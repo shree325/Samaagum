@@ -4,7 +4,7 @@
    ============================================================ */
 
 /* ---------------- Popover (click-away) ---------------- */
-function Popover({ open, onClose, children, style }) {
+function Popover({ open, onClose, children = null, style = null }: { open: any; onClose: any; children?: any; style?: any }) {
   const ref = useRef(null);
   useEffect(() => {
     if (!open) return;
@@ -37,7 +37,7 @@ function CreateMenu({ onPick }) {
 }
 
 /* ---------------- Sidebar ---------------- */
-function Sidebar({ view, go, counts, chatSettings }) {
+function Sidebar({ view, go, counts, collapsed, onToggleCollapse }) {
   const [createOpen, setCreateOpen] = useState(false);
   const showMessages = chatSettings?.allowSiteMessaging !== false;
   const main = [
@@ -53,35 +53,60 @@ function Sidebar({ view, go, counts, chatSettings }) {
   ];
   const active = (k) => view === k || (k==="events" && view==="event") || (k==="groups" && view==="group");
   return (
-    <aside className="sidebar">
-      <div className="sb-brand"><Wordmark size={19} /></div>
-      <div style={{ position:"relative" }}>
-        <button className="sb-create" onClick={() => setCreateOpen(v=>!v)}>
-          <I.plus/> Create <span className="plus"><I.chevD/></span>
+    <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
+      <div className="sb-brand" style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "space-between" }}>
+        <Wordmark size={19} />
+        <button 
+          onClick={onToggleCollapse} 
+          className="sb-collapse-btn" 
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 6,
+            borderRadius: "50%",
+            color: "var(--ink-3)",
+            transition: "background var(--t-fast)"
+          }}
+        >
+          {collapsed ? <svg viewBox="0 0 24 24" fill="none" width="16" height="16" stroke="currentColor" strokeWidth="2"><path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round"/></svg> : <svg viewBox="0 0 24 24" fill="none" width="16" height="16" stroke="currentColor" strokeWidth="2"><path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round"/></svg>}
         </button>
-        <Popover open={createOpen} onClose={()=>setCreateOpen(false)} style={{ top:"calc(100% + 6px)", left:0, right:0 }}>
+      </div>
+      <div style={{ position:"relative" }}>
+        <button className="sb-create" onClick={() => setCreateOpen(v=>!v)} title="Create" style={collapsed ? { padding: 12, width: 42, height: 42, borderRadius: "50%", margin: "0 auto", justifyContent: "center" } : {}}>
+          <I.plus/> {!collapsed && <>Create <span className="plus"><I.chevD/></span></>}
+        </button>
+        <Popover open={createOpen} onClose={()=>setCreateOpen(false)} style={{ top:"calc(100% + 6px)", left: collapsed ? -16 : 0, width: 280 }}>
           <CreateMenu onPick={(k)=>{ setCreateOpen(false); go(k); }} />
         </Popover>
       </div>
-      <nav className="sb-nav">
+      <nav className="sb-nav" style={collapsed ? { alignItems: "center" } : {}}>
         {main.map(it => (
-          <button key={it.k} className={`sb-item ${active(it.k)?"on":""}`} onClick={()=>go(it.k)}>
-            <span className="ic">{it.ic}</span>{it.label}
+          <button key={it.k} className={`sb-item ${active(it.k)?"on":""}`} onClick={()=>go(it.k)} title={it.label} style={collapsed ? { justifyContent: "center", padding: "11px 0" } : {}}>
+            <span className="ic">{it.ic}</span>{!collapsed && it.label}
           </button>
         ))}
-        <div className="sb-section">Community</div>
+        {collapsed ? <div style={{ height: 1, background: "var(--border-2)", margin: "12px 0", width: "100%" }} /> : <div className="sb-section">Community</div>}
         {social.map(it => (
-          <button key={it.k} className={`sb-item ${active(it.k)?"on":""}`} onClick={()=>go(it.k)}>
-            <span className="ic">{it.ic}</span>{it.label}
-            {it.badge ? <span className="badge">{it.badge}</span> : null}
+          <button key={it.k} className={`sb-item ${active(it.k)?"on":""}`} onClick={()=>go(it.k)} title={it.label} style={collapsed ? { justifyContent: "center", padding: "11px 0", position: "relative" } : {}}>
+            <span className="ic">{it.ic}</span>{!collapsed && it.label}
+            {it.badge ? (collapsed ? <span style={{ position: "absolute", top: 6, right: 12, width: 6, height: 6, borderRadius: "50%", background: "var(--accent-1)" }} /> : <span className="badge">{it.badge}</span>) : null}
           </button>
         ))}
       </nav>
-      <div className="sb-foot">
-        <button className="sb-user" onClick={()=>go("profile")}>
-          <I.Avatar userId={window.ME?.id} name={ME.name} img={ME.img} size={36} className="ring" />
-          <span className="meta"><span className="n">{ME.name}</span><span className="h">{ME.handle}</span></span>
-          <I.chevD style={{ color:"var(--ink-3)" }} />
+      <div className="sb-foot" style={collapsed ? { display: "flex", justifyContent: "center" } : {}}>
+        <button className="sb-user" onClick={()=>go("profile")} title={ME.name} style={collapsed ? { padding: 4, justifyContent: "center" } : {}}>
+          <Avatar name={ME.name} size={36} className="ring" />
+          {!collapsed && (
+            <>
+              <span className="meta"><span className="n">{ME.name}</span><span className="h">{ME.handle}</span></span>
+              <I.chevD style={{ color:"var(--ink-3)" }} />
+            </>
+          )}
         </button>
       </div>
     </aside>
@@ -120,6 +145,9 @@ function Topbar({ go, counts, dark, onToggleTheme, city, onCity, chatSettings })
       )}
       <button className="tb-icon" onClick={()=>go("notifications")} title="Notifications">
         <I.bell/>{counts.notifs ? <span className="badge">{counts.notifs}</span> : null}
+      </button>
+      <button className="tb-icon" onClick={onToggleTheme} title={dark ? "Switch to Light Mode" : "Switch to Dark Mode"}>
+        {dark ? <I.sun/> : <I.moon/>}
       </button>
       <div style={{ position:"relative" }}>
         <button className="tb-icon" style={{ padding:0, border:"none" }} onClick={()=>setProfileOpen(v=>!v)}>
