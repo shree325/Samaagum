@@ -758,6 +758,12 @@ function GroupDetail({ group, st, go }) {
     fetchGroupDetails();
   }, [fetchGroupDetails]);
 
+  React.useEffect(() => {
+    if (group && group.postId) {
+      openThread({ id: group.postId });
+    }
+  }, [group?.postId]);
+
   const handleJoinClick = async () => {
     if (isJoined || isPending) return;
     try {
@@ -1171,12 +1177,10 @@ function GroupDetail({ group, st, go }) {
 
           <div className="grp-tabs">
             {tabs.map(([k, l]) => (
-              <button key={k} className={`grp-tab ${tab === k ? "on" : ""}`} onClick={() => { setTab(k); if (k === "dashboard") setNewJoinRequestNotif(false); }}>
+              <button key={k} className={`grp-tab ${tab === k ? "on" : ""}`} onClick={() => { setTab(k); if (k === "dashboard" || k === "members") setNewJoinRequestNotif(false); }}>
                 {l}
-                {k === "requests" && isOwner && dashboardStats.pendingMembers > 0 && (
-                  <span className="qs-badge" style={{ marginLeft: 6, background: "var(--accent-2)", color: "white", padding: "2px 6px", fontSize: 11, borderRadius: 8 }}>
-                    {dashboardStats.pendingMembers}
-                  </span>
+                {k === "members" && isOwner && (dashboardStats.pendingMembers > 0 || newJoinRequestNotif) && (
+                  <span style={{ marginLeft: 6, width: 8, height: 8, borderRadius: "50%", background: "var(--accent-2)", display: "inline-block" }} />
                 )}
                 {k === "dashboard" && newJoinRequestNotif && (
                   <span style={{ marginLeft: 6, width: 8, height: 8, borderRadius: "50%", background: "var(--accent-2)", display: "inline-block" }} />
@@ -2281,7 +2285,10 @@ function MemberManagementPanel({ group, st, go }) {
 
             return (
               <div key={m.user_id} style={{ position: "relative", zIndex: openMenuId === m.user_id ? 50 : 1, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div 
+                  onClick={() => m.users && go("public-profile", m.users)}
+                  style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
+                >
                   <Avatar name={m.users?.display_name || "Unknown"} size={40} />
                   <div style={{ display: "flex", flexDirection: "column" }}>
                     <span style={{ fontSize: 14, fontWeight: 600 }}>{m.users?.display_name || "Unknown"}</span>

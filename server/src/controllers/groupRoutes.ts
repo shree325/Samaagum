@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { GroupService } from '../services/GroupService';
 import { InvitationService } from '../services/InvitationService';
+import { GroupNotificationService } from '../services/GroupNotificationService';
 
 export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
 
@@ -162,6 +163,17 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                     (fastify as any).io.of('/groups').to(`group_${id}`).emit('new_join_request', { groupId: id });
                 }
             }
+
+            if (res.state === 'active') {
+                GroupService.getGroupDetails(id, request.user)
+                    .then(gDetails => {
+                        if (gDetails && gDetails.group) {
+                            GroupNotificationService.notifyUserJoined(id, gDetails.group.name, request.user.id);
+                        }
+                    })
+                    .catch(err => console.error('Join notification error:', err));
+            }
+
             return { success: true, data: res, message: res.state === 'active' ? 'Joined successfully' : 'Request to join submitted' };
         } catch (e: any) {
             if (e.message.includes('Group not found')) return reply.status(404).send({ success: false, message: e.message });
@@ -200,6 +212,15 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             if ((fastify as any).io) {
                 (fastify as any).io.of('/groups').to(`group_${id}`).emit('dashboard_updated', { action: 'approve_member' });
             }
+
+            GroupService.getGroupDetails(id, request.user)
+                .then(gDetails => {
+                    if (gDetails && gDetails.group) {
+                        GroupNotificationService.notifyJoinRequestApproved(id, gDetails.group.name, memberId, request.user.id);
+                    }
+                })
+                .catch(err => console.error('Approve notification error:', err));
+
             return { success: true, data, message: 'Membership approved' };
         } catch (e: any) {
             if (e.message.includes('Forbidden')) return reply.status(403).send({ success: false, message: e.message });
@@ -217,6 +238,15 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             if ((fastify as any).io) {
                 (fastify as any).io.of('/groups').to(`group_${id}`).emit('dashboard_updated', { action: 'reject_member' });
             }
+
+            GroupService.getGroupDetails(id, request.user)
+                .then(gDetails => {
+                    if (gDetails && gDetails.group) {
+                        GroupNotificationService.notifyJoinRequestRejected(id, gDetails.group.name, memberId);
+                    }
+                })
+                .catch(err => console.error('Reject notification error:', err));
+
             return { success: true, data, message: 'Membership rejected' };
         } catch (e: any) {
             if (e.message.includes('Forbidden')) return reply.status(403).send({ success: false, message: e.message });
@@ -359,6 +389,22 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const { id } = request.params as any;
             const data = await GroupService.createGroupPost(id, request.user, request.body);
             (fastify as any).io.of('/groups').to(`group_${id}`).emit('new_thread', { groupId: id, postId: (data as any).id });
+            
+            // Trigger notifications asynchronously
+            GroupService.getGroupDetails(id, request.user)
+                .then(groupDetails => {
+                    if (groupDetails && groupDetails.group) {
+                        return GroupNotificationService.notifyNewPost(
+                            id,
+                            groupDetails.group.name,
+                            (data as any).id,
+                            request.body.title || 'Untitled Post',
+                            request.user.id
+                        );
+                    }
+                })
+                .catch(err => console.error('New post notification error:', err));
+
             return reply.status(201).send({ success: true, data, message: 'Post created' });
         } catch (e: any) {
             if (e.message.includes('Group not found')) return reply.status(404).send({ success: false, message: e.message });
@@ -421,6 +467,23 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             if (!request.body.body?.trim()) return reply.status(400).send({ success: false, message: 'Reply cannot be empty' });
             const data = await GroupService.createGroupComment(id, postId, request.user, request.body);
             (fastify as any).io.of('/groups').to(`group_${id}`).emit('new_comment', { groupId: id, postId, commentId: (data as any).id });
+            
+            // Trigger notifications asynchronously
+            GroupService.getGroupDetails(id, request.user)
+                .then(groupDetails => {
+                    if (groupDetails && groupDetails.group) {
+                        const activityType = request.body.parent_id || request.body.parentId ? 'reply' : 'comment';
+                        return GroupNotificationService.notifyPostActivity(
+                            id,
+                            groupDetails.group.name,
+                            postId,
+                            request.user.id,
+                            activityType
+                        );
+                    }
+                })
+                .catch(err => console.error('Post comment notification error:', err));
+
             return reply.status(201).send({ success: true, data, message: 'Reply added' });
         } catch (e: any) {
             if (e.message.includes('Thread not found')) return reply.status(404).send({ success: false, message: e.message });
@@ -500,6 +563,22 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             if (!emoji) return reply.status(400).send({ success: false, message: 'emoji required' });
             const reactions = await GroupService.reactGroupPost(id, postId, request.user, emoji);
             (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_reacted', { groupId: id, postId, reactions });
+            
+            // Trigger notifications asynchronously
+            GroupService.getGroupDetails(id, request.user)
+                .then(groupDetails => {
+                    if (groupDetails && groupDetails.group) {
+                        return GroupNotificationService.notifyPostActivity(
+                            id,
+                            groupDetails.group.name,
+                            postId,
+                            request.user.id,
+                            'reaction'
+                        );
+                    }
+                })
+                .catch(err => console.error('Post reaction notification error:', err));
+
             return { success: true, data: { reactions } };
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });

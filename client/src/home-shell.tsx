@@ -190,10 +190,32 @@ function SectionBar({ title, count, onMore, moreLabel = "See all" }) {
 }
 
 function FilterChip({ active, icon, children, onClick, count }) {
+  const showBadge = count != null && count > 0;
   return (
     <button className={`fchip ${active?"on":""}`} onClick={onClick}>
       {icon && <span className="cv">{icon}</span>}{children}
-      {count!=null && <span style={{ opacity:0.7, fontVariantNumeric:"tabular-nums" }}>{count}</span>}
+      {count!=null && (
+        <span style={showBadge ? { 
+          background: "var(--accent-1, #6d5efc)", 
+          color: "#fff", 
+          padding: "2px 7px", 
+          borderRadius: "99px", 
+          fontSize: "11px", 
+          fontWeight: "700", 
+          marginLeft: "6px", 
+          display: "inline-flex", 
+          alignItems: "center", 
+          justifyContent: "center",
+          fontVariantNumeric: "tabular-nums",
+          boxShadow: "0 2px 8px rgba(109, 94, 252, 0.3)"
+        } : { 
+          opacity: 0.5, 
+          marginLeft: "4px",
+          fontVariantNumeric: "tabular-nums" 
+        }}>
+          {count}
+        </span>
+      )}
     </button>
   );
 }

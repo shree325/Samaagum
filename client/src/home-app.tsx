@@ -235,6 +235,17 @@ function App() {
         window.chatSettings = updatedSettings;
       });
 
+      chatSocket.on("group.notification", (payload) => {
+        fetchCounts();
+        if (window.toast) {
+          // Remove HTML tags for standard toast display
+          const cleanText = payload.text ? payload.text.replace(/<\/?[^>]+(>|$)/g, "") : "New group activity";
+          window.toast(cleanText, "info");
+        }
+        // Dispatch custom event for real-time list updates if a view wants to listen
+        window.dispatchEvent(new CustomEvent("samaagum:groupNotification", { detail: payload }));
+      });
+
       setSocket(chatSocket);
       window.chatSocket = chatSocket;
 

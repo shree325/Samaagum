@@ -50,7 +50,10 @@ prisma.admin_roles.count()
         console.error('❌ Error during auto-seeding:', err.message || err);
     });
 
-const fastify = Fastify({ logger: true });
+const fastify = Fastify({
+    logger: true,
+    bodyLimit: 20 * 1024 * 1024 // 20MB limit to allow base64 image uploads
+});
 const PORT = Number(process.env.PORT) || 3001;
 
 // Register CORS
