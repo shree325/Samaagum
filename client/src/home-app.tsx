@@ -14,17 +14,18 @@ function useSet(initial = []) {
 function TabBar({ view, go, counts, chatSettings }) {
   const showMessages = chatSettings?.allowSiteMessaging !== false;
   const tabs = [
-    { k: "home", ic: <I.home />, label: "Home" },
-    { k: "discover", ic: <I.compass />, label: "Discover" },
-    { k: "create-event", ic: <I.plus />, label: "", fab: true },
-    ...(showMessages ? [{ k: "messages", ic: <I.chat />, label: "Chats", badge: counts.messages }] : []),
-    { k: "profile", ic: <I.user />, label: "You" },
+    { k:"home", ic:<I.home/>, label:"Home" },
+    { k:"discover", ic:<I.compass/>, label:"Discover" },
+    { k:"create-event", ic:<I.plus/>, label:"", fab:true },
+    { k:"create-group", ic:<I.users/>, label:"", fab:true },
+    { k:"messages", ic:<I.chat/>, label:"Chats", badge: counts.messages },
+    { k:"profile", ic:<I.user/>, label:"You" },
   ];
   const active = (k) => view === k || (k === "home" && view === "event") || (k === "discover" && view === "group");
   return (
     <div className="tabbar">
       {tabs.map(t => t.fab ? (
-        <button key={t.k} className="tab" onClick={() => go("create-event")}><span className="fab">{t.ic}</span></button>
+        <button key={t.k} className="tab" onClick={() => go(t.k)}><span className="fab">{t.ic}</span></button>
       ) : (
         <button key={t.k} className={`tab ${active(t.k) ? "on" : ""}`} onClick={() => go(t.k)}>
           <span className="ic">{t.ic}</span>{t.label}
@@ -233,6 +234,17 @@ function App() {
         console.log("⚡ Chat settings updated in real-time:", updatedSettings);
         setChatSettings(updatedSettings);
         window.chatSettings = updatedSettings;
+      });
+
+      chatSocket.on("group.notification", (payload) => {
+        fetchCounts();
+        if (window.toast) {
+          // Remove HTML tags for standard toast display
+          const cleanText = payload.text ? payload.text.replace(/<\/?[^>]+(>|$)/g, "") : "New group activity";
+          window.toast(cleanText, "info");
+        }
+        // Dispatch custom event for real-time list updates if a view wants to listen
+        window.dispatchEvent(new CustomEvent("samaagum:groupNotification", { detail: payload }));
       });
 
       setSocket(chatSocket);
@@ -522,6 +534,9 @@ function App() {
     chatSettings, setChatSettings
   };
 
+  // sidebar collapsed state
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
   // responsive window width check
   const [width, setWidth] = useState(window.innerWidth);
   useEffect(() => {
@@ -582,8 +597,8 @@ function App() {
         : cur.view;
 
   return (
-    <div className={`app ${mobile ? "mobile" : ""}`}>
-      {!mobile && <Sidebar view={navKey} go={go} counts={counts} chatSettings={chatSettings} />}
+    <div className={`app ${mobile?"mobile":""} ${sidebarCollapsed?"collapsed":""}`}>
+      {!mobile && <Sidebar view={navKey} go={go} counts={counts} collapsed={sidebarCollapsed} onToggleCollapse={()=>setSidebarCollapsed(v=>!v)} chatSettings={chatSettings} />}
       <div className="content">
         {mobile ? <MobileTop go={go} counts={counts} city={city} chatSettings={chatSettings} />
           : <Topbar go={go} counts={counts} dark={t.dark} onToggleTheme={() => setTweak("dark", !t.dark)} city={city} onCity={() => setCityOpen(true)} chatSettings={chatSettings} />}

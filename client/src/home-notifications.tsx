@@ -14,6 +14,11 @@ const NTYPE = {
   registration:{ ico:<I.ticket style={{width:13,height:13}}/>, c:"linear-gradient(135deg,#0ea5a4,#3b82f6)" },
   system:      { ico:<I.bell style={{width:13,height:13}}/>,   c:"linear-gradient(135deg,#f59e0b,#ef6f53)" },
   billing:     { ico:<svg viewBox="0 0 24 24" fill="none" width="13" height="13" stroke="currentColor" strokeWidth="2"><path d="M20 7H4a2 2 0 00-2 2v8a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M22 13h-4v2h4v-2zM4 7V5a2 2 0 012-2h10"/></svg>, c:"linear-gradient(135deg,#f43f5e,#ec4899)" },
+  group_created: { ico:<I.groups style={{width:14,height:14}}/>, c:"linear-gradient(135deg,#6d5efc,#2a7fff)" },
+  group_new_post: { ico:<I.comment style={{width:13,height:13}}/>, c:"linear-gradient(135deg,#f59e0b,#ef6f53)" },
+  group_post_activity: { ico:<I.comment style={{width:13,height:13}}/>, c:"linear-gradient(135deg,#10b981,#22d3ee)" },
+  group_gallery: { ico:<I.cal style={{width:13,height:13}}/>, c:"linear-gradient(135deg,#8b5cf6,#e5489d)" },
+  group_user_joined: { ico:<I.user style={{width:14,height:14}}/>, c:"linear-gradient(135deg,#10b981,#22d3ee)" },
 };
 
 const API_BASE = window.location.port === "8080" ? "http://localhost:3000" : "";
@@ -25,7 +30,7 @@ function authHeaders() {
 
 function NotifRow({ n, st, go, onRead }) {
   const meta = NTYPE[n.type] || NTYPE.system;
-  const avatarTypes = ["connect","message","forum"];
+  const avatarTypes = ["connect","message","forum","group_user_joined"];
   const [acted, setActed] = useState(null);
   const [loading, setLoading] = useState(null);
 
@@ -63,7 +68,12 @@ function NotifRow({ n, st, go, onRead }) {
   };
 
   return (
-    <div className={`notif ${n.unread && !acted ? "unread" : ""}`} onClick={acted ? undefined : onRead}>
+    <div className={`notif ${n.unread && !acted ? "unread" : ""}`} onClick={acted ? undefined : () => {
+      onRead();
+      if (n.action === "view_user" && n.targetUserId) {
+        go("public-profile", { id: n.targetUserId });
+      }
+    }}>
       <div className="nic" style={{ background: avatarTypes.includes(n.type) ? "transparent" : meta.c, color:"#fff" }}>
         {avatarTypes.includes(n.type)
           ? <><Avatar name={n.who} size={42}/><span className="tagico" style={{ background: meta.c }}>{meta.ico}</span></>
@@ -114,7 +124,22 @@ function NotifRow({ n, st, go, onRead }) {
 
         {n.action==="ticket" && <div className="nacts"><button className="hbtn hbtn--soft hbtn--sm" onClick={(e)=>{e.stopPropagation(); go("event", FEATURED);}}><I.ticket/>View ticket</button></div>}
         {n.action==="reply"  && <div className="nacts"><button className="hbtn hbtn--soft hbtn--sm" onClick={(e)=>{e.stopPropagation(); go("messages");}}><I.msg/>Reply</button></div>}
-        {n.action==="view"   && <div className="nacts"><button className="hbtn hbtn--ghost hbtn--sm" onClick={(e)=>e.stopPropagation()}>View</button></div>}
+        {n.action==="view"   && <div className="nacts"><button className="hbtn hbtn--ghost hbtn--sm" onClick={(e)=>{
+          e.stopPropagation();
+          onRead();
+          if (n.groupId && n.postId) {
+            go("group", { id: n.groupId, postId: n.postId });
+          } else if (n.groupId) {
+            go("group", { id: n.groupId });
+          }
+        }}>View</button></div>}
+        {n.action==="view_user" && <div className="nacts"><button className="hbtn hbtn--ghost hbtn--sm" onClick={(e)=>{
+          e.stopPropagation();
+          onRead();
+          if (n.targetUserId) {
+            go("public-profile", { id: n.targetUserId });
+          }
+        }}>View Profile</button></div>}
         {n.action==="billing" && <div className="nacts"><button className="hbtn hbtn--soft hbtn--sm" onClick={(e)=>{e.stopPropagation(); go("settings", "billing");}}><svg viewBox="0 0 24 24" fill="none" width="13" height="13" stroke="currentColor" strokeWidth="2" style={{marginRight:6}}><path d="M20 7H4a2 2 0 00-2 2v8a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M22 13h-4v2h4v-2zM4 7V5a2 2 0 012-2h10"/></svg>View Billing</button></div>}
       </div>
       {n.unread && !acted && <span className="udot"/>}
@@ -228,7 +253,16 @@ function Notifications({ st, go, socket }) {
       .catch(err => console.error("Error fetching connection requests:", err));
   }, []);
 
-  useEffect(() => { fetchNotifications(); fetchConnRequests(); }, []);
+  useEffect(() => {
+    fetchNotifications();
+    fetchConnRequests();
+    return () => {
+      fetch(`${API_BASE}/api/messaging/notifications/mark-read`, { method: 'POST', headers: authHeaders() })
+        .then(res => res.json())
+        .then(() => { if (st.fetchCounts) st.fetchCounts(); })
+        .catch(err => console.error("Error marking notifications read on unmount:", err));
+    };
+  }, []);
   useEffect(() => { fetchConnRequests(); }, [tab]);
 
   /* ── Socket event listeners ── */
@@ -248,19 +282,42 @@ function Notifications({ st, go, socket }) {
         action: "reply"
       }, ...prev]);
     };
+    const onGroupNotif = (payload) => {
+      setItems(prev => [{
+        id: payload.id || Math.random().toString(),
+        type: payload.type,
+        who: payload.type === 'group_created' ? 'Groups' : (payload.type === 'group_gallery' ? 'Gallery' : 'Forums'),
+        unread: true,
+        day: "Today",
+        time: "Just now",
+        text: payload.text,
+        action: "view",
+        groupId: payload.groupId,
+        postId: payload.postId,
+        itemId: payload.itemId
+      }, ...prev]);
+    };
     socket.on("connection.request.received", onConnRequest);
     socket.on("connection.accepted", onConnAccepted);
     socket.on("connection.declined", onConnDeclined);
     socket.on("message.received", onMsg);
+    socket.on("group.notification", onGroupNotif);
     return () => {
       socket.off("connection.request.received", onConnRequest);
       socket.off("connection.accepted", onConnAccepted);
       socket.off("connection.declined", onConnDeclined);
       socket.off("message.received", onMsg);
+      socket.off("group.notification", onGroupNotif);
     };
   }, [socket, fetchConnRequests]);
 
-  const read = (id) => setItems(arr => arr.map(n => n.id === id ? {...n, unread: false} : n));
+  const read = (id) => {
+    setItems(arr => arr.map(n => n.id === id ? {...n, unread: false} : n));
+    fetch(`${API_BASE}/api/messaging/notifications/${id}/read`, { method: 'POST', headers: authHeaders() })
+      .then(res => res.json())
+      .then(() => { if (st.fetchCounts) st.fetchCounts(); })
+      .catch(err => console.error("Error marking single notification read:", err));
+  };
 
   const markAll = () => {
     setItems(arr => arr.map(n => ({...n, unread: false})));
