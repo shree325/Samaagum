@@ -2776,7 +2776,7 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
           const groupName = name;
 
           if (!isEdit && pendingInviteEmails.length > 0) {
-            // Generate individual invite tokens and open mailto: for each
+            // Generate individual invite tokens and send email for each
             for (const email of pendingInviteEmails) {
               try {
                 const res = await fetch(`${apiBase}/api/groups/${groupId}/invites`, {
@@ -2785,12 +2785,8 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
                   body: JSON.stringify({ targets: [{ email }] })
                 });
                 const d = await res.json();
-                if (d.success && d.data[0]?.success) {
-                  const tkn = d.data[0].token;
-                  const inviteLink = `${window.location.origin}${window.location.pathname}#/groups/invite/${tkn}`;
-                  const subject = encodeURIComponent(`You're invited to join ${groupName} on Samaagum`);
-                  const body = encodeURIComponent(`Hi!\n\n${senderEmail || "Someone"} has invited you to join "${groupName}" on Samaagum.\n\nClick the link below to accept:\n${inviteLink}\n\nThis link is for your use only.`);
-                  window.open(`mailto:${email}?subject=${subject}&body=${body}`);
+                if (!d.success || !d.data[0]?.success) {
+                  console.error(`Failed to invite ${email}:`, d.message || d.data?.[0]?.message || "Unknown error");
                 }
               } catch (err) {
                 console.error(`Failed to invite ${email}:`, err);
@@ -3521,11 +3517,7 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
                 });
                 const data = await res.json();
                 if (data.success && data.data[0]?.success) {
-                  const tkn = data.data[0].token;
-                  const inviteLink = `${window.location.origin}${window.location.pathname}#/groups/invite/${tkn}`;
-                  const subject = encodeURIComponent(`You're invited to join ${name} on Samaagum`);
-                  const body = encodeURIComponent(`Hi!\n\n${senderEmail || "Someone"} has invited you to join "${name}" on Samaagum.\n\nClick the link below to accept:\n${inviteLink}\n\nThis link is for your use only.`);
-                  window.open(`mailto:${inviteEmail}?subject=${subject}&body=${body}`);
+                  alert("Invitation email sent successfully!");
                   setInviteEmail("");
                 } else {
                   alert("Failed to generate invite: " + (data.data?.[0]?.message || data.message || "Unknown error"));

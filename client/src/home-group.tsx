@@ -1576,11 +1576,7 @@ function GroupDetail({ group, st, go }) {
                             });
                             const data = await res.json();
                             if (data.success && data.data[0]?.success) {
-                              const tkn = data.data[0].token;
-                              const inviteLink = `${window.location.origin}${window.location.pathname}#/groups/invite/${tkn}`;
-                              const subject = encodeURIComponent(`You're invited to join ${g.name} on Samaagum`);
-                              const body = encodeURIComponent(`Hi!\n\n${senderEmail || "Someone"} has invited you to join "${g.name}" on Samaagum.\n\nClick the link below to accept:\n${inviteLink}\n\nThis link is for your use only.`);
-                              window.open(`mailto:${inviteEmail}?subject=${subject}&body=${body}`);
+                              alert("Invitation email sent successfully!");
                               setInviteEmail("");
                               fetchInvites();
                             } else {
