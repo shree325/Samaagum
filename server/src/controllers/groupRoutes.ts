@@ -192,6 +192,22 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
         }
     });
 
+    // GET /:groupId/members/:memberId/questionnaire
+    fastify.get('/:groupId/members/:memberId/questionnaire', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            const { groupId, memberId } = request.params as any;
+            const data = await GroupService.getMemberQuestionnaire(groupId, memberId, request.user);
+            
+            reply.header('Cache-Control', 'no-store');
+            return { success: true, data };
+        } catch (e: any) {
+            if (e.message.includes('404')) return reply.status(404).send({ success: false, message: e.message });
+            if (e.message.includes('401')) return reply.status(401).send({ success: false, message: e.message });
+            if (e.message.includes('403')) return reply.status(403).send({ success: false, message: e.message });
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
     // POST /:id/memberships/:memberId/approve
     fastify.post('/:id/memberships/:memberId/approve', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
         try {

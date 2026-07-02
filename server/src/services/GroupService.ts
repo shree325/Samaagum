@@ -14,6 +14,10 @@ import { R_forum_votes } from '../repositories/R_forum_votes';
 import { R_forum_tags } from '../repositories/R_forum_tags';
 import { R_forum_post_tags } from '../repositories/R_forum_post_tags';
 import { R_cityControls } from '../repositories/R_cityControls';
+import { R_formFields } from '../repositories/R_formFields';
+import { R_formResponses } from '../repositories/R_formResponses';
+import { R_formResponseValues } from '../repositories/R_formResponseValues';
+import { R_audit_log } from '../repositories/R_audit_log';
 import { InvitationService } from './InvitationService';
 import prisma from '../config/prisma';
 
@@ -33,6 +37,10 @@ export class GroupService {
     private static tagsRepo = new R_forum_tags();
     private static postTagsRepo = new R_forum_post_tags();
     private static cityControlsRepo = new R_cityControls();
+    private static formFieldsRepo = new R_formFields();
+    private static formResponsesRepo = new R_formResponses();
+    private static formResponseValuesRepo = new R_formResponseValues();
+    private static auditLogRepo = new R_audit_log(prisma);
 
     private static getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
         const R = 6371;
@@ -841,6 +849,15 @@ export class GroupService {
         }
     }
 
+    private static async requireUnarchivedGroup(groupId: string) {
+        const group = await this.groupRepo.findOne({ entity_id: groupId });
+        if (!group) throw new Error('Group not found');
+        if ((group.settings as any)?.isArchived) {
+            throw new Error('This group is archived and is read-only');
+        }
+        return group;
+    }
+
     static async checkForumPermission(userId: string, groupId: string, permType: 'create_thread' | 'reply_thread', settings: any): Promise<boolean> {
         const perm = permType === 'create_thread'
             ? (settings?.forums?.threadPerm || 'everyone')
@@ -1174,6 +1191,7 @@ export class GroupService {
     }
 
     static async createGroupPost(groupId: string, user: any, body: any) {
+        await this.requireUnarchivedGroup(groupId);
         const group = await this.groupRepo.findOne({ entity_id: groupId });
         if (!group) throw new Error('Group not found');
 
@@ -1221,6 +1239,7 @@ export class GroupService {
     }
 
     static async editGroupPost(groupId: string, postId: string, user: any, body: any) {
+        await this.requireUnarchivedGroup(groupId);
         const post = await this.forumPostsRepo.findOne({ id: postId, scope_type: 'group', scope_id: groupId, deleted_at: null } as any);
         if (!post) throw new Error('Post not found');
         if (post.author_user_id !== user.id) throw new Error('Only author can edit');
@@ -1306,6 +1325,7 @@ export class GroupService {
     }
 
     static async createGroupComment(groupId: string, postId: string, user: any, body: any) {
+        await this.requireUnarchivedGroup(groupId);
         const post = await this.forumPostsRepo.findOne({ id: postId, scope_type: 'group', scope_id: groupId, deleted_at: null } as any);
         if (!post) throw new Error('Thread not found');
         if (post.locked) throw new Error('This thread is locked');
@@ -1336,6 +1356,7 @@ export class GroupService {
     }
 
     static async editGroupComment(groupId: string, postId: string, commentId: string, user: any, body: any) {
+        await this.requireUnarchivedGroup(groupId);
         const comment = await this.forumCommentsRepo.findOne({ id: commentId, post_id: postId, deleted_at: null } as any);
         if (!comment) throw new Error('Comment not found');
         if (comment.author_user_id !== user.id) throw new Error('Only author can edit');
@@ -1361,6 +1382,7 @@ export class GroupService {
     }
 
     static async voteGroupPost(groupId: string, postId: string, user: any, vote: number) {
+        await this.requireUnarchivedGroup(groupId);
         if (vote === 0) {
             await this.votesRepo.dbModel.deleteMany({
                 where: { user_id: user.id, target_id: postId, target_type: 'post' }
@@ -1380,6 +1402,7 @@ export class GroupService {
     }
 
     static async voteGroupComment(groupId: string, commentId: string, user: any, vote: number) {
+        await this.requireUnarchivedGroup(groupId);
         if (vote === 0) {
             await this.votesRepo.dbModel.deleteMany({
                 where: { user_id: user.id, target_id: commentId, target_type: 'comment' }
@@ -1399,6 +1422,7 @@ export class GroupService {
     }
 
     static async reactGroupPost(groupId: string, postId: string, user: any, emoji: string) {
+        await this.requireUnarchivedGroup(groupId);
         const existingAll = await this.reactionsRepo.findAll({ user_id: user.id, target_id: postId, target_type: 'post' });
         
         const isSameEmoji = existingAll.some((r: any) => r.emoji === emoji);
@@ -1571,6 +1595,7 @@ export class GroupService {
     }
 
     static async uploadToGallery(groupId: string, user: any, body: any) {
+        await this.requireUnarchivedGroup(groupId);
         const mem = await this.getUserMembership(user.id, groupId);
         const isAdmin = await this.verifyGroupAdmin(user.id, groupId);
         if (!isAdmin && mem.state !== 'active') throw new Error('Members only');
@@ -1681,6 +1706,132 @@ export class GroupService {
             reportedPosts: 0,
             activeMembers,
             pendingMembers
+        };
+    }
+
+    static async getMemberQuestionnaire(groupId: string, targetMemberId: string, requestingUser: any) {
+        if (!requestingUser || !requestingUser.id) {
+            throw new Error("401: Unauthorized");
+        }
+
+        const requesterMembership = await this.groupMembershipsRepo.getByGroupAndUser(groupId, requestingUser.id);
+        if (!requesterMembership) {
+            throw new Error("403: You must be a member of this group");
+        }
+
+        const role = await this.getHighestGroupRole(requestingUser.id, groupId);
+        const canView = role === 'group_owner' || role === 'group_admin' || role === 'group_moderator' || requestingUser.id === targetMemberId;
+        
+        if (!canView) {
+            throw new Error("403: Insufficient permissions");
+        }
+
+        const group = await this.groupRepo.findOne({ entity_id: groupId });
+        if (!group) {
+            throw new Error("404: Group not found");
+        }
+
+        const targetMembership = await this.groupMembershipsRepo.getByGroupAndUser(groupId, targetMemberId);
+        if (!targetMembership) {
+            throw new Error("404: Member not found");
+        }
+
+        if (targetMembership.state === 'rejected') {
+            throw new Error("403: Cannot view responses for rejected members");
+        }
+
+        let legacySettingsQuestions: any[] = [];
+        const qs = (group.settings as any)?.questionnaires;
+        if (qs && Array.isArray(qs) && qs.length > 0) {
+            legacySettingsQuestions = qs;
+        }
+
+        if (!group.join_form_id && legacySettingsQuestions.length === 0) {
+            return { hasForm: false };
+        }
+
+        let questions: any[] = [];
+        if (group.join_form_id) {
+            questions = await this.formFieldsRepo.findByFormId(group.join_form_id);
+        } else {
+            questions = legacySettingsQuestions.map((q: any, idx: number) => ({
+                field_id: q.id || String(idx),
+                position: idx + 1,
+                label: q.q || `Question ${idx + 1}`,
+                field_type: q.type || 'long_text',
+                required: q.required !== false
+            }));
+        }
+        let answersMap: Record<string, any> = {};
+        let submittedAt = targetMembership.created_at;
+
+        if (targetMembership.form_response_id) {
+            const formResponse = await this.formResponsesRepo.findById(targetMembership.form_response_id);
+            if (formResponse) {
+                submittedAt = formResponse.submitted_at || submittedAt;
+                const formResponseValues = await this.formResponseValuesRepo.findByResponseId(targetMembership.form_response_id);
+                for (const val of formResponseValues) {
+                    if (val.field_id) {
+                        answersMap[val.field_id] = val.value;
+                    }
+                }
+            }
+        } else if (targetMembership.answers) {
+            answersMap = (targetMembership.answers as Record<string, any>) || {};
+        }
+
+        const structuredQuestions = questions.map((q) => {
+            let rawAnswer = answersMap[q.field_id as string];
+            if (rawAnswer === undefined || rawAnswer === null) {
+                // Fallback for legacy answers keyed by index
+                const legacyIdx = q.position - 1;
+                rawAnswer = answersMap[String(legacyIdx)];
+            }
+            
+            const answered = rawAnswer !== undefined && rawAnswer !== null && rawAnswer !== "";
+            let answer = rawAnswer;
+            
+            if (q.field_type === 'checkbox') {
+                answer = answered ? Boolean(rawAnswer) : false;
+            } else if (q.field_type === 'multiple_choice') {
+                answer = answered ? (Array.isArray(rawAnswer) ? rawAnswer : [rawAnswer]) : [];
+            }
+
+            return {
+                fieldId: q.field_id,
+                number: q.position,
+                label: q.label,
+                type: q.field_type,
+                required: q.required,
+                answer: answer,
+                answered: answered
+            };
+        });
+
+        const targetUser = await this.usersRepo.findOne({ id: targetMemberId });
+        const targetRole = await this.getHighestGroupRole(targetMemberId, groupId);
+
+        await this.auditLogRepo.create({
+            bu_id: requestingUser.tenant_id || group.tenant_id,
+            actor_id: requestingUser.id,
+            action: 'view_questionnaire_response',
+            resource_type: 'group_membership',
+            resource_id: targetMemberId,
+            metadata: { group_id: groupId }
+        }).catch(err => console.error("Audit log error:", err));
+
+        return {
+            hasForm: true,
+            submittedAt: submittedAt,
+            member: {
+                userId: targetMemberId,
+                displayName: targetUser?.display_name || "Unknown",
+                username: targetUser?.username,
+                role: targetRole,
+                state: targetMembership.state,
+                joinedAt: targetMembership.created_at
+            },
+            questions: structuredQuestions
         };
     }
 }

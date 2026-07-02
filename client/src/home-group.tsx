@@ -1025,8 +1025,9 @@ function GroupDetail({ group, st, go }) {
   const replyPerm = g.settings?.forums?.replyPerm || "everyone";
   const isMember = isOwner || isJoined;
   const forumPermissions = g.forumPermissions || [];
-  const canPost = forumsEnabled && isMember && (isOwner || threadPerm === "everyone" || threadPerm === "members" || (threadPerm === "selected" && forumPermissions.includes("create_thread")));
-  const canReply = forumsEnabled && isMember && (isOwner || replyPerm === "everyone" || replyPerm === "members" || (replyPerm === "selected" && forumPermissions.includes("reply_thread")));
+  const isArchived = Boolean(g.settings?.isArchived);
+  const canPost = !isArchived && forumsEnabled && isMember && (isOwner || threadPerm === "everyone" || threadPerm === "members" || (threadPerm === "selected" && forumPermissions.includes("create_thread")));
+  const canReply = !isArchived && forumsEnabled && isMember && (isOwner || replyPerm === "everyone" || replyPerm === "members" || (replyPerm === "selected" && forumPermissions.includes("reply_thread")));
 
   const filteredPosts = (activeTag
     ? posts.filter(p => (p.tags || []).some(t => t.name === activeTag))
@@ -1044,7 +1045,7 @@ function GroupDetail({ group, st, go }) {
 
   const gallerySettings = g.settings?.gallery || {};
   const galleryEnabled = gallerySettings.enabled !== false;
-  const canUpload = galleryEnabled && (isOwner || isJoined);
+  const canUpload = !isArchived && galleryEnabled && (isOwner || isJoined);
   const galleryMediaType = gallerySettings.imageOnly ? "Images only" : gallerySettings.videoOnly ? "Videos only" : "Images & videos";
   const galleryNeedsApproval = gallerySettings.approve === true;
   const galleryAcceptTypes = gallerySettings.videoOnly ? "video/*" : gallerySettings.imageOnly ? "image/*" : "image/*,video/*";
@@ -2107,6 +2108,10 @@ function MemberManagementPanel({ group, st, go }) {
   const [currentUserId, setCurrentUserId] = useState(null);
   const [groupSettings, setGroupSettings] = useState(g?.settings || {});
 
+  const [selectedMember, setSelectedMember] = useState(null);
+  const QUESTIONNAIRE_INIT = { loading: false, error: null, hasForm: null, data: null };
+  const [questionnaireData, setQuestionnaireData] = useState(QUESTIONNAIRE_INIT);
+
   React.useEffect(() => {
     const token = localStorage.getItem('token');
     let uid = null;
@@ -2154,6 +2159,30 @@ function MemberManagementPanel({ group, st, go }) {
     };
     if (g?.id) fetchMembers();
   }, [g?.id]);
+
+  const fetchQuestionnaire = async (memberId) => {
+    setQuestionnaireData({ ...QUESTIONNAIRE_INIT, loading: true });
+    try {
+      const token = localStorage.getItem('token');
+      const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+      const res = await fetch(`${apiBase}/api/groups/${g.id}/members/${memberId}/questionnaire`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setQuestionnaireData({ loading: false, error: null, hasForm: data.data.hasForm, data: data.data });
+      } else {
+        setQuestionnaireData({ loading: false, error: data.message || 'Failed to load', hasForm: null, data: null });
+      }
+    } catch {
+      setQuestionnaireData({ loading: false, error: 'Network error. Please retry.', hasForm: null, data: null });
+    }
+  };
+
+  const closeModal = () => {
+    setSelectedMember(null);
+    setQuestionnaireData(QUESTIONNAIRE_INIT);
+  };
 
   const handleApprove = async (r) => {
     try {
@@ -2368,9 +2397,18 @@ function MemberManagementPanel({ group, st, go }) {
               showRemove
             });
 
+            const canViewResponses = currentUserRole === 'group_owner' || currentUserRole === 'group_admin' || currentUserRole === 'group_moderator';
+
             return (
               <div key={m.user_id} style={{ position: "relative", zIndex: openMenuId === m.user_id ? 50 : 1, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div 
+                  style={{ display: "flex", alignItems: "center", gap: 12, cursor: canViewResponses ? 'pointer' : 'default' }}
+                  onClick={() => {
+                    if (!canViewResponses) return;
+                    setSelectedMember(m);
+                    fetchQuestionnaire(m.user_id);
+                  }}
+                >
                   <Avatar name={m.users?.display_name || "Unknown"} size={40} />
                   <div style={{ display: "flex", flexDirection: "column" }}>
                     <span style={{ fontSize: 14, fontWeight: 600 }}>{m.users?.display_name || "Unknown"}</span>
@@ -2403,6 +2441,82 @@ function MemberManagementPanel({ group, st, go }) {
           })}
         </div>
       </div>
+
+      {selectedMember && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000 }} onClick={closeModal}>
+          <div style={{ background: 'var(--bg)', width: '90%', maxWidth: 500, borderRadius: 12, display: 'flex', flexDirection: 'column', maxHeight: '80vh', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottom: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Avatar name={selectedMember.users?.display_name || "Unknown"} size={48} />
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--ink)' }}>{selectedMember.users?.display_name || "Unknown"}</span>
+                  <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>@{selectedMember.users?.username || "unknown"}</span>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4, fontSize: 12 }}>
+                    <span style={{ color: roleColors[getHighestRole(selectedMember.roles)] || 'var(--ink-2)' }}>Role: {roleLabels[getHighestRole(selectedMember.roles)]}</span>
+                    <span style={{ color: 'var(--ink-3)' }}>|</span>
+                    <span style={{ color: selectedMember.state === 'active' ? 'var(--accent)' : 'var(--accent-2)' }}>Status: {selectedMember.state === 'active' ? 'Approved' : 'Pending'}</span>
+                  </div>
+                  {questionnaireData.data?.submittedAt && (
+                    <span style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>
+                      Joined on: {new Date(questionnaireData.data.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button className="tool" onClick={closeModal}>
+                <I.x style={{ width: 20, height: 20 }} />
+              </button>
+            </div>
+            
+            <div style={{ padding: 16, overflowY: 'auto', flex: 1 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 600, margin: '0 0 16px 0', color: 'var(--ink)' }}>Join Questionnaire Responses</h3>
+              
+              {questionnaireData.loading && (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
+                  <div className="spinner" style={{ width: 24, height: 24, border: '2px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                  <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                </div>
+              )}
+
+              {!questionnaireData.loading && questionnaireData.error && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 32, gap: 12 }}>
+                  <span style={{ color: '#ef4444', fontSize: 14 }}>{questionnaireData.error}</span>
+                  <button className="hbtn hbtn--primary hbtn--sm" onClick={() => fetchQuestionnaire(selectedMember.user_id)}>Retry</button>
+                </div>
+              )}
+
+              {!questionnaireData.loading && !questionnaireData.error && questionnaireData.hasForm === false && (
+                <div style={{ textAlign: 'center', padding: 32, color: 'var(--ink-3)', fontSize: 14 }}>
+                  This group has no join questionnaire.
+                </div>
+              )}
+
+              {!questionnaireData.loading && !questionnaireData.error && questionnaireData.data?.questions && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {questionnaireData.data.questions.map((q, idx) => (
+                    <div key={q.fieldId} style={{ display: 'flex', flexDirection: 'column', borderBottom: idx < questionnaireData.data.questions.length - 1 ? '1px solid var(--border)' : 'none', paddingBottom: idx < questionnaireData.data.questions.length - 1 ? 16 : 0 }}>
+                      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink-2)' }}>Q{q.number}. {q.label} {q.required && <span style={{ color: '#ef4444' }}>*</span>}</span>
+                      <div style={{ marginTop: 6, fontSize: 14, color: 'var(--ink)' }}>
+                        {!q.answered ? (
+                          <span style={{ fontStyle: 'italic', color: 'var(--ink-3)' }}>(No response submitted)</span>
+                        ) : q.type === 'multiple_choice' ? (
+                          <ul style={{ margin: 0, paddingLeft: 20 }}>
+                            {q.answer.map((a, i) => <li key={i}>{a}</li>)}
+                          </ul>
+                        ) : q.type === 'checkbox' ? (
+                          <span>{q.answer ? 'Yes' : 'No'}</span>
+                        ) : (
+                          <span style={{ whiteSpace: 'pre-wrap' }}>{String(q.answer)}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

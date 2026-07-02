@@ -18,4 +18,10 @@ export class R_formResponses extends PostgresBaseRepository<IFormResponse> imple
     const { rows } = await prisma.query(query, [respondentUserId]);
     return rows;
   }
+
+  async findById(id: string): Promise<IFormResponse | null> {
+    const query = `SELECT * FROM form_responses WHERE id = $1`;
+    const { rows } = await prisma.query(query, [id]);
+    return rows[0] || null;
+  }
 }
