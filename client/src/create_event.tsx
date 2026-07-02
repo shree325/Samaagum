@@ -4,7 +4,42 @@ const { useState, useRef, useEffect, useCallback, useMemo } = React;
 // Reuse existing components and utilities from the project
 // Assuming I, Grain, EventCard, LocationSection, COVERS, GROUPS, ME, etc. are globally available via the app bundle or global namespace.
 
-const COVER_SWATCHES = Object.entries(COVERS).map(([k, v]) => ({ k, v: v as string }));
+function UpgradePlanModal({ open, onClose, feature, go }) {
+  if (!open) return null;
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 12000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)" }}>
+      <div style={{ background: "var(--surface)", width: 440, borderRadius: "var(--r-xl)", padding: 32, boxShadow: "var(--sh-xl)", border: "1px solid var(--border)", position: "relative", textAlign: "center" }}>
+        <button onClick={onClose} style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", color: "var(--ink-3)", cursor: "pointer" }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
+        <h2 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 8px 0", color: "var(--ink)" }}>Upgrade Required</h2>
+        <p style={{ fontSize: 14, color: "var(--ink-2)", margin: "0 0 24px 0", lineHeight: 1.6 }}>
+          The feature <strong>{feature}</strong> is locked under your current plan. Upgrade to the <strong>Standard Plan</strong> to unlock premium options, unlimited capacity, and advanced events features!
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <button 
+            className="hbtn hbtn--primary" 
+            style={{ width: "100%", justifyContent: "center", padding: "12px", fontSize: 15, fontWeight: 600 }}
+            onClick={() => {
+              onClose();
+              go("upgrade");
+            }}
+          >
+            Upgrade Plan
+          </button>
+          <button 
+            className="hbtn hbtn--ghost" 
+            style={{ width: "100%", justifyContent: "center", padding: "12px", fontSize: 14 }}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function CoverPicker({ value, onPick }) {
   return (
@@ -1423,11 +1458,36 @@ function LocationSection({ venue, setVenue, locType, setLocType }) {
 }
 
 /* ---------------- Create Event ---------------- */
-function CreateEvent({ go, mobile }) {
+const DEFAULT_FREE_ENTITLEMENTS = {
+  group_max_groups: -1,
+  group_allowed_visibility: ['private'],
+  group_allowed_join_modes: ['open', 'invite_only'],
+  group_max_capacity: 25,
+  group_can_restricted_access: false,
+  event_allowed_registration_modes: ['free', 'cash'],
+  event_allowed_visibility: ['unlisted', 'invite_only'],
+  event_max_participants: 100,
+  event_checkin_methods: ['scanner', 'manual', 'gate'],
+  event_can_create_paid_tickets: false
+};
+
+function CreateEvent({ go, mobile, st }) {
+  const entitlements = st?.entitlements || DEFAULT_FREE_ENTITLEMENTS;
+  const allowedVisibilities = entitlements.event_allowed_visibility || ['unlisted', 'invite_only'];
+  const eventMaxParticipants = entitlements.event_max_participants ?? 100;
+  const canCreatePaidTickets = entitlements.event_can_create_paid_tickets ?? false;
+
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [upgradeFeature, setUpgradeFeature] = useState("");
+  const triggerUpgrade = (feat) => {
+    setUpgradeFeature(feat);
+    setUpgradeModalOpen(true);
+  };
+
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [cover, setCover] = useState("");
-  const [visibility, setVisibility] = useState("public");
+  const [visibility, setVisibility] = useState(allowedVisibilities.includes("public") ? "public" : "unlisted");
   const [calendar, setCalendar] = useState("Main Calendar");
   const [startDate, setStartDate] = useState("");
   const [startTime, setStartTime] = useState("");
@@ -1440,10 +1500,10 @@ function CreateEvent({ go, mobile }) {
   const [tzModalOpen, setTzModalOpen] = useState(false);
   const [tzSearchQuery, setTzSearchQuery] = useState("");
 
-  const [type, setType] = useState("paid");
+  const [type, setType] = useState(canCreatePaidTickets ? "paid" : "free");
   const [approval, setApproval] = useState(false);
-  const [capacityEnabled, setCapacityEnabled] = useState(false);
-  const [capacity, setCapacity] = useState("");
+  const [capacityEnabled, setCapacityEnabled] = useState(entitlements.event_max_participants !== -1);
+  const [capacity, setCapacity] = useState(entitlements.event_max_participants !== -1 ? String(entitlements.event_max_participants) : "");
   const [waitlist, setWaitlist] = useState(false);
   const [tickets, setTickets] = useState([{ n: "Early Bird", cap: "50", price: "499" }]);
 
@@ -2206,6 +2266,10 @@ function CreateEvent({ go, mobile }) {
                       value={visibility}
                       onChange={(e) => {
                         const val = e.target.value;
+                        if (val === "public" && !allowedVisibilities.includes("public")) {
+                          triggerUpgrade("Public Event Visibility");
+                          return;
+                        }
                         setVisibility(val);
                         if (val === "custom") {
                           setAccessModalOpen(true);
@@ -2213,7 +2277,7 @@ function CreateEvent({ go, mobile }) {
                       }}
                       style={{ background: "var(--field)", border: "1px solid var(--border)", height: 42 }}
                     >
-                      <option value="public">Public</option>
+                      <option value="public">{!allowedVisibilities.includes("public") && "🔒 "}Public</option>
                       <option value="unlisted">Unlisted</option>
                       <option value="custom">Custom Access</option>
                     </select>
@@ -2500,9 +2564,21 @@ function CreateEvent({ go, mobile }) {
                 <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr 1fr", gap: "16px", marginBottom: 20 }}>
                   <div style={{ padding: 12, background: "var(--field)", borderRadius: "var(--r-md)", border: "1px solid var(--border)" }}>
                     <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Ticket Price</div>
-                    <select className="cselect" value={type} onChange={e => setType(e.target.value)} style={{ background: "var(--surface)", height: 36, padding: "6px" }}>
+                    <select 
+                      className="cselect" 
+                      value={type} 
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (val === "paid" && !canCreatePaidTickets) {
+                          triggerUpgrade("Paid Events / Tickets");
+                          return;
+                        }
+                        setType(val);
+                      }} 
+                      style={{ background: "var(--surface)", height: 36, padding: "6px" }}
+                    >
                       <option value="free">Free</option>
-                      <option value="paid">Paid</option>
+                      <option value="paid">{!canCreatePaidTickets && "🔒 "}Paid</option>
                     </select>
                   </div>
                   <div style={{ padding: 12, background: "var(--field)", borderRadius: "var(--r-md)", border: "1px solid var(--border)" }}>
@@ -2532,6 +2608,10 @@ function CreateEvent({ go, mobile }) {
                         on={capacityEnabled}
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (capacityEnabled && eventMaxParticipants !== -1) {
+                            triggerUpgrade("Unlimited Event Capacity");
+                            return;
+                          }
                           const next = !capacityEnabled;
                           setCapacityEnabled(next);
                           if (next) {
@@ -3312,6 +3392,11 @@ function CreateEvent({ go, mobile }) {
 
             <div className="cfield">
               <label>Maximum Capacity</label>
+              {eventMaxParticipants !== -1 && (
+                <div style={{ padding: "8px 10px", background: "var(--field-2, var(--field))", borderRadius: "var(--r-sm)", border: "1px dashed var(--accent)", fontSize: "11px", color: "var(--ink-2)", marginBottom: 12 }}>
+                  🔒 Under your current plan, event capacity is capped at a maximum of <strong>{eventMaxParticipants}</strong> participants. Upgrade to Standard for unlimited capacity.
+                </div>
+              )}
               <input
                 className="cinput"
                 placeholder="e.g. 100"
@@ -3345,7 +3430,20 @@ function CreateEvent({ go, mobile }) {
 
             <div style={{ display: "flex", gap: 12, marginTop: 32 }}>
               <button className="hbtn hbtn--ghost" style={{ flex: 1 }} onClick={() => setCapacityModalOpen(false)}>Cancel</button>
-              <button className="hbtn hbtn--primary" style={{ flex: 1 }} onClick={() => setCapacityModalOpen(false)}>Save</button>
+              <button 
+                className="hbtn hbtn--primary" 
+                style={{ flex: 1 }} 
+                onClick={() => {
+                  if (eventMaxParticipants !== -1 && (!capacity || parseInt(capacity) > eventMaxParticipants || parseInt(capacity) < 1)) {
+                    alert(`Event capacity must be between 1 and ${eventMaxParticipants} participants under your current plan.`);
+                    triggerUpgrade(`Event Capacity > ${eventMaxParticipants}`);
+                    return;
+                  }
+                  setCapacityModalOpen(false);
+                }}
+              >
+                Save
+              </button>
             </div>
           </div>
         </div>
@@ -3366,6 +3464,14 @@ function CreateEvent({ go, mobile }) {
         <button className="hbtn hbtn--ghost" style={{ display: "flex", alignItems: "center", gap: 8 }} onClick={() => go("event", { ...previewEv, id: "new", host: ME.name, hostBy: ME.name, city: "Bengaluru", cap: capacity || 180, desc })}><I.external /> Preview</button>
         <button className="hbtn hbtn--primary" onClick={() => go("event", { ...previewEv, id: "new", host: ME.name, hostBy: ME.name, city: "Bengaluru", cap: capacity || 180, desc })}><I.check />Publish Event</button>
       </div>
+      {upgradeModalOpen && (
+        <UpgradePlanModal 
+          open={upgradeModalOpen} 
+          onClose={() => setUpgradeModalOpen(false)} 
+          feature={upgradeFeature} 
+          go={go} 
+        />
+      )}
     </div>
   );
 }

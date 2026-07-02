@@ -15,6 +15,7 @@ import { R_forum_tags } from '../repositories/R_forum_tags';
 import { R_forum_post_tags } from '../repositories/R_forum_post_tags';
 import { InvitationService } from './InvitationService';
 import prisma from '../config/prisma';
+import { PlanEntitlementService } from './PlanEntitlementService';
 
 export class GroupService {
     private static groupRepo = new R_groups();
@@ -126,7 +127,50 @@ export class GroupService {
         return !!mem;
     }
 
+    static async validateGroupEntitlements(userId: string, body: any, isUpdate = false, existingGroup?: any) {
+        const ents = await PlanEntitlementService.getEntitlements(userId);
+        
+        // 1. Check visibility / listed
+        const listedVal = body.listed !== undefined ? body.listed : (existingGroup ? existingGroup.listed : 'unlisted');
+        if (listedVal === 'listed') {
+            if (!ents.group_allowed_visibility.includes('public')) {
+                throw new Error('Your current plan only allows creating unlisted groups. Upgrade to Standard to create public groups.');
+            }
+        }
+        
+        // 2. Check restricted access in settings
+        const settings = body.settings !== undefined ? body.settings : (existingGroup ? (existingGroup.settings || {}) : {});
+        const hasRestrictedAccess = !!(settings?.restrictedAccess?.enabled || settings?.restrictedAccess?.visibility?.enabled || settings?.restrictedAccess?.join?.enabled);
+        if (hasRestrictedAccess && !ents.group_can_restricted_access) {
+            throw new Error('Restricted access controls are locked for your current plan. Upgrade to Standard to use them.');
+        }
+
+        // 3. Check join mode
+        const joinModeVal = body.joinMode !== undefined ? body.joinMode : (existingGroup ? existingGroup.join_mode : 'open');
+        if (joinModeVal === 'restricted' || joinModeVal === 'restricted_access') {
+            if (!ents.group_allowed_join_modes.includes('restricted_access')) {
+                throw new Error('Restricted join eligibility is locked for your current plan. Upgrade to Standard to use it.');
+            }
+        }
+
+        // 4. Check group max capacity limit
+        const capacity = settings?.capacity || {};
+        if (ents.group_max_capacity !== -1) {
+            if (capacity.limit === true && capacity.max > ents.group_max_capacity) {
+                throw new Error(`Your plan limits group capacity to a maximum of ${ents.group_max_capacity} members.`);
+            }
+            if (capacity.limit !== true) {
+                if (!body.settings) body.settings = {};
+                if (!body.settings.capacity) body.settings.capacity = {};
+                body.settings.capacity.limit = true;
+                body.settings.capacity.max = ents.group_max_capacity;
+            }
+        }
+    }
+
     static async createGroup(userId: string, tenantId: string, body: any) {
+        await this.validateGroupEntitlements(userId, body);
+
         const slug = body.slug || body.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
         const bannerParsed = body.banner && body.banner.startsWith('data:') ? this.parseDataUri(body.banner) : null;
@@ -358,6 +402,8 @@ export class GroupService {
         })) : false;
 
         if (!isOwner) throw new Error('Only group owners can edit the group');
+
+        await this.validateGroupEntitlements(userId, body, true, group);
 
         const bannerParsed = body.banner && body.banner.startsWith('data:') ? this.parseDataUri(body.banner) : null;
         const iconParsed = body.icon && body.icon.startsWith('data:') ? this.parseDataUri(body.icon) : null;

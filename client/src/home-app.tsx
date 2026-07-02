@@ -67,6 +67,7 @@ function App() {
   const [cityOpen, setCityOpen] = useState(false);
   const [meSync, setMeSync] = useState(0); // Add a tick to force re-render when ME updates asynchronously
 
+  const { entitlements, plan, loading: entitlementsLoading, refetch: refetchEntitlements } = usePlanEntitlements();
   const [subscription, setSubscription] = useState({ plan: 'free', status: 'active' });
   const [socket, setSocket] = useState(null);
   const [counts, setCounts] = useState({ notifs: 0, messages: 0 });
@@ -287,6 +288,8 @@ function App() {
           if (res.data.role) {
             ME.role = res.data.role.displayName || res.data.role.name;
           }
+          // Notify entitlements hook to refetch
+          window.dispatchEvent(new CustomEvent('subscription_changed'));
         }
       })
       .catch(err => console.error('Error fetching subscription status', err));
@@ -531,7 +534,8 @@ function App() {
     addCreatedEvent, addCreatedGroup,
     subscription, setSubscription,
     fetchCounts,
-    chatSettings, setChatSettings
+    chatSettings, setChatSettings,
+    entitlements, plan, refetchEntitlements
   };
 
   // sidebar collapsed state

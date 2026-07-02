@@ -112,6 +112,50 @@ export const subscriptionPlanRoutes: FastifyPluginAsync = async (fastify: Fastif
         } catch (e: any) { return reply.status(500).send({ success: false, message: e.message }); }
     });
 
+    // PUT /plans/:id/entitlements — update plan entitlements config
+    fastify.put('/plans/:id/entitlements', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
+        try {
+            const { id } = request.params;
+            const { entitlements } = request.body as any;
+            if (!entitlements) {
+                return reply.status(400).send({ success: false, message: 'entitlements object is required' });
+            }
+
+            const adminPlan = await prisma.admin_subscription_plans.findUnique({ where: { id } });
+            if (!adminPlan) {
+                return reply.status(404).send({ success: false, message: 'Admin subscription plan not found' });
+            }
+
+            const updatedAdminPlan = await prisma.admin_subscription_plans.update({
+                where: { id },
+                data: {
+                    limits: entitlements,
+                    updated_at: new Date()
+                }
+            });
+
+            // Mirror to core plans table using key
+            const planKey = adminPlan.name.toLowerCase();
+            const corePlan = await prisma.plans.findUnique({ where: { key: planKey } });
+            if (corePlan) {
+                await prisma.plans.update({
+                    where: { id: corePlan.id },
+                    data: {
+                        entitlements
+                    }
+                });
+            }
+
+            // Invalidate the cache
+            const { PlanEntitlementService } = require('../services/PlanEntitlementService');
+            PlanEntitlementService.clearCache();
+
+            return { success: true, data: updatedAdminPlan, message: 'Plan entitlements updated successfully' };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
     // DELETE /plans/:id
     fastify.delete('/plans/:id', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
         try {

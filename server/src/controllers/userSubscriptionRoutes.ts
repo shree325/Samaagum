@@ -226,6 +226,24 @@ export const userSubscriptionRoutes: FastifyPluginAsync = async (fastify: Fastif
         }
     });
 
+    // GET /entitlements — Get active plan entitlements config for the logged-in user
+    fastify.get('/entitlements', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            const userId = request.user?.id;
+            if (!userId) {
+                return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            }
+
+            const { PlanEntitlementService } = require('../services/PlanEntitlementService');
+            const entitlements = await PlanEntitlementService.getEntitlements(userId);
+            const planKey = await PlanEntitlementService.getUserPlan(userId);
+
+            return { success: true, data: { entitlements, plan: planKey } };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
     // 3. POST /coupons/validate — Validate a coupon code
     fastify.post('/coupons/validate', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
         try {

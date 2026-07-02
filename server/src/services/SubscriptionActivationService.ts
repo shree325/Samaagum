@@ -1,4 +1,5 @@
 import prisma from '../config/prisma';
+import { PlanEntitlementService } from './PlanEntitlementService';
 
 export class SubscriptionActivationService {
     /**
@@ -207,6 +208,12 @@ export class SubscriptionActivationService {
                 console.log('Transaction committed');
                 return true;
             });
+            if (result) {
+                const order = await prisma.subscription_orders.findUnique({ where: { id: orderId } });
+                if (order) {
+                    PlanEntitlementService.invalidate(order.user_id);
+                }
+            }
             return result;
         } catch (err: any) {
             console.error('[SubscriptionActivationService] Prisma transaction error:', err);
@@ -220,7 +227,7 @@ export class SubscriptionActivationService {
     static async switchPlan(orderId: string): Promise<boolean> {
         console.log(`Subscription switch started for order: ${orderId}`);
         try {
-            return await prisma.$transaction(async (tx) => {
+            const result = await prisma.$transaction(async (tx) => {
                 // 1. Fetch Target Order
                 const targetOrder = await tx.subscription_orders.findUnique({
                     where: { id: orderId }
@@ -338,6 +345,13 @@ export class SubscriptionActivationService {
 
                 return true;
             });
+            if (result) {
+                const order = await prisma.subscription_orders.findUnique({ where: { id: orderId } });
+                if (order) {
+                    PlanEntitlementService.invalidate(order.user_id);
+                }
+            }
+            return result;
         } catch (err) {
             console.error('[SubscriptionActivationService] Error switching plan:', err);
             return false;

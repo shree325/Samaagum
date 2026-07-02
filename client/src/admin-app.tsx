@@ -3201,6 +3201,63 @@ function SubscriptionPlansView({ user, apiBase }) {
     rbac: { assignedRole: "", assignedPosition: "", autoAssignRole: true }
   };
   const [form, setForm] = useState({ ...emptyForm });
+  const [entitlementsOpen, setEntitlementsOpen] = useState(false);
+  const [entitlementsPlan, setEntitlementsPlan] = useState(null);
+  const [entForm, setEntForm] = useState({
+    group_max_groups: -1,
+    group_allowed_visibility: [],
+    group_allowed_join_modes: [],
+    group_max_capacity: 25,
+    group_can_restricted_access: false,
+    event_allowed_registration_modes: [],
+    event_allowed_visibility: [],
+    event_max_participants: 100,
+    event_checkin_methods: [],
+    event_can_create_paid_tickets: false
+  });
+
+  const openEntitlements = (p) => {
+    setEntitlementsPlan(p);
+    const limits = p.limits || {};
+    setEntForm({
+      group_max_groups: typeof limits.group_max_groups === 'number' ? limits.group_max_groups : -1,
+      group_allowed_visibility: Array.isArray(limits.group_allowed_visibility) ? limits.group_allowed_visibility : ['unlisted'],
+      group_allowed_join_modes: Array.isArray(limits.group_allowed_join_modes) ? limits.group_allowed_join_modes : ['open', 'invite_only'],
+      group_max_capacity: typeof limits.group_max_capacity === 'number' ? limits.group_max_capacity : 25,
+      group_can_restricted_access: typeof limits.group_can_restricted_access === 'boolean' ? limits.group_can_restricted_access : false,
+      event_allowed_registration_modes: Array.isArray(limits.event_allowed_registration_modes) ? limits.event_allowed_registration_modes : ['free', 'cash'],
+      event_allowed_visibility: Array.isArray(limits.event_allowed_visibility) ? limits.event_allowed_visibility : ['unlisted', 'invite_only'],
+      event_max_participants: typeof limits.event_max_participants === 'number' ? limits.event_max_participants : 100,
+      event_checkin_methods: Array.isArray(limits.event_checkin_methods) ? limits.event_checkin_methods : ['scanner'],
+      event_can_create_paid_tickets: typeof limits.event_can_create_paid_tickets === 'boolean' ? limits.event_can_create_paid_tickets : false
+    });
+    setEntitlementsOpen(true);
+  };
+
+  const handleSaveEntitlements = async (e) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${apiBase}/api/admin/plans/${entitlementsPlan.id}/entitlements`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ entitlements: entForm })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("Plan entitlements updated successfully!");
+        setEntitlementsOpen(false);
+        load();
+      } else {
+        alert(data.message || "Failed to update entitlements.");
+      }
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -3325,6 +3382,7 @@ function SubscriptionPlansView({ user, apiBase }) {
                   {isSuperAdmin && (
                     <td style={{ textAlign: "right" }}>
                       <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                        <button className="btn-sm btn-sm-ghost" onClick={() => openEntitlements(p)}>Entitlements</button>
                         <button className="btn-sm btn-sm-ghost" onClick={() => openEdit(p)}>Edit</button>
                         <button className="btn-sm btn-sm-danger" onClick={() => handleDelete(p.id)}>Delete</button>
                       </div>
@@ -3553,6 +3611,198 @@ function SubscriptionPlansView({ user, apiBase }) {
               <div className="modal-footer">
                 <button type="button" className="btn-sm btn-sm-ghost" onClick={() => setModalOpen(false)}>Cancel</button>
                 <button type="submit" className="btn-sm btn-sm-primary">{editItem ? "Update Plan" : "Create Plan"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {entitlementsOpen && entitlementsPlan && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: "580px", maxHeight: "90vh", overflowY: "auto" }}>
+            <div className="modal-header">
+              <h3>Manage Entitlements: {entitlementsPlan.display_name}</h3>
+              <button onClick={() => setEntitlementsOpen(false)} style={{ background: "transparent", border: "none", color: "var(--ink)", cursor: "pointer" }}><Icons.close /></button>
+            </div>
+            <form onSubmit={handleSaveEntitlements}>
+              <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <p style={{ margin: 0, fontSize: "13px", color: "var(--ink-3)" }}>
+                  Configure the technical validation limits and locked features associated with this subscription tier.
+                </p>
+
+                {/* Groups Section */}
+                <div style={{ border: "1px solid var(--border)", borderRadius: "8px", padding: "16px", background: "var(--surface-2)" }}>
+                  <h4 style={{ margin: "0 0 12px 0", fontSize: "14px", fontWeight: "600", color: "var(--accent-2)" }}>👥 Group Entitlements</h4>
+                  
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+                    <div className="form-group">
+                      <label>Max Groups (-1 = unlimited)</label>
+                      <input 
+                        type="number" 
+                        className="form-control" 
+                        value={entForm.group_max_groups} 
+                        onChange={e => setEntForm({ ...entForm, group_max_groups: Number(e.target.value) })} 
+                        required 
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Max Capacity per Group (-1 = unlimited)</label>
+                      <input 
+                        type="number" 
+                        className="form-control" 
+                        value={entForm.group_max_capacity} 
+                        onChange={e => setEntForm({ ...entForm, group_max_capacity: Number(e.target.value) })} 
+                        required 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: "12px" }}>
+                    <label style={{ fontWeight: "600" }}>Allowed Visibilities</label>
+                    <div style={{ display: "flex", gap: "16px", marginTop: "6px" }}>
+                      {['public', 'unlisted', 'restricted'].map(vis => (
+                        <label key={vis} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", textTransform: "capitalize", cursor: "pointer" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={entForm.group_allowed_visibility.includes(vis)} 
+                            onChange={e => {
+                              const list = e.target.checked 
+                                ? [...entForm.group_allowed_visibility, vis]
+                                : entForm.group_allowed_visibility.filter(x => x !== vis);
+                              setEntForm({ ...entForm, group_allowed_visibility: list });
+                            }}
+                          />
+                          {vis}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: "12px" }}>
+                    <label style={{ fontWeight: "600" }}>Allowed Join Modes</label>
+                    <div style={{ display: "flex", gap: "16px", marginTop: "6px", flexWrap: "wrap" }}>
+                      {['open', 'invite_only', 'restricted_access'].map(mode => (
+                        <label key={mode} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", cursor: "pointer" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={entForm.group_allowed_join_modes.includes(mode)} 
+                            onChange={e => {
+                              const list = e.target.checked 
+                                ? [...entForm.group_allowed_join_modes, mode]
+                                : entForm.group_allowed_join_modes.filter(x => x !== mode);
+                              setEntForm({ ...entForm, group_allowed_join_modes: list });
+                            }}
+                          />
+                          {mode.replace('_', ' ')}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+                    <input 
+                      type="checkbox" 
+                      checked={entForm.group_can_restricted_access} 
+                      onChange={e => setEntForm({ ...entForm, group_can_restricted_access: e.target.checked })} 
+                    />
+                    Enable Restricted Group Access Controls
+                  </label>
+                </div>
+
+                {/* Events Section */}
+                <div style={{ border: "1px solid var(--border)", borderRadius: "8px", padding: "16px", background: "var(--surface-2)" }}>
+                  <h4 style={{ margin: "0 0 12px 0", fontSize: "14px", fontWeight: "600", color: "var(--accent-2)" }}>📅 Event Entitlements</h4>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "12px", marginBottom: "12px" }}>
+                    <div className="form-group">
+                      <label>Max Participants per Event (-1 = unlimited)</label>
+                      <input 
+                        type="number" 
+                        className="form-control" 
+                        value={entForm.event_max_participants} 
+                        onChange={e => setEntForm({ ...entForm, event_max_participants: Number(e.target.value) })} 
+                        required 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: "12px" }}>
+                    <label style={{ fontWeight: "600" }}>Allowed Visibilities</label>
+                    <div style={{ display: "flex", gap: "16px", marginTop: "6px" }}>
+                      {['public', 'unlisted', 'invite_only'].map(vis => (
+                        <label key={vis} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", cursor: "pointer" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={entForm.event_allowed_visibility.includes(vis)} 
+                            onChange={e => {
+                              const list = e.target.checked 
+                                ? [...entForm.event_allowed_visibility, vis]
+                                : entForm.event_allowed_visibility.filter(x => x !== vis);
+                              setEntForm({ ...entForm, event_allowed_visibility: list });
+                            }}
+                          />
+                          {vis.replace('_', ' ')}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: "12px" }}>
+                    <label style={{ fontWeight: "600" }}>Allowed Registration / Payment Modes</label>
+                    <div style={{ display: "flex", gap: "16px", marginTop: "6px" }}>
+                      {['free', 'cash', 'paid'].map(mode => (
+                        <label key={mode} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", textTransform: "capitalize", cursor: "pointer" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={entForm.event_allowed_registration_modes.includes(mode)} 
+                            onChange={e => {
+                              const list = e.target.checked 
+                                ? [...entForm.event_allowed_registration_modes, mode]
+                                : entForm.event_allowed_registration_modes.filter(x => x !== mode);
+                              setEntForm({ ...entForm, event_allowed_registration_modes: list });
+                            }}
+                          />
+                          {mode}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: "12px" }}>
+                    <label style={{ fontWeight: "600" }}>Ticket Check-in Options</label>
+                    <div style={{ display: "flex", gap: "16px", marginTop: "6px" }}>
+                      {['scanner', 'manual', 'gate'].map(method => (
+                        <label key={method} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", textTransform: "capitalize", cursor: "pointer" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={entForm.event_checkin_methods.includes(method)} 
+                            onChange={e => {
+                              const list = e.target.checked 
+                                ? [...entForm.event_checkin_methods, method]
+                                : entForm.event_checkin_methods.filter(x => x !== method);
+                              setEntForm({ ...entForm, event_checkin_methods: list });
+                            }}
+                          />
+                          {method}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+                    <input 
+                      type="checkbox" 
+                      checked={entForm.event_can_create_paid_tickets} 
+                      onChange={e => setEntForm({ ...entForm, event_can_create_paid_tickets: e.target.checked })} 
+                    />
+                    Allow Paid Ticket Creations
+                  </label>
+                </div>
+
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-sm btn-sm-ghost" onClick={() => setEntitlementsOpen(false)}>Cancel</button>
+                <button type="submit" className="btn-sm btn-sm-primary">Save Entitlements</button>
               </div>
             </form>
           </div>
