@@ -653,6 +653,7 @@ const OrderReviewModal = ({ previewData, checkoutParams, onClose, st, go }) => {
             });
 
             go("checkout-success", {
+              orderId: localOrderId,
               order_number: confirmData.data.order_number,
               plan_name: confirmData.data.plan_name,
               billing_cycle: confirmData.data.billing_cycle,
@@ -713,6 +714,7 @@ const OrderReviewModal = ({ previewData, checkoutParams, onClose, st, go }) => {
             });
 
             go("checkout-success", {
+              orderId: localOrderId,
               order_number: confirmData.data.order_number,
               plan_name: confirmData.data.plan_name,
               billing_cycle: confirmData.data.billing_cycle,
@@ -881,7 +883,7 @@ const OrderReviewModal = ({ previewData, checkoutParams, onClose, st, go }) => {
    3. CHECKOUT SUCCESS PAGE
    ────────────────────────────────────────────────────────────── */
 window.CheckoutSuccessPage = function CheckoutSuccessPage({ param, go }) {
-  const { order_number, plan_name, billing_cycle, activated_at, next_billing_at, subscription_status, total } = param || {};
+  const { orderId, order_number, plan_name, billing_cycle, activated_at, next_billing_at, subscription_status, total } = param || {};
 
   const formatDate = (dateStr) => {
     if (!dateStr) return 'N/A';
@@ -936,6 +938,50 @@ window.CheckoutSuccessPage = function CheckoutSuccessPage({ param, go }) {
       </div>
 
       <div style={{ display:"flex", justifyContent:"center", gap: 16, marginTop: 32 }}>
+        {orderId && (
+          <button 
+            className="btn" 
+            style={{ 
+              padding: "12px 24px", 
+              borderRadius: 8,
+              background: 'var(--primary)', 
+              color: '#fff', 
+              fontWeight: 600,
+              border: 'none',
+              boxShadow: '0 4px 12px rgba(109, 94, 252, 0.25)',
+              cursor: 'pointer',
+              minWidth: 160
+            }} 
+            onClick={async () => {
+              try {
+                const apiBase = window.location.port === "8080" ? "http://localhost:3000" : window.location.origin;
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${apiBase}/api/subscription/orders/${orderId}/invoice`, {
+                  headers: {
+                    ...(token ? { "Authorization": `Bearer ${token}` } : {})
+                  }
+                });
+                if (!response.ok) {
+                  throw new Error('Failed to download invoice');
+                }
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Invoice-${order_number || 'order'}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+              } catch (err) {
+                console.error(err);
+                alert("Error downloading invoice. Please try again.");
+              }
+            }}
+          >
+            Download Invoice
+          </button>
+        )}
         <button 
           className="btn" 
           style={{ 
