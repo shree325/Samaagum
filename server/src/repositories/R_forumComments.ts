@@ -21,6 +21,7 @@ export class R_forumComments extends PostgresBaseRepository<IForumComment> imple
   }
 
   async getRecursiveComments(postId: string, userId: string | null): Promise<any[]> {
+    const safeUserId = userId || '00000000-0000-0000-0000-000000000000';
     return await prisma.$queryRawUnsafe(`
         WITH RECURSIVE comment_tree AS (
             SELECT fc.id, fc.post_id, fc.parent_id, fc.author_user_id, fc.body, fc.status,
@@ -45,7 +46,7 @@ export class R_forumComments extends PostgresBaseRepository<IForumComment> imple
                  ct.deleted_at, ct.created_at, ct.updated_at, ct.depth,
                  u.first_name, u.last_name, u.primary_email
         ORDER BY ct.depth ASC, ct.created_at ASC
-    `, postId, userId);
+    `, postId, safeUserId);
   }
 
   async updateCommentRaw(commentId: string, body: string): Promise<void> {

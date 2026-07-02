@@ -250,7 +250,9 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
             y: Math.max(10, Math.min(90, (90 - Number(c.latitude)) / 180 * 100)),
             info: `${c.state_name || ''}, ${c.country_name || ''}`.replace(/^,\s*/, ''),
             lat: Number(c.latitude),
-            lon: Number(c.longitude)
+            lon: Number(c.longitude),
+            state: c.state_name,
+            country: c.country_name
           })));
         }
       });
@@ -259,7 +261,7 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
 
   React.useEffect(() => {
     if (tempCity && dynamicCities.length > 0) {
-      const isActive = dynamicCities.some(c => c.name.toLowerCase() === tempCity.toLowerCase());
+      const isActive = dynamicCities.some(c => (c.name || "").toLowerCase() === (tempCity || "").toLowerCase());
       setIsCityActive(isActive);
     } else {
       setIsCityActive(true); // default true while loading or if not checked yet
@@ -428,7 +430,7 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
     if (!searchQuery.trim()) return;
 
     // Match local cities first
-    const match = dynamicCities.find(c => c.name.toLowerCase() === searchQuery.trim().toLowerCase());
+    const match = dynamicCities.find(c => (c.name || "").toLowerCase() === searchQuery.trim().toLowerCase());
     if (match) {
       setTempCity(match.name);
       setCustomLocationName(match.info);
@@ -444,7 +446,7 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
         const filteredData = data.filter((item: any) => {
           const locationName = (item.name || item.display_name.split(',')[0]).toLowerCase().trim();
           return dynamicCities.some(dc => {
-            const dcName = dc.name.toLowerCase();
+            const dcName = (dc.name || "").toLowerCase();
             return locationName === dcName || 
                    locationName === dcName + " city" || 
                    dcName === locationName + " city";
@@ -475,7 +477,7 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
     }
   };
 
-  const filtered = dynamicCities.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filtered = dynamicCities.filter(c => (c.name || "").toLowerCase().includes((searchQuery || "").toLowerCase())).slice(0, 50);
 
   if (!open) return null;
 
@@ -564,9 +566,9 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
 
               {/* Local Predefined Cities */}
               {filtered.length > 0 && <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-3)", padding: "4px 8px" }}>Popular Cities</div>}
-              {filtered.map(c => (
+              {filtered.map((c, idx) => (
                 <button
-                  key={c.name}
+                  key={`${c.name}-${c.state}-${c.country}-${idx}`}
                   type="button"
                   onClick={() => {
                     setTempCity(c.name);
@@ -720,7 +722,7 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
             style={{ opacity: !isCityActive ? 0.5 : 1, cursor: !isCityActive ? "not-allowed" : "pointer" }}
             onClick={() => {
               if (tempCity && isCityActive) {
-                onSelectCity(tempCity);
+                onSelectCity(tempCity, activeCityObj);
               }
               onClose();
             }}
@@ -2770,7 +2772,9 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
   const [locationType, setLocationType] = useState(savedDraft.locationType || "");
   const [venueName, setVenueName] = useState(savedDraft.venueName || "");
   const [address, setAddress] = useState(savedDraft.address || "");
-  const [city, setCity] = useState(savedDraft.city || "");
+  const [city, setCity] = useState(isEdit ? (editGroup.settings?.location?.city || editGroup.settings?.city || "") : (savedDraft.city || ""));
+  const [locationState, setLocationState] = useState(isEdit ? (editGroup.settings?.location?.state || "") : (savedDraft.locationState || ""));
+  const [locationCountry, setLocationCountry] = useState(isEdit ? (editGroup.settings?.location?.country || "") : (savedDraft.locationCountry || ""));
   const [platform, setPlatform] = useState(savedDraft.platform || "zoom");
   const [meetingLink, setMeetingLink] = useState(savedDraft.meetingLink || "");
 
@@ -2919,15 +2923,21 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
       name, icon, cover, banner, cat, desc, visibility, joinElig,
       limitCap, maxCap, waitlist, questionnaire, questions, forums, threadPerm, replyPerm, gallery,
       galleryAllow, galleryImageOnly, galleryVideoOnly, galleryApprove,
-      locationType, venueName, address, city, platform, meetingLink,
+      locationType, venueName, address, city, locationState, locationCountry, platform, meetingLink,
       selectedAccess, visibilityAccess, approval
     }));
-  }, [name, icon, cover, banner, cat, desc, visibility, joinElig, limitCap, maxCap, waitlist, questionnaire, questions, forums, threadPerm, replyPerm, gallery, galleryAllow, galleryImageOnly, galleryVideoOnly, galleryApprove, locationType, venueName, address, city, platform, meetingLink, selectedAccess, visibilityAccess, approval]);
+  }, [name, icon, cover, banner, cat, desc, visibility, joinElig, limitCap, maxCap, waitlist, questionnaire, questions, forums, threadPerm, replyPerm, gallery, galleryAllow, galleryImageOnly, galleryVideoOnly, galleryApprove, locationType, venueName, address, city, locationState, locationCountry, platform, meetingLink, selectedAccess, visibilityAccess, approval]);
 
   const [loading, setLoading] = useState(false);
 
 
   const handleCreateGroup = async (isDraftSubmit = false) => {
+    if (!isDraftSubmit && !city) {
+      if (window.toast) window.toast("Please select a location for the group.", "error");
+      else alert("Please select a location for the group.");
+      return;
+    }
+
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
@@ -2944,11 +2954,12 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
         settings: {
           isDraft: isDraftSubmit,
           joinElig: joinElig === "communities" ? "restricted" : joinElig,
+          location: { city, state: locationState, country: locationCountry },
           restrictedAccess: {
             join: selectedAccess,
             visibility: visibilityAccess
           },
-          capacity: { limit: limitCap, max: maxCap ? parseInt(maxCap) : 0, waitlist },
+          capacity: { limit: limitCap, max: Number(maxCap) || null, waitlist },
           questionnaires: questionnaire ? questions : [],
           forums: { enabled: forums, threadPerm, replyPerm },
           gallery: { enabled: gallery, allow: galleryAllow, imageOnly: galleryImageOnly, videoOnly: galleryVideoOnly, approve: galleryApprove }
@@ -3155,7 +3166,7 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
     name: name || "Your group name", icon, cover, banner, cat,
     location: city ? `${city}, India` : "Location TBD",
     desc: desc || "A short description of what your community is about and who it's for.",
-    members: 1, online: 1, memberNames: [{ name: ME.name, role: "owner" }], owner: ME.name,
+    members: 1, online: 0, memberNames: [{ name: ME.name, role: "owner" }], owner: ME.name,
     visibility,
     joinMode: joinElig === "invite" ? "invite" : "approval"
   };
@@ -3164,7 +3175,13 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
     <div className={`create ${mobile ? "single" : ""}`}>
       {/* Modals placed outside layout structure */}
       
-      <LocationModal open={locationModalOpen} onClose={() => setLocationModalOpen(false)} selectedCity={city} onSelectCity={setCity} />
+      <LocationModal open={locationModalOpen} onClose={() => setLocationModalOpen(false)} selectedCity={city} onSelectCity={(selected, obj) => {
+        setCity(selected);
+        if (obj) {
+          setLocationState(obj.state);
+          setLocationCountry(obj.country);
+        }
+      }} />
       <AccessControlModal
         open={accessModal}
         onClose={() => setAccessModal(false)}

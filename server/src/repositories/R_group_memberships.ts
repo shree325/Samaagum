@@ -56,6 +56,30 @@ export class R_group_memberships extends PostgresBaseRepository<IGroupMembership
     });
   }
 
+  async getOnlineCounts(groupIds: string[]): Promise<any[]> {
+    if (groupIds.length === 0) return [];
+    return await prisma.$queryRawUnsafe<any[]>(`
+      SELECT gm.group_id, count(p.user_id)::int as count
+      FROM group_memberships gm
+      JOIN presences p ON p.user_id = gm.user_id
+      WHERE gm.group_id IN (${groupIds.map((_, i) => `$${i + 1}::uuid`).join(', ')})
+        AND p.active_connections > 0
+        AND gm.state = 'active'
+      GROUP BY gm.group_id
+    `, ...groupIds);
+  }
+
+  async getOnlineCountsAll(): Promise<any[]> {
+    return await prisma.$queryRawUnsafe<any[]>(`
+      SELECT gm.group_id, count(p.user_id)::int as count
+      FROM group_memberships gm
+      JOIN presences p ON p.user_id = gm.user_id
+      WHERE p.active_connections > 0
+        AND gm.state = 'active'
+      GROUP BY gm.group_id
+    `);
+  }
+
   async deleteMembership(groupId: string, userId: string): Promise<boolean> {
     try {
       await prisma.group_memberships.deleteMany({

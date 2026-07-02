@@ -140,7 +140,8 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                     }
                 } catch (err) {}
             }
-            const data = await GroupService.listGroups(userPayload);
+            const cityQuery = request.query.city;
+            const data = await GroupService.listGroups(userPayload, cityQuery);
             return { success: true, data };
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });
@@ -322,19 +323,6 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
         } catch (e: any) {
             if (e.message.includes('Group not found')) return reply.status(404).send({ success: false, message: e.message });
             if (e.message.includes('owners can unarchive')) return reply.status(403).send({ success: false, message: e.message });
-            return reply.status(500).send({ success: false, message: e.message });
-        }
-    });
-
-    // GET /:id/dashboard-stats
-    fastify.get('/:id/dashboard-stats', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
-        try {
-            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
-            const { id } = request.params as any;
-            const data = await GroupService.getDashboardStats(id, request.user.id);
-            return { success: true, data };
-        } catch (e: any) {
-            if (e.message.includes('Forbidden')) return reply.status(403).send({ success: false, message: e.message });
             return reply.status(500).send({ success: false, message: e.message });
         }
     });
@@ -601,6 +589,19 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
         }
     });
 
+    // GET /:id/dashboard-stats
+    fastify.get('/:id/dashboard-stats', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+            const data = await GroupService.getDashboardStats(id, request.user);
+            return { success: true, data };
+        } catch (e: any) {
+            if (e.message.includes('Forbidden')) return reply.status(403).send({ success: false, message: e.message });
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
     // GET /:id/forum-members
     fastify.get('/:id/forum-members', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
         try {
@@ -640,15 +641,17 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
         }
     });
 
-    // GET /:id/gallery
+    // GET /:id/gallery — public groups allow unauthenticated/non-member read
     fastify.get('/:id/gallery', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
         try {
-            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
             const { id } = request.params as any;
-            const isAdmin = await GroupService.verifyGroupAdmin(request.user.id, id);
+            const isAdmin = request.user ? await GroupService.verifyGroupAdmin(request.user.id, id) : false;
             const data = await GroupService.getGroupGallery(id, request.user, isAdmin);
-            return reply.send({ success: true, data });
+            return reply.send({ success: true, data, callerIsAdmin: isAdmin });
         } catch (e: any) {
+            if (e.message?.includes('members only') || e.message?.includes('not a member')) {
+                return reply.status(403).send({ success: false, message: e.message });
+            }
             return reply.status(500).send({ success: false, message: e.message });
         }
     });

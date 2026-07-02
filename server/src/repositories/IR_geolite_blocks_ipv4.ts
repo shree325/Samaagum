@@ -31,4 +31,8 @@ export interface IR_geolite_blocks_ipv4
     findByNetwork(
         network: string
     ): Promise<IGeoliteBlockIPv4 | null>;
+
+    findByIp(
+        ip: string
+    ): Promise<IGeoliteBlockIPv4 | null>;
 }

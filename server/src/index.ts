@@ -29,6 +29,7 @@ import { messagingTestRoutes } from './controllers/messagingTestRoutes';
 import { messagingRoutes } from './controllers/messagingRoutes';
 import { connectionRoutes } from './controllers/connectionRoutes';
 import { groupRoutes } from './controllers/groupRoutes';
+import { publicRoutes } from './controllers/publicRoutes';
 
 
 dotenv.config();
@@ -50,7 +51,7 @@ prisma.admin_roles.count()
         console.error('❌ Error during auto-seeding:', err.message || err);
     });
 
-const fastify = Fastify({ logger: true });
+const fastify = Fastify({ logger: true, trustProxy: true });
 const PORT = Number(process.env.PORT) || 3001;
 
 // Register CORS
@@ -129,7 +130,6 @@ fastify.register(adminGeoRoutes, { prefix: '/api/admin' });
 
 fastify.register(userSubscriptionRoutes, { prefix: '/api/subscription' });
 fastify.register(uploadRoutes, { prefix: '/api' });
-import { publicRoutes } from './controllers/publicRoutes';
 fastify.register(publicRoutes, { prefix: '/api/public' });
 fastify.register(messagingTestRoutes, { prefix: '/api/test' });
 fastify.register(messagingRoutes, { prefix: '/api/messaging' });

@@ -21,6 +21,7 @@ export class R_forumPosts extends PostgresBaseRepository<IForumPost> implements 
   }
 
   async getGroupPostsRaw(groupId: string, userId: string | null, limit: number, skip: number, orderBy: string, whereExtra: string, queryParams: any[]): Promise<any[]> {
+    const safeUserId = userId || '00000000-0000-0000-0000-000000000000';
     return await prisma.$queryRawUnsafe(`
         SELECT
             fp.id, fp.title, fp.body, fp.pinned, fp.locked, fp.solved, fp.archived,
@@ -38,7 +39,7 @@ export class R_forumPosts extends PostgresBaseRepository<IForumPost> implements 
         GROUP BY fp.id, u.first_name, u.last_name, u.primary_email
         ORDER BY ${orderBy}
         LIMIT $3 OFFSET $4
-    `, groupId, userId, limit, skip, ...queryParams);
+    `, groupId, safeUserId, limit, skip, ...queryParams);
   }
 
   async getReactionCounts(postIds: string[]): Promise<any[]> {
@@ -68,6 +69,7 @@ export class R_forumPosts extends PostgresBaseRepository<IForumPost> implements 
   }
 
   async getPostWithAuthorAndVotes(postId: string, userId: string | null, groupId: string): Promise<any> {
+    const safeUserId = userId || '00000000-0000-0000-0000-000000000000';
     const postRows: any[] = await prisma.$queryRawUnsafe(`
         SELECT fp.*, u.first_name, u.last_name, u.primary_email,
             COALESCE(SUM(fv.vote), 0)::int AS vote_score,
@@ -77,7 +79,7 @@ export class R_forumPosts extends PostgresBaseRepository<IForumPost> implements 
         LEFT JOIN forum_votes fv ON fv.target_id = fp.id AND fv.target_type = 'post'
         WHERE fp.id = $1::uuid AND fp.scope_type = 'group' AND fp.scope_id = $3::uuid AND fp.deleted_at IS NULL
         GROUP BY fp.id, u.first_name, u.last_name, u.primary_email
-    `, postId, userId, groupId);
+    `, postId, safeUserId, groupId);
     return postRows[0] || null;
   }
 
