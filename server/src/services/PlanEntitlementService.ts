@@ -20,9 +20,158 @@ export class PlanEntitlementService {
   }
 
   /**
+   * Automatically detects and transitions expired subscriptions to default/free plan.
+   */
+  static async processExpirations(userId: string): Promise<void> {
+    try {
+      const userEntity = await prisma.entities.findFirst({
+        where: { user_id: userId, entity_type: 'user' }
+      });
+      if (!userEntity) return;
+
+      // Find any active subscriptions that have expired (valid_to is in the past)
+      const expiredSubs = await prisma.subscriptions.findMany({
+        where: {
+          owner_entity_id: userEntity.id,
+          state: 'active',
+          valid_to: { lte: new Date() }
+        },
+        include: {
+          plans: true
+        }
+      });
+
+      if (expiredSubs.length === 0) return;
+
+      console.log(`[PlanEntitlementService] Found ${expiredSubs.length} expired subscriptions for user ${userId}. Processing downgrade...`);
+
+      // 1. Mark subscriptions as expired
+      await prisma.subscriptions.updateMany({
+        where: {
+          id: { in: expiredSubs.map(s => s.id) }
+        },
+        data: {
+          state: 'expired',
+          updated_at: new Date()
+        }
+      });
+
+      // 2. Mark corresponding completed subscription orders as expired
+      const planIds = expiredSubs.map(s => s.plans.id);
+      const plans = await prisma.plans.findMany({
+        where: { id: { in: planIds } },
+        select: { key: true }
+      });
+      const planKeys = plans.map(p => p.key);
+
+      const adminPlans = await prisma.admin_subscription_plans.findMany({
+        where: { name: { in: planKeys } },
+        select: { id: true }
+      });
+      const adminPlanIds = adminPlans.map(ap => ap.id);
+
+      await prisma.subscription_orders.updateMany({
+        where: {
+          user_id: userId,
+          plan_id: { in: adminPlanIds },
+          status: 'completed',
+          subscription_status: 'active'
+        },
+        data: {
+          subscription_status: 'expired',
+          updated_at: new Date()
+        }
+      });
+
+      // 3. Find default/free plan configuration
+      const defaultAdminPlan = await prisma.admin_subscription_plans.findFirst({
+        where: { is_default: true, is_active: true }
+      }) || await prisma.admin_subscription_plans.findFirst({
+        where: { name: 'free', is_active: true }
+      });
+
+      if (!defaultAdminPlan) {
+        console.error(`[PlanEntitlementService] No default plan found during expiration cleanup!`);
+        return;
+      }
+
+      // 4. Assign default plan role/entitlements
+      let defaultRoleId: string | null = null;
+      if (defaultAdminPlan.rbac_auto_assign && defaultAdminPlan.rbac_role_id) {
+        const adminRole = await prisma.admin_roles.findUnique({
+          where: { id: defaultAdminPlan.rbac_role_id }
+        });
+        if (adminRole) {
+          const roleRecord = await prisma.roles.findUnique({
+            where: { key: adminRole.name }
+          });
+          if (roleRecord) {
+            defaultRoleId = roleRecord.id;
+          }
+        }
+      }
+
+      if (!defaultRoleId) {
+        // Fallback to free_user role
+        const fallbackRole = await prisma.roles.findFirst({
+          where: { key: 'free_user' }
+        }) || await prisma.roles.findFirst({
+          where: { key: 'member' }
+        });
+        if (fallbackRole) {
+          defaultRoleId = fallbackRole.id;
+        }
+      }
+
+      if (defaultRoleId) {
+        // Remove old platform role assignments
+        await prisma.$executeRawUnsafe(
+          `DELETE FROM role_assignments WHERE user_id = $1::uuid AND scope_entity_id IS NULL`,
+          userId
+        );
+
+        // Assign the default role
+        const tenantId = userEntity.tenant_id || '00000000-0000-0000-0000-000000000000';
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO role_assignments (id, tenant_id, user_id, role_id, created_at, updated_at)
+           VALUES (gen_random_uuid(), $1::uuid, $2::uuid, $3::uuid, now(), now())`,
+          tenantId,
+          userId,
+          defaultRoleId
+        );
+        console.log(`[PlanEntitlementService] User ${userId} successfully transitioned to default role: ${defaultRoleId}`);
+      }
+
+      // 5. Invalidate client-side & server-side cache
+      this.invalidate(userId);
+
+      // 6. Broadcast real-time socket events for entitlements.updated and subscription.activated
+      try {
+        const { sendNotificationToUser } = require('./messagingSocket');
+        sendNotificationToUser(userId, 'entitlements.updated', {
+          planName: defaultAdminPlan.display_name,
+          entitlements: defaultAdminPlan.limits || defaultAdminPlan.features || {}
+        });
+        sendNotificationToUser(userId, 'subscription.activated', {
+          status: 'expired',
+          planName: defaultAdminPlan.display_name
+        });
+      } catch (err) {
+        console.error(`[PlanEntitlementService] Failed to send real-time socket events for subscription expiration:`, err);
+      }
+
+    } catch (e) {
+      console.error(`[PlanEntitlementService] Error processing expirations for user ${userId}:`, e);
+    }
+  }
+
+  /**
    * Fetches active plan entitlements for the given user, with a local cache.
    */
   static async getEntitlements(userId: string): Promise<PlanEntitlements> {
+    // Process expirations dynamically in real-time
+    await this.processExpirations(userId);
+
     const now = Date.now();
     const cached = cache.get(userId);
     if (cached && cached.expiresAt > now) {
@@ -106,6 +255,9 @@ export class PlanEntitlementService {
    * Checks if user has standard plan (active plan that is not free/fallback)
    */
   static async getUserPlan(userId: string): Promise<string> {
+    // Process expirations dynamically in real-time
+    await this.processExpirations(userId);
+
     try {
       const userEntity = await prisma.entities.findFirst({
         where: { user_id: userId, entity_type: 'user' }
