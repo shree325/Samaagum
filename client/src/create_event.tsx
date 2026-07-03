@@ -2,7 +2,7 @@ const { useState, useRef, useEffect, useCallback, useMemo } = React;
 
 // Reuse existing components and utilities from the project
 // Assuming I, Grain, EventCard, LocationSection, COVERS, GROUPS, ME, etc. are globally available via the app bundle or global namespace.
-const { COVERS, GROUPS, ME, EventCard, Grain } = window as any;
+const { COVERS, GROUPS, ME, EventCard, Grain, Avatar } = window as any;
 
 const COVER_SWATCHES = Object.entries(COVERS).map(([k, v]) => ({ k, v: v as string }));
 
@@ -1622,7 +1622,7 @@ function LocationSection({ venue, setVenue, locType, setLocType }) {
 }
 
 /* ---------------- Create Event ---------------- */
-function CreateEvent({ go, mobile, st, editEv }: any) {
+function CreateEvent({ go, mobile, st, editEv, hostGroupId, hostGroupName }: any) {
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
@@ -1630,7 +1630,8 @@ function CreateEvent({ go, mobile, st, editEv }: any) {
   const savedDraft = JSON.parse(localStorage.getItem(draftKey) || "{}");
   // Resuming an in-progress draft (e.g. Preview -> Back) restores every field below via `draft`.
   const draft = (editEv && editEv.__draft) || null;
-  const [hostEntityId, setHostEntityId] = useState(draft?.hostEntityId || savedDraft.hostEntityId || "standalone");
+  const [hostEntityId, setHostEntityId] = useState(draft?.hostEntityId || savedDraft.hostEntityId || hostGroupId || "standalone");
+  const [hostGroups, setHostGroups] = useState([] as any[]);
   const [dbGroups, setDbGroups] = useState([] as any[]);
   const [accessTreeUpdated, setAccessTreeUpdated] = useState(0);
 
@@ -1638,6 +1639,14 @@ function CreateEvent({ go, mobile, st, editEv }: any) {
     const fetchGroups = async () => {
       try {
         const token = localStorage.getItem('token');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {} as any;
+
+        // Fetch groups user can host events under
+        fetch(`${apiBase}/api/groups/mine/as-host`, { headers })
+          .then(r => r.json())
+          .then(d => { if (d.success) setHostGroups(d.data); })
+          .catch(console.error);
+
         const res = await fetch(`${apiBase}/api/groups`, {
           headers: token ? { 'Authorization': `Bearer ${token}` } : {}
         });
@@ -1659,9 +1668,9 @@ function CreateEvent({ go, mobile, st, editEv }: any) {
   }, []);
 
   const [title, setTitle] = useState(draft?.title ?? editEv?.title ?? "");
-  const [slug, setSlug] = useState(draft?.slug ?? editEv?.venue?.meta?.slug ?? "");
-  const [cover, setCover] = useState(draft?.cover ?? editEv?.cover ?? editEv?.venue?.meta?.cover ?? "");
-  const [visibility, setVisibility] = useState(draft?.visibility ?? editEv?.venue?.visibility ?? "public");
+  const [slug, setSlug] = useState(draft?.slug ?? editEv?.venue_raw?.meta?.slug ?? editEv?.venue?.meta?.slug ?? "");
+  const [cover, setCover] = useState(draft?.cover ?? editEv?.cover ?? editEv?.venue_raw?.meta?.cover ?? editEv?.venue?.meta?.cover ?? "");
+  const [visibility, setVisibility] = useState(draft?.visibility ?? editEv?.venue_raw?.visibility ?? editEv?.venue?.visibility ?? "public");
   const [calendar, setCalendar] = useState(draft?.calendar ?? "Main Calendar");
   const initDT = useMemo(() => {
     const now = new Date();
@@ -1695,18 +1704,22 @@ function CreateEvent({ go, mobile, st, editEv }: any) {
 
   const startsAt = editEv?.starts_at ? new Date(editEv.starts_at) : null;
   const endsAt = editEv?.ends_at ? new Date(editEv.ends_at) : null;
-  const editStartDate = startsAt ? startsAt.toISOString().split('T')[0] : "";
-  const editStartTime = startsAt ? startsAt.toTimeString().split(' ')[0].substring(0, 5) : "";
-  const editEndDate = endsAt ? endsAt.toISOString().split('T')[0] : "";
-  const editEndTime = endsAt ? endsAt.toTimeString().split(' ')[0].substring(0, 5) : "";
+  
+  // Extract local date and time to avoid UTC shifts
+  const editStartDate = startsAt ? `${startsAt.getFullYear()}-${String(startsAt.getMonth() + 1).padStart(2, '0')}-${String(startsAt.getDate()).padStart(2, '0')}` : "";
+  const editStartTime = startsAt ? `${String(startsAt.getHours()).padStart(2, '0')}:${String(startsAt.getMinutes()).padStart(2, '0')}` : "";
+  const editEndDate = endsAt ? `${endsAt.getFullYear()}-${String(endsAt.getMonth() + 1).padStart(2, '0')}-${String(endsAt.getDate()).padStart(2, '0')}` : "";
+  const editEndTime = endsAt ? `${String(endsAt.getHours()).padStart(2, '0')}:${String(endsAt.getMinutes()).padStart(2, '0')}` : "";
 
-  const [startDate, setStartDate] = useState(draft?.startDate ?? savedDraft.startDate ?? editStartDate ?? initDT.currentDate);
-  const [startTime, setStartTime] = useState(draft?.startTime ?? savedDraft.startTime ?? editStartTime ?? initDT.currentTime);
-  const [endDate, setEndDate] = useState(draft?.endDate ?? savedDraft.endDate ?? editEndDate ?? initDT.endDateStr);
-  const [endTime, setEndTime] = useState(draft?.endTime ?? savedDraft.endTime ?? editEndTime ?? initDT.currentEndTime);
+  const [startDate, setStartDate] = useState(draft?.startDate ?? (editEv ? editStartDate : savedDraft.startDate) ?? initDT.currentDate);
+  const [startTime, setStartTime] = useState(draft?.startTime ?? (editEv ? editStartTime : savedDraft.startTime) ?? initDT.currentTime);
+  const [endDate, setEndDate] = useState(draft?.endDate ?? (editEv ? editEndDate : savedDraft.endDate) ?? initDT.endDateStr);
+  const [endTime, setEndTime] = useState(draft?.endTime ?? (editEv ? editEndTime : savedDraft.endTime) ?? initDT.currentEndTime);
 
-  // Enforce dates/times are not in the past
+  // Enforce dates/times are not in the past (only for new events, not when editing)
   useEffect(() => {
+    if (editEv?.id && editEv.id !== 'new') return; // Skip past enforcement when editing existing events
+
     const now = new Date();
     
     // Format YYYY-MM-DD
@@ -1770,16 +1783,16 @@ function CreateEvent({ go, mobile, st, editEv }: any) {
         }
       }
     }
-  }, [startDate, startTime, endDate, endTime]);
+  }, [startDate, startTime, endDate, endTime, editEv]);
 
   const [timezone, setTimezone] = useState(draft?.timezone ?? editEv?.venue_timezone ?? "UTC +05:30 India");
   const [locType, setLocType] = useState(draft?.locType ?? (editEv?.location_type === 'online' ? 'online' : 'physical'));
-  const [venue, setVenue] = useState(draft?.venue ?? editEv?.venue?.name ?? editEv?.venue?.address ?? "");
-  const [desc, setDesc] = useState(draft?.desc ?? editEv?.description ?? "");
+  const [venue, setVenue] = useState(draft?.venue ?? (editEv?.location_type === 'online' ? editEv?.online_link : (editEv?.venue_raw?.name ?? editEv?.venue_raw?.address ?? editEv?.venue?.name ?? editEv?.venue?.address ?? "")));
+  const [desc, setDesc] = useState(draft?.desc ?? editEv?.description ?? editEv?.desc ?? "");
   const [tzModalOpen, setTzModalOpen] = useState(false);
   const [tzSearchQuery, setTzSearchQuery] = useState("");
 
-  const [type, setType] = useState(draft?.type ?? (editEv?.registration_mode === 'free_rsvp' ? 'free' : (editEv?.registration_mode || 'paid')));
+  const [type, setType] = useState(draft?.type ?? ((editEv?.registration_mode === 'free_rsvp' || editEv?.registration_mode === 'free') ? 'free' : 'paid'));
   const [approval, setApproval] = useState(draft?.approval ?? editEv?.approval_required ?? false);
   const [capacityEnabled, setCapacityEnabled] = useState(draft?.capacityEnabled ?? !!editEv?.capacity_total);
   const [capacity, setCapacity] = useState(draft?.capacity ?? editEv?.capacity_total ?? "");
@@ -1790,23 +1803,23 @@ function CreateEvent({ go, mobile, st, editEv }: any) {
     : [{ n: "Early Bird", cap: "50", price: "499" }];
   const [tickets, setTickets] = useState(draft?.tickets ?? initialTickets);
 
-  const [tags, setTags] = useState(draft?.tags ?? editEv?.venue?.meta?.tags ?? ["Startup", "Technology"]);
+  const [tags, setTags] = useState(draft?.tags ?? editEv?.venue_raw?.meta?.tags ?? editEv?.venue?.meta?.tags ?? ["Startup", "Technology"]);
   const [tagInput, setTagInput] = useState("");
 
-  const [cat, setCat] = useState(draft?.cat ?? editEv?.venue?.meta?.category ?? "Startups");
+  const [cat, setCat] = useState(draft?.cat ?? editEv?.venue_raw?.meta?.category ?? editEv?.venue?.meta?.category ?? "Startups");
   const [seoExpanded, setSeoExpanded] = useState(false);
   const [calModalOpen, setCalModalOpen] = useState(false);
   const [descModalOpen, setDescModalOpen] = useState(false);
-  const [instructions, setInstructions] = useState(draft?.instructions ?? editEv?.venue?.meta?.instructions ?? "");
+  const [instructions, setInstructions] = useState(draft?.instructions ?? editEv?.venue_raw?.meta?.instructions ?? editEv?.venue?.meta?.instructions ?? editEv?.instructions ?? editEv?.instructions ?? "");
   const [instModalOpen, setInstModalOpen] = useState(false);
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [aiInstModalOpen, setAiInstModalOpen] = useState(false);
   const [capacityModalOpen, setCapacityModalOpen] = useState(false);
   const [questModalOpen, setQuestModalOpen] = useState(false);
   const [ticketModalOpen, setTicketModalOpen] = useState(false);
-  const [joinEligibility, setJoinEligibility] = useState(draft?.joinEligibility ?? editEv?.venue?.meta?.joinEligibility ?? "public");
+  const [joinEligibility, setJoinEligibility] = useState(draft?.joinEligibility ?? editEv?.venue_raw?.meta?.joinEligibility ?? editEv?.venue?.meta?.joinEligibility ?? "public");
   const [accessModalOpen, setAccessModalOpen] = useState(false);
-  const [selectedAccess, setSelectedAccess] = useState(draft?.selectedAccess ?? editEv?.venue?.meta?.selectedAccess ?? {
+  const [selectedAccess, setSelectedAccess] = useState(draft?.selectedAccess ?? editEv?.venue_raw?.meta?.selectedAccess ?? editEv?.venue?.meta?.selectedAccess ?? {
     restricted: {
       communities: [],
       subCommunities: [],
@@ -1814,6 +1827,7 @@ function CreateEvent({ go, mobile, st, editEv }: any) {
     },
     selectedMembers: []
   });
+
 
   // --- REGISTRATION FORM BUILDER STATES (Phase 3 Schema) ---
   const [enableRegForm, setEnableRegForm] = useState(draft?.enableRegForm ?? editEv?.venue?.meta?.enableRegForm ?? false);
@@ -2637,6 +2651,95 @@ function CreateEvent({ go, mobile, st, editEv }: any) {
           <div className="create-container">
             {/* Left Side: Form */}
             <div className="form-section">
+              {/* Host Picker — only shown when user owns/admins at least one group */}
+              {hostGroups.length > 0 && (
+                <div className="form-group-section" style={{ marginBottom: 20, padding: 18, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)" }}>
+                  <div className="cfield" style={{ marginBottom: 0 }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}>
+                      <span style={{ fontSize: 15 }}>🏠</span> Host as
+                    </label>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                      {/* Standalone option */}
+                      <button
+                        type="button"
+                        onClick={() => setHostEntityId("standalone")}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 8,
+                          padding: "8px 14px", borderRadius: "var(--r-md)",
+                          border: hostEntityId === "standalone"
+                            ? "2px solid var(--accent-2)"
+                            : "1.5px solid var(--border)",
+                          background: hostEntityId === "standalone"
+                            ? "var(--accent-soft)" : "var(--surface)",
+                          cursor: "pointer", fontSize: 13, fontWeight: 500,
+                          transition: "all 0.15s"
+                        }}
+                      >
+                        <Avatar name={ME.name} size={24} />
+                        <div style={{ textAlign: "left" }}>
+                          <div style={{ fontWeight: 600 }}>{ME.name}</div>
+                          <div style={{ fontSize: 11, color: "var(--ink-3)" }}>Personal (standalone)</div>
+                        </div>
+                        {hostEntityId === "standalone" && (
+                          <span style={{ marginLeft: 4, color: "var(--accent-2)", fontSize: 14 }}>✓</span>
+                        )}
+                      </button>
+
+                      {/* Group options */}
+                      {hostGroups.map(grp => (
+                        <button
+                          key={grp.entity_id}
+                          type="button"
+                          onClick={() => setHostEntityId(grp.entity_id)}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 8,
+                            padding: "8px 14px", borderRadius: "var(--r-md)",
+                            border: hostEntityId === grp.entity_id
+                              ? "2px solid var(--accent-2)"
+                              : "1.5px solid var(--border)",
+                            background: hostEntityId === grp.entity_id
+                              ? "var(--accent-soft)" : "var(--surface)",
+                            cursor: "pointer", fontSize: 13, fontWeight: 500,
+                            transition: "all 0.15s"
+                          }}
+                        >
+                          <div style={{
+                            width: 24, height: 24, borderRadius: 6, overflow: "hidden",
+                            background: grp.cover || "var(--accent-2)",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: 13, color: "#fff", flexShrink: 0
+                          }}>
+                            {grp.icon || grp.name?.[0]?.toUpperCase()}
+                          </div>
+                          <div style={{ textAlign: "left" }}>
+                            <div style={{ fontWeight: 600 }}>{grp.name}</div>
+                            <div style={{ fontSize: 11, color: "var(--ink-3)" }}>
+                              {grp.role === 'owner' ? 'Owner' : 'Admin'} · Community
+                            </div>
+                          </div>
+                          {hostEntityId === grp.entity_id && (
+                            <span style={{ marginLeft: 4, color: "var(--accent-2)", fontSize: 14 }}>✓</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Current selection summary */}
+                    {hostEntityId !== "standalone" && (
+                      <div style={{
+                        marginTop: 8, fontSize: 12, color: "var(--ink-3)",
+                        display: "flex", alignItems: "center", gap: 4
+                      }}>
+                        <span>📢</span>
+                        This event will appear under{" "}
+                        <strong style={{ color: "var(--ink)" }}>
+                          {hostGroups.find(g => g.entity_id === hostEntityId)?.name}
+                        </strong>'s events tab.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Group 1: Basic Information */}
               <div className="form-group-section">

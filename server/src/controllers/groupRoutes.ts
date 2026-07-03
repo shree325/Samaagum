@@ -2,6 +2,8 @@ import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { GroupService } from '../services/GroupService';
 import { InvitationService } from '../services/InvitationService';
 import { GroupNotificationService } from '../services/GroupNotificationService';
+import prisma from '../config/prisma';
+
 
 export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
 
@@ -39,6 +41,60 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
             const data = await GroupService.getMyManagedGroups(request.user.id);
             return reply.send({ success: true, data });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // GET /mine/as-host — returns groups the user can host events under
+    fastify.get('/mine/as-host', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const userId = request.user.id;
+
+            // Fetch the role definitions for group_owner and group_admin
+            const rolesList = await prisma.roles.findMany({
+                where: { key: { in: ['group_owner', 'group_admin'] } }
+            });
+            const roleIds = rolesList.map(r => r.id);
+
+            // Fetch assignments for this user
+            const assignments = await prisma.role_assignments.findMany({
+                where: {
+                    user_id: userId,
+                    role_id: { in: roleIds }
+                }
+            });
+
+            const scopeEntityIds = assignments
+                .map(a => a.scope_entity_id)
+                .filter((id): id is string => id !== null);
+
+            if (scopeEntityIds.length === 0) {
+                return reply.send({ success: true, data: [] });
+            }
+
+            // Retrieve matching groups
+            const userGroups = await prisma.groups.findMany({
+                where: {
+                    entity_id: { in: scopeEntityIds }
+                }
+            });
+
+            const groups = userGroups.map(g => {
+                const assocAssignment = assignments.find(a => a.scope_entity_id === g.entity_id);
+                const assocRole = rolesList.find(r => r.id === assocAssignment?.role_id);
+                return {
+                    id: g.entity_id,
+                    entity_id: g.entity_id,
+                    name: g.name,
+                    icon: g.icon || null,
+                    cover: g.cover || null,
+                    role: assocRole?.key === 'group_owner' ? 'owner' : 'admin'
+                };
+            });
+
+            return reply.send({ success: true, data: groups });
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });
         }

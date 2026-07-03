@@ -816,7 +816,15 @@ function App() {
       }
       return <Messages st={st} go={go} mobile={mobile} socket={socket} />;
     }
-    if (v === "create-event") return <CreateEvent go={go} mobile={mobile} st={st} />;
+    if (v === "create-event") return (
+      <CreateEvent
+        go={go}
+        mobile={mobile}
+        st={st}
+        hostGroupId={cur.param?.hostGroupId}
+        hostGroupName={cur.param?.hostGroupName}
+      />
+    );
     if (v === "edit-event") return <CreateEvent editEv={cur.param} go={go} mobile={mobile} st={st} />;
     if (v === "create-group") return <CreateGroup go={go} mobile={mobile} st={st} />;
     if (v === "edit-group") return <CreateGroup mode="edit" editGroup={cur.param} go={go} mobile={mobile} st={st} />;

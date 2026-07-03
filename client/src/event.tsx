@@ -357,14 +357,17 @@ function EventPage({ ev, st, go }) {
   );
 
   // Tab State
-  const [tab, setTab] = useState("about"); // about | members | gallery | discussion | invite | registration | guests | settings
+  const [tab, setTab] = useState("about"); // about | members | gallery | discussion | invite | settings
+
+  const pendingCount = (hostStats?.requests || []).length;
+  const confirmedCount = (hostStats?.confirmed || attendees || []).length;
 
   const tabs = [
     ["about", "About"],
-    ["members", "Members"],
+    ["members", isMember ? `Members${pendingCount > 0 && (isOwner || isAdmin || isModerator) ? ` · 🔴${pendingCount}` : ""}` : "Members"],
     ...(canViewGallery ? [["gallery", "Gallery"]] : []),
     ...(discussionEnabled && isMember ? [["discussion", "Discussion"]] : []),
-    ...((isOwner || isAdmin || isModerator) ? [["invite", "Invite"], ["registration", "Registration"], ["guests", "Guests"]] : []),
+    ...((isOwner || isAdmin || isModerator) ? [["invite", "Invite"]] : []),
     ...((isOwner || isAdmin || isModerator) ? [["settings", "Advance setting"]] : [])
   ];
 
@@ -565,20 +568,148 @@ function EventPage({ ev, st, go }) {
                 </div>
               )}
 
-              {/* Tab 2: Members */}
-              {tab === "members" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Event Attendees</h3>
-                  <div className="att-grid">
-                    {attendees.map(n => (
-                      <div key={n} className="att" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
-                        <Avatar name={n} size={32} />
-                        <span className="nm" style={{ fontWeight: 600 }}>{n}</span>
+              {/* Tab 2: Members — consolidated (pending requests + confirmed list) */}
+              {tab === "members" && (() => {
+                const [memberSearch, setMemberSearch] = React.useState("");
+                const confirmedAttendees = hostStats?.confirmed || attendees || [];
+                const pendingRequests = hostStats?.requests || [];
+
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+                    {/* Pending join requests — host only */}
+                    {(isOwner || isAdmin || isModerator) && pendingRequests.length > 0 && (
+                      <div style={{ border: "1px solid rgba(245,158,11,0.3)", borderRadius: "var(--r-md)", background: "rgba(245,158,11,0.06)", overflow: "hidden" }}>
+                        <div style={{ padding: "14px 18px", borderBottom: "1px solid rgba(245,158,11,0.2)", display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#f59e0b", flexShrink: 0 }} />
+                          <span style={{ fontWeight: 700, fontSize: 14, color: "#92400e" }}>Pending Requests ({pendingRequests.length})</span>
+                          <span style={{ marginLeft: "auto", fontSize: 11, color: "#b45309" }}>Approve or decline below</span>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                          {pendingRequests.map((r, idx) => (
+                            <div key={r.id || r.bookingId} style={{
+                              padding: "14px 18px",
+                              borderBottom: idx < pendingRequests.length - 1 ? "1px solid rgba(245,158,11,0.15)" : "none",
+                              display: "flex", flexDirection: "column", gap: 8
+                            }}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
+                                  onClick={() => r.userId && go("profile", { id: r.userId })}>
+                                  <Avatar name={r.name || "User"} size={36} />
+                                  <div>
+                                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{r.name || "Unknown"}</div>
+                                    <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{r.email || ""}</div>
+                                  </div>
+                                </div>
+                                <div style={{ display: "flex", gap: 6 }}>
+                                  <button className="hbtn hbtn--soft hbtn--sm"
+                                    style={{ color: "#ef4444", padding: "4px 12px", fontSize: 12 }}
+                                    onClick={() => handleHostRequestAction(r.bookingId, 'decline')}>
+                                    Decline
+                                  </button>
+                                  <button className="hbtn hbtn--primary hbtn--sm"
+                                    style={{ padding: "4px 12px", fontSize: 12 }}
+                                    onClick={() => handleHostRequestAction(r.bookingId, 'accept')}>
+                                    Approve
+                                  </button>
+                                </div>
+                              </div>
+                              {/* Questionnaire answers */}
+                              {r.answers && Object.keys(r.answers).length > 0 && (
+                                <div style={{ marginLeft: 46, padding: "8px 12px", background: "rgba(0,0,0,0.04)", borderRadius: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+                                  {Object.entries(r.answers).map(([key, val]) => (
+                                    <div key={key} style={{ fontSize: 12 }}>
+                                      <span style={{ color: "var(--ink-3)", fontWeight: 500 }}>{key}: </span>
+                                      <span style={{ color: "var(--ink)" }}>{String(val)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    ))}
+                    )}
+
+                    {/* No pending + not host: show nothing special */}
+                    {(isOwner || isAdmin || isModerator) && pendingRequests.length === 0 && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "rgba(31,157,87,0.07)", border: "1px solid rgba(31,157,87,0.2)", borderRadius: "var(--r-md)" }}>
+                        <span style={{ fontSize: 16 }}>✅</span>
+                        <span style={{ fontSize: 13, color: "#166534", fontWeight: 500 }}>No pending join requests</span>
+                      </div>
+                    )}
+
+                    {/* Confirmed members */}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
+                          Members
+                          {confirmedAttendees.length > 0 && (
+                            <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: "var(--ink-3)", background: "var(--border)", padding: "2px 8px", borderRadius: 999 }}>
+                              {confirmedAttendees.length}
+                            </span>
+                          )}
+                        </h3>
+                        {confirmedAttendees.length > 4 && (
+                          <input
+                            className="cinput"
+                            placeholder="Search members…"
+                            value={memberSearch}
+                            onChange={ev => setMemberSearch(ev.target.value)}
+                            style={{ width: 170, fontSize: 12, background: "var(--field)", border: "1px solid var(--border)" }}
+                          />
+                        )}
+                      </div>
+                      {confirmedAttendees.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "36px 20px", color: "var(--ink-3)", border: "1px dashed var(--border)", borderRadius: "var(--r-md)" }}>
+                          No confirmed members yet.
+                        </div>
+                      ) : (
+                        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", overflow: "hidden" }}>
+                          {(typeof confirmedAttendees[0] === 'string'
+                            ? confirmedAttendees.filter(n => !memberSearch || n.toLowerCase().includes(memberSearch.toLowerCase()))
+                              .map((name, i, arr) => ({ name, id: null, email: null, _arr: arr, _i: i }))
+                            : confirmedAttendees.filter(a => !memberSearch || (a.name || "").toLowerCase().includes(memberSearch.toLowerCase()))
+                          ).map((a, i, arr) => {
+                            const name = typeof a === 'string' ? a : (a.name || "Member");
+                            const userId = a.userId || a.id || null;
+                            const email = a.email || "";
+                            const isLast = i === arr.length - 1;
+                            return (
+                              <div key={userId || name + i}
+                                style={{
+                                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                                  padding: "11px 16px",
+                                  borderBottom: isLast ? "none" : "1px solid var(--border)",
+                                  cursor: userId ? "pointer" : "default",
+                                  transition: "background 0.15s"
+                                }}
+                                onClick={() => userId && go("profile", { id: userId })}
+                                onMouseEnter={ev => { if (userId) ev.currentTarget.style.background = "var(--field)"; }}
+                                onMouseLeave={ev => { ev.currentTarget.style.background = ""; }}
+                              >
+                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                  <Avatar name={name} size={32} />
+                                  <div>
+                                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{name}</div>
+                                    {email && <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{email}</div>}
+                                  </div>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                  <span style={{ fontSize: 11, fontWeight: 600, color: "#1f9d57", background: "rgba(31,157,87,0.1)", padding: "3px 8px", borderRadius: 999 }}>
+                                    Attending
+                                  </span>
+                                  {userId && <I.chevronR style={{ width: 14, color: "var(--ink-3)" }} />}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Tab 3: Gallery */}
               {tab === "gallery" && (
@@ -748,118 +879,8 @@ function EventPage({ ev, st, go }) {
                 </div>
               )}
 
-              {/* Tab 5: Registration */}
-              {tab === "registration" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  {/* Host Section: Pending Approvals */}
-                  {(isOwner || isAdmin || isModerator) && hostStats && hostStats.requests && hostStats.requests.length > 0 && (
-                    <div style={{ border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: 18, background: "var(--surface)", marginBottom: 10 }}>
-                      <h4 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, display: "flex", gap: 6, alignItems: "center" }}>
-                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent-2)" }} />
-                        Pending Registrations ({hostStats.requests.length})
-                      </h4>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                        {hostStats.requests.map(r => (
-                          <div key={r.id} style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)" }}>
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <Avatar name={r.name} size={32} />
-                                <div style={{ display: "flex", flexDirection: "column" }}>
-                                  <span style={{ fontSize: 13, fontWeight: 600 }}>{r.name}</span>
-                                  <span style={{ fontSize: 11, color: "var(--ink-3)" }}>{r.email}</span>
-                                </div>
-                              </div>
-                              <div style={{ display: "flex", gap: 6 }}>
-                                <button className="hbtn hbtn--soft hbtn--sm" onClick={() => handleHostRequestAction(r.bookingId, 'decline')} style={{ color: "#ef4444", padding: "4px 10px", fontSize: 11.5 }}>Decline</button>
-                                <button className="hbtn hbtn--primary hbtn--sm" onClick={() => handleHostRequestAction(r.bookingId, 'accept')} style={{ padding: "4px 10px", fontSize: 11.5 }}>Approve</button>
-                              </div>
-                            </div>
-                            {r.answers && Object.keys(r.answers).length > 0 && (
-                              <div style={{ marginTop: 6, padding: "8px 10px", background: "var(--field)", borderRadius: 6, display: "flex", flexDirection: "column", gap: 4 }}>
-                                {Object.entries(r.answers).map(([key, val]) => (
-                                  <div key={key} style={{ fontSize: 11.5 }}>
-                                    <span style={{ color: "var(--ink-3)" }}>{key}: </span>
-                                    <span style={{ color: "var(--ink)", fontWeight: 500 }}>{String(val)}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
 
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Registration Form Fields</h3>
-                  {currentEvent.formFields && currentEvent.formFields.length > 0 ? (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      {currentEvent.formFields.map((f, i) => (
-                        <div key={f.id || i} style={{ padding: 14, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)" }}>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-2)", textTransform: "uppercase" }}>Question #{i+1} · {f.type}</div>
-                          <div style={{ fontWeight: 600, fontSize: 14, color: "var(--ink)", marginTop: 4 }}>{f.question}</div>
-                          <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>{f.required ? "Required" : "Optional"}</div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--ink-3)", border: "1px dashed var(--border)", borderRadius: "var(--r-md)" }}>
-                      No custom questions configured. Guests only need to provide their name and email.
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Tab 6: Guests */}
-              {tab === "guests" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  {/* Host Section: Pending Approvals in Guests tab as well */}
-                  {(isOwner || isAdmin || isModerator) && hostStats && hostStats.requests && hostStats.requests.length > 0 && (
-                    <div style={{ border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: 18, background: "var(--surface)", marginBottom: 10 }}>
-                      <h4 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, display: "flex", gap: 6, alignItems: "center" }}>
-                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent-2)" }} />
-                        Pending Guest Requests ({hostStats.requests.length})
-                      </h4>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                        {hostStats.requests.map(r => (
-                          <div key={r.id} style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)" }}>
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <Avatar name={r.name} size={32} />
-                                <div style={{ display: "flex", flexDirection: "column" }}>
-                                  <span style={{ fontSize: 13, fontWeight: 600 }}>{r.name}</span>
-                                  <span style={{ fontSize: 11, color: "var(--ink-3)" }}>{r.email}</span>
-                                </div>
-                              </div>
-                              <div style={{ display: "flex", gap: 6 }}>
-                                <button className="hbtn hbtn--soft hbtn--sm" onClick={() => handleHostRequestAction(r.bookingId, 'decline')} style={{ color: "#ef4444", padding: "4px 10px", fontSize: 11.5 }}>Decline</button>
-                                <button className="hbtn hbtn--primary hbtn--sm" onClick={() => handleHostRequestAction(r.bookingId, 'accept')} style={{ padding: "4px 10px", fontSize: 11.5 }}>Approve</button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Guest List</h3>
-                    <input className="cinput" placeholder="Search guests..." value={guestSearch} onChange={e => setGuestSearch(e.target.value)} style={{ width: 180, fontSize: 13, background: "var(--field)", border: "1px solid var(--border)" }} />
-                  </div>
-                  <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "12px 16px" }}>
-                    {attendees.filter(n => n.toLowerCase().includes(guestSearch.toLowerCase())).map((name, i) => (
-                      <div key={name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: i < attendees.length - 1 ? "1px solid var(--border)" : "none" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <Avatar name={name} size={28} />
-                          <span style={{ fontWeight: 600, fontSize: 13.5 }}>{name}</span>
-                        </div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: "#1f9d57", background: "rgba(31, 157, 87, 0.1)", padding: "3px 8px", borderRadius: 999 }}>Attending</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Tab 7: Settings */}
+              {/* Tab: Settings */}
               {tab === "settings" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Gallery Settings</h3>

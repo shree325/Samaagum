@@ -1311,17 +1311,37 @@ function GroupDetail({ group, st, go }) {
                 />
               )}
               {tab === "events" && (
-                gEvents.length > 0 ? (
-                  <div className="ev-grid">
-                    {gEvents.map(ev => <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)} saved={st.saved.has(ev.id)} onSave={() => st.toggleSave(ev.id)} registered={st.registered.has(ev.id)} />)}
-                  </div>
-                ) : (
-                  <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--ink-3)", background: "var(--surface)", borderRadius: "var(--r-md)", border: "1px dashed var(--border)" }}>
-                    <I.cal style={{ width: 48, height: 48, marginBottom: 16, opacity: 0.3 }} />
-                    <h4 style={{ margin: "0 0 8px 0", color: "var(--ink)", fontSize: 16 }}>No events scheduled</h4>
-                    <p style={{ margin: 0 }}>There are currently no events scheduled for this group.</p>
-                  </div>
-                )
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  {/* Create Event button — visible to group owner and admin */}
+                  {isOwner && (
+                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                      <button
+                        className="hbtn hbtn--primary hbtn--sm"
+                        onClick={() => go("create-event", { hostGroupId: g.entity_id, hostGroupName: g.name })}
+                        style={{ display: "flex", alignItems: "center", gap: 6 }}
+                      >
+                        <I.plus style={{ width: 14 }} />
+                        Create Event
+                      </button>
+                    </div>
+                  )}
+
+                  {gEvents.length > 0 ? (
+                    <div className="ev-grid">
+                      {gEvents.map(ev => <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)} saved={st.saved.has(ev.id)} onSave={() => st.toggleSave(ev.id)} registered={st.registered.has(ev.id)} />)}
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--ink-3)", background: "var(--surface)", borderRadius: "var(--r-md)", border: "1px dashed var(--border)" }}>
+                      <I.cal style={{ width: 48, height: 48, marginBottom: 16, opacity: 0.3 }} />
+                      <h4 style={{ margin: "0 0 8px 0", color: "var(--ink)", fontSize: 16 }}>No events scheduled</h4>
+                      <p style={{ margin: 0 }}>
+                        {isOwner
+                          ? "Click \"Create Event\" above to host your first group event."
+                          : "There are currently no events scheduled for this group."}
+                      </p>
+                    </div>
+                  )}
+                </div>
               )}
               {tab === "members" && (
                 <MemberManagementPanel group={g} st={st} go={go} />

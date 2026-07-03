@@ -38,34 +38,51 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
             const userId = request.user.id;
 
-            // Find all bookings this user made
+            // Fetch bookings with their related events in a single query
             const bookings = await prisma.bookings.findMany({
-                where: { booker_user_id: userId },
+                where: {
+                    booker_user_id: userId,
+                    status: { in: ['confirmed', 'pending_approval'] }
+                },
+                include: {
+                    events: true
+                },
                 orderBy: { created_at: 'desc' }
             });
 
-            const eventIds = [...new Set(bookings.map(b => b.event_id))];
-            const results = [];
+            // Deduplicate by event_id (keep latest booking per event)
+            const seen = new Set<string>();
+            const results: any[] = [];
 
-            for (const eventId of eventIds) {
-                const booking = bookings.find(b => b.event_id === eventId);
-                try {
-                    const event = await prisma.events.findUnique({ where: { id: eventId } });
-                    if (!event || event.status === 'cancelled') continue;
-                    const tickets = await prisma.ticket_types.findMany({ where: { event_id: eventId } });
-                    results.push({
-                        ...event,
-                        tickets,
-                        bookingStatus: booking?.status || null,
-                        bookingId: booking?.id || null
-                    });
-                } catch (err) {
-                    // skip missing event
-                }
+            for (const booking of bookings) {
+                if (seen.has(booking.event_id)) continue;
+                seen.add(booking.event_id);
+
+                const event = booking.events;
+                if (!event || event.status === 'cancelled') continue;
+
+                // Fetch ticket types for this event
+                const ticketsRaw = await prisma.ticket_types.findMany({
+                    where: { event_id: booking.event_id }
+                });
+
+                const tickets = ticketsRaw.map((t: any) => ({
+                    ...t,
+                    price_amount_minor: t.price_amount_minor !== null && t.price_amount_minor !== undefined ? Number(t.price_amount_minor) : null,
+                    early_bird_price_amount_minor: t.early_bird_price_amount_minor !== null && t.early_bird_price_amount_minor !== undefined ? Number(t.early_bird_price_amount_minor) : null
+                }));
+
+                results.push({
+                    ...event,
+                    tickets,
+                    bookingStatus: booking.status,
+                    bookingId: booking.id
+                });
             }
 
             return reply.send({ success: true, data: results });
         } catch (e: any) {
+            fastify.log.error(e, 'GET /events/joined failed');
             return reply.status(500).send({ success: false, message: e.message });
         }
     });
@@ -454,6 +471,7 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                         } catch (e) {}
                         return {
                             id: a.id,
+                            userId: a.user_id,
                             bookingId: a.booking_id,
                             name: a.name,
                             email: a.email,
@@ -468,6 +486,7 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                         } catch (e) {}
                         return {
                             id: r.id,
+                            userId: r.user_id,
                             bookingId: r.booking_id,
                             name: r.name,
                             email: r.email,
