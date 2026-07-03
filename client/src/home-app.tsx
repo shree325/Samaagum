@@ -14,17 +14,18 @@ function useSet(initial = []) {
 function TabBar({ view, go, counts, chatSettings }) {
   const showMessages = chatSettings?.allowSiteMessaging !== false;
   const tabs = [
-    { k: "home", ic: <I.home />, label: "Home" },
-    { k: "discover", ic: <I.compass />, label: "Discover" },
-    { k: "create-event", ic: <I.plus />, label: "", fab: true },
-    ...(showMessages ? [{ k: "messages", ic: <I.chat />, label: "Chats", badge: counts.messages }] : []),
-    { k: "profile", ic: <I.user />, label: "You" },
+    { k:"home", ic:<I.home/>, label:"Home" },
+    { k:"discover", ic:<I.compass/>, label:"Discover" },
+    { k:"create-event", ic:<I.plus/>, label:"", fab:true },
+    { k:"create-group", ic:<I.users/>, label:"", fab:true },
+    { k:"messages", ic:<I.chat/>, label:"Chats", badge: counts.messages },
+    { k:"profile", ic:<I.user/>, label:"You" },
   ];
   const active = (k) => view === k || (k === "home" && view === "event") || (k === "discover" && view === "group");
   return (
     <div className="tabbar">
       {tabs.map(t => t.fab ? (
-        <button key={t.k} className="tab" onClick={() => go("create-event")}><span className="fab">{t.ic}</span></button>
+        <button key={t.k} className="tab" onClick={() => go(t.k)}><span className="fab">{t.ic}</span></button>
       ) : (
         <button key={t.k} className={`tab ${active(t.k) ? "on" : ""}`} onClick={() => go(t.k)}>
           <span className="ic">{t.ic}</span>{t.label}
@@ -73,6 +74,7 @@ function App() {
   const [cityOpen, setCityOpen] = useState(false);
   const [meSync, setMeSync] = useState(0); // Add a tick to force re-render when ME updates asynchronously
 
+  const { entitlements, plan, planDisplayName, loading: entitlementsLoading, refetch: refetchEntitlements } = usePlanEntitlements();
   const [subscription, setSubscription] = useState({ plan: 'free', status: 'active' });
   const [socket, setSocket] = useState(null);
   const [counts, setCounts] = useState({ notifs: 0, messages: 0 });
@@ -270,6 +272,68 @@ function App() {
         window.chatSettings = updatedSettings;
       });
 
+      chatSocket.on("group.notification", (payload) => {
+        fetchCounts();
+        if (window.toast) {
+          // Remove HTML tags for standard toast display
+          const cleanText = payload.text ? payload.text.replace(/<\/?[^>]+(>|$)/g, "") : "New group activity";
+          window.toast(cleanText, "info");
+        }
+        // Dispatch custom event for real-time list updates if a view wants to listen
+        window.dispatchEvent(new CustomEvent("samaagum:groupNotification", { detail: payload }));
+      });
+
+      chatSocket.on("subscription.activated", (payload) => {
+        fetchCounts();
+        // Real-time plan activation: fetch new subscription status from API
+        const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+        const tok = localStorage.getItem('token');
+        if (tok) {
+          fetch(`${apiBase}/api/subscription/status`, {
+            headers: { 'Authorization': `Bearer ${tok}` }
+          })
+          .then(r => r.json())
+          .then(res => {
+            if (res.success && res.data?.subscription) {
+              setSubscription(res.data.subscription);
+              // Notify entitlements hook to immediately refetch
+              window.dispatchEvent(new CustomEvent('subscription_changed'));
+            }
+          })
+          .catch(err => console.error('Error refreshing subscription after activation:', err));
+        }
+        // Show beautiful toast
+        if (window.toast) {
+          const name = payload?.planName || 'Standard';
+          window.toast(`🎉 Your ${name} Plan is now active! Enjoy your new features.`, "success");
+        }
+      });
+
+      chatSocket.on("subscription.expiring", (payload) => {
+        if (window.toast) {
+          const planName = payload?.planName || 'your';
+          window.toast(`⚠️ Your ${planName} Plan expires soon. Renew to keep access.`, "warning");
+        }
+      });
+
+      chatSocket.on("entitlements.updated", (payload) => {
+        console.log("⚡ Plan entitlements updated in real-time:", payload);
+        window.dispatchEvent(new CustomEvent('subscription_changed'));
+        if (window.toast) {
+          window.toast(`⚡ Your plan (${payload.planName || 'Plan'}) features have been updated!`, "info");
+        }
+      });
+
+      chatSocket.on("notification:count", (payload) => {
+        if (payload && typeof payload.count === 'number') {
+          setCounts(prev => ({ ...prev, notifs: payload.count }));
+        }
+      });
+
+      chatSocket.on("notification:updated", (payload) => {
+        fetchCounts();
+      });
+
       setSocket(chatSocket);
       window.chatSocket = chatSocket;
 
@@ -310,6 +374,8 @@ function App() {
           if (res.data.role) {
             ME.role = res.data.role.displayName || res.data.role.name;
           }
+          // Notify entitlements hook to refetch
+          window.dispatchEvent(new CustomEvent('subscription_changed'));
         }
       })
       .catch(err => console.error('Error fetching subscription status', err));
@@ -554,8 +620,12 @@ function App() {
     addCreatedEvent, addCreatedGroup,
     subscription, setSubscription,
     fetchCounts,
-    chatSettings, setChatSettings
+    chatSettings, setChatSettings,
+    entitlements, plan, planDisplayName, refetchEntitlements
   };
+
+  // sidebar collapsed state
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // responsive window width check
   const [width, setWidth] = useState(window.innerWidth);
@@ -617,8 +687,8 @@ function App() {
         : cur.view;
 
   return (
-    <div className={`app ${mobile ? "mobile" : ""}`}>
-      {!mobile && <Sidebar view={navKey} go={go} counts={counts} chatSettings={chatSettings} />}
+    <div className={`app ${mobile?"mobile":""} ${sidebarCollapsed?"collapsed":""}`}>
+      {!mobile && <Sidebar view={navKey} go={go} counts={counts} collapsed={sidebarCollapsed} onToggleCollapse={()=>setSidebarCollapsed(v=>!v)} chatSettings={chatSettings} />}
       <div className="content">
         {mobile ? <MobileTop go={go} counts={counts} city={city} chatSettings={chatSettings} />
           : <Topbar go={go} counts={counts} dark={t.dark} onToggleTheme={() => setTweak("dark", !t.dark)} city={city} onCity={() => setCityOpen(true)} chatSettings={chatSettings} />}

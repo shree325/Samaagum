@@ -773,6 +773,17 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       }) : [];
       const acceptorMap = new Map(acceptors.map(u => [u.id, u]));
 
+      // Pre-fetch forum posts to resolve groupId asynchronously
+      const postIds = logs
+        .filter(l => (l.template_key === 'group_new_post' || l.template_key === 'group_post_activity') && l.provider_ref)
+        .map(l => l.provider_ref) as string[];
+
+      const forumPosts = postIds.length > 0 ? await prisma.forum_posts.findMany({
+        where: { id: { in: postIds } },
+        select: { id: true, scope_id: true }
+      }) : [];
+      const forumPostsMap = new Map<string, string>(forumPosts.map((fp: any) => [fp.id, fp.scope_id]));
+
       const mappedLogs = logs.map(l => {
         const time = new Date(l.created_at);
         const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -801,8 +812,8 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             const acceptorName = u.profiles?.display_name || u.primary_email?.split('@')[0] || "Someone";
             return {
               id: l.id,
-              type: "connect",
               who: acceptorName,
+              type: "connect",
               unread: l.status !== 'read',
               day: dayLabel,
               time: timeStr,
@@ -810,6 +821,131 @@ export async function messagingRoutes(fastify: FastifyInstance) {
               action: "view"
             };
           }
+        }
+
+        if (l.template_key === 'group_user_joined' && l.provider_ref) {
+          try {
+            const data = JSON.parse(l.provider_ref);
+            const joinedUserName = data.joinedUserName || "Someone";
+            const groupName = data.groupName || "the group";
+            let text = "";
+            if (data.approverName) {
+              text = `<b>${data.approverName}</b> approved <b>${joinedUserName}</b>'s request to join <b>${groupName}</b>`;
+            } else {
+              text = `<b>${joinedUserName}</b> has joined the group <b>${groupName}</b>`;
+            }
+            return {
+              id: l.id,
+              who: joinedUserName,
+              type: "group_user_joined",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text,
+              action: "view_user",
+              targetUserId: data.joinedUserId
+            };
+          } catch (e) {
+            return {
+              id: l.id,
+              who: "Someone",
+              type: "group_user_joined",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `A new user has joined the group`,
+              action: "view_user",
+              targetUserId: l.provider_ref
+            };
+          }
+        }
+
+        if (l.template_key === 'group_join_declined' && l.provider_ref) {
+          try {
+            const data = JSON.parse(l.provider_ref);
+            const groupName = data.groupName || "the group";
+            return {
+              id: l.id,
+              who: groupName,
+              type: "system",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `Your request to join <b>${groupName}</b> was declined`,
+              action: null
+            };
+          } catch (e) {
+            return {
+              id: l.id,
+              who: "System",
+              type: "system",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `Your request to join the group was declined`,
+              action: null
+            };
+          }
+        }
+
+        if (l.template_key === 'group_created') {
+          return {
+            id: l.id,
+            who: "Groups",
+            type: "group_created",
+            unread: l.status !== 'read',
+            day: dayLabel,
+            time: timeStr,
+            text: `A new group was created. Click to view details.`,
+            action: "view",
+            groupId: l.provider_ref
+          };
+        }
+
+        if (l.template_key === 'group_new_post') {
+          const targetGroupId = l.provider_ref ? (forumPostsMap.get(l.provider_ref) || undefined) : undefined;
+          return {
+            id: l.id,
+            who: "Forums",
+            type: "group_new_post",
+            unread: l.status !== 'read',
+            day: dayLabel,
+            time: timeStr,
+            text: `New post created in a group forum.`,
+            action: "view",
+            postId: l.provider_ref || undefined,
+            groupId: targetGroupId
+          };
+        }
+
+        if (l.template_key === 'group_post_activity') {
+          const targetGroupId = l.provider_ref ? (forumPostsMap.get(l.provider_ref) || undefined) : undefined;
+          return {
+            id: l.id,
+            who: "Forums",
+            type: "group_post_activity",
+            unread: l.status !== 'read',
+            day: dayLabel,
+            time: timeStr,
+            text: `Activity on a forum post you follow.`,
+            action: "view",
+            postId: l.provider_ref || undefined,
+            groupId: targetGroupId
+          };
+        }
+
+        if (l.template_key === 'group_gallery') {
+          return {
+            id: l.id,
+            who: "Gallery",
+            type: "group_gallery",
+            unread: l.status !== 'read',
+            day: dayLabel,
+            time: timeStr,
+            text: `New gallery media has been uploaded.`,
+            action: "view",
+            itemId: l.provider_ref
+          };
         }
 
         if (l.template_key === 'subscription_expiring_soon') {
@@ -823,6 +959,34 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             text: `Your subscription is expiring in 5 days. Click to renew!`,
             action: "billing"
           };
+        }
+
+        if (l.template_key === 'subscription_activated' && l.provider_ref) {
+          try {
+            const data = JSON.parse(l.provider_ref);
+            const planName = data.planName || "Standard";
+            return {
+              id: l.id,
+              type: "billing",
+              who: "Billing",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `Your subscription to the <b>${planName} Plan</b> has been activated successfully! 🎉`,
+              action: "billing"
+            };
+          } catch (e) {
+            return {
+              id: l.id,
+              type: "billing",
+              who: "Billing",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `Your subscription has been activated successfully! 🎉`,
+              action: "billing"
+            };
+          }
         }
 
         return {
@@ -852,6 +1016,23 @@ export async function messagingRoutes(fastify: FastifyInstance) {
     try {
       await prisma.notification_log.updateMany({
         where: { user_id: userId, status: { not: 'read' } },
+        data: { status: 'read' }
+      });
+      return reply.send({ success: true });
+    } catch (err: any) {
+      return reply.status(500).send({ success: false, message: err.message });
+    }
+  });
+
+  // POST /api/messaging/notifications/:id/read
+  fastify.post<{ Params: { id: string } }>('/notifications/:id/read', { preHandler: [(fastify as any).authenticate] }, async (request, reply) => {
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply.status(401).send({ success: false, message: 'Unauthorized' });
+    }
+    try {
+      await prisma.notification_log.update({
+        where: { id: request.params.id, user_id: userId },
         data: { status: 'read' }
       });
       return reply.send({ success: true });

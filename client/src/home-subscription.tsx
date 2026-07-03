@@ -96,15 +96,26 @@ window.UpgradePage = function UpgradePage({ st, go }) {
         {plans.map(plan => {
           const pricing = plan.pricing[billingCycle] || {};
           const priceAmount = pricing.amount || 0;
-          const isCurrent = userPlan === plan.name.toLowerCase() && userCycle === billingCycle;
+          const isFreeOrZero = plan.plan_type === 'free' || priceAmount === 0;
+          const isCurrent = isFreeOrZero
+            ? (userPlan === plan.name.toLowerCase() || userPlan === 'free' || !userPlan)
+            : (userPlan === plan.name.toLowerCase() && userCycle === billingCycle);
           const isPrevious = previousPlans.some(p => p.planId === plan.id && p.billingCycle === billingCycle);
           const switchableMatch = switchablePlans.find(p => p.planId === plan.id && p.billingCycle === billingCycle);
 
+          // Whether user is already on a paid/higher plan
+          const isOnPaidPlan = userPlan && userPlan !== 'free' && userPlan !== 'free plan';
+
           let buttonContent = `Get ${plan.display_name}`;
           let buttonAction = () => go("checkout", { selectedPlan: plan, billingCycle });
+          let buttonDisabled = isCurrent || loading;
 
           if (isCurrent) {
             buttonContent = "Current Plan";
+          } else if (isFreeOrZero && isOnPaidPlan) {
+            // User is on paid plan — free tier is their default, not something to "get"
+            buttonContent = "Default Plan";
+            buttonDisabled = true;
           } else if (switchableMatch) {
             buttonContent = "Switch Plan";
             buttonAction = async () => {
@@ -169,9 +180,9 @@ window.UpgradePage = function UpgradePage({ st, go }) {
 
               <div className="card-foot">
                 <button 
-                  className={`btn-sub-cta ${isCurrent ? 'btn-sub-basic' : (plan.is_popular ? 'btn-sub-pro' : 'btn-sub-basic')}`}
-                  onClick={buttonAction}
-                  disabled={isCurrent || loading}
+                  className={`btn-sub-cta ${buttonDisabled ? 'btn-sub-basic' : (plan.is_popular ? 'btn-sub-pro' : 'btn-sub-basic')}`}
+                  onClick={buttonDisabled ? undefined : buttonAction}
+                  disabled={buttonDisabled}
                 >
                   {buttonContent}
                 </button>
@@ -653,6 +664,7 @@ const OrderReviewModal = ({ previewData, checkoutParams, onClose, st, go }) => {
             });
 
             go("checkout-success", {
+              orderId: localOrderId,
               order_number: confirmData.data.order_number,
               plan_name: confirmData.data.plan_name,
               billing_cycle: confirmData.data.billing_cycle,
@@ -713,6 +725,7 @@ const OrderReviewModal = ({ previewData, checkoutParams, onClose, st, go }) => {
             });
 
             go("checkout-success", {
+              orderId: localOrderId,
               order_number: confirmData.data.order_number,
               plan_name: confirmData.data.plan_name,
               billing_cycle: confirmData.data.billing_cycle,
@@ -881,7 +894,7 @@ const OrderReviewModal = ({ previewData, checkoutParams, onClose, st, go }) => {
    3. CHECKOUT SUCCESS PAGE
    ────────────────────────────────────────────────────────────── */
 window.CheckoutSuccessPage = function CheckoutSuccessPage({ param, go }) {
-  const { order_number, plan_name, billing_cycle, activated_at, next_billing_at, subscription_status, total } = param || {};
+  const { orderId, order_number, plan_name, billing_cycle, activated_at, next_billing_at, subscription_status, total } = param || {};
 
   const formatDate = (dateStr) => {
     if (!dateStr) return 'N/A';
@@ -936,6 +949,50 @@ window.CheckoutSuccessPage = function CheckoutSuccessPage({ param, go }) {
       </div>
 
       <div style={{ display:"flex", justifyContent:"center", gap: 16, marginTop: 32 }}>
+        {orderId && (
+          <button 
+            className="btn" 
+            style={{ 
+              padding: "12px 24px", 
+              borderRadius: 8,
+              background: 'var(--primary)', 
+              color: '#fff', 
+              fontWeight: 600,
+              border: 'none',
+              boxShadow: '0 4px 12px rgba(109, 94, 252, 0.25)',
+              cursor: 'pointer',
+              minWidth: 160
+            }} 
+            onClick={async () => {
+              try {
+                const apiBase = window.location.port === "8080" ? "http://localhost:3000" : window.location.origin;
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${apiBase}/api/subscription/orders/${orderId}/invoice`, {
+                  headers: {
+                    ...(token ? { "Authorization": `Bearer ${token}` } : {})
+                  }
+                });
+                if (!response.ok) {
+                  throw new Error('Failed to download invoice');
+                }
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Invoice-${order_number || 'order'}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+              } catch (err) {
+                console.error(err);
+                alert("Error downloading invoice. Please try again.");
+              }
+            }}
+          >
+            Download Invoice
+          </button>
+        )}
         <button 
           className="btn" 
           style={{ 

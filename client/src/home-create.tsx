@@ -22,208 +22,40 @@ function CoverPicker({ value, onPick }) {
 
 function Toggle({ on, onClick }) { return <button className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
 
-/* ---------------- Create Event ---------------- */
-function CreateEvent({ go, mobile }) {
-  const [title, setTitle] = useState("");
-  const [cover, setCover] = useState(COVERS.sunset);
-  const [type, setType] = useState("paid");
-  const [cat, setCat] = useState("Startups"); const [city, setCity] = useState("Bengaluru");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
-  const [venue, setVenue] = useState("");
-  const [desc, setDesc] = useState("");
-  const [approval, setApproval] = useState(false);
-  const [cash, setCash] = useState(false);
-  const [tickets, setTickets] = useState([{ n: "Early Bird", cap: "50", price: "499" }]);
-  const types = [
-    { k: "paid", ic: <I.ticket />, t: "Paid", d: "Sell tickets" },
-    { k: "free", ic: <I.users />, t: "Free", d: "RSVP only" },
-    { k: "online", ic: <I.online />, t: "Online", d: "Virtual link" },
-  ];
-  const setTk = (i, key, v) => setTickets(ts => ts.map((t, j) => j === i ? { ...t, [key]: v } : t));
 
-  const venueInputRef = useRef(null);
-  const cityInputRef = useRef(null);
 
-  useEffect(() => {
-    if (type === "online" || !window.google?.maps?.places || !venueInputRef.current) return;
-
-    const autocomplete = new window.google.maps.places.Autocomplete(venueInputRef.current, {
-      componentRestrictions: { country: "in" },
-      fields: ["address_components", "formatted_address"]
-    });
-
-    autocomplete.addListener("place_changed", () => {
-      const place = autocomplete.getPlace();
-      if (place.formatted_address) {
-        setVenue(place.formatted_address);
-        const cityComp = place.address_components?.find(c =>
-          c.types.includes("locality") || c.types.includes("administrative_area_level_2")
-        );
-        if (cityComp) {
-          setCity(cityComp.long_name);
-        }
-      }
-    });
-
-    return () => {
-      if (window.google?.maps?.event) {
-        window.google.maps.event.clearInstanceListeners(venueInputRef.current);
-      }
-    };
-  }, [type]);
-
-  useEffect(() => {
-    if (!window.google?.maps?.places || !cityInputRef.current) return;
-
-    const autocomplete = new window.google.maps.places.Autocomplete(cityInputRef.current, {
-      types: ["(cities)"],
-      componentRestrictions: { country: "in" },
-      fields: ["address_components", "formatted_address"]
-    });
-
-    autocomplete.addListener("place_changed", () => {
-      const place = autocomplete.getPlace();
-      if (place.address_components) {
-        const cityComp = place.address_components.find(c =>
-          c.types.includes("locality") || c.types.includes("administrative_area_level_2")
-        );
-        if (cityComp) {
-          setCity(cityComp.long_name);
-        } else if (place.formatted_address) {
-          setCity(place.formatted_address);
-        }
-      }
-    });
-
-    return () => {
-      if (window.google?.maps?.event) {
-        window.google.maps.event.clearInstanceListeners(cityInputRef.current);
-      }
-    };
-  }, []);
-
-  const previewEv = {
-    cover, cat, type: type === "free" ? "Free" : "Paid", online: type === "online",
-    month: "JUN", day: "18", title: title || "Your event title",
-    date: date || "Date TBD", time: time || "Time TBD",
-    venue: type === "online" ? "Online" : (venue || "Venue TBD"),
-    going: 0, price: type === "paid" ? `₹${tickets[0]?.price || "—"}` : "Free", attendees: [],
-    city: city
-  };
-
+function UpgradePlanModal({ open, onClose, feature, go, currentPlanName }) {
+  if (!open) return null;
   return (
-    <div className={`create max-w-[1000px] mx-auto w-full ${mobile ? "single" : ""}`}>
-      <div className="create-form">
-        <div className="cf-inner">
-          <div className="create-head">
-            <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => go("home")} style={{ padding: "7px 11px" }}><I.arrowL /></button>
-            <div><div className="ck">New event</div><h1>Create an event</h1></div>
-          </div>
-
-          <div className={`cover-up ${cover ? "filled" : ""}`} style={cover ? { background: cover } : {}}>
-            {cover && <Grain />}
-            <div className="up-hint" style={cover ? { color: "#fff" } : {}}>
-              <div className="uic" style={cover ? { background: "rgba(255,255,255,0.2)", color: "#fff" } : {}}><I.image /></div>
-              {cover ? "Looks great — pick a theme below" : "Upload a cover image"}
-            </div>
-          </div>
-          <CoverPicker value={cover} onPick={setCover} />
-
-          <div style={{ marginTop: 22 }}>
-            <input className="title-input" placeholder="Event title" value={title} onChange={e => setTitle(e.target.value)} />
-          </div>
-
-          <div className="cfield" style={{ marginTop: 18 }}>
-            <label>Event type</label>
-            <div className="type-pills">
-              {types.map(t => (
-                <button key={t.k} className={`type-pill ${type === t.k ? "on" : ""}`} onClick={() => setType(t.k)}>
-                  <span className="tpic">{t.ic}</span><span className="tpt">{t.t}</span><span className="tpd">{t.d}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="crow">
-            <div className="cfield"><label>Date</label><input className="cinput" type="text" placeholder="Thu, Jun 18" value={date} onChange={e => setDate(e.target.value)} /></div>
-            <div className="cfield"><label>Time</label><input className="cinput" type="text" placeholder="6:30 PM" value={time} onChange={e => setTime(e.target.value)} /></div>
-          </div>
-
-          <div className="cfield">
-            <label>{type === "online" ? "Meeting link" : "Venue"} <span className="opt">{type === "online" ? "· revealed after registration" : ""}</span></label>
-            <input className="cinput" placeholder={type === "online" ? "https://meet.samaagum.co/…" : "Add a venue or address"} value={venue} onChange={e => setVenue(e.target.value)} />
-            <input ref={venueInputRef} className="cinput" placeholder={type === "online" ? "https://meet.samaagum.co/…" : "Add a venue or address"} value={venue} onChange={e => setVenue(e.target.value)} />
-          </div>
-
-          <div className="crow">
-            <div className="cfield"><label>City</label>
-              <input ref={cityInputRef} className="cinput" placeholder="Search city in India..." value={city} onChange={e => setCity(e.target.value)} />
-            </div>
-            <div className="cfield"><label>Category</label>
-              <select className="cselect" value={cat} onChange={e => setCat(e.target.value)}>
-                {CATS.filter(c => c[0] !== "All").map(([c]) => <option key={c}>{c}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div className="cfield">
-            <label>Capacity <span className="opt">· hard cap</span></label>
-            <input className="cinput" placeholder="180" />
-          </div>
-
-          <div className="cfield">
-            <label>Description</label>
-            <textarea className="ctext" placeholder="Tell people what to expect — the vibe, who it's for, what they'll leave with." value={desc} onChange={e => setDesc(e.target.value)} />
-          </div>
-
-          {type === "paid" && (
-            <div className="cfield">
-              <label>Ticket types</label>
-              {tickets.map((t, i) => (
-                <div key={i} className="ticket-row">
-                  <span className="grip"><I.more style={{ transform: "rotate(90deg)" }} /></span>
-                  <div className="tr-i">
-                    <input className="tr-mini" placeholder="Tier name" value={t.n} onChange={e => setTk(i, "n", e.target.value)} />
-                    <input className="tr-mini" placeholder="Qty" value={t.cap} onChange={e => setTk(i, "cap", e.target.value)} />
-                    <input className="tr-mini" placeholder="₹ Price" value={t.price} onChange={e => setTk(i, "price", e.target.value)} />
-                  </div>
-                  {tickets.length > 1 && <button className="tr-del" onClick={() => setTickets(ts => ts.filter((_, j) => j !== i))}><I.x /></button>}
-                </div>
-              ))}
-              <button className="add-row" onClick={() => setTickets(ts => [...ts, { n: "", cap: "", price: "" }])}><I.plus />Add ticket type</button>
-            </div>
-          )}
-
-          <div className="cfield">
-            <label>Registration settings</label>
-            <div className="toggle-row"><div className="ti"><div className="t">Approval required</div><div className="d">Manually approve each registration</div></div><Toggle on={approval} onClick={() => setApproval(v => !v)} /></div>
-            {type === "paid" && <div className="toggle-row"><div className="ti"><div className="t">Accept cash / offline payment</div><div className="d">Hold capacity until you confirm receipt</div></div><Toggle on={cash} onClick={() => setCash(v => !v)} /></div>}
-            <div className="toggle-row"><div className="ti"><div className="t">Add to calendar (ICS)</div><div className="d">Attendees get a calendar file with their ticket</div></div><Toggle on={true} onClick={() => { }} /></div>
-          </div>
+    <div style={{ position: "fixed", inset: 0, zIndex: 12000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)" }}>
+      <div style={{ background: "var(--surface)", width: 440, borderRadius: "var(--r-xl)", padding: 32, boxShadow: "var(--sh-xl)", border: "1px solid var(--border)", position: "relative", textAlign: "center" }}>
+        <button onClick={onClose} style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", color: "var(--ink-3)", cursor: "pointer" }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
+        <h2 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 8px 0", color: "var(--ink)" }}>Upgrade Required</h2>
+        <p style={{ fontSize: 14, color: "var(--ink-2)", margin: "0 0 24px 0", lineHeight: 1.6 }}>
+          The feature <strong>{feature}</strong> is locked under your current plan ({currentPlanName || "Free Plan"}). Please upgrade your plan to unlock premium options, unlimited capacity, and advanced host features!
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <button 
+            className="hbtn hbtn--primary" 
+            style={{ width: "100%", justifyContent: "center", padding: "12px", fontSize: 15, fontWeight: 600 }}
+            onClick={() => {
+              onClose();
+              go("upgrade");
+            }}
+          >
+            Upgrade Plan
+          </button>
+          <button 
+            className="hbtn hbtn--ghost" 
+            style={{ width: "100%", justifyContent: "center", padding: "12px", fontSize: 14 }}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
         </div>
-      </div>
-
-      {!mobile && (
-        <div className="create-preview">
-          <div className="pv-label"><span className="d" />Live preview</div>
-          <EventCard ev={previewEv} onOpen={() => { }} saved={false} onSave={() => { }} />
-          <div style={{ marginTop: 22, padding: 16, border: "1px solid var(--border)", borderRadius: "var(--r-md)", background: "var(--surface)" }}>
-            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 12 }}>Summary</div>
-            <div className="side-stat"><span className="k">Type</span><span className="v" style={{ textTransform: "capitalize" }}>{type}</span></div>
-            <div className="side-stat"><span className="k">Category</span><span className="v">{cat}</span></div>
-            {type === "paid" && <div className="side-stat"><span className="k">From</span><span className="v">₹{tickets[0]?.price || "—"}</span></div>}
-            <div className="side-stat"><span className="k">Approval</span><span className="v">{approval ? "On" : "Auto"}</span></div>
-          </div>
-        </div>
-      )}
-
-      <div className="create-foot" style={mobile ? { gridColumn: "1" } : { gridColumn: "1 / -1" }}>
-        <button className="hbtn hbtn--ghost" onClick={() => go("home")}>Cancel</button>
-        <div className="sp" />
-        <button className="hbtn hbtn--ghost">Save draft</button>
-        <button className="hbtn hbtn--primary" onClick={() => go("event", { ...previewEv, id: "new", host: ME.name, hostBy: ME.name, city: "Bengaluru", cap: 180, desc })}><I.check />Publish event</button>
-        <button className="hbtn hbtn--primary" onClick={() => go("event", { ...previewEv, id: "new", host: ME.name, hostBy: ME.name, city, cap: 180, desc })}><I.check />Publish event</button>
       </div>
     </div>
   );
@@ -924,18 +756,24 @@ function QuestionnaireBuilderModal({ open, onClose, questions, setQuestions }) {
 }
 
 
-function CapacitySettingsModal({ open, onClose, limitCap, setLimitCap, maxCap, setMaxCap, waitlist, setWaitlist }) {
+function CapacitySettingsModal({ open, onClose, limitCap, setLimitCap, maxCap, setMaxCap, waitlist, setWaitlist, entitlementMaxCap = -1, triggerUpgrade }) {
   const [tempLimitCap, setTempLimitCap] = React.useState(limitCap);
   const [tempMaxCap, setTempMaxCap] = React.useState(maxCap);
   const [tempWaitlist, setTempWaitlist] = React.useState(waitlist);
 
   React.useEffect(() => {
     if (open) {
-      setTempLimitCap(limitCap);
-      setTempMaxCap(maxCap);
+      // Force limitCap to true if plan capacity limit is active and they had it disabled
+      if (entitlementMaxCap !== -1 && !limitCap) {
+        setTempLimitCap(true);
+        setTempMaxCap(String(entitlementMaxCap));
+      } else {
+        setTempLimitCap(limitCap);
+        setTempMaxCap(maxCap || (entitlementMaxCap !== -1 ? String(entitlementMaxCap) : ""));
+      }
       setTempWaitlist(waitlist);
     }
-  }, [open, limitCap, maxCap, waitlist]);
+  }, [open, limitCap, maxCap, waitlist, entitlementMaxCap]);
 
   if (!open) return null;
 
@@ -959,12 +797,27 @@ function CapacitySettingsModal({ open, onClose, limitCap, setLimitCap, maxCap, s
             Close registration when reaching the capacity. Only approved attendees count toward capacity.
           </p>
 
+          {entitlementMaxCap !== -1 && (
+            <div style={{ padding: "10px 12px", background: "var(--field-2, var(--field))", borderRadius: "var(--r-sm)", border: "1px dashed var(--accent)", fontSize: "12px", color: "var(--ink-2)" }}>
+              🔒 Under your current plan, capacity is capped at a maximum of <strong>{entitlementMaxCap}</strong> members. Upgrade to Standard for unlimited capacity.
+            </div>
+          )}
+
           {/* Option 1: Limit Event Capacity */}
           <div className="toggle-row" style={{ padding: "4px 0", background: "transparent", border: "none", margin: 0 }}>
             <div className="ti">
               <div className="t" style={{ fontSize: "13.5px", fontWeight: 600 }}>Enable Capacity Limit</div>
             </div>
-            <Toggle on={tempLimitCap} onClick={() => setTempLimitCap(!tempLimitCap)} />
+            <Toggle 
+              on={tempLimitCap} 
+              onClick={() => {
+                if (tempLimitCap && entitlementMaxCap !== -1) {
+                  triggerUpgrade("Unlimited Group Capacity");
+                  return;
+                }
+                setTempLimitCap(!tempLimitCap);
+              }} 
+            />
           </div>
 
           {tempLimitCap && (
@@ -1003,6 +856,11 @@ function CapacitySettingsModal({ open, onClose, limitCap, setLimitCap, maxCap, s
             onClick={() => {
               if (tempLimitCap && (!tempMaxCap || parseInt(tempMaxCap) < 1)) {
                 alert("Please enter a valid capacity (at least 1).");
+                return;
+              }
+              if (tempLimitCap && entitlementMaxCap !== -1 && parseInt(tempMaxCap) > entitlementMaxCap) {
+                alert(`Capacity cannot exceed ${entitlementMaxCap} members under your current plan.`);
+                triggerUpgrade(`Group Capacity > ${entitlementMaxCap}`);
                 return;
               }
               setLimitCap(tempLimitCap);
@@ -2736,8 +2594,36 @@ function RuleGroupSummaryChip({ rule, onEditClick }) {
   );
 }
 
+const DEFAULT_FREE_ENTITLEMENTS = {
+  group_max_groups: -1,
+  group_allowed_visibility: ['unlisted'],
+  group_allowed_join_modes: ['open', 'invite_only'],
+  group_max_capacity: 25,
+  group_can_restricted_access: false,
+  event_allowed_registration_modes: ['free', 'cash'],
+  event_allowed_visibility: ['unlisted', 'invite_only'],
+  event_max_participants: 100,
+  event_checkin_methods: ['scanner', 'manual', 'gate'],
+  event_can_create_paid_tickets: false
+};
+
 /* ---------------- Create Group ---------------- */
-function CreateGroup({ mode, editGroup, go, mobile }) {
+function CreateGroup({ mode, editGroup, go, mobile, st }) {
+  const entitlements = st?.entitlements || DEFAULT_FREE_ENTITLEMENTS;
+  const allowedVisibilities = entitlements.group_allowed_visibility || ['unlisted'];
+  const allowedJoinModes = entitlements.group_allowed_join_modes || ['open', 'invite_only'];
+  const entitlementMaxCap = entitlements.group_max_capacity ?? 25;
+  const canJoinRestricted = allowedJoinModes.includes('restricted_access');
+  const canPublic = allowedVisibilities.includes('public');
+  const canRestricted = allowedVisibilities.includes('restricted');
+
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [upgradeFeature, setUpgradeFeature] = useState("");
+  const triggerUpgrade = (feat) => {
+    setUpgradeFeature(feat);
+    setUpgradeModalOpen(true);
+  };
+
   const isEdit = mode === "edit" && editGroup;
 
   // Try loading draft only if not editing
@@ -2950,7 +2836,7 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
         banner,
         joinMode: approval ? "approval" : joinElig === "invite" ? "invite_only" : joinElig === "communities" ? "restricted" : "open",
         visibility,
-        listed: isDraftSubmit ? "unlisted" : "listed",
+        listed: isDraftSubmit ? "unlisted" : (visibility === "public" ? "listed" : "unlisted"),
         settings: {
           isDraft: isDraftSubmit,
           joinElig: joinElig === "communities" ? "restricted" : joinElig,
@@ -2992,7 +2878,7 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
           const groupName = name;
 
           if (!isEdit && pendingInviteEmails.length > 0) {
-            // Generate individual invite tokens and open mailto: for each
+            // Generate individual invite tokens and send email for each
             for (const email of pendingInviteEmails) {
               try {
                 const res = await fetch(`${apiBase}/api/groups/${groupId}/invites`, {
@@ -3001,12 +2887,8 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
                   body: JSON.stringify({ targets: [{ email }] })
                 });
                 const d = await res.json();
-                if (d.success && d.data[0]?.success) {
-                  const tkn = d.data[0].token;
-                  const inviteLink = `${window.location.origin}${window.location.pathname}#/groups/invite/${tkn}`;
-                  const subject = encodeURIComponent(`You're invited to join ${groupName} on Samaagum`);
-                  const body = encodeURIComponent(`Hi!\n\n${senderEmail || "Someone"} has invited you to join "${groupName}" on Samaagum.\n\nClick the link below to accept:\n${inviteLink}\n\nThis link is for your use only.`);
-                  window.open(`mailto:${email}?subject=${subject}&body=${body}`);
+                if (!d.success || !d.data[0]?.success) {
+                  console.error(`Failed to invite ${email}:`, d.message || d.data?.[0]?.message || "Unknown error");
                 }
               } catch (err) {
                 console.error(`Failed to invite ${email}:`, err);
@@ -3207,7 +3089,7 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
           setVisibilityAccess(nextValue.restricted);
         }}
       />
-      <CapacitySettingsModal open={capModal} onClose={() => setCapModal(false)} limitCap={limitCap} setLimitCap={setLimitCap} maxCap={maxCap} setMaxCap={setMaxCap} waitlist={waitlist} setWaitlist={setWaitlist} />
+      <CapacitySettingsModal open={capModal} onClose={() => setCapModal(false)} limitCap={limitCap} setLimitCap={setLimitCap} maxCap={maxCap} setMaxCap={setMaxCap} waitlist={waitlist} setWaitlist={setWaitlist} entitlementMaxCap={entitlementMaxCap} triggerUpgrade={triggerUpgrade} />
 
       {/* Description Modal */}
       {descModal && (
@@ -3554,13 +3436,41 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
               <div className="cfield">
                 <label>Visibility</label>
                 <div className="vis-pills">
-                  <button type="button" className={`vis-pill ${visibility === "public" ? "on" : ""}`} onClick={() => setVisibility("public")}>Public</button>
-                  <button type="button" className={`vis-pill ${visibility === "private" ? "on" : ""}`} onClick={() => setVisibility("private")}>Unlisted</button>
-                  <button type="button" className={`vis-pill ${visibility === "hidden" ? "on" : ""}`} onClick={() => {
-                    setVisibility("hidden");
-                    setAccessModalTarget("visibility");
-                    setAccessModal(true);
-                  }}>Restricted-Access</button>
+                  <button 
+                    type="button" 
+                    className={`vis-pill ${visibility === "public" ? "on" : ""}`} 
+                    onClick={() => {
+                      if (!canPublic) {
+                        triggerUpgrade("Public Group Visibility");
+                        return;
+                      }
+                      setVisibility("public");
+                    }}
+                  >
+                    {!canPublic && "🔒 "}Public
+                  </button>
+                  <button 
+                    type="button" 
+                    className={`vis-pill ${visibility === "private" ? "on" : ""}`} 
+                    onClick={() => setVisibility("private")}
+                  >
+                    Unlisted
+                  </button>
+                  <button 
+                    type="button" 
+                    className={`vis-pill ${visibility === "hidden" ? "on" : ""}`} 
+                    onClick={() => {
+                      if (!canRestricted) {
+                        triggerUpgrade("Restricted-Access Group Visibility");
+                        return;
+                      }
+                      setVisibility("hidden");
+                      setAccessModalTarget("visibility");
+                      setAccessModal(true);
+                    }}
+                  >
+                    {!canRestricted && "🔒 "}Restricted-Access
+                  </button>
                 </div>
                 {visibility === "private" && (
                   <div style={{ marginTop: 10, padding: "10px 12px", background: "var(--field)", borderRadius: "var(--r-md)", border: "1px solid var(--border-2)" }}>
@@ -3627,6 +3537,10 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
                 value={joinElig}
                 onChange={(e) => {
                   const val = e.target.value;
+                  if (val === "restricted" && !canJoinRestricted) {
+                    triggerUpgrade("Restricted Join Eligibility");
+                    return;
+                  }
                   setJoinElig(val);
                   if (val === "restricted") {
                     setAccessModalTarget("join");
@@ -3636,7 +3550,7 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
                 style={{ padding: "10px 14px", fontSize: 13.5, width: "100%", marginBottom: 12 }}
               >
                 <option value="anyone">Public</option>
-                <option value="restricted">Restricted Access</option>
+                <option value="restricted">{!canJoinRestricted && "🔒 "}Restricted Access</option>
                 <option value="invite">Invite Only</option>
               </select>
 
@@ -3743,11 +3657,7 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
                 });
                 const data = await res.json();
                 if (data.success && data.data[0]?.success) {
-                  const tkn = data.data[0].token;
-                  const inviteLink = `${window.location.origin}${window.location.pathname}#/groups/invite/${tkn}`;
-                  const subject = encodeURIComponent(`You're invited to join ${name} on Samaagum`);
-                  const body = encodeURIComponent(`Hi!\n\n${senderEmail || "Someone"} has invited you to join "${name}" on Samaagum.\n\nClick the link below to accept:\n${inviteLink}\n\nThis link is for your use only.`);
-                  window.open(`mailto:${inviteEmail}?subject=${subject}&body=${body}`);
+                  alert("Invitation email sent successfully!");
                   setInviteEmail("");
                 } else {
                   alert("Failed to generate invite: " + (data.data?.[0]?.message || data.message || "Unknown error"));
@@ -3968,8 +3878,17 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
           </div>
         </div>
       )}
+      {upgradeModalOpen && (
+        <UpgradePlanModal 
+          open={upgradeModalOpen} 
+          onClose={() => setUpgradeModalOpen(false)} 
+          feature={upgradeFeature} 
+          go={go} 
+          currentPlanName={st?.planDisplayName}
+        />
+      )}
     </div>
   );
 }
 
-Object.assign(window, { CreateEvent, CreateGroup });
+Object.assign(window, { CreateGroup });

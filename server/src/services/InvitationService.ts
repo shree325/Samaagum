@@ -1,6 +1,6 @@
 import prisma from '../config/prisma';
 import crypto from 'crypto';
-import nodemailer from 'nodemailer';
+import { sendEmail } from '../utils/email';
 import { R_users } from '../repositories/R_users';
 import { R_profiles } from '../repositories/R_profiles';
 import { R_groups } from '../repositories/R_groups';
@@ -37,6 +37,16 @@ export class InvitationService {
         });
         if (!entity) throw new Error("Group entity not found");
         const tenantId = entity.tenant_id;
+
+        // Get inviter name
+        let inviterName = 'Someone';
+        try {
+            const inviter = await userRepo.getById(inviterId);
+            const inviterProfile = await profileRepo.getByUserId(inviterId);
+            inviterName = inviterProfile?.display_name || inviter?.primary_email || 'Someone';
+        } catch (e) {
+            console.error('[InvitationService] Failed to fetch inviter details:', e);
+        }
         
         for (const target of targets) {
             // Check if user is already a member
@@ -83,26 +93,18 @@ export class InvitationService {
                 invited_by: inviterId
             });
 
-            const inviteLink = `${process.env.APP_URL || 'http://app.samaagum.com'}/groups/invite/${token}`;
-            if (process.env.SMTP_HOST) {
+            const inviteLink = `${process.env.APP_URL || 'http://localhost:8080'}/pages/Samaagum%20Home.html#/groups/invite/${token}`;
+            console.log(`[Email] Invite for ${target.email || target.username || 'unknown'}: ${inviteLink}`);
+            if (target.email) {
                 try {
-                    const transporter = nodemailer.createTransport({
-                        host: process.env.SMTP_HOST,
-                        port: parseInt(process.env.SMTP_PORT || '587'),
-                        secure: process.env.SMTP_SECURE === 'true',
-                        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+                    await sendEmail({
+                        to: target.email,
+                        subject: `You've been invited to join ${group.name} on Samaagum`,
+                        html: `<p>Hi!</p><p>${inviterName} has invited you to join <strong>${group.name}</strong> on Samaagum.</p><p>Click the link below to accept your invitation:</p><p><a href="${inviteLink}">${inviteLink}</a></p><p>This link is for your use only.</p>`
                     });
-                    await transporter.sendMail({
-                        from: process.env.SMTP_FROM || 'noreply@samaagum.com',
-                        to: target.email || '',
-                        subject: "You've been invited to join a group on Samaagum",
-                        html: `<p>You have been invited to join a group on Samaagum.</p><p>Click the link below to accept your invitation:</p><p><a href="${inviteLink}">${inviteLink}</a></p><p>This link is for your use only and will expire after one use.</p>`
-                    });
-                } catch (emailErr) {
-                    console.error('[Email] Failed to send invite email:', emailErr);
+                } catch (emailErr: any) {
+                    console.error('[Email] Failed to send invite email:', emailErr.message);
                 }
-            } else {
-                console.log(`[Email Mock] Invite for ${target.email || target.username}: ${inviteLink}`);
             }
 
             results.push({ target, success: true, token });

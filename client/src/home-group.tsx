@@ -271,6 +271,10 @@ function GroupDetail({ group, st, go }) {
   const [callerIsAdmin, setCallerIsAdmin] = useState(false);
   const [galleryUploading, setGalleryUploading] = useState(false);
   const [activeThread, setActiveThread] = useState(null);
+  const activeThreadRef = React.useRef(null);
+  React.useEffect(() => {
+    activeThreadRef.current = activeThread;
+  }, [activeThread]);
   const [loadingThread, setLoadingThread] = useState(false);
   const [replyDraft, setReplyDraft] = useState("");
   const [submittingReply, setSubmittingReply] = useState(false);
@@ -403,6 +407,36 @@ function GroupDetail({ group, st, go }) {
     } catch (e) { console.error(e); }
     setLoadingThread(false);
   };
+
+  const refreshThreadComments = React.useCallback(async (threadId) => {
+    if (!threadId) return;
+    try {
+      const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+      const res = await fetch(`${apiBase}/api/groups/${g.id}/posts/${threadId}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      const data = await res.json();
+      if (data.success) {
+        setActiveThread(data.data);
+        const initCVotes = {};
+        const walkComments = (comments) => {
+          (comments || []).forEach(c => {
+            initCVotes[c.id] = { score: c.vote_score || 0, userVote: c.user_vote || 0 };
+            if (c.replies) walkComments(c.replies);
+          });
+        };
+        walkComments(data.data.comments || []);
+        setCommentVotes(initCVotes);
+        setThreadVotes(prev => ({ ...prev, [data.data.id]: { score: data.data.vote_score || 0, userVote: data.data.user_vote || 0 } }));
+        setThreadReactions(prev => ({ ...prev, [data.data.id]: data.data.reactions || {} }));
+      }
+    } catch (e) { console.error(e); }
+  }, [g.id, token]);
+
+  const refreshThreadCommentsRef = React.useRef(refreshThreadComments);
+  React.useEffect(() => {
+    refreshThreadCommentsRef.current = refreshThreadComments;
+  }, [refreshThreadComments]);
 
   const handleNewThread = async () => {
     if (!newThreadTitle.trim() && !newThreadBody.trim()) return;
@@ -782,6 +816,12 @@ function GroupDetail({ group, st, go }) {
     fetchGroupDetails();
   }, [fetchGroupDetails]);
 
+  React.useEffect(() => {
+    if (group && group.postId) {
+      openThread({ id: group.postId });
+    }
+  }, [group?.postId]);
+
   const handleJoinClick = async () => {
     if (isJoined || isPending) return;
     try {
@@ -906,13 +946,63 @@ function GroupDetail({ group, st, go }) {
       if (tab === 'discussion') fetchPosts(sort);
     });
 
-    socket.on('thread_deleted', () => {
+    socket.on('thread_deleted', (data) => {
       if (tab === 'discussion') fetchPosts(sort);
+      if (activeThreadRef.current && activeThreadRef.current.id === data.postId) {
+        setActiveThread(null);
+        alert("This thread has been deleted.");
+      }
+    });
+
+    socket.on('thread_edited', (data) => {
+      if (tab === 'discussion') fetchPosts(sort);
+      if (activeThreadRef.current && activeThreadRef.current.id === data.postId) {
+        refreshThreadCommentsRef.current(data.postId);
+      }
+    });
+
+    socket.on('thread_solved', (data) => {
+      if (tab === 'discussion') {
+        setPosts(prev => prev.map(t => t.id === data.postId ? { ...t, solved: data.solved } : t));
+      }
+      if (activeThreadRef.current && activeThreadRef.current.id === data.postId) {
+        setActiveThread(prev => prev ? { ...prev, solved: data.solved } : null);
+      }
+    });
+
+    socket.on('thread_pinned', (data) => {
+      if (tab === 'discussion') {
+        setPosts(prev => prev.map(t => t.id === data.postId ? { ...t, pinned: data.pinned } : t));
+      }
+      if (activeThreadRef.current && activeThreadRef.current.id === data.postId) {
+        setActiveThread(prev => prev ? { ...prev, pinned: data.pinned } : null);
+      }
+    });
+
+    socket.on('thread_locked', (data) => {
+      if (tab === 'discussion') {
+        setPosts(prev => prev.map(t => t.id === data.postId ? { ...t, locked: data.locked } : t));
+      }
+      if (activeThreadRef.current && activeThreadRef.current.id === data.postId) {
+        setActiveThread(prev => prev ? { ...prev, locked: data.locked } : null);
+      }
+    });
+
+    socket.on('thread_archived', (data) => {
+      if (tab === 'discussion') {
+        setPosts(prev => prev.map(t => t.id === data.postId ? { ...t, archived: data.archived } : t));
+      }
+      if (activeThreadRef.current && activeThreadRef.current.id === data.postId) {
+        setActiveThread(prev => prev ? { ...prev, archived: data.archived } : null);
+      }
     });
 
     socket.on('thread_voted', (data) => {
       if (tab === 'discussion') {
         setPosts(prev => prev.map(t => t.id === data.postId ? { ...t, vote_score: data.score } : t));
+      }
+      if (activeThreadRef.current && activeThreadRef.current.id === data.postId) {
+        setThreadVotes(prev => ({ ...prev, [data.postId]: { ...prev[data.postId], score: data.score } }));
       }
     });
 
@@ -920,18 +1010,37 @@ function GroupDetail({ group, st, go }) {
       if (tab === 'discussion') {
         setPosts(prev => prev.map(t => t.id === data.postId ? { ...t, reactions: data.reactions } : t));
       }
+      if (activeThreadRef.current && activeThreadRef.current.id === data.postId) {
+        setThreadReactions(prev => ({ ...prev, [data.postId]: data.reactions }));
+      }
     });
 
-    socket.on('new_comment', () => {
+    socket.on('new_comment', (data) => {
       if (tab === 'discussion') fetchPosts(sort);
+      if (activeThreadRef.current && activeThreadRef.current.id === data.postId) {
+        refreshThreadCommentsRef.current(data.postId);
+      }
     });
 
-    socket.on('comment_deleted', () => {
+    socket.on('comment_deleted', (data) => {
       if (tab === 'discussion') fetchPosts(sort);
+      if (activeThreadRef.current && activeThreadRef.current.id === data.postId) {
+        refreshThreadCommentsRef.current(data.postId);
+      }
     });
 
-    socket.on('comment_voted', () => {
+    socket.on('comment_voted', (data) => {
       if (tab === 'discussion') fetchPosts(sort);
+      if (activeThreadRef.current && activeThreadRef.current.id === data.postId) {
+        refreshThreadCommentsRef.current(data.postId);
+      }
+    });
+
+    socket.on('comment_edited', (data) => {
+      if (tab === 'discussion') fetchPosts(sort);
+      if (activeThreadRef.current && activeThreadRef.current.id === data.postId) {
+        refreshThreadCommentsRef.current(data.postId);
+      }
     });
 
     socket.on('online_count', (data) => {
@@ -1220,12 +1329,10 @@ function GroupDetail({ group, st, go }) {
 
           <div className="grp-tabs">
             {tabs.map(([k, l]) => (
-              <button key={k} className={`grp-tab ${tab === k ? "on" : ""}`} onClick={() => { setTab(k); if (k === "dashboard") setNewJoinRequestNotif(false); }}>
+              <button key={k} className={`grp-tab ${tab === k ? "on" : ""}`} onClick={() => { setTab(k); if (k === "dashboard" || k === "members") setNewJoinRequestNotif(false); }}>
                 {l}
-                {k === "requests" && isOwner && dashboardStats.pendingMembers > 0 && (
-                  <span className="qs-badge" style={{ marginLeft: 6, background: "var(--accent-2)", color: "white", padding: "2px 6px", fontSize: 11, borderRadius: 8 }}>
-                    {dashboardStats.pendingMembers}
-                  </span>
+                {k === "members" && isOwner && (dashboardStats.pendingMembers > 0 || newJoinRequestNotif) && (
+                  <span style={{ marginLeft: 6, width: 8, height: 8, borderRadius: "50%", background: "var(--accent-2)", display: "inline-block" }} />
                 )}
                 {k === "dashboard" && newJoinRequestNotif && (
                   <span style={{ marginLeft: 6, width: 8, height: 8, borderRadius: "50%", background: "var(--accent-2)", display: "inline-block" }} />
@@ -1546,11 +1653,7 @@ function GroupDetail({ group, st, go }) {
                             });
                             const data = await res.json();
                             if (data.success && data.data[0]?.success) {
-                              const tkn = data.data[0].token;
-                              const inviteLink = `${window.location.origin}${window.location.pathname}#/groups/invite/${tkn}`;
-                              const subject = encodeURIComponent(`You're invited to join ${g.name} on Samaagum`);
-                              const body = encodeURIComponent(`Hi!\n\n${senderEmail || "Someone"} has invited you to join "${g.name}" on Samaagum.\n\nClick the link below to accept:\n${inviteLink}\n\nThis link is for your use only.`);
-                              window.open(`mailto:${inviteEmail}?subject=${subject}&body=${body}`);
+                              alert("Invitation email sent successfully!");
                               setInviteEmail("");
                               fetchInvites();
                             } else {
@@ -1798,7 +1901,17 @@ function GroupDetail({ group, st, go }) {
                   const targetRole = typeof m === 'object' ? (m.role || (m.roles ? getHighestRole(m.roles) : (i === 0 ? "group_owner" : i < 3 ? "group_moderator" : "group_member"))) : "group_member";
                   const mRole = targetRole.replace('group_', '');
                   return (
-                    <div key={m.id || mName} className="member-row">
+                    <div 
+                      key={m.id || mName} 
+                      className="member-row" 
+                      onClick={() => {
+                        const targetUser = typeof m === 'object' && m.users ? m.users : (typeof m === 'object' ? m : { id: m.id, name: mName, username: mUsername.replace('@', '') });
+                        if (targetUser && targetUser.id) {
+                          go("public-profile", targetUser);
+                        }
+                      }}
+                      style={{ cursor: "pointer" }}
+                    >
                       <Avatar name={mName} size={32} />
                       <div className="mi">
                         <div className="n" style={{ display: "flex", alignItems: "center", gap: 5 }}>{mName} {mRole === 'owner' && <I.crown className="crown" />}</div>
@@ -2113,6 +2226,7 @@ function MemberManagementPanel({ group, st, go }) {
   const [questionnaireData, setQuestionnaireData] = useState(QUESTIONNAIRE_INIT);
 
   React.useEffect(() => {
+  const fetchMembers = React.useCallback(async () => {
     const token = localStorage.getItem('token');
     let uid = null;
     if (token) {
@@ -2126,38 +2240,35 @@ function MemberManagementPanel({ group, st, go }) {
       } catch (e) { }
     }
 
-    const fetchMembers = async () => {
-      try {
-        const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
-        const [membRes, groupRes] = await Promise.all([
-          fetch(`${apiBase}/api/groups/${g.id}/members`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} }),
-          fetch(`${apiBase}/api/groups/${g.id}`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} })
-        ]);
-        const data = await membRes.json();
-        if (data.success && data.data) {
-          const active = data.data.filter(m => m.state === 'active');
-          const pending = data.data.filter(m => m.state === 'pending');
-          setMembers(active);
-          setRequests(pending);
+    try {
+      const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+      const [membRes, groupRes] = await Promise.all([
+        fetch(`${apiBase}/api/groups/${g.id}/members`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} }),
+        fetch(`${apiBase}/api/groups/${g.id}`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} })
+      ]);
+      const data = await membRes.json();
+      if (data.success && data.data) {
+        const active = data.data.filter(m => m.state === 'active');
+        const pending = data.data.filter(m => m.state === 'pending');
+        setMembers(active);
+        setRequests(pending);
 
-          const myMem = active.find(m => m.user_id === uid);
-          if (myMem) {
-            const roles = myMem.roles || [];
-            if (roles.includes('group_owner')) setCurrentUserRole('group_owner');
-            else if (roles.includes('group_admin')) setCurrentUserRole('group_admin');
-            else if (roles.includes('group_moderator')) setCurrentUserRole('group_moderator');
-            else setCurrentUserRole('group_member');
-          }
+        const myMem = active.find(m => m.user_id === uid);
+        if (myMem) {
+          const roles = myMem.roles || [];
+          if (roles.includes('group_owner')) setCurrentUserRole('group_owner');
+          else if (roles.includes('group_admin')) setCurrentUserRole('group_admin');
+          else if (roles.includes('group_moderator')) setCurrentUserRole('group_moderator');
+          else setCurrentUserRole('group_member');
         }
-        const groupData = await groupRes.json();
-        if (groupData.success && groupData.data?.settings) {
-          setGroupSettings(groupData.data.settings);
-        }
-      } catch (e) {
-        console.error(e);
       }
-    };
-    if (g?.id) fetchMembers();
+      const groupData = await groupRes.json();
+      if (groupData.success && groupData.data?.settings) {
+        setGroupSettings(groupData.data.settings);
+      }
+    } catch (e) {
+      console.error(e);
+    }
   }, [g?.id]);
 
   const fetchQuestionnaire = async (memberId) => {
@@ -2183,6 +2294,27 @@ function MemberManagementPanel({ group, st, go }) {
     setSelectedMember(null);
     setQuestionnaireData(QUESTIONNAIRE_INIT);
   };
+  React.useEffect(() => {
+    if (g?.id) fetchMembers();
+  }, [g?.id, fetchMembers]);
+
+  React.useEffect(() => {
+    if (!g?.id || !window.io) return;
+    const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+    const socketUrl = apiBase ? `${apiBase}/groups` : "/groups";
+    const socket = window.io(socketUrl, { transports: ['websocket'] });
+
+    socket.emit('join_group', g.id);
+
+    socket.on('dashboard_updated', () => {
+      fetchMembers();
+    });
+
+    return () => {
+      socket.emit('leave_group', g.id);
+      socket.disconnect();
+    };
+  }, [g?.id, fetchMembers]);
 
   const handleApprove = async (r) => {
     try {
@@ -2408,6 +2540,8 @@ function MemberManagementPanel({ group, st, go }) {
                     setSelectedMember(m);
                     fetchQuestionnaire(m.user_id);
                   }}
+                  onClick={() => m.users && go("public-profile", m.users)}
+                  style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
                 >
                   <Avatar name={m.users?.display_name || "Unknown"} size={40} />
                   <div style={{ display: "flex", flexDirection: "column" }}>

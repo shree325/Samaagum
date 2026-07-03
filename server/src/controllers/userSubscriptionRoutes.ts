@@ -1,5 +1,7 @@
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import prisma from '../config/prisma';
 import { R_adminSubscriptionPlans } from '../repositories/R_adminSubscriptionPlans';
 import { R_adminCoupons } from '../repositories/R_adminCoupons';
@@ -224,6 +226,29 @@ export const userSubscriptionRoutes: FastifyPluginAsync = async (fastify: Fastif
         }
     });
 
+    // GET /entitlements — Get active plan entitlements config for the logged-in user
+    fastify.get('/entitlements', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            const userId = request.user?.id;
+            if (!userId) {
+                return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            }
+
+            const { PlanEntitlementService } = require('../services/PlanEntitlementService');
+            const entitlements = await PlanEntitlementService.getEntitlements(userId);
+            const planKey = await PlanEntitlementService.getUserPlan(userId);
+
+            const adminPlan = await prisma.admin_subscription_plans.findFirst({
+                where: { name: planKey }
+            });
+            const planDisplayName = adminPlan?.display_name || (planKey.charAt(0).toUpperCase() + planKey.slice(1) + ' Plan');
+
+            return { success: true, data: { entitlements, plan: planKey, planDisplayName } };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
     // 3. POST /coupons/validate — Validate a coupon code
     fastify.post('/coupons/validate', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
         try {
@@ -405,6 +430,10 @@ export const userSubscriptionRoutes: FastifyPluginAsync = async (fastify: Fastif
             // If it is a free order, activate right away!
             if (total === 0) {
                 await SubscriptionActivationService.activate(order.id);
+                // Fire-and-forget: socket notification + invoice + email
+                SubscriptionActivationService.notifyAndSendInvoice(order.id).catch(err =>
+                    console.error(`[userSubscriptionRoutes] Free order notifyAndSendInvoice failed:`, err)
+                );
             }
 
             return reply.status(201).send({
@@ -564,6 +593,11 @@ export const userSubscriptionRoutes: FastifyPluginAsync = async (fastify: Fastif
 
             // Activate subscription benefits & role assignment
             await SubscriptionActivationService.activate(orderId);
+
+            // Fire-and-forget: emit socket event + generate invoice + send email with PDF
+            SubscriptionActivationService.notifyAndSendInvoice(orderId).catch(err =>
+                console.error('[userSubscriptionRoutes] notifyAndSendInvoice failed:', err)
+            );
 
             return {
                 success: true,
@@ -942,6 +976,11 @@ export const userSubscriptionRoutes: FastifyPluginAsync = async (fastify: Fastif
             // Activate subscription benefits & role assignment
             await SubscriptionActivationService.activate(localOrderId);
 
+            // Fire-and-forget: emit socket event + database notifications + generate invoice + send email with PDF
+            SubscriptionActivationService.notifyAndSendInvoice(localOrderId).catch(err =>
+                console.error('[userSubscriptionRoutes] notifyAndSendInvoice failed:', err)
+            );
+
             // Fetch Plan details to get plan display name
             const plan = await planRepo.getById(order.plan_id);
 
@@ -964,6 +1003,57 @@ export const userSubscriptionRoutes: FastifyPluginAsync = async (fastify: Fastif
                 }
             };
         } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // 10. GET /orders/:orderId/invoice — Download PDF invoice
+    fastify.get('/orders/:orderId/invoice', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            const { orderId } = request.params as { orderId: string };
+            const userId = request.user?.id;
+
+            if (!userId) {
+                return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            }
+
+            // 1. Fetch Order and verify ownership
+            const order = await prisma.subscription_orders.findUnique({
+                where: { id: orderId }
+            });
+
+            if (!order) {
+                return reply.status(404).send({ success: false, message: 'Order not found' });
+            }
+
+            if (order.user_id !== userId) {
+                return reply.status(403).send({ success: false, message: 'Forbidden: You do not own this order' });
+            }
+
+            if (order.status !== 'completed') {
+                return reply.status(400).send({ success: false, message: 'Invoice only available for completed orders' });
+            }
+
+            // 2. Find or generate invoice
+            const { InvoiceService } = await import('../services/InvoiceService');
+            let invoice = await prisma.invoices.findUnique({
+                where: { order_id: orderId }
+            });
+
+            if (!invoice) {
+                console.log(`[userSubscriptionRoutes] Invoice not found for completed order ${orderId}, generating now.`);
+                invoice = await InvoiceService.generateInvoice(orderId);
+            }
+
+            if (!invoice || !invoice.pdf_data) {
+                return reply.status(500).send({ success: false, message: 'Failed to retrieve or generate invoice' });
+            }
+
+            reply.header('Content-Type', 'application/pdf');
+            reply.header('Content-Disposition', `attachment; filename="${invoice.invoice_number}.pdf"`);
+            return reply.send(invoice.pdf_data);
+        } catch (e: any) {
+            console.error(`[userSubscriptionRoutes] Error downloading invoice:`, e);
             return reply.status(500).send({ success: false, message: e.message });
         }
     });

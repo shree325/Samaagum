@@ -35,23 +35,29 @@ function VirtualCard({ user }) {
   const profileUrl = `${apiBase}/pages/VirtualCardPage.html?u=${encodeURIComponent(username)}`;
 
   useEffect(() => {
-    // Generate QR code using the bundled QRCode library
-    QRCode.toDataURL(profileUrl, {
-      width: 200,
-      margin: 2,
-      color: {
-        dark: '#111827',
-        light: '#ffffff'
-      }
-    })
-      .then(url => {
-        setQrCodeUrl(url);
+    // Generate QR code using the bundled QRCode library via QRCodeLib (to avoid name collision with the custom SVG component)
+    const qrLib = window.QRCodeLib || window.QRCode;
+    if (qrLib && typeof qrLib.toDataURL === 'function') {
+      qrLib.toDataURL(profileUrl, {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: '#111827',
+          light: '#ffffff'
+        }
       })
-      .catch(err => {
-        console.error('Error generating QR Code', err);
-        // Fallback to quickchart if library fails
-        setQrCodeUrl(`https://quickchart.io/qr?text=${encodeURIComponent(profileUrl)}&size=200&dark=111827&light=ffffff&margin=2`);
-      });
+        .then(url => {
+          setQrCodeUrl(url);
+        })
+        .catch(err => {
+          console.error('Error generating QR Code', err);
+          // Fallback to quickchart if library fails
+          setQrCodeUrl(`https://quickchart.io/qr?text=${encodeURIComponent(profileUrl)}&size=200&dark=111827&light=ffffff&margin=2`);
+        });
+    } else {
+      // Fallback directly if library is not available
+      setQrCodeUrl(`https://quickchart.io/qr?text=${encodeURIComponent(profileUrl)}&size=200&dark=111827&light=ffffff&margin=2`);
+    }
   }, [profileUrl]);
 
 

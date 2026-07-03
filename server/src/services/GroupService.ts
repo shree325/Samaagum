@@ -20,6 +20,7 @@ import { R_formResponseValues } from '../repositories/R_formResponseValues';
 import { R_audit_log } from '../repositories/R_audit_log';
 import { InvitationService } from './InvitationService';
 import prisma from '../config/prisma';
+import { PlanEntitlementService } from './PlanEntitlementService';
 
 export class GroupService {
     private static groupRepo = new R_groups();
@@ -148,7 +149,62 @@ export class GroupService {
         return !!mem;
     }
 
+    static async validateGroupEntitlements(userId: string, body: any, isUpdate = false, existingGroup?: any) {
+        const ents = await PlanEntitlementService.getEntitlements(userId);
+        const planKey = await PlanEntitlementService.getUserPlan(userId);
+        const adminPlan = await prisma.admin_subscription_plans.findFirst({
+            where: { name: planKey }
+        });
+        const planDisplayName = adminPlan?.display_name || (planKey.charAt(0).toUpperCase() + planKey.slice(1) + ' Plan');
+        
+        // 1. Check visibility / listed
+        const listedVal = body.listed !== undefined ? body.listed : (existingGroup ? existingGroup.listed : 'unlisted');
+        const visibilityVal = body.visibility !== undefined ? body.visibility : (existingGroup?.entities?.visibility || 'public');
+
+        let requiredVisibility = 'unlisted';
+        if (listedVal === 'listed' || visibilityVal === 'public') {
+            requiredVisibility = 'public';
+        } else if (visibilityVal === 'hidden' || visibilityVal === 'restricted') {
+            requiredVisibility = 'restricted';
+        }
+
+        if (!ents.group_allowed_visibility.includes(requiredVisibility)) {
+            throw new Error(`Your current plan (${planDisplayName}) does not allow creating ${requiredVisibility} groups. Please upgrade your plan.`);
+        }
+        
+        // 2. Check restricted access in settings
+        const settings = body.settings !== undefined ? body.settings : (existingGroup ? (existingGroup.settings || {}) : {});
+        const hasRestrictedAccess = !!(settings?.restrictedAccess?.enabled || settings?.restrictedAccess?.visibility?.enabled || settings?.restrictedAccess?.join?.enabled);
+        if (hasRestrictedAccess && !ents.group_can_restricted_access) {
+            throw new Error(`Restricted access controls are locked for your current plan (${planDisplayName}). Please upgrade your plan to use them.`);
+        }
+
+        // 3. Check join mode
+        const joinModeVal = body.joinMode !== undefined ? body.joinMode : (existingGroup ? existingGroup.join_mode : 'open');
+        if (joinModeVal === 'restricted' || joinModeVal === 'restricted_access') {
+            if (!ents.group_allowed_join_modes.includes('restricted_access')) {
+                throw new Error(`Restricted join eligibility is locked for your current plan (${planDisplayName}). Please upgrade your plan to use it.`);
+            }
+        }
+
+        // 4. Check group max capacity limit
+        const capacity = settings?.capacity || {};
+        if (ents.group_max_capacity !== -1) {
+            if (capacity.limit === true && capacity.max > ents.group_max_capacity) {
+                throw new Error(`Your plan limits group capacity to a maximum of ${ents.group_max_capacity} members.`);
+            }
+            if (capacity.limit !== true) {
+                if (!body.settings) body.settings = {};
+                if (!body.settings.capacity) body.settings.capacity = {};
+                body.settings.capacity.limit = true;
+                body.settings.capacity.max = ents.group_max_capacity;
+            }
+        }
+    }
+
     static async createGroup(userId: string, tenantId: string, body: any) {
+        await this.validateGroupEntitlements(userId, body);
+
         const slug = body.slug || body.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
         if (!body.settings?.location?.city) {
@@ -397,6 +453,8 @@ export class GroupService {
         })) : false;
 
         if (!isOwner) throw new Error('Only group owners can edit the group');
+
+        await this.validateGroupEntitlements(userId, body, true, group);
 
         const bannerParsed = body.banner && body.banner.startsWith('data:') ? this.parseDataUri(body.banner) : null;
         const iconParsed = body.icon && body.icon.startsWith('data:') ? this.parseDataUri(body.icon) : null;
@@ -1062,6 +1120,24 @@ export class GroupService {
     static async updateVisibility(groupId: string, visibility: string, adminUserId: string) {
         if (!(await this.verifyGroupAdmin(adminUserId, groupId))) {
             throw new Error('Forbidden');
+        }
+
+        const ents = await PlanEntitlementService.getEntitlements(adminUserId);
+        const planKey = await PlanEntitlementService.getUserPlan(adminUserId);
+        const adminPlan = await prisma.admin_subscription_plans.findFirst({
+            where: { name: planKey }
+        });
+        const planDisplayName = adminPlan?.display_name || (planKey.charAt(0).toUpperCase() + planKey.slice(1) + ' Plan');
+
+        let requiredVisibility = 'unlisted';
+        if (visibility === 'public') {
+            requiredVisibility = 'public';
+        } else if (visibility === 'hidden' || visibility === 'restricted') {
+            requiredVisibility = 'restricted';
+        }
+
+        if (!ents.group_allowed_visibility.includes(requiredVisibility)) {
+            throw new Error(`Your current plan (${planDisplayName}) does not allow setting group visibility to ${requiredVisibility}. Please upgrade your plan.`);
         }
 
         const entity = await this.entitiesRepo.update(groupId, { visibility: visibility as any });

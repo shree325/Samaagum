@@ -657,6 +657,10 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
               }
             }
           });
+          // Auto-assign the default plan to new users (fire-and-forget)
+          import('../services/SubscriptionActivationService').then(({ SubscriptionActivationService }) => {
+            SubscriptionActivationService.assignDefaultPlanToUser(dbUser!.id, tenantId).catch(console.error);
+          }).catch(console.error);
         } else {
           if (!dbUser) {
             return reply.status(400).send({ success: false, message: 'Account does not exist. Please sign up/create a profile first.' });

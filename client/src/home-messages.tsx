@@ -1035,7 +1035,7 @@ function Messages({ st, go, mobile, socket }) {
                         >
                           <I.moreV style={{ width: 16, height: 16 }} />
                           {menuMsgId === m.id && (
-                            <div className="msg-menu" onClick={(e) => e.stopPropagation()}>
+                            <div className={`msg-menu ${i < 3 ? 'open-down' : ''}`} onClick={(e) => e.stopPropagation()}>
                               <div className="msg-menu-header">
                                 {new Date(m.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </div>
