@@ -339,6 +339,104 @@ export const subscriptionPlanRoutes: FastifyPluginAsync = async (fastify: Fastif
             return { success: true, message: 'Subscription plan deleted' };
         } catch (e: any) { return reply.status(500).send({ success: false, message: e.message }); }
     });
+
+    // GET /billing/summary — Retrieve billing metrics & transaction logs
+    fastify.get('/billing/summary', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
+        try {
+            // 1. Total revenue
+            const revenueResult = await prisma.subscription_orders.aggregate({
+                where: { status: 'completed' },
+                _sum: { total: true }
+            });
+            const totalRevenue = Number(revenueResult._sum.total || 0);
+
+            // 2. Counts
+            const totalOrders = await prisma.subscription_orders.count();
+            const activeSubscriptions = await prisma.subscription_orders.count({
+                where: { status: 'completed', subscription_status: 'active' }
+            });
+            const inactiveSubscriptions = await prisma.subscription_orders.count({
+                where: { status: 'completed', subscription_status: 'inactive' }
+            });
+
+            // 3. Breakdown by plans
+            const breakdown = await prisma.subscription_orders.groupBy({
+                by: ['plan_id'],
+                where: { status: 'completed', subscription_status: 'active' },
+                _count: { _all: true },
+                _sum: { total: true }
+            });
+
+            // Map plan details to breakdown
+            const plans = await prisma.admin_subscription_plans.findMany({
+                select: { id: true, display_name: true, name: true }
+            });
+            const planMap = new Map(plans.map(p => [p.id, p]));
+
+            const plansBreakdown = breakdown.map(b => {
+                const planInfo = planMap.get(b.plan_id);
+                return {
+                    planId: b.plan_id,
+                    name: planInfo?.name || 'unknown',
+                    displayName: planInfo?.display_name || 'Unknown Plan',
+                    activeCount: b._count._all,
+                    revenue: Number(b._sum.total || 0)
+                };
+            });
+
+            // 4. Detailed list of subscription orders
+            const orders = await prisma.subscription_orders.findMany({
+                orderBy: { created_at: 'desc' },
+                take: 100,
+                include: {
+                    admin_subscription_plans: {
+                        select: { display_name: true, name: true }
+                    },
+                    users: {
+                        select: {
+                            id: true,
+                            primary_email: true,
+                            first_name: true,
+                            last_name: true
+                        }
+                    }
+                }
+            });
+
+            const transactions = orders.map(o => ({
+                id: o.id,
+                orderNumber: o.order_number,
+                userName: [o.users?.first_name, o.users?.last_name].filter(Boolean).join(' ') || o.users?.primary_email?.split('@')[0] || 'Unknown',
+                userEmail: o.users?.primary_email || 'N/A',
+                planName: o.admin_subscription_plans?.display_name || 'Standard Plan',
+                planType: o.plan_type, // 'monthly' / 'yearly'
+                subtotal: Number(o.subtotal),
+                taxTotal: Number(o.tax_total),
+                total: Number(o.total),
+                currency: o.currency,
+                paymentStatus: o.payment_status,
+                subscriptionStatus: o.subscription_status,
+                completedAt: o.completed_at ? o.completed_at.toISOString() : null,
+                createdAt: o.created_at.toISOString()
+            }));
+
+            return {
+                success: true,
+                data: {
+                    metrics: {
+                        totalRevenue,
+                        totalOrders,
+                        activeSubscriptions,
+                        inactiveSubscriptions
+                    },
+                    plansBreakdown,
+                    transactions
+                }
+            };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
 };
 
 export default subscriptionPlanRoutes;

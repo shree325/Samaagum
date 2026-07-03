@@ -980,6 +980,10 @@ function App() {
             <Icons.credit /> Subscription Plans
           </button>
 
+          <button className={`sidebar-item ${activeTab === "billing" ? "active" : ""}`} onClick={() => setActiveTab("billing")}>
+            <Icons.credit style={{ stroke: "var(--accent-2)" }} /> Billing &amp; Revenue
+          </button>
+
           <button className={`sidebar-item ${activeTab === "coupons" ? "active" : ""}`} onClick={() => setActiveTab("coupons")}>
             <Icons.tag /> Coupon Management
           </button>
@@ -1128,6 +1132,10 @@ function App() {
 
           {activeTab === "subscriptions" && (
             <SubscriptionPlansView user={user} apiBase={apiBase} />
+          )}
+
+          {activeTab === "billing" && (
+            <BillingDashboardView apiBase={apiBase} />
           )}
 
           {activeTab === "coupons" && (
@@ -6015,6 +6023,282 @@ function CategoriesView({ categories, setCategories, tags, setTags, showToast, l
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── BILLING & REVENUE VIEW ──────────────────────────────────────────────────
+function BillingDashboardView({ apiBase }) {
+  const [data, setData] = useState({
+    metrics: { totalRevenue: 0, totalOrders: 0, activeSubscriptions: 0, inactiveSubscriptions: 0 },
+    plansBreakdown: [],
+    transactions: []
+  });
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${apiBase}/api/admin/billing/summary`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const resData = await res.json();
+      if (resData.success) {
+        setData(resData.data);
+      }
+    } catch (err) {
+      console.error("Error loading billing summary:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const downloadInvoice = async (orderId, orderNumber) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${apiBase}/api/subscription/orders/${orderId}/invoice`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        alert("Failed to download invoice");
+        return;
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Invoice-${orderNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (err) {
+      alert("Error downloading invoice: " + err.message);
+    }
+  };
+
+  const filteredTransactions = data.transactions.filter(t => {
+    const matchesSearch = 
+      t.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.userEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.planName.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    if (statusFilter === "all") return matchesSearch;
+    if (statusFilter === "active") return matchesSearch && t.subscriptionStatus === "active";
+    if (statusFilter === "inactive") return matchesSearch && t.subscriptionStatus === "inactive";
+    if (statusFilter === "failed") return matchesSearch && t.paymentStatus === "failed";
+    return matchesSearch;
+  });
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "300px" }}>
+        <div style={{ color: "var(--ink-2)", fontSize: "16px" }}>Loading Billing Ledger & Metrics...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
+        <div>
+          <h2 style={{ fontFamily: "var(--font-display)", fontWeight: "600", fontSize: "24px", margin: "0 0 4px 0" }}>
+            Billing &amp; Revenue Operations
+          </h2>
+          <p style={{ color: "var(--ink-2)", margin: 0, fontSize: "14px" }}>
+            Monitor subscription revenue, active license distributions, and invoices.
+          </p>
+        </div>
+        <button onClick={load} className="btn-sm btn-sm-ghost" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          🔄 Refresh Ledger
+        </button>
+      </div>
+
+      {/* Metrics Cards */}
+      <div className="stats-grid" style={{ marginBottom: "24px" }}>
+        <div className="stat-card">
+          <div className="header">
+            <span>Total Gross Revenue</span>
+            <Icons.credit style={{ color: "var(--accent-1)" }} />
+          </div>
+          <div className="value">₹{data.metrics.totalRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+          <div className="trend" style={{ color: "#10b981", fontWeight: "600" }}>
+            ✓ Fully Cleared &amp; Settled
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="header">
+            <span>Active Paid Licenses</span>
+            <Icons.users style={{ color: "var(--accent-2)" }} />
+          </div>
+          <div className="value">{data.metrics.activeSubscriptions}</div>
+          <div className="trend" style={{ color: "var(--accent-2)", fontWeight: "600" }}>
+            ⚡ Real-Time User sessions
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="header">
+            <span>Inactive/Expired accounts</span>
+            <Icons.alert style={{ color: "#ef4444" }} />
+          </div>
+          <div className="value">{data.metrics.inactiveSubscriptions}</div>
+          <div className="trend" style={{ color: "var(--ink-3)", fontWeight: "600" }}>
+            Churned or downgraded users
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="header">
+            <span>Total Invoice Orders</span>
+            <Icons.doc style={{ color: "#10b981" }} />
+          </div>
+          <div className="value">{data.metrics.totalOrders}</div>
+          <div className="trend" style={{ color: "#10b981", fontWeight: "600" }}>
+            🧾 Lifetime transactions
+          </div>
+        </div>
+      </div>
+
+      {/* Plans breakdown progress bars */}
+      <div className="data-panel" style={{ marginBottom: "24px", padding: "24px" }}>
+        <h3 style={{ margin: "0 0 16px 0", fontSize: "16px", fontWeight: "600" }}>Subscription Tier Breakdown</h3>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "24px" }}>
+          {data.plansBreakdown.length === 0 ? (
+            <div style={{ color: "var(--ink-3)", fontSize: "14px" }}>No active subscriptions to display breakdown.</div>
+          ) : (
+            data.plansBreakdown.map(p => {
+              const totalActive = data.metrics.activeSubscriptions || 1;
+              const percentage = Math.round((p.activeCount / totalActive) * 100);
+              return (
+                <div key={p.planId} style={{ background: "var(--surface-2)", padding: "16px", borderRadius: "12px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                    <span style={{ fontWeight: "600", fontSize: "14px" }}>{p.displayName}</span>
+                    <span style={{ fontSize: "12px", color: "var(--ink-2)" }}>{p.activeCount} active ({percentage}%)</span>
+                  </div>
+                  <div style={{ height: "8px", background: "var(--surface-3)", borderRadius: "4px", overflow: "hidden", marginBottom: "12px" }}>
+                    <div style={{ width: `${percentage}%`, height: "100%", background: "linear-gradient(90deg, var(--accent-1), var(--accent-2))", borderRadius: "4px" }}></div>
+                  </div>
+                  <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>
+                    Revenue Contribution: <b style={{ color: "var(--ink)" }}>₹{p.revenue.toLocaleString('en-IN')}</b>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Transaction List Panel */}
+      <div className="data-panel" style={{ padding: "24px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px", marginBottom: "20px" }}>
+          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "600" }}>Transaction Ledger &amp; Invoices</h3>
+          
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            <input
+              type="text"
+              placeholder="Search order #, email, name..."
+              className="form-control"
+              style={{ width: "220px", fontSize: "13px", padding: "6px 12px" }}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            
+            <select
+              className="form-control"
+              style={{ width: "160px", fontSize: "13px", padding: "6px 12px" }}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="all">All Subscriptions</option>
+              <option value="active">Active Plans</option>
+              <option value="inactive">Inactive Plans</option>
+              <option value="failed">Failed Payments</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="table-wrapper">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Order #</th>
+                <th>User / Email</th>
+                <th>Plan Name</th>
+                <th>Billing Cycle</th>
+                <th>Revenue (Gross)</th>
+                <th>Payment</th>
+                <th>Subscription</th>
+                <th>Date Completed</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTransactions.length === 0 ? (
+                <tr>
+                  <td colSpan="9" style={{ textAlign: "center", padding: "32px", color: "var(--ink-3)" }}>
+                    No matching billing records found.
+                  </td>
+                </tr>
+              ) : (
+                filteredTransactions.map(t => (
+                  <tr key={t.id}>
+                    <td style={{ fontWeight: "600" }}>{t.orderNumber}</td>
+                    <td>
+                      <div>
+                        <span style={{ fontWeight: "600", display: "block" }}>{t.userName}</span>
+                        <span style={{ fontSize: "11px", color: "var(--ink-3)" }}>{t.userEmail}</span>
+                      </div>
+                    </td>
+                    <td><span className="badge" style={{ background: "var(--surface-3)", color: "var(--ink)" }}>{t.planName}</span></td>
+                    <td style={{ textTransform: "capitalize" }}>{t.planType}</td>
+                    <td style={{ fontWeight: "600" }}>
+                      ₹{t.total.toFixed(2)}
+                      {t.taxTotal > 0 && (
+                        <span style={{ display: "block", fontSize: "10px", color: "var(--ink-3)", fontWeight: "normal" }}>
+                          Incl. ₹{t.taxTotal.toFixed(2)} GST
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      <span className={`badge-status ${t.paymentStatus === 'completed' ? 'active' : t.paymentStatus === 'failed' ? 'inactive' : 'pending'}`}>
+                        {t.paymentStatus}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`badge-status ${t.subscriptionStatus === 'active' ? 'active' : 'inactive'}`}>
+                        {t.subscriptionStatus}
+                      </span>
+                    </td>
+                    <td>{t.completedAt ? new Date(t.completedAt).toLocaleDateString('en-IN') : 'Pending'}</td>
+                    <td>
+                      {t.paymentStatus === 'completed' ? (
+                        <button
+                          onClick={() => downloadInvoice(t.id, t.orderNumber)}
+                          className="btn-sm btn-sm-ghost"
+                          style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px" }}
+                        >
+                          📄 Download Invoice
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: "12px", color: "var(--ink-3)" }}>—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
