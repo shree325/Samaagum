@@ -2,7 +2,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { HashRouter, useNavigate, useLocation } from 'react-router-dom';
-import { Mark } from './components';
+import { Mark, LocationSelector } from './components';
+(window as any).LocationSelector = LocationSelector;
 import { CreateEvent } from './create_event';
 import { CreateGroup } from './home-create';
 import { EVENTS, FEATURED, GROUPS, ME, MY_TICKETS } from './home-data';

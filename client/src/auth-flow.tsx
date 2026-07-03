@@ -745,8 +745,8 @@ export function ScreenLocation({ m }) {
       )}
 
       <div style={{ marginTop: "16px" }}>
-        {window.LocationSelector && (
-          <window.LocationSelector
+        {LocationSelector && (
+          <LocationSelector
             value={city}
             onChange={(val) => setCity(val)}
             placeholder="Search your city..."

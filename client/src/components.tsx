@@ -122,7 +122,7 @@ export function OTPInput({ length = 6, value, onChange, status }) {
     <div className={`otp ${status || ""}`}>
       {Array.from({ length }).map((_, i) => (
         <input
-          key={i} ref={el => refs.current[i] = el}
+          key={i} ref={el => { refs.current[i] = el; }}
           className={`cell focusable ${value[i] ? "filled" : ""}`}
           inputMode="numeric" maxLength={1} value={value[i] || ""}
           onChange={(e) => onInput(i, e)} onKeyDown={(e) => onKey(i, e)}
@@ -355,7 +355,7 @@ export let activeCitiesPromise = null;
 export let activeCitiesTimestamp = 0;
 export const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-async function getActiveCities(returnFullObjects = false) {
+export async function getActiveCities(returnFullObjects = false) {
   const now = Date.now();
   if (activeCitiesCache && (now - activeCitiesTimestamp < CACHE_TTL)) {
     return returnFullObjects ? activeCitiesCache.full : activeCitiesCache.names;
@@ -390,6 +390,7 @@ async function getActiveCities(returnFullObjects = false) {
   }
   return activeCitiesPromise;
 }
+(window as any).getActiveCities = getActiveCities;
 
 /* ---------------- LocationSelector ---------------- */
 export function LocationSelector({ value, onChange, placeholder = "Search for a location...", style = {} }) {
@@ -515,8 +516,8 @@ export function LocationSelector({ value, onChange, placeholder = "Search for a 
             zIndex: 10,
             fontSize: "15px"
           }}
-          onMouseOver={(e) => e.target.style.borderColor = "var(--accent-1)"}
-          onMouseOut={(e) => e.target.style.borderColor = "var(--border)"}
+          onMouseOver={(e) => e.currentTarget.style.borderColor = "var(--accent-1)"}
+          onMouseOut={(e) => e.currentTarget.style.borderColor = "var(--border)"}
         />
         {normalizedValue && (
           <button 

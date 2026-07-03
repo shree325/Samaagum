@@ -360,8 +360,8 @@ export function CityPicker({ open, onClose, city, onPick }) {
         <p style={{ margin: "0 24px", fontSize: "13px", color: "var(--ink-2)" }}>Discovery is biased to events near you.</p>
         
         <div style={{ padding: "20px 24px 24px" }}>
-          {window.LocationSelector && (
-            <window.LocationSelector 
+          {LocationSelector && (
+            <LocationSelector 
               value={selectedLocation}
               onChange={handleSelect}
               placeholder="Search a new location..."

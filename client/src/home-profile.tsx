@@ -210,8 +210,8 @@ export function EditProfileForm({ profile, onCancel }) {
               {window.featureSettings?.location_active !== false && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, position: "relative" }}>
                   <label style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-2)" }}>Location</label>
-                  {window.LocationSelector && (
-                    <window.LocationSelector
+                  {LocationSelector && (
+                    <LocationSelector
                       value={{
                         location_name: form.locationName || form.location,
                         address: form.address || form.location,
