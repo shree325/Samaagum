@@ -214,6 +214,21 @@ function CommentItem({ c, depth, canReply, isOwner, currentUserId, replyingToId,
   );
 }
 
+function MemberOnlyScreen({ onJoin, isPending }) {
+  return (
+    <div style={{ textAlign: "center", padding: "80px 20px", color: "var(--ink-3)", background: "var(--surface)", borderRadius: "var(--r-md)", border: "1px dashed var(--border)" }}>
+      <I.lock style={{ width: 48, height: 48, marginBottom: 16, opacity: 0.3 }} />
+      <h4 style={{ margin: "0 0 8px 0", color: "var(--ink)", fontSize: 18 }}>Members Only</h4>
+      <p style={{ margin: "0 0 24px 0", maxWidth: 400, marginLeft: "auto", marginRight: "auto" }}>
+        This content is available only to group members. Join this group to access Discussions, Members, Gallery, and Events.
+      </p>
+      <button className="hbtn hbtn--primary" onClick={onJoin} disabled={isPending}>
+        {isPending ? "Request Pending" : "Join Group"}
+      </button>
+    </div>
+  );
+}
+
 function GroupDetail({ group, st, go }) {
   const [fullGroup, setFullGroup] = useState(null);
   const [membershipState, setMembershipState] = useState(null);
@@ -227,6 +242,12 @@ function GroupDetail({ group, st, go }) {
   const { joined, pending, toggleJoin } = st;
   const isJoined = joined.has(g.id) || membershipState === 'active';
   const isPending = pending.has(g.id) || membershipState === 'pending';
+  
+  const isAccessRestricted = !isJoined && !isOwner;
+  // Public groups (visibility=public, joinMode=open) allow non-members to read all tabs
+  const isPublicGroup = g.visibility === 'public' && g.joinMode === 'open';
+  const protectedTabs = ['discussion', 'events', 'members', 'gallery'];
+  const showMemberOnlyScreen = isAccessRestricted && !isPublicGroup && protectedTabs.includes(tab);
 
   const chatSettings = st.chatSettings || {
     allowSiteMessaging: true,
@@ -238,14 +259,16 @@ function GroupDetail({ group, st, go }) {
     chatSettings.allowDirectMessaging ||
     (chatSettings.allowGroupChat || chatSettings.allowEventChat)
   );
-  const [tab, setTab] = useState("discussion");
+  const [tab, setTab] = useState("about");
   const [draft, setDraft] = useState("");
   const [posts, setPosts] = useState([]);
   const [posting, setPosting] = useState(false);
 
   const [showQModal, setShowQModal] = useState(false);
   const [answers, setAnswers] = useState({});
+  const [onlineCount, setOnlineCount] = useState(g.online || 0);
   const [galleryItems, setGalleryItems] = useState([]);
+  const [callerIsAdmin, setCallerIsAdmin] = useState(false);
   const [galleryUploading, setGalleryUploading] = useState(false);
   const [activeThread, setActiveThread] = useState(null);
   const activeThreadRef = React.useRef(null);
@@ -641,10 +664,11 @@ function GroupDetail({ group, st, go }) {
   };
 
   const tabs = [
-    ["discussion", "Discussion"],
-    ["events", "Events"],
-    ["members", "Members"],
-    ["gallery", "Gallery"]
+    ["about", <span style={{ fontSize: 13, fontWeight: 600 }}>About</span>],
+    ["events", <span style={{ fontSize: 13, fontWeight: 600 }}>Events</span>],
+    ["members", <span style={{ fontSize: 13, fontWeight: 600 }}>Members</span>],
+    ["gallery", <span style={{ fontSize: 13, fontWeight: 600 }}>Gallery</span>],
+    ["discussion", <span style={{ fontSize: 13, fontWeight: 600 }}>Discussions</span>]
   ];
   const [members, setMembers] = useState(g.memberNames || []);
   const [isOwner, setIsOwner] = useState(ME.name === g.owner);
@@ -903,7 +927,10 @@ function GroupDetail({ group, st, go }) {
     const socketUrl = apiBase ? `${apiBase}/groups` : "/groups";
     const socket = window.io(socketUrl, { transports: ['websocket'] });
 
-    socket.emit('join_group', g.id);
+    // Only count as "online" if the user is an active member or owner
+    if (isMember) {
+      socket.emit('join_group', { groupId: g.id, userId: currentUserId });
+    }
 
     socket.on('dashboard_updated', () => {
       fetchGroupDetails();
@@ -1016,21 +1043,25 @@ function GroupDetail({ group, st, go }) {
       }
     });
 
+    socket.on('online_count', (data) => {
+      if (data.groupId === g.id) setOnlineCount(data.count);
+    });
+
     socket.on('gallery_updated', () => {
       if (tab === 'gallery') {
         const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
         const tkn = localStorage.getItem('token');
         fetch(`${apiBase}/api/groups/${g.id}/gallery`, {
           headers: tkn ? { 'Authorization': `Bearer ${tkn}` } : {}
-        }).then(r => r.json()).then(d => { if (d.success) setGalleryItems(d.data); }).catch(console.error);
+        }).then(r => r.json()).then(d => { if (d.success) { setGalleryItems(d.data); setCallerIsAdmin(d.callerIsAdmin || false); } }).catch(console.error);
       }
     });
 
     return () => {
-      socket.emit('leave_group', g.id);
+      if (isMember) socket.emit('leave_group', g.id);
       socket.disconnect();
     };
-  }, [g.id, isOwner, tab, sort, fetchPosts]);
+  }, [g.id, isOwner, isMember, tab, sort, fetchPosts]);
 
   if (isOwner) {
     if ((g.joinMode === 'invite_only' || g.joinMode === 'approval') && !tabs.find(t => t[0] === 'invites')) {
@@ -1103,8 +1134,9 @@ function GroupDetail({ group, st, go }) {
   const replyPerm = g.settings?.forums?.replyPerm || "everyone";
   const isMember = isOwner || isJoined;
   const forumPermissions = g.forumPermissions || [];
-  const canPost = forumsEnabled && isMember && (isOwner || threadPerm === "everyone" || threadPerm === "members" || (threadPerm === "selected" && forumPermissions.includes("create_thread")));
-  const canReply = forumsEnabled && isMember && (isOwner || replyPerm === "everyone" || replyPerm === "members" || (replyPerm === "selected" && forumPermissions.includes("reply_thread")));
+  const isArchived = Boolean(g.settings?.isArchived);
+  const canPost = !isArchived && forumsEnabled && isMember && (isOwner || threadPerm === "everyone" || threadPerm === "members" || (threadPerm === "selected" && forumPermissions.includes("create_thread")));
+  const canReply = !isArchived && forumsEnabled && isMember && (isOwner || replyPerm === "everyone" || replyPerm === "members" || (replyPerm === "selected" && forumPermissions.includes("reply_thread")));
 
   const filteredPosts = (activeTag
     ? posts.filter(p => (p.tags || []).some(t => t.name === activeTag))
@@ -1122,7 +1154,7 @@ function GroupDetail({ group, st, go }) {
 
   const gallerySettings = g.settings?.gallery || {};
   const galleryEnabled = gallerySettings.enabled !== false;
-  const canUpload = galleryEnabled && (isOwner || isJoined);
+  const canUpload = !isArchived && galleryEnabled && (isOwner || isJoined);
   const galleryMediaType = gallerySettings.imageOnly ? "Images only" : gallerySettings.videoOnly ? "Videos only" : "Images & videos";
   const galleryNeedsApproval = gallerySettings.approve === true;
   const galleryAcceptTypes = gallerySettings.videoOnly ? "video/*" : gallerySettings.imageOnly ? "image/*" : "image/*,video/*";
@@ -1136,7 +1168,7 @@ function GroupDetail({ group, st, go }) {
         headers: tkn ? { 'Authorization': `Bearer ${tkn}` } : {}
       });
       const data = await res.json();
-      if (data.success) setGalleryItems(data.data);
+      if (data.success) { setGalleryItems(data.data); setCallerIsAdmin(data.callerIsAdmin || false); }
     } catch (e) { console.error(e); }
   }, [g.id]);
 
@@ -1189,6 +1221,18 @@ function GroupDetail({ group, st, go }) {
   const capacityFull = g.isFull !== undefined ? g.isFull : (g.settings && g.settings.capacity && g.settings.capacity.limit === true && g.settings.capacity.max > 0 && nonOwnerMembers.length >= g.settings.capacity.max);
   const hasWaitlist = g.hasWaitlist !== undefined ? g.hasWaitlist : (capacityFull && g.settings && g.settings.capacity && g.settings.capacity.waitlist === true);
 
+  let displayLocation = null;
+  const loc = g.settings?.location;
+  if (loc) {
+    if (loc.city && loc.state && loc.country) displayLocation = `${loc.city}, ${loc.state}, ${loc.country}`;
+    else if (loc.city && loc.state) displayLocation = `${loc.city}, ${loc.state}`;
+    else if (loc.city && loc.country) displayLocation = `${loc.city}, ${loc.country}`;
+    else if (loc.city) displayLocation = loc.city;
+    else if (typeof loc === 'string') displayLocation = loc;
+  } else if (g.settings?.city) {
+    displayLocation = g.settings.city;
+  }
+
   if (accessDenied) {
     return (
       <div className="scroll">
@@ -1228,10 +1272,15 @@ function GroupDetail({ group, st, go }) {
               <div className="nm">{g.name} {g.visibility === "private" && <I.lock style={{ width: 18, height: 18, color: "var(--ink-3)", marginLeft: 6 }} title="Private" />}</div>
               <div className="sub">
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><I.users /> {members.length.toLocaleString()} members</span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#1f9d57", fontWeight: 600 }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#2bb673" }} />{g.online || 1} online</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#1f9d57", fontWeight: 600 }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#2bb673" }} />{onlineCount} online</span>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><I.comment /> {g.posts || 0} posts</span>
                 <span className="fchip on" style={{ pointerEvents: "none", padding: "4px 11px", fontSize: 12 }}>{g.cat || "Community"}</span>
               </div>
+              {displayLocation && (
+                <div className="sub" style={{ marginTop: 4 }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><I.pin /> {displayLocation}</span>
+                </div>
+              )}
             </div>
             <div className="gh-act">
               <button className="hbtn hbtn--ghost hbtn--sm"><I.share /></button>
@@ -1294,6 +1343,28 @@ function GroupDetail({ group, st, go }) {
 
           <div className="grp-cols">
             <div style={{ minWidth: 0 }}>
+              {showMemberOnlyScreen ? (
+                <MemberOnlyScreen onJoin={handleJoinClick} isPending={isPending} />
+              ) : (
+                <>
+              {tab === "about" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "24px" }}>
+                    <h3 style={{ marginTop: 0, marginBottom: 16, fontSize: 18 }}>About this group</h3>
+                    <div style={{ color: "var(--ink-2)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                      {g.description || g.desc || "No description provided."}
+                    </div>
+                  </div>
+                  {(g.rules || (g.settings && g.settings.rules)) && (
+                    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "24px" }}>
+                      <h3 style={{ marginTop: 0, marginBottom: 16, fontSize: 18 }}>Group Rules</h3>
+                      <div style={{ color: "var(--ink-2)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                        {g.rules || g.settings.rules}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               {tab === "discussion" && activeThread === null && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -1326,10 +1397,16 @@ function GroupDetail({ group, st, go }) {
                       <span style={{ fontSize: 14 }}>The discussion forum is disabled for this group.</span>
                     </div>
                   )}
-                  {!canPost && forumsEnabled && (
+                  {!canPost && forumsEnabled && isMember && (
                     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, color: "var(--ink-2)" }}>
                       <I.lock style={{ width: 16, height: 16, opacity: 0.5 }} />
                       <span style={{ fontSize: 13 }}>Only {threadPerm === "admins" ? "moderators and admins" : "selected members"} can create new threads.</span>
+                    </div>
+                  )}
+                  {!isMember && isPublicGroup && forumsEnabled && (
+                    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                      <span style={{ fontSize: 13, color: "var(--ink-2)" }}>Join this group to create threads and reply to discussions.</span>
+                      <button className="hbtn hbtn--primary hbtn--sm" onClick={handleJoinClick}>{isPending ? "Pending" : "Join group"}</button>
                     </div>
                   )}
                   {filteredPosts.length === 0 ? (
@@ -1746,7 +1823,13 @@ function GroupDetail({ group, st, go }) {
                       </label>
                     )}
                   </div>
-                  {galleryItems.filter(item => isOwner || item.status === 'approved').length === 0 ? (
+                  {!isMember && isPublicGroup && (
+                    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                      <span style={{ fontSize: 13, color: "var(--ink-2)" }}>Join this group to upload media.</span>
+                      <button className="hbtn hbtn--primary hbtn--sm" onClick={handleJoinClick}>{isPending ? "Pending" : "Join group"}</button>
+                    </div>
+                  )}
+                  {galleryItems.filter(item => callerIsAdmin || item.status === 'approved').length === 0 ? (
                     <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--ink-3)", background: "var(--surface)", borderRadius: "var(--r-md)", border: "1px dashed var(--border)" }}>
                       <I.image style={{ width: 48, height: 48, marginBottom: 16, opacity: 0.3 }} />
                       <h4 style={{ margin: "0 0 8px 0", color: "var(--ink)", fontSize: 16 }}>No media yet</h4>
@@ -1754,21 +1837,26 @@ function GroupDetail({ group, st, go }) {
                     </div>
                   ) : (
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
-                      {galleryItems.filter(item => isOwner || item.status === 'approved').map(item => (
+                      {galleryItems.filter(item => callerIsAdmin || item.status === 'approved').map(item => (
                         <div key={item.id} style={{ position: "relative", borderRadius: "var(--r-sm)", overflow: "hidden", aspectRatio: "1", background: "var(--surface-2)", border: "1px solid var(--border)" }}>
                           {item.type === 'video' ? (
                             <video src={item.src} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted onClick={e => e.currentTarget.paused ? e.currentTarget.play() : e.currentTarget.pause()} />
                           ) : (
                             <img src={item.src} alt="gallery" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                           )}
+                          {callerIsAdmin && item.uploaderName && (
+                            <div style={{ position: "absolute", top: 0, left: 0, right: 0, background: "linear-gradient(rgba(0,0,0,0.55),transparent)", color: "#fff", fontSize: 10, padding: "4px 6px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {item.uploaderName}
+                            </div>
+                          )}
                           {item.status === 'pending' && (
                             <div style={{ position: "absolute", top: 6, right: 6, background: "rgba(0,0,0,0.65)", color: "#fff", borderRadius: 4, fontSize: 10, padding: "2px 6px", fontWeight: 600 }}>
                               Pending
                             </div>
                           )}
-                          {(isOwner || item.user_id === currentUserId) && (
+                          {(callerIsAdmin || item.uploaderUserId === currentUserId) && (
                             <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, display: "flex", gap: 4, padding: 6 }}>
-                              {isOwner && item.status === 'pending' && (
+                              {callerIsAdmin && item.status === 'pending' && (
                                 <button className="hbtn hbtn--primary hbtn--sm" style={{ flex: 1, justifyContent: "center", fontSize: 11 }} onClick={async () => {
                                   const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
                                   const tkn = localStorage.getItem('token');
@@ -1790,6 +1878,8 @@ function GroupDetail({ group, st, go }) {
                     </div>
                   )}
                 </div>
+              )}
+              </>
               )}
             </div>
 
@@ -2131,6 +2221,11 @@ function MemberManagementPanel({ group, st, go }) {
   const [currentUserId, setCurrentUserId] = useState(null);
   const [groupSettings, setGroupSettings] = useState(g?.settings || {});
 
+  const [selectedMember, setSelectedMember] = useState(null);
+  const QUESTIONNAIRE_INIT = { loading: false, error: null, hasForm: null, data: null };
+  const [questionnaireData, setQuestionnaireData] = useState(QUESTIONNAIRE_INIT);
+
+  React.useEffect(() => {
   const fetchMembers = React.useCallback(async () => {
     const token = localStorage.getItem('token');
     let uid = null;
@@ -2176,6 +2271,29 @@ function MemberManagementPanel({ group, st, go }) {
     }
   }, [g?.id]);
 
+  const fetchQuestionnaire = async (memberId) => {
+    setQuestionnaireData({ ...QUESTIONNAIRE_INIT, loading: true });
+    try {
+      const token = localStorage.getItem('token');
+      const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+      const res = await fetch(`${apiBase}/api/groups/${g.id}/members/${memberId}/questionnaire`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setQuestionnaireData({ loading: false, error: null, hasForm: data.data.hasForm, data: data.data });
+      } else {
+        setQuestionnaireData({ loading: false, error: data.message || 'Failed to load', hasForm: null, data: null });
+      }
+    } catch {
+      setQuestionnaireData({ loading: false, error: 'Network error. Please retry.', hasForm: null, data: null });
+    }
+  };
+
+  const closeModal = () => {
+    setSelectedMember(null);
+    setQuestionnaireData(QUESTIONNAIRE_INIT);
+  };
   React.useEffect(() => {
     if (g?.id) fetchMembers();
   }, [g?.id, fetchMembers]);
@@ -2411,9 +2529,17 @@ function MemberManagementPanel({ group, st, go }) {
               showRemove
             });
 
+            const canViewResponses = currentUserRole === 'group_owner' || currentUserRole === 'group_admin' || currentUserRole === 'group_moderator';
+
             return (
               <div key={m.user_id} style={{ position: "relative", zIndex: openMenuId === m.user_id ? 50 : 1, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)" }}>
                 <div 
+                  style={{ display: "flex", alignItems: "center", gap: 12, cursor: canViewResponses ? 'pointer' : 'default' }}
+                  onClick={() => {
+                    if (!canViewResponses) return;
+                    setSelectedMember(m);
+                    fetchQuestionnaire(m.user_id);
+                  }}
                   onClick={() => m.users && go("public-profile", m.users)}
                   style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
                 >
@@ -2449,6 +2575,82 @@ function MemberManagementPanel({ group, st, go }) {
           })}
         </div>
       </div>
+
+      {selectedMember && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100000 }} onClick={closeModal}>
+          <div style={{ background: 'var(--bg)', width: '90%', maxWidth: 500, borderRadius: 12, display: 'flex', flexDirection: 'column', maxHeight: '80vh', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottom: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Avatar name={selectedMember.users?.display_name || "Unknown"} size={48} />
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--ink)' }}>{selectedMember.users?.display_name || "Unknown"}</span>
+                  <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>@{selectedMember.users?.username || "unknown"}</span>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4, fontSize: 12 }}>
+                    <span style={{ color: roleColors[getHighestRole(selectedMember.roles)] || 'var(--ink-2)' }}>Role: {roleLabels[getHighestRole(selectedMember.roles)]}</span>
+                    <span style={{ color: 'var(--ink-3)' }}>|</span>
+                    <span style={{ color: selectedMember.state === 'active' ? 'var(--accent)' : 'var(--accent-2)' }}>Status: {selectedMember.state === 'active' ? 'Approved' : 'Pending'}</span>
+                  </div>
+                  {questionnaireData.data?.submittedAt && (
+                    <span style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>
+                      Joined on: {new Date(questionnaireData.data.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button className="tool" onClick={closeModal}>
+                <I.x style={{ width: 20, height: 20 }} />
+              </button>
+            </div>
+            
+            <div style={{ padding: 16, overflowY: 'auto', flex: 1 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 600, margin: '0 0 16px 0', color: 'var(--ink)' }}>Join Questionnaire Responses</h3>
+              
+              {questionnaireData.loading && (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
+                  <div className="spinner" style={{ width: 24, height: 24, border: '2px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                  <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                </div>
+              )}
+
+              {!questionnaireData.loading && questionnaireData.error && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 32, gap: 12 }}>
+                  <span style={{ color: '#ef4444', fontSize: 14 }}>{questionnaireData.error}</span>
+                  <button className="hbtn hbtn--primary hbtn--sm" onClick={() => fetchQuestionnaire(selectedMember.user_id)}>Retry</button>
+                </div>
+              )}
+
+              {!questionnaireData.loading && !questionnaireData.error && questionnaireData.hasForm === false && (
+                <div style={{ textAlign: 'center', padding: 32, color: 'var(--ink-3)', fontSize: 14 }}>
+                  This group has no join questionnaire.
+                </div>
+              )}
+
+              {!questionnaireData.loading && !questionnaireData.error && questionnaireData.data?.questions && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {questionnaireData.data.questions.map((q, idx) => (
+                    <div key={q.fieldId} style={{ display: 'flex', flexDirection: 'column', borderBottom: idx < questionnaireData.data.questions.length - 1 ? '1px solid var(--border)' : 'none', paddingBottom: idx < questionnaireData.data.questions.length - 1 ? 16 : 0 }}>
+                      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink-2)' }}>Q{q.number}. {q.label} {q.required && <span style={{ color: '#ef4444' }}>*</span>}</span>
+                      <div style={{ marginTop: 6, fontSize: 14, color: 'var(--ink)' }}>
+                        {!q.answered ? (
+                          <span style={{ fontStyle: 'italic', color: 'var(--ink-3)' }}>(No response submitted)</span>
+                        ) : q.type === 'multiple_choice' ? (
+                          <ul style={{ margin: 0, paddingLeft: 20 }}>
+                            {q.answer.map((a, i) => <li key={i}>{a}</li>)}
+                          </ul>
+                        ) : q.type === 'checkbox' ? (
+                          <span>{q.answer ? 'Yes' : 'No'}</span>
+                        ) : (
+                          <span style={{ whiteSpace: 'pre-wrap' }}>{String(q.answer)}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

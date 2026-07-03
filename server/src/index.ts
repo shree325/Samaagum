@@ -29,6 +29,7 @@ import { messagingTestRoutes } from './controllers/messagingTestRoutes';
 import { messagingRoutes } from './controllers/messagingRoutes';
 import { connectionRoutes } from './controllers/connectionRoutes';
 import { groupRoutes } from './controllers/groupRoutes';
+import { publicRoutes } from './controllers/publicRoutes';
 
 
 dotenv.config();
@@ -132,7 +133,6 @@ fastify.register(adminGeoRoutes, { prefix: '/api/admin' });
 
 fastify.register(userSubscriptionRoutes, { prefix: '/api/subscription' });
 fastify.register(uploadRoutes, { prefix: '/api' });
-import { publicRoutes } from './controllers/publicRoutes';
 fastify.register(publicRoutes, { prefix: '/api/public' });
 fastify.register(messagingTestRoutes, { prefix: '/api/test' });
 fastify.register(messagingRoutes, { prefix: '/api/messaging' });

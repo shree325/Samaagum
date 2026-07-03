@@ -57,7 +57,14 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const [city, setCity] = useState(window.ME?.location || "Global");
+  const [city, setCity] = useState(() => {
+    if (window.ME?.location) return window.ME.location;
+    const manual = localStorage.getItem('samaagum_selected_city');
+    if (manual) { try { return JSON.parse(manual).city_name || "Global"; } catch { return manual; } }
+    const detected = localStorage.getItem('samaagum_detected_city');
+    if (detected) { try { return JSON.parse(detected).city_name || "Global"; } catch { return detected; } }
+    return "Global";
+  });
   const [chatSettings, setChatSettings] = useState({
     allowSiteMessaging: true,
     allowDirectMessaging: true,
@@ -86,6 +93,34 @@ function App() {
   }, []);
 
   const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+
+  // IP-based location detection — runs once on mount
+  useEffect(() => {
+     if (localStorage.getItem('samaagum_location_locked')) return;
+     if (window.ME?.location) return;
+     if (localStorage.getItem('samaagum_detected_city')) return;
+
+    const lastAttempt = localStorage.getItem('samaagum_detect_attempted_at');
+    if (lastAttempt) {
+      const hoursSince = (Date.now() - new Date(lastAttempt).getTime()) / 3_600_000;
+      if (hoursSince < 24) return;
+    }
+
+    fetch(`${apiBase}/api/public/detect-location`)
+      .then(r => r.json())
+      .then(res => {
+        localStorage.setItem('samaagum_detect_attempted_at', new Date().toISOString());
+        if (res.success && res.data?.city_name) {
+          localStorage.setItem('samaagum_detected_city', JSON.stringify(res.data));
+          if (!localStorage.getItem('samaagum_location_locked') && !window.ME?.location) {
+            setCity(res.data.city_name);
+          }
+        }
+      })
+      .catch(() => {
+        localStorage.setItem('samaagum_detect_attempted_at', new Date().toISOString());
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Set up global toast helper and initial fetch
   useEffect(() => {
@@ -486,8 +521,8 @@ function App() {
 
   // engagement state
   const [saved, toggleSave] = useSet([]);
-  const [joined, toggleJoin] = useSet(["g1", "g2", "g4"]);
-  const [pending, togglePending] = useSet([]);
+  const [joined, toggleJoin, addJoined] = useSet(["g1", "g2", "g4"]);
+  const [pending, togglePending, addPending] = useSet([]);
   const [createdGroups, setCreatedGroups] = useState(() => [GROUPS[1]]);
   const [connected, toggleConnect] = useSet([]);
   const [registered, , registerAdd] = useSet(["e1", "e2", "e4"]);
@@ -579,7 +614,7 @@ function App() {
   }, [toggleJoin, togglePending]);
 
   const st = {
-    saved, toggleSave, joined, pending, toggleJoin: handleJoin, connected, toggleConnect, registered, register, city,
+    saved, toggleSave, joined, addJoined, pending, addPending, toggleJoin: handleJoin, connected, toggleConnect, registered, register, city,
     myTickets, setMyTickets, waitlisted, toggleWaitlist, addClaimedTicket,
     createdEvents, setCreatedEvents, createdGroups, setCreatedGroups,
     addCreatedEvent, addCreatedGroup,

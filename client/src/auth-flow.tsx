@@ -675,12 +675,12 @@ function ScreenLocation({ m }) {
             dob: m.data.dob,
             displayName: m.data.name,
             bio: m.data.role || '',
-            location: city ? city.address : 'Bengaluru',
-            preferredLocation: city ? city.address : 'Bengaluru',
-            locationName: city ? city.location_name : 'Bengaluru',
-            locationLat: city ? city.latitude : undefined,
-            locationLng: city ? city.longitude : undefined,
-            address: city ? city.address : undefined,
+            location: city?.address ?? null,
+            preferredLocation: city?.address ?? null,
+            locationName: city?.location_name ?? null,
+            locationLat: city?.latitude ?? null,
+            locationLng: city?.longitude ?? null,
+            address: city?.address ?? null,
             phoneNumber: m.data.phoneNumber || '',
             interests: m.data.interests || []
           })
@@ -693,7 +693,7 @@ function ScreenLocation({ m }) {
     if (window.ME) {
       window.ME.name = m.data.name || window.ME.name;
       window.ME.role = m.data.role || window.ME.role;
-      window.ME.location = city ? city.location_name : window.ME.location;
+      if (city) window.ME.location = city.location_name;
       if (m.data.interests && m.data.interests.length > 0) {
         window.ME.skills = m.data.interests;
       }
@@ -795,7 +795,7 @@ function ScreenDone({ m }) {
           )}
           {d.name || "You"} · {d.role || "Explorer"}
         </span></div>
-        <div className="srow"><span className="k">Location</span><span className="v"><Ic.pin style={{ color: "var(--accent-2)" }} />{loc ? loc.location_name : "Bengaluru, India"}</span></div>
+        <div className="srow"><span className="k">Location</span><span className="v"><Ic.pin style={{ color: "var(--accent-2)" }} />{loc ? loc.location_name : "Not set"}</span></div>
         <div className="srow"><span className="k">Interests</span><span className="v">
           {(d.interests.length ? d.interests : ["Startups", "Design", "Music"]).slice(0, 4).map(i => <span key={i} className="mini-chip">{i}</span>)}
           {d.interests.length > 4 && <span className="mini-chip">+{d.interests.length - 4}</span>}

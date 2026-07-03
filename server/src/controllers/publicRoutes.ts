@@ -127,6 +127,18 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
     }
   });
 
+  // IP-based location detection
+  fastify.get('/detect-location', async (request: any, reply: any) => {
+    try {
+      const ip = request.ip;
+      const detected = await locationService.detectByIp(ip);
+      return { success: true, data: detected };
+    } catch (error: any) {
+      fastify.log.warn('IP location detection failed: ' + error.message);
+      return { success: true, data: null };
+    }
+  });
+
   // Virtual Card fetch
   fastify.get('/card/:username', async (request: any, reply: any) => {
     try {

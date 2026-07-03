@@ -6,7 +6,7 @@
 const ME = {
   name: "", handle: "", role: "",
   bio: "",
-  location: "Bengaluru, India",
+  location: "",
   plan: "free", // "free", "pro", "enterprise"
   stats: { connections: 248, events: 36, groups: 7 },
 };

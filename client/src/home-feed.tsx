@@ -110,7 +110,7 @@ function HomeFeed({ st, go }) {
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
               {TRENDING.filter(g => g.visibility !== "hidden").map((g,i) => (
                 <GroupRow key={g.id} g={g} rank={i+1} onOpen={(g)=>go("group", g)}
-                  joined={false} onJoin={()=>go("group", g)} />
+                  joined={g.isJoined || st.joined?.has(g.id) ? true : (g.isPending || st.pending?.has(g.id)) ? "pending" : false} onJoin={(g)=>{ st.toggleJoin(g); }} />
               ))}
             </div>
           </div>
@@ -120,7 +120,7 @@ function HomeFeed({ st, go }) {
         <div className="section">
           <SectionBar title="Communities near you" onMore={()=>go("discover")} />
           <div className="ev-grid">
-            {NEAR.filter(g => g.visibility !== "hidden").map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={false} onJoin={()=>go("group", g)} />)}
+            {NEAR.filter(g => g.visibility !== "hidden").map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={g.isJoined || st.joined?.has(g.id) ? true : (g.isPending || st.pending?.has(g.id)) ? "pending" : false} onJoin={(g)=>{ st.toggleJoin(g); }} />)}
           </div>
         </div>
 
@@ -140,16 +140,42 @@ function HomeFeed({ st, go }) {
 function Discover({ st, go }) {
   const [tab, setTab] = useState("groups");
   const [cat, setCat] = useState("All");
-  const { saved, toggleSave, registered } = st;
+  const { saved, toggleSave, registered, city, addJoined, addPending } = st;
   const evs = EVENTS.filter(e => cat==="All" || e.cat===cat);
 
   const [dbGroups, setDbGroups] = useState([]);
   const [categoriesList, setCategoriesList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+
+  const cityRef = React.useRef(city);
+  React.useEffect(() => { cityRef.current = city; }, [city]);
+
+  const fetchGroups = React.useCallback(async (currentCity) => {
+    try {
+      const token = localStorage.getItem('token');
+      const cityQuery = currentCity && currentCity !== "Global" ? `?city=${encodeURIComponent(currentCity)}` : '';
+      const res = await fetch(`${apiBase}/api/groups${cityQuery}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      const data = await res.json();
+      if (data.success) {
+        const groups = data.data || [];
+        setDbGroups(groups);
+        // Seed joined/pending sets from server so cards show correct state on load
+        groups.forEach(g => {
+          if (g.isJoined) addJoined && addJoined(g.id);
+          else if (g.isPending) addPending && addPending(g.id);
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [apiBase]);
 
   React.useEffect(() => {
-    const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
-    
     const fetchCategories = async () => {
       try {
         const res = await fetch(`${apiBase}/api/public/categories`);
@@ -162,32 +188,20 @@ function Discover({ st, go }) {
       }
     };
     fetchCategories();
+  }, [apiBase]);
 
-    const fetchGroups = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`${apiBase}/api/groups`, {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-        });
-        const data = await res.json();
-        if (data.success) {
-          setDbGroups(data.data || []);
-        }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchGroups();
+  React.useEffect(() => {
+    fetchGroups(city);
+  }, [city, fetchGroups]);
 
+  React.useEffect(() => {
     if (window.io) {
       const socketUrl = apiBase ? `${apiBase}/groups` : "/groups";
       const socket = window.io(socketUrl, { transports: ['websocket'] });
-      socket.on('groups_updated', () => fetchGroups());
+      socket.on('groups_updated', () => fetchGroups(cityRef.current));
       return () => socket.disconnect();
     }
-  }, []);
+  }, [apiBase, fetchGroups]);
 
   const grps = dbGroups.filter(g => g.visibility !== "hidden" && (cat==="All" || g.category===cat || g.cat===cat));
 
@@ -218,7 +232,7 @@ function Discover({ st, go }) {
           </div>
         ) : (
           <div className="ev-grid">
-            {loading ? <div style={{ color: "var(--ink-3)", padding: 20 }}>Loading groups...</div> : grps.map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={false} onJoin={()=>go("group", g)} />)}
+            {loading ? <div style={{ color: "var(--ink-3)", padding: 20 }}>Loading groups...</div> : grps.map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={g.isJoined || st.joined?.has(g.id) ? true : (g.isPending || st.pending?.has(g.id)) ? "pending" : false} onJoin={(g)=>{ st.toggleJoin(g); }} />)}
           </div>
         )}
       </div>

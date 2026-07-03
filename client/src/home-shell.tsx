@@ -284,7 +284,18 @@ function CityPicker({ open, onClose, city, onPick }) {
     setSelectedLocation(loc);
     if (loc) {
       onPick(loc.location_name);
-      
+
+      // Persist as manual (device-level) selection and lock out auto-detection
+      const manualObj = {
+        city_name: loc.location_name,
+        state_name: null,
+        country_name: null,
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+      };
+      localStorage.setItem('samaagum_selected_city', JSON.stringify(manualObj));
+      localStorage.setItem('samaagum_location_locked', '1');
+
       try {
         const token = localStorage.getItem('token');
         if (token) {
@@ -312,7 +323,7 @@ function CityPicker({ open, onClose, city, onPick }) {
       } catch (e) {
         console.error(e);
       }
-      
+
       setTimeout(() => onClose(), 800);
     }
   };
