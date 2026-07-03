@@ -67,7 +67,7 @@ function App() {
   const [cityOpen, setCityOpen] = useState(false);
   const [meSync, setMeSync] = useState(0); // Add a tick to force re-render when ME updates asynchronously
 
-  const { entitlements, plan, loading: entitlementsLoading, refetch: refetchEntitlements } = usePlanEntitlements();
+  const { entitlements, plan, planDisplayName, loading: entitlementsLoading, refetch: refetchEntitlements } = usePlanEntitlements();
   const [subscription, setSubscription] = useState({ plan: 'free', status: 'active' });
   const [socket, setSocket] = useState(null);
   const [counts, setCounts] = useState({ notifs: 0, messages: 0 });
@@ -246,6 +246,57 @@ function App() {
         }
         // Dispatch custom event for real-time list updates if a view wants to listen
         window.dispatchEvent(new CustomEvent("samaagum:groupNotification", { detail: payload }));
+      });
+
+      chatSocket.on("subscription.activated", (payload) => {
+        fetchCounts();
+        // Real-time plan activation: fetch new subscription status from API
+        const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+        const tok = localStorage.getItem('token');
+        if (tok) {
+          fetch(`${apiBase}/api/subscription/status`, {
+            headers: { 'Authorization': `Bearer ${tok}` }
+          })
+          .then(r => r.json())
+          .then(res => {
+            if (res.success && res.data?.subscription) {
+              setSubscription(res.data.subscription);
+              // Notify entitlements hook to immediately refetch
+              window.dispatchEvent(new CustomEvent('subscription_changed'));
+            }
+          })
+          .catch(err => console.error('Error refreshing subscription after activation:', err));
+        }
+        // Show beautiful toast
+        if (window.toast) {
+          const name = payload?.planName || 'Standard';
+          window.toast(`🎉 Your ${name} Plan is now active! Enjoy your new features.`, "success");
+        }
+      });
+
+      chatSocket.on("subscription.expiring", (payload) => {
+        if (window.toast) {
+          const planName = payload?.planName || 'your';
+          window.toast(`⚠️ Your ${planName} Plan expires soon. Renew to keep access.`, "warning");
+        }
+      });
+
+      chatSocket.on("entitlements.updated", (payload) => {
+        console.log("⚡ Plan entitlements updated in real-time:", payload);
+        window.dispatchEvent(new CustomEvent('subscription_changed'));
+        if (window.toast) {
+          window.toast(`⚡ Your plan (${payload.planName || 'Plan'}) features have been updated!`, "info");
+        }
+      });
+
+      chatSocket.on("notification:count", (payload) => {
+        if (payload && typeof payload.count === 'number') {
+          setCounts(prev => ({ ...prev, notifs: payload.count }));
+        }
+      });
+
+      chatSocket.on("notification:updated", (payload) => {
+        fetchCounts();
       });
 
       setSocket(chatSocket);
@@ -535,7 +586,7 @@ function App() {
     subscription, setSubscription,
     fetchCounts,
     chatSettings, setChatSettings,
-    entitlements, plan, refetchEntitlements
+    entitlements, plan, planDisplayName, refetchEntitlements
   };
 
   // sidebar collapsed state

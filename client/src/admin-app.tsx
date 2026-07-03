@@ -3192,7 +3192,7 @@ function SubscriptionPlansView({ user, apiBase }) {
   const [editItem, setEditItem] = useState(null);
   const emptyForm = {
     name: "", displayName: "", description: "", category: "individual",
-    planType: "monthly", isActive: true, isPopular: false, groupName: "",
+    planType: "monthly", isActive: true, isPopular: false, isDefault: false, groupName: "",
     pricing: { monthly: 0, yearly: 0, yearlyDiscount: 0 },
     metadata: { maxEvents: 5, maxAttendees: 100, maxGroups: 1, supportLevel: "basic", customBranding: false, whiteLabel: false },
     features: [],
@@ -3292,7 +3292,7 @@ function SubscriptionPlansView({ user, apiBase }) {
     setEditItem(p);
     setForm({
       name: p.name, displayName: p.display_name, description: p.description || "",
-      category: p.category, planType: p.plan_type, isActive: p.is_active, isPopular: p.is_popular,
+      category: p.category, planType: p.plan_type, isActive: p.is_active, isPopular: p.is_popular, isDefault: p.is_default || false,
       groupName: p.group_name || "",
       pricing: {
         monthly: p.pricing?.monthly?.amount ?? p.pricing?.monthly ?? 0,
@@ -3313,7 +3313,7 @@ function SubscriptionPlansView({ user, apiBase }) {
     try {
       const payload = {
         name: form.name, displayName: form.displayName, description: form.description,
-        category: form.category, planType: form.planType, isActive: form.isActive, isPopular: form.isPopular,
+        category: form.category, planType: form.planType, isActive: form.isActive, isPopular: form.isPopular, isDefault: form.isDefault,
         groupName: form.groupName,
         pricing: { monthly: { amount: Number(form.pricing.monthly), currency: "INR" }, yearly: { amount: Number(form.pricing.yearly), currency: "INR", discount: Number(form.pricing.yearlyDiscount) } },
         metadata: form.metadata,
@@ -3332,6 +3332,23 @@ function SubscriptionPlansView({ user, apiBase }) {
     try {
       await adminApi.plans.deletePlan(id);
       load();
+    } catch (err) { alert(err.message); }
+  };
+
+  const handleSetDefault = async (plan) => {
+    if (!confirm(`Set "${plan.display_name}" as the default plan for all new users?`)) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${apiBase}/api/admin/plans/${plan.id}/set-default`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const json = await res.json();
+      if (json.success) {
+        load();
+      } else {
+        alert(json.message || 'Failed to set default plan');
+      }
     } catch (err) { alert(err.message); }
   };
 
@@ -3369,7 +3386,11 @@ function SubscriptionPlansView({ user, apiBase }) {
                 <tr key={p.id}>
                   <td>
                     <div>
-                      <span style={{ fontWeight: "600", display: "block" }}>{p.display_name} {p.is_popular && <span style={{ color: "var(--accent-1)", fontSize: "11px" }}>★ Popular</span>}</span>
+                      <span style={{ fontWeight: "600", display: "block" }}>
+                        {p.display_name}
+                        {p.is_popular && <span style={{ color: "var(--accent-1)", fontSize: "11px", marginLeft: 4 }}>★ Popular</span>}
+                        {p.is_default && <span style={{ background: "#059669", color: "#fff", fontSize: "10px", fontWeight: "700", padding: "2px 7px", borderRadius: "10px", marginLeft: 6 }}>⭐ Default</span>}
+                      </span>
                       <span style={{ fontSize: "11px", color: "var(--ink-3)" }}>{p.name}</span>
                     </div>
                   </td>
@@ -3383,6 +3404,7 @@ function SubscriptionPlansView({ user, apiBase }) {
                     <td style={{ textAlign: "right" }}>
                       <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
                         <button className="btn-sm btn-sm-ghost" onClick={() => openEntitlements(p)}>Entitlements</button>
+                        {!p.is_default && <button className="btn-sm btn-sm-ghost" style={{ color: "#059669", borderColor: "#059669" }} onClick={() => handleSetDefault(p)}>Set Default</button>}
                         <button className="btn-sm btn-sm-ghost" onClick={() => openEdit(p)}>Edit</button>
                         <button className="btn-sm btn-sm-danger" onClick={() => handleDelete(p.id)}>Delete</button>
                       </div>
@@ -3586,13 +3608,17 @@ function SubscriptionPlansView({ user, apiBase }) {
                   </label>
                 </div>
 
-                <div style={{ display: "flex", gap: "20px" }}>
+                <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
                   {[{ k: "isActive", l: "Active" }, { k: "isPopular", l: "Mark as Popular" }].map(item => (
                     <label key={item.k} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
                       <input type="checkbox" checked={form[item.k]} onChange={e => setF(item.k, e.target.checked)} />
                       {item.l}
                     </label>
                   ))}
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer", color: form.isDefault ? "#059669" : undefined }}>
+                    <input type="checkbox" checked={form.isDefault} onChange={e => setF("isDefault", e.target.checked)} />
+                    ⭐ Set as Default Plan (auto-assigned to new users)
+                  </label>
                 </div>
 
                 <div style={{ display: "flex", gap: "20px" }}>

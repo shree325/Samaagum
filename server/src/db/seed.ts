@@ -4,7 +4,7 @@ import prisma from '../config/prisma';
 
 async function seedPlans() {
     console.log('🧹 Cleaning up old plans and referencing records...');
-    
+
     try {
         // Delete subscription_orders of non-free/non-standard plans
         await prisma.$executeRawUnsafe(`
@@ -100,8 +100,7 @@ async function seedPlans() {
         }
     });
 
-    // 2. Seed admin_subscription_plans
-    await prisma.admin_subscription_plans.upsert({
+    const freePlan = await prisma.admin_subscription_plans.upsert({
         where: { name: 'free' },
         update: {
             display_name: 'Free Plan',
@@ -131,6 +130,12 @@ async function seedPlans() {
             ],
             limits: freeEntitlements
         }
+    });
+
+    // Separately set is_default to true to avoid any IDE type-checking lag
+    await (prisma.admin_subscription_plans as any).update({
+        where: { id: freePlan.id },
+        data: { is_default: true }
     });
 
     await prisma.admin_subscription_plans.upsert({
@@ -179,7 +184,7 @@ async function main() {
     try {
         console.log('🔄 Seeding Admin RBAC...');
         await seedAdminRBAC();
-        
+
         console.log('🔄 Seeding Platform Settings...');
         await seedPlatformSettings(async (query: string, params: any[]) => {
             return prisma.$queryRawUnsafe(query, ...params);

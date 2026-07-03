@@ -961,6 +961,34 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           };
         }
 
+        if (l.template_key === 'subscription_activated' && l.provider_ref) {
+          try {
+            const data = JSON.parse(l.provider_ref);
+            const planName = data.planName || "Standard";
+            return {
+              id: l.id,
+              type: "billing",
+              who: "Billing",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `Your subscription to the <b>${planName} Plan</b> has been activated successfully! 🎉`,
+              action: "billing"
+            };
+          } catch (e) {
+            return {
+              id: l.id,
+              type: "billing",
+              who: "Billing",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `Your subscription has been activated successfully! 🎉`,
+              action: "billing"
+            };
+          }
+        }
+
         return {
           id: l.id,
           type: "system",

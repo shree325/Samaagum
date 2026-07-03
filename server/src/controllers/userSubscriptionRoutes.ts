@@ -238,7 +238,12 @@ export const userSubscriptionRoutes: FastifyPluginAsync = async (fastify: Fastif
             const entitlements = await PlanEntitlementService.getEntitlements(userId);
             const planKey = await PlanEntitlementService.getUserPlan(userId);
 
-            return { success: true, data: { entitlements, plan: planKey } };
+            const adminPlan = await prisma.admin_subscription_plans.findFirst({
+                where: { name: planKey }
+            });
+            const planDisplayName = adminPlan?.display_name || (planKey.charAt(0).toUpperCase() + planKey.slice(1) + ' Plan');
+
+            return { success: true, data: { entitlements, plan: planKey, planDisplayName } };
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });
         }
@@ -425,12 +430,10 @@ export const userSubscriptionRoutes: FastifyPluginAsync = async (fastify: Fastif
             // If it is a free order, activate right away!
             if (total === 0) {
                 await SubscriptionActivationService.activate(order.id);
-                try {
-                    const { InvoiceService } = await import('../services/InvoiceService');
-                    await InvoiceService.generateInvoice(order.id);
-                } catch (invErr) {
-                    console.error(`[userSubscriptionRoutes] Failed to generate invoice for free order ${order.id}:`, invErr);
-                }
+                // Fire-and-forget: socket notification + invoice + email
+                SubscriptionActivationService.notifyAndSendInvoice(order.id).catch(err =>
+                    console.error(`[userSubscriptionRoutes] Free order notifyAndSendInvoice failed:`, err)
+                );
             }
 
             return reply.status(201).send({
@@ -590,6 +593,11 @@ export const userSubscriptionRoutes: FastifyPluginAsync = async (fastify: Fastif
 
             // Activate subscription benefits & role assignment
             await SubscriptionActivationService.activate(orderId);
+
+            // Fire-and-forget: emit socket event + generate invoice + send email with PDF
+            SubscriptionActivationService.notifyAndSendInvoice(orderId).catch(err =>
+                console.error('[userSubscriptionRoutes] notifyAndSendInvoice failed:', err)
+            );
 
             return {
                 success: true,
@@ -968,13 +976,10 @@ export const userSubscriptionRoutes: FastifyPluginAsync = async (fastify: Fastif
             // Activate subscription benefits & role assignment
             await SubscriptionActivationService.activate(localOrderId);
 
-            // Generate invoice
-            try {
-                const { InvoiceService } = await import('../services/InvoiceService');
-                await InvoiceService.generateInvoice(localOrderId);
-            } catch (invErr) {
-                console.error(`[userSubscriptionRoutes] Failed to generate invoice for order ${localOrderId}:`, invErr);
-            }
+            // Fire-and-forget: emit socket event + database notifications + generate invoice + send email with PDF
+            SubscriptionActivationService.notifyAndSendInvoice(localOrderId).catch(err =>
+                console.error('[userSubscriptionRoutes] notifyAndSendInvoice failed:', err)
+            );
 
             // Fetch Plan details to get plan display name
             const plan = await planRepo.getById(order.plan_id);

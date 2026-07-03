@@ -4,7 +4,7 @@ const { useState, useRef, useEffect, useCallback, useMemo } = React;
 // Reuse existing components and utilities from the project
 // Assuming I, Grain, EventCard, LocationSection, COVERS, GROUPS, ME, etc. are globally available via the app bundle or global namespace.
 
-function UpgradePlanModal({ open, onClose, feature, go }) {
+function UpgradePlanModal({ open, onClose, feature, go, currentPlanName }) {
   if (!open) return null;
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 12000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)" }}>
@@ -15,7 +15,7 @@ function UpgradePlanModal({ open, onClose, feature, go }) {
         <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
         <h2 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 8px 0", color: "var(--ink)" }}>Upgrade Required</h2>
         <p style={{ fontSize: 14, color: "var(--ink-2)", margin: "0 0 24px 0", lineHeight: 1.6 }}>
-          The feature <strong>{feature}</strong> is locked under your current plan. Upgrade to the <strong>Standard Plan</strong> to unlock premium options, unlimited capacity, and advanced events features!
+          The feature <strong>{feature}</strong> is locked under your current plan ({currentPlanName || "Free Plan"}). Please upgrade your plan to unlock premium options, unlimited capacity, and advanced events features!
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <button 
@@ -1460,7 +1460,7 @@ function LocationSection({ venue, setVenue, locType, setLocType }) {
 /* ---------------- Create Event ---------------- */
 const DEFAULT_FREE_ENTITLEMENTS = {
   group_max_groups: -1,
-  group_allowed_visibility: ['private'],
+  group_allowed_visibility: ['unlisted'],
   group_allowed_join_modes: ['open', 'invite_only'],
   group_max_capacity: 25,
   group_can_restricted_access: false,
@@ -3470,6 +3470,7 @@ function CreateEvent({ go, mobile, st }) {
           onClose={() => setUpgradeModalOpen(false)} 
           feature={upgradeFeature} 
           go={go} 
+          currentPlanName={st?.planDisplayName}
         />
       )}
     </div>

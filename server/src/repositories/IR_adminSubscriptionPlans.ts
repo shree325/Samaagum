@@ -19,6 +19,7 @@ export interface IAdminSubscriptionPlan {
     rbac_role_id?: string | null;
     rbac_position_id?: string | null;
     rbac_auto_assign: boolean;
+    is_default?: boolean;
     tenant_id?: string | null;
     created_at?: Date;
     updated_at?: Date;

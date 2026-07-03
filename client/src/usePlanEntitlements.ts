@@ -3,7 +3,7 @@ const { useState, useEffect, useCallback } = React;
 
 const DEFAULT_FREE_ENTITLEMENTS = {
   group_max_groups: -1,
-  group_allowed_visibility: ['private'],
+  group_allowed_visibility: ['unlisted'],
   group_allowed_join_modes: ['open', 'invite_only'],
   group_max_capacity: 25,
   group_can_restricted_access: false,
@@ -19,6 +19,7 @@ const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
 function usePlanEntitlements() {
   const [entitlements, setEntitlements] = useState(DEFAULT_FREE_ENTITLEMENTS);
   const [plan, setPlan] = useState('free');
+  const [planDisplayName, setPlanDisplayName] = useState('Free Plan');
   const [loading, setLoading] = useState(true);
 
   const fetchEntitlements = useCallback(async () => {
@@ -26,6 +27,7 @@ function usePlanEntitlements() {
     if (!token) {
       setEntitlements(DEFAULT_FREE_ENTITLEMENTS);
       setPlan('free');
+      setPlanDisplayName('Free Plan');
       setLoading(false);
       return;
     }
@@ -41,9 +43,11 @@ function usePlanEntitlements() {
       if (data.success && data.data) {
         setEntitlements(data.data.entitlements);
         setPlan(data.data.plan || 'free');
+        setPlanDisplayName(data.data.planDisplayName || 'Free Plan');
       } else {
         setEntitlements(DEFAULT_FREE_ENTITLEMENTS);
         setPlan('free');
+        setPlanDisplayName('Free Plan');
       }
     } catch (err) {
       console.error('Failed to fetch plan entitlements:', err);
@@ -69,6 +73,7 @@ function usePlanEntitlements() {
   return {
     entitlements,
     plan,
+    planDisplayName,
     loading,
     refetch: fetchEntitlements
   };

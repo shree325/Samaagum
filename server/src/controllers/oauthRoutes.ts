@@ -154,6 +154,9 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                         created_at: new Date()
                     }
                 });
+                // Auto-assign the default plan to new users
+                const { SubscriptionActivationService } = await import('../services/SubscriptionActivationService');
+                SubscriptionActivationService.assignDefaultPlanToUser(dbUser.id, tenantId).catch(console.error);
             }
 
             // Issue JWT token
@@ -367,6 +370,9 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                         created_at: new Date()
                     }
                 });
+                // Auto-assign the default plan to new users
+                const { SubscriptionActivationService } = await import('../services/SubscriptionActivationService');
+                SubscriptionActivationService.assignDefaultPlanToUser(dbUser.id, tenantId).catch(console.error);
             }
 
             const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
@@ -580,6 +586,9 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                         created_at: new Date()
                     }
                 });
+                // Auto-assign the default plan to new users
+                const { SubscriptionActivationService } = await import('../services/SubscriptionActivationService');
+                SubscriptionActivationService.assignDefaultPlanToUser(dbUser.id, tenantId).catch(console.error);
             }
 
             const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');

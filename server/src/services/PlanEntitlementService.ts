@@ -34,11 +34,7 @@ export class PlanEntitlementService {
         where: { user_id: userId, entity_type: 'user' }
       });
 
-      if (!userEntity) {
-        return DEFAULT_FREE_ENTITLEMENTS;
-      }
-
-      const activeSub = await prisma.subscriptions.findFirst({
+      const activeSub = userEntity ? await prisma.subscriptions.findFirst({
         where: {
           owner_entity_id: userEntity.id,
           state: 'active',
@@ -51,12 +47,26 @@ export class PlanEntitlementService {
         include: {
           plans: true
         }
-      });
+      }) : null;
 
       let entitlements = DEFAULT_FREE_ENTITLEMENTS;
+      let dbEntitlements: any = null;
 
       if (activeSub && activeSub.plans && activeSub.plans.entitlements) {
-        const entObj = activeSub.plans.entitlements as any;
+        dbEntitlements = activeSub.plans.entitlements;
+      } else {
+        const defaultAdminPlan = await prisma.admin_subscription_plans.findFirst({
+          where: { is_default: true, is_active: true }
+        }) || await prisma.admin_subscription_plans.findFirst({
+          where: { name: 'free', is_active: true }
+        });
+        if (defaultAdminPlan) {
+          dbEntitlements = defaultAdminPlan.limits || defaultAdminPlan.features;
+        }
+      }
+
+      if (dbEntitlements) {
+        const entObj = dbEntitlements as any;
         entitlements = {
           group_max_groups: typeof entObj.group_max_groups === 'number' ? entObj.group_max_groups : DEFAULT_FREE_ENTITLEMENTS.group_max_groups,
           group_allowed_visibility: Array.isArray(entObj.group_allowed_visibility) ? entObj.group_allowed_visibility : DEFAULT_FREE_ENTITLEMENTS.group_allowed_visibility,
@@ -79,6 +89,15 @@ export class PlanEntitlementService {
       return entitlements;
     } catch (error) {
       console.error('[PlanEntitlementService] Error fetching entitlements:', error);
+      // Attempt dynamic default fallback even on error
+      try {
+        const defaultAdminPlan = await prisma.admin_subscription_plans.findFirst({
+          where: { is_default: true, is_active: true }
+        });
+        if (defaultAdminPlan && (defaultAdminPlan.limits || defaultAdminPlan.features)) {
+          return (defaultAdminPlan.limits || defaultAdminPlan.features) as any;
+        }
+      } catch (innerErr) {}
       return DEFAULT_FREE_ENTITLEMENTS;
     }
   }
@@ -91,7 +110,14 @@ export class PlanEntitlementService {
       const userEntity = await prisma.entities.findFirst({
         where: { user_id: userId, entity_type: 'user' }
       });
-      if (!userEntity) return 'free';
+      if (!userEntity) {
+        const defaultAdminPlan = await prisma.admin_subscription_plans.findFirst({
+          where: { is_default: true, is_active: true }
+        }) || await prisma.admin_subscription_plans.findFirst({
+          where: { name: 'free', is_active: true }
+        });
+        return defaultAdminPlan?.name || 'free';
+      }
 
       const activeSub = await prisma.subscriptions.findFirst({
         where: {
@@ -111,7 +137,13 @@ export class PlanEntitlementService {
       if (activeSub && activeSub.plans) {
         return activeSub.plans.key;
       }
-      return 'free';
+      
+      const defaultAdminPlan = await prisma.admin_subscription_plans.findFirst({
+        where: { is_default: true, is_active: true }
+      }) || await prisma.admin_subscription_plans.findFirst({
+        where: { name: 'free', is_active: true }
+      });
+      return defaultAdminPlan?.name || 'free';
     } catch (e) {
       return 'free';
     }

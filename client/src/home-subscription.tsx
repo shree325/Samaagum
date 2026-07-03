@@ -96,15 +96,26 @@ window.UpgradePage = function UpgradePage({ st, go }) {
         {plans.map(plan => {
           const pricing = plan.pricing[billingCycle] || {};
           const priceAmount = pricing.amount || 0;
-          const isCurrent = userPlan === plan.name.toLowerCase() && userCycle === billingCycle;
+          const isFreeOrZero = plan.plan_type === 'free' || priceAmount === 0;
+          const isCurrent = isFreeOrZero
+            ? (userPlan === plan.name.toLowerCase() || userPlan === 'free' || !userPlan)
+            : (userPlan === plan.name.toLowerCase() && userCycle === billingCycle);
           const isPrevious = previousPlans.some(p => p.planId === plan.id && p.billingCycle === billingCycle);
           const switchableMatch = switchablePlans.find(p => p.planId === plan.id && p.billingCycle === billingCycle);
 
+          // Whether user is already on a paid/higher plan
+          const isOnPaidPlan = userPlan && userPlan !== 'free' && userPlan !== 'free plan';
+
           let buttonContent = `Get ${plan.display_name}`;
           let buttonAction = () => go("checkout", { selectedPlan: plan, billingCycle });
+          let buttonDisabled = isCurrent || loading;
 
           if (isCurrent) {
             buttonContent = "Current Plan";
+          } else if (isFreeOrZero && isOnPaidPlan) {
+            // User is on paid plan — free tier is their default, not something to "get"
+            buttonContent = "Default Plan";
+            buttonDisabled = true;
           } else if (switchableMatch) {
             buttonContent = "Switch Plan";
             buttonAction = async () => {
@@ -169,9 +180,9 @@ window.UpgradePage = function UpgradePage({ st, go }) {
 
               <div className="card-foot">
                 <button 
-                  className={`btn-sub-cta ${isCurrent ? 'btn-sub-basic' : (plan.is_popular ? 'btn-sub-pro' : 'btn-sub-basic')}`}
-                  onClick={buttonAction}
-                  disabled={isCurrent || loading}
+                  className={`btn-sub-cta ${buttonDisabled ? 'btn-sub-basic' : (plan.is_popular ? 'btn-sub-pro' : 'btn-sub-basic')}`}
+                  onClick={buttonDisabled ? undefined : buttonAction}
+                  disabled={buttonDisabled}
                 >
                   {buttonContent}
                 </button>
