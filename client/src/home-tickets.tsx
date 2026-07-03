@@ -1,10 +1,20 @@
 // @ts-nocheck
+import React, { useRef, useState } from 'react';
+import { Wordmark } from './components';
+import { COVERS, EVENTS, FEATURED } from './home-data';
+import { Discover } from './home-feed';
+import { Avatar, Grain, QRCode } from './home-icons';
+import { Empty } from './home-shell';
+import { Waitlist } from './home-waitlist';
+import { I } from './home-icons';
+import { Events } from './landing-features';
+
 /* ============================================================
    Samaagum — Tickets wallet (S-085) · Ticket detail (S-086)
    · Claim-your-ticket (F4: S-090 landing, S-091 OTP)
    ============================================================ */
 
-function MyTickets({ st, go }) {
+export function MyTickets({ st, go }) {
   const [tab, setTab] = useState("upcoming");
   const tickets = st.myTickets || [];
   const upcoming = tickets.filter(t => t.status !== "used" && t.status !== "voided");
@@ -132,7 +142,7 @@ function MyTickets({ st, go }) {
   );
 }
 
-function TicketDetail({ tkt, st, go }) {
+export function TicketDetail({ tkt, st, go }) {
   const tickets = st?.myTickets || [];
   const t = tkt || tickets[0] || {};
   const used = t.status === "used";
@@ -198,7 +208,7 @@ function TicketDetail({ tkt, st, go }) {
 }
 
 /* ---------------- Claim-your-ticket (F4) ---------------- */
-function ClaimFlow({ st, go }) {
+export function ClaimFlow({ st, go }) {
   const [step, setStep] = useState("landing"); // landing | otp | done
   const [code, setCode] = useState(["", "", "", "", "", ""]);
   const [status, setStatus] = useState("");
@@ -288,7 +298,7 @@ function ClaimFlow({ st, go }) {
   );
 }
 
-function EventDashboard({ ev, st, go }) {
+export function EventDashboard({ ev, st, go }) {
   const e = ev || st.createdEvents[0];
   const [attendees, setAttendees] = useState(e.attendees || ["Dev Kapoor", "Mira Shah", "Leo Patel", "Zoya Nair", "Ishaan Malhotra"]);
   const [requests, setRequests] = useState(["Kabir Anand", "Mira Shah", "Riya Thomas"]);
@@ -384,4 +394,4 @@ function EventDashboard({ ev, st, go }) {
   );
 }
 
-Object.assign(window, { MyTickets, TicketDetail, ClaimFlow, EventDashboard });
+

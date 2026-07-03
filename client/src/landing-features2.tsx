@@ -1,10 +1,17 @@
 // @ts-nocheck
+import React from 'react';
+import { Field, Reveal, gradFor, initials } from './components';
+import { Discover } from './home-feed';
+import { I, REDUCED, clamp, lerp, range, useScrub, useTilt } from './landing-core';
+import { Communities, Events, easeOutCubic } from './landing-features';
+import { AUTH } from './landing-hero';
+
 /* ============================================================
    Samaagum landing — Networking, Rich Profiles
    ============================================================ */
 
 /* ---------------- Networking constellation ---------------- */
-const NET_NODES = [
+export const NET_NODES = [
   { x: 50, y: 49, n: "You", you: true, s: 66 },
   { x: 17, y: 23, n: "Mira Shah", s: 50 },
   { x: 83, y: 19, n: "Leo Park", s: 46 },
@@ -13,9 +20,9 @@ const NET_NODES = [
   { x: 33, y: 87, n: "Sara Iyer", s: 44 },
   { x: 71, y: 88, n: "Noah Field", s: 50 },
 ];
-const NET_EDGES = [[0, 1], [0, 2], [0, 3], [0, 4], [0, 5], [0, 6], [1, 3], [2, 4], [5, 6], [1, 0], [4, 6]];
+export const NET_EDGES = [[0, 1], [0, 2], [0, 3], [0, 4], [0, 5], [0, 6], [1, 3], [2, 4], [5, 6], [1, 0], [4, 6]];
 
-function Networking() {
+export function Networking() {
   const stageRef = useScrub((p, r, vh, el) => {
     const sp = easeOutCubic(range(p, 0.1, 0.58));
     el.querySelectorAll(".net-edge").forEach((path, i) => {
@@ -79,14 +86,14 @@ function Networking() {
 }
 
 /* ---------------- Rich Profiles (3D tilt) ---------------- */
-function FloatBadge({ pos, speed, children, style }) {
+export function FloatBadge({ pos, speed, children, style }) {
   const ref = useScrub((p, r, vh, el) => {
     const k = (p - 0.5) * 2;
     el.style.transform = `translateY(${(k * speed).toFixed(1)}px)`;
   });
   return <div className="float-badge glass-card" ref={ref} style={{ ...pos, ...style }}>{children}</div>;
 }
-function Profiles() {
+export function Profiles() {
   const cardRef = useTilt(9);
   return (
     <section className="section" id="profiles">
@@ -135,4 +142,4 @@ function Profiles() {
   );
 }
 
-Object.assign(window, { Networking, Profiles, FloatBadge });
+

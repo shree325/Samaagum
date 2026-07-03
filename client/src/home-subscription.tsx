@@ -1,9 +1,16 @@
 // @ts-nocheck
+import React, { useEffect, useState } from 'react';
+import { ORDER } from './auth-flow';
+import { ME } from './home-data';
+import { Profile } from './home-profile';
+import { Sidebar } from './home-shell';
+import { I } from './home-icons';
+
 /* ============================================================
    Samaagum Home — Subscription & Checkout Flow
    ============================================================ */
 
-const formatPrice = (amount: number, currency: string = 'INR') => {
+export const formatPrice = (amount: number, currency: string = 'INR') => {
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency,
@@ -11,10 +18,10 @@ const formatPrice = (amount: number, currency: string = 'INR') => {
   }).format(amount);
 };
 
-const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+export const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
 
 // Helper function to dynamically load Razorpay SDK script if not already loaded
-const loadRazorpayScript = () => {
+export const loadRazorpayScript = () => {
   return new Promise((resolve) => {
     if (window.Razorpay) {
       resolve(true);
@@ -31,7 +38,7 @@ const loadRazorpayScript = () => {
 /* ──────────────────────────────────────────────────────────────
    1. UPGRADE PAGE
    ────────────────────────────────────────────────────────────── */
-window.UpgradePage = function UpgradePage({ st, go }) {
+export function UpgradePage({ st, go }) {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [billingCycle, setBillingCycle] = useState('monthly');
@@ -199,7 +206,7 @@ window.UpgradePage = function UpgradePage({ st, go }) {
 /* ──────────────────────────────────────────────────────────────
    2. CHECKOUT PAGE
    ────────────────────────────────────────────────────────────── */
-window.CheckoutPage = function CheckoutPage({ param, st, go }) {
+export function CheckoutPage({ param, st, go }) {
   const { selectedPlan, billingCycle } = param || {};
   const savedState = JSON.parse(sessionStorage.getItem('subscriptionCheckout') || '{}');
   
@@ -584,7 +591,7 @@ window.CheckoutPage = function CheckoutPage({ param, st, go }) {
 /* ──────────────────────────────────────────────────────────────
    2.5 ORDER REVIEW MODAL
    ────────────────────────────────────────────────────────────── */
-const OrderReviewModal = ({ previewData, checkoutParams, onClose, st, go }) => {
+export const OrderReviewModal = ({ previewData, checkoutParams, onClose, st, go }) => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
   const [agreedTerms, setAgreedTerms] = useState(false);
@@ -893,7 +900,7 @@ const OrderReviewModal = ({ previewData, checkoutParams, onClose, st, go }) => {
 /* ──────────────────────────────────────────────────────────────
    3. CHECKOUT SUCCESS PAGE
    ────────────────────────────────────────────────────────────── */
-window.CheckoutSuccessPage = function CheckoutSuccessPage({ param, go }) {
+export function CheckoutSuccessPage({ param, go }) {
   const { orderId, order_number, plan_name, billing_cycle, activated_at, next_billing_at, subscription_status, total } = param || {};
 
   const formatDate = (dateStr) => {

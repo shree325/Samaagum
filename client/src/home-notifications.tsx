@@ -1,11 +1,19 @@
 // @ts-nocheck
+import React, { useCallback, useEffect, useState } from 'react';
+import { Mark } from './components';
+import { FEATURED, NOTIFS } from './home-data';
+import { Avatar } from './home-icons';
+import { Profile } from './home-profile';
+import { Empty, FilterChip } from './home-shell';
+import { I } from './home-icons';
+
 /* ============================================================
    Samaagum Home — Notification center
    ============================================================ */
 
-const { useState, useEffect, useCallback } = React;
 
-const NTYPE = {
+
+export const NTYPE = {
   join:        { ico:<I.groups style={{width:14,height:14}}/>, c:"linear-gradient(135deg,#6d5efc,#2a7fff)" },
   connect:     { ico:<I.user style={{width:14,height:14}}/>,   c:"linear-gradient(135deg,#10b981,#22d3ee)" },
   event:       { ico:<I.cal style={{width:13,height:13}}/>,    c:"linear-gradient(135deg,#ff6b4a,#ff4d8d)" },
@@ -21,14 +29,14 @@ const NTYPE = {
   group_user_joined: { ico:<I.user style={{width:14,height:14}}/>, c:"linear-gradient(135deg,#10b981,#22d3ee)" },
 };
 
-const API_BASE = window.location.port === "8080" ? "http://localhost:3000" : "";
+export const API_BASE = window.location.port === "8080" ? "http://localhost:3000" : "";
 
-function authHeaders() {
+export function authHeaders() {
   const token = localStorage.getItem('token');
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-function NotifRow({ n, st, go, onRead }) {
+export function NotifRow({ n, st, go, onRead }) {
   const meta = NTYPE[n.type] || NTYPE.system;
   const avatarTypes = ["connect","message","forum","group_user_joined"];
   const [acted, setActed] = useState(null);
@@ -148,7 +156,7 @@ function NotifRow({ n, st, go, onRead }) {
 }
 
 /* ── Incoming connection requests card ── */
-function ConnRequestCard({ req, onActed }) {
+export function ConnRequestCard({ req, onActed }) {
   const [acted, setActed] = useState(null);
   const [loading, setLoading] = useState(null);
   const name = req.requester?.display_name || req.requester?.email || "Unknown";
@@ -232,7 +240,7 @@ function ConnRequestCard({ req, onActed }) {
   );
 }
 
-function Notifications({ st, go, socket }) {
+export function Notifications({ st, go, socket }) {
   const [tab, setTab] = useState("all");
   const [items, setItems] = useState(NOTIFS);
   const [connRequests, setConnRequests] = useState([]);
@@ -389,4 +397,4 @@ function Notifications({ st, go, socket }) {
   );
 }
 
-Object.assign(window, { Notifications });
+

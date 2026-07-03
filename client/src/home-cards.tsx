@@ -1,12 +1,16 @@
+import React from 'react';
+import { Avatar, Grain } from './home-icons';
+import { I } from './home-icons';
+
 /* ============================================================
    Samaagum Home — shared cards (event, group, person, discussion)
    ============================================================ */
 
-function DateBadge({ month, day }) {
+export function DateBadge({ month, day }) {
   return <div className="date-badge"><div className="m">{month}</div><div className="d">{day}</div></div>;
 }
 
-function SaveBtn({ saved, onClick, Cls = "save" }) {
+export function SaveBtn({ saved, onClick, Cls = "save" }) {
   return (
     <button className={`${Cls} ${saved?"on":""}`} onClick={(e)=>{ e.stopPropagation(); onClick(); }} title={saved?"Saved":"Save"}>
       {saved ? <I.bookmarkF/> : <I.bookmark/>}
@@ -15,7 +19,7 @@ function SaveBtn({ saved, onClick, Cls = "save" }) {
 }
 
 /* ---------------- Event card (rail / grid) ---------------- */
-const EventCard = React.memo(function EventCard({ ev, onOpen, saved, onSave, registered }) {
+export const EventCard = React.memo(function EventCard({ ev, onOpen, saved, onSave, registered }) {
   return (
     <div className="ecard rise" onClick={()=>onOpen(ev)}>
       <div className="cover" style={{ background: ev.cover }}>
@@ -45,7 +49,7 @@ const EventCard = React.memo(function EventCard({ ev, onOpen, saved, onSave, reg
 });
 
 /* ---------------- Featured (hero) ---------------- */
-const FeatureCard = React.memo(function FeatureCard({ ev, onOpen, saved, onSave }) {
+export const FeatureCard = React.memo(function FeatureCard({ ev, onOpen, saved, onSave }) {
   return (
     <div className="feature rise" onClick={()=>onOpen(ev)}>
       <div className="fcover" style={{ background: ev.cover }}>
@@ -73,7 +77,7 @@ const FeatureCard = React.memo(function FeatureCard({ ev, onOpen, saved, onSave 
 });
 
 /* ---------------- Group card (grid) ---------------- */
-const GroupCard = React.memo(function GroupCard({ g, onOpen, joined, onJoin }) {
+export const GroupCard = React.memo(function GroupCard({ g, onOpen, joined, onJoin }) {
   const _apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
   const _resolveImg = (url) => url && !url.startsWith('blob:') ? (url.startsWith('/api/') ? _apiBase + url : url) : null;
   const bannerSrc = _resolveImg(g.banner);
@@ -133,7 +137,7 @@ const GroupCard = React.memo(function GroupCard({ g, onOpen, joined, onJoin }) {
 });
 
 /* ---------------- Group row (trending list) ---------------- */
-const GroupRow = React.memo(function GroupRow({ g, rank, onOpen, joined, onJoin }) {
+export const GroupRow = React.memo(function GroupRow({ g, rank, onOpen, joined, onJoin }) {
   const _apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
   const _resolveImg = (url) => url && !url.startsWith('blob:') ? (url.startsWith('/api/') ? _apiBase + url : url) : null;
   const iconSrc = _resolveImg(g.icon);
@@ -176,7 +180,7 @@ const GroupRow = React.memo(function GroupRow({ g, rank, onOpen, joined, onJoin 
 });
 
 /* ---------------- Person card (horizontal scroll) ---------------- */
-const PersonCard = React.memo(function PersonCard({ p, connected, onConnect }) {
+export const PersonCard = React.memo(function PersonCard({ p, connected, onConnect }) {
   return (
     <div className="pcard rise">
       <div className="pc-cov" style={{ background: p.cover }} />
@@ -196,7 +200,7 @@ const PersonCard = React.memo(function PersonCard({ p, connected, onConnect }) {
 });
 
 /* ---------------- Discussion row (feed) ---------------- */
-const DiscussionRow = React.memo(function DiscussionRow({ d, onOpen }) {
+export const DiscussionRow = React.memo(function DiscussionRow({ d, onOpen }) {
   return (
     <div className="disc" onClick={onOpen}>
       <Avatar name={d.who} size={40} />
@@ -218,4 +222,4 @@ const DiscussionRow = React.memo(function DiscussionRow({ d, onOpen }) {
   );
 });
 
-Object.assign(window, { EventCard, FeatureCard, GroupCard, GroupRow, PersonCard, DiscussionRow, DateBadge, SaveBtn });
+

@@ -1,13 +1,26 @@
 // @ts-nocheck
+import React, { Fragment, useEffect, useRef, useState } from 'react';
+import ReactDOM from 'react-dom/client';
+import { Field, Mark, ROLES } from './components';
+import { Toggle, isChecked } from './create_event';
+import { AdminApiClient } from './generated/api-client';
+import { Discover } from './home-feed';
+import { Sidebar, Topbar } from './home-shell';
+import { apiBase } from './home-subscription';
+import { Waitlist } from './home-waitlist';
+import { Events } from './landing-features';
+import { Networking } from './landing-features2';
+import { AUTH } from './landing-hero';
+
 /* ============================================================
    Samaagum Admin Panel — React Application
    Requires React, ReactDOM, and Babel in browser.
    ============================================================ */
 
-var { useState, useEffect, useRef } = React;
+
 
 // --- INLINE SVG ICONS ---
-const Icons = {
+export const Icons = {
   messageSquare: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>,
   shield: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>,
   users: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>,
@@ -31,7 +44,7 @@ const Icons = {
 };
 
 // --- INITIAL MOCK DATA ---
-const INITIAL_USERS = [
+export const INITIAL_USERS = [
   { id: "usr-1", name: "Aanya Reddy", email: "aanya@samaagum.co", role: "Super Admin", status: "Active", joined: "1 month ago" },
   { id: "usr-2", name: "Dev Kapoor", email: "dev@samaagum.co", role: "Platform Admin", status: "Active", joined: "3 weeks ago" },
   { id: "usr-3", name: "Mira Shah", email: "mira@gmail.com", role: "Event Host", status: "Active", joined: "2 weeks ago" },
@@ -39,7 +52,7 @@ const INITIAL_USERS = [
   { id: "usr-5", name: "SpamBot99", email: "spambot99@scam.org", role: "Participant", status: "Suspended", joined: "3 days ago" },
 ];
 
-const INITIAL_CATEGORIES = [
+export const INITIAL_CATEGORIES = [
   { id: 'cat-1', name: 'Technology', slug: 'technology', description: 'Software, AI, hardware, and digital innovation events', iconType: 'emoji', iconValue: '💻', displayOrder: 1, status: 'active', subcategoryCount: 6, eventCount: 142, isDeleted: false, createdAt: '2025-12-01T10:00:00Z' },
   { id: 'cat-2', name: 'Sports & Fitness', slug: 'sports-fitness', description: 'Cricket, football, gym, running, and outdoor sports', iconType: 'emoji', iconValue: '🏏', displayOrder: 2, status: 'active', subcategoryCount: 5, eventCount: 89, isDeleted: false, createdAt: '2025-12-01T10:01:00Z' },
   { id: 'cat-3', name: 'Education', slug: 'education', description: 'Workshops, seminars, training, and learning events', iconType: 'emoji', iconValue: '🎓', displayOrder: 3, status: 'active', subcategoryCount: 4, eventCount: 67, isDeleted: false, createdAt: '2025-12-01T10:02:00Z' },
@@ -52,7 +65,7 @@ const INITIAL_CATEGORIES = [
   { id: 'cat-10', name: 'Health & Wellness', slug: 'health-wellness', description: 'Yoga, meditation, mental health, and wellness sessions', iconType: 'emoji', iconValue: '🧘', displayOrder: 10, status: 'active', subcategoryCount: 0, eventCount: 23, isDeleted: false, createdAt: '2025-12-01T10:09:00Z' },
 ];
 
-const INITIAL_TAGS = [
+export const INITIAL_TAGS = [
   { id: 'tag-1', name: 'Web3 & Crypto', slug: 'web3-crypto', category: 'Technology', status: 'active', eventCount: 24, isDeleted: false, createdAt: '2026-01-01T10:00:00Z' },
   { id: 'tag-2', name: 'Yoga Flow', slug: 'yoga-flow', category: 'Health & Wellness', status: 'active', eventCount: 15, isDeleted: false, createdAt: '2026-01-01T10:01:00Z' },
   { id: 'tag-3', name: 'SaaS & AI Startups', slug: 'saas-ai-startups', category: 'Business & Startup', status: 'active', eventCount: 42, isDeleted: false, createdAt: '2026-01-01T10:02:00Z' },
@@ -63,7 +76,7 @@ const INITIAL_TAGS = [
   { id: 'tag-8', name: 'Fitness & Running', slug: 'fitness-running', category: 'Sports & Fitness', status: 'inactive', eventCount: 5, isDeleted: false, createdAt: '2026-01-01T10:07:00Z' }
 ];
 
-const EMOJI_SETS = {
+export const EMOJI_SETS = {
   'Tech': ['💻', '🤖', '🔧', '⚡', '📱', '🌐', '🔬', '💡'],
   'Sports': ['🏏', '⚽', '🏀', '🎾', '🏃', '🏋️', '🚴', '⛳'],
   'Education': ['🎓', '📚', '✏️', '🏫', '📖', '🧪', '📐', '🎒'],
@@ -76,31 +89,31 @@ const EMOJI_SETS = {
   'Health': ['🧘', '💪', '🏥', '💊', '🧠', '🌿', '🍎', '😌'],
 };
 
-const INITIAL_KYC = [
+export const INITIAL_KYC = [
   { id: "kyc-1", name: "Echo Collective", type: "Event Host", email: "echo@collective.in", submitted: "2 hours ago", docName: "Certificate of Incorporation & PAN", docNumber: "AAACE9912A", status: "Pending", notes: "" },
   { id: "kyc-2", name: "Letterform Lab", type: "Event Host", email: "admin@letterform.org", submitted: "1 day ago", docName: "Aadhaar Card & GST Registry", docNumber: "GST-29AAAAA1111A1Z1", status: "Pending", notes: "" },
   { id: "kyc-3", name: "Still Mind Collective", type: "Event Host", email: "shanti@stillmind.in", submitted: "3 days ago", docName: "PAN Card & Address Proof", docNumber: "BBBPX9012K", status: "Verified", notes: "Verified by admin on June 12" }
 ];
 
-const INITIAL_DISPUTES = [
+export const INITIAL_DISPUTES = [
   { id: "disp-1", user: "Arjun V", event: "Sunset Rooftop Sessions: Indie Live", amount: "₹350", reason: "Host cancelled but refund didn't trigger automatically.", submitted: "5 hours ago", status: "Open", maker: "", checker: "" },
   { id: "disp-2", user: "Meera J", event: "Street Food Crawl: VV Puram", amount: "₹600", reason: "Accidentally booked twice, requested cancellation.", submitted: "Yesterday", status: "Refund Requested", maker: "admin@samaagum.co", checker: "" },
   { id: "disp-3", user: "Karan Sethi", event: "Morning Flow + Community Brunch", amount: "₹250", reason: "Waitlist spot expired early due to system lag.", submitted: "4 days ago", status: "Closed", maker: "admin@samaagum.co", checker: "superadmin@samaagum.co" }
 ];
 
-const INITIAL_MODERATION = [
+export const INITIAL_MODERATION = [
   { id: "mod-1", reporter: "Mira Shah", reportedUser: "SpamBot99", entityType: "Post", entityContent: "Invest ₹1000 and earn ₹10000 daily! Click here: bit.ly/spam-link", reason: "Spam / Financial scam", submitted: "3 hours ago", status: "Pending" },
   { id: "mod-2", reporter: "Zoya N", reportedUser: "AnonymousUser", entityType: "Comment", entityContent: "This event is garbage and the host is a crook.", reason: "Abusive language", submitted: "1 day ago", status: "Pending" },
   { id: "mod-3", reporter: "Nina P", reportedUser: "SpammyHost", entityType: "Event", entityContent: "Free Cryptocurrency Webinar", reason: "Scam / Commercial promo", submitted: "2 days ago", status: "Suspended" }
 ];
 
-const INITIAL_TENANTS = [
+export const INITIAL_TENANTS = [
   { id: "ten-1", name: "Indiranagar Tech Hub", slug: "indiranagar-tech", plan: "Enterprise", entitlements: ["Waitlist Priority Boosts", "PWA Check-in"], status: "Active" },
   { id: "ten-2", name: "Koramangala Culturals", slug: "koramangala-culture", plan: "Standard", entitlements: ["Offline Cash Payments"], status: "Active" },
   { id: "ten-3", name: "Cubbon Athletic Collective", slug: "cubbon-athletics", plan: "Free Trial", entitlements: ["PWA Check-in"], status: "Pending Approval" }
 ];
 
-const INITIAL_RBAC = [
+export const INITIAL_RBAC = [
   { permission: "Book/RSVP/Waitlist", desc: "Discover, join, RSVP, waitlist and message on the end-user side", roles: ["Participant", "Event Host", "Group Organizer", "Community Admin", "Platform Admin", "Super Admin"] },
   { permission: "Create & Run Events", desc: "Manage event lifecycle, edit details, custom fields, waitlists", roles: ["Event Host", "Group Organizer", "Community Admin", "Platform Admin", "Super Admin"] },
   { permission: "Refund Bookings (Maker)", desc: "Initiate or request refunds for event tickets", roles: ["Event Host", "Platform Admin", "Super Admin"] },
@@ -112,14 +125,14 @@ const INITIAL_RBAC = [
   { permission: "Tenant Provisioning & Entitlements", desc: "Approve, create, configure and entitle new tenants", roles: ["Super Admin"] },
 ];
 
-const INITIAL_AUDIT = [
+export const INITIAL_AUDIT = [
   { time: "2026-06-15 10:14:02", actor: "System", action: "Tenant 'Indiranagar Tech Hub' successfully provisioned on Enterprise plan." },
   { time: "2026-06-15 11:02:15", actor: "superadmin@samaagum.co", action: "Updated global feature flag: Enabled 'Waitlist Boosts'." },
   { time: "2026-06-15 11:45:30", actor: "admin@samaagum.co", action: "Closed dispute ticket disp-3 and verified offline audit trail." },
   { time: "2026-06-15 12:12:08", actor: "superadmin@samaagum.co", action: "Role permission matrix initialized." }
 ];
 
-const FEATURE_FLAGS = [
+export const FEATURE_FLAGS = [
   { id: "ff-1", name: "Waitlist Referral Boosts", desc: "Allows users to boost waitlist priority via sharing referrals.", active: true },
   { id: "ff-2", name: "Offline Proof Verification", desc: "Allows uploading cash payment proofs for event tickets.", active: true },
   { id: "ff-3", name: "PWA Check-in Gate", desc: "Enables host-side offline QR validation.", active: false },
@@ -127,9 +140,9 @@ const FEATURE_FLAGS = [
 ];
 
 // --- UNIFIED API CLIENT FOR ADMIN PANEL ---
-const apiClient = new window.AdminApiClient();
+export const apiClient = new window.AdminApiClient();
 
-const adminApi = {
+export const adminApi = {
   // Provider settings from unified-admin-service.yaml configuration logic
   activeProviders: {
     categories: "database",
@@ -492,16 +505,16 @@ const adminApi = {
   }
 };
 
-window.adminApi = adminApi;
 
 
-const GeoLocationsView = window.GeoLocationsView;
-const ChatControlsView = window.ChatControlsView;
-const GeoIpv4View = window.GeoIpv4View;
-const GeoIpv6View = window.GeoIpv6View;
+
+export const GeoLocationsView = window.GeoLocationsView;
+export const ChatControlsView = window.ChatControlsView;
+export const GeoIpv4View = window.GeoIpv4View;
+export const GeoIpv6View = window.GeoIpv6View;
 
 // --- APP COMPONENT ---
-function App() {
+export function App() {
   const [user, setUser] = useState(() => {
     try {
       const token = localStorage.getItem('samaagum_admin_token');
@@ -661,7 +674,7 @@ function App() {
   }, [user]);
 
   useEffect(() => {
-    window.samaagum_admin_setActiveTab = setActiveTab;
+    
     window.samaagum_admin_login = (email) => {
       handleLogin(email, "superadmin");
     };
@@ -1344,7 +1357,7 @@ function App() {
 // --- SUB-COMPONENTS & VIEWS ---
 
 // Login Form Component
-function LoginForm({ onSubmit }) {
+export function LoginForm({ onSubmit }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -1385,7 +1398,7 @@ function LoginForm({ onSubmit }) {
 }
 
 // Dashboard Home View
-function DashboardView({ kyc, disputes, moderation, tenants, user, setActiveTab }) {
+export function DashboardView({ kyc, disputes, moderation, tenants, user, setActiveTab }) {
   const pendingKyc = kyc.filter(k => k.status === "Pending").length;
   const unresolvedDisputes = disputes.filter(d => d.status === "Open" || d.status === "Refund Requested").length;
   const pendingMod = moderation.filter(m => m.status === "Pending").length;
@@ -1505,7 +1518,7 @@ function DashboardView({ kyc, disputes, moderation, tenants, user, setActiveTab 
 }
 
 // KYC Verification View
-function KycView({ kyc, onView }) {
+export function KycView({ kyc, onView }) {
   return (
     <div className="data-panel">
       <div className="panel-header">
@@ -1558,7 +1571,7 @@ function KycView({ kyc, onView }) {
 }
 
 // Disputes & Refunds View
-function DisputesView({ disputes, onView, user }) {
+export function DisputesView({ disputes, onView, user }) {
   return (
     <div className="data-panel">
       <div className="panel-header">
@@ -1610,7 +1623,7 @@ function DisputesView({ disputes, onView, user }) {
 }
 
 // Moderation View
-function ModerationView({ moderation, onAction }) {
+export function ModerationView({ moderation, onAction }) {
   return (
     <div className="data-panel">
       <div className="panel-header">
@@ -1671,7 +1684,7 @@ function ModerationView({ moderation, onAction }) {
 }
 
 // Tenants View (Super Admin only)
-function TenantsView({ tenants, newTenant, onFormChange, onCheckboxChange, onSubmit, featureFlags, onToggleFlag }) {
+export function TenantsView({ tenants, newTenant, onFormChange, onCheckboxChange, onSubmit, featureFlags, onToggleFlag }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "32px" }}>
       {/* List */}
@@ -1828,7 +1841,7 @@ function TenantsView({ tenants, newTenant, onFormChange, onCheckboxChange, onSub
 }
 
 // RBAC View (Dynamic PostgreSQL Integration)
-function RbacView({ user }) {
+export function RbacView({ user }) {
   const isSuper = user.role === "Super Admin" || user.role === "Platform Admin"; // Let both view; super admin can modify.
   const isSuperAdmin = user.role === "Super Admin";
 
@@ -2891,7 +2904,7 @@ function RbacView({ user }) {
 
 
 // System Audit Logs View
-function AuditView({ logs }) {
+export function AuditView({ logs }) {
   return (
     <div className="data-panel" style={{ padding: "24px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
@@ -2916,7 +2929,7 @@ function AuditView({ logs }) {
 }
 
 // User Management View
-function UsersView({ users, onUpdateUser, onAddUser, onDeleteUser }) {
+export function UsersView({ users, onUpdateUser, onAddUser, onDeleteUser }) {
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("All");
   const [showAddModal, setShowAddModal] = useState(false);
@@ -3189,7 +3202,7 @@ function UsersView({ users, onUpdateUser, onAddUser, onDeleteUser }) {
 }
 
 // ── SUBSCRIPTION PLANS VIEW ─────────────────────────────────────────────────
-function SubscriptionPlansView({ user, apiBase }) {
+export function SubscriptionPlansView({ user, apiBase }) {
   const isSuperAdmin = user.role === "Super Admin";
   const [plans, setPlans] = useState([]);
   const [roles, setRoles] = useState([]);
@@ -3847,7 +3860,7 @@ function SubscriptionPlansView({ user, apiBase }) {
 }
 
 // ── COUPONS VIEW ──────────────────────────────────────────────────────────────
-function CouponsView({ user, apiBase }) {
+export function CouponsView({ user, apiBase }) {
   const isSuperAdmin = user.role === "Super Admin";
   const [coupons, setCoupons] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -4106,7 +4119,7 @@ function CouponsView({ user, apiBase }) {
 
 
 
-function SettingsView({ user, logAction, addToast }) {
+export function SettingsView({ user, logAction, addToast }) {
   const [authSettings, setAuthSettings] = React.useState({
     google: { enabled: false, clientId: '', clientSecret: '' },
     linkedin: { enabled: false, clientId: '', clientSecret: '' }
@@ -4831,7 +4844,7 @@ function SettingsView({ user, logAction, addToast }) {
 }
 
 // --- TAGS VIEW ---
-function TagsView({ tags, setTags, categories, showToast, logAction, user }) {
+export function TagsView({ tags, setTags, categories, showToast, logAction, user }) {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -5292,7 +5305,7 @@ function TagsView({ tags, setTags, categories, showToast, logAction, user }) {
 }
 
 // --- CATEGORIES VIEW ---
-function CategoriesView({ categories, setCategories, tags, setTags, showToast, logAction, user }) {
+export function CategoriesView({ categories, setCategories, tags, setTags, showToast, logAction, user }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [expandedCats, setExpandedCats] = useState(new Set());
@@ -6028,7 +6041,7 @@ function CategoriesView({ categories, setCategories, tags, setTags, showToast, l
 }
 
 // ── BILLING & REVENUE VIEW ──────────────────────────────────────────────────
-function BillingDashboardView({ apiBase }) {
+export function BillingDashboardView({ apiBase }) {
   const [data, setData] = useState({
     metrics: { totalRevenue: 0, totalOrders: 0, activeSubscriptions: 0, inactiveSubscriptions: 0 },
     plansBreakdown: [],
@@ -6303,5 +6316,9 @@ function BillingDashboardView({ apiBase }) {
   );
 }
 
-// Export for Babel Standalone usage
-window.App = App;
+const container = document.getElementById('root');
+if (container) {
+  const root = ReactDOM.createRoot(container);
+  root.render(<App />);
+}
+

@@ -1,9 +1,17 @@
 // @ts-nocheck
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { DiscussionRow, EventCard, FeatureCard, GroupCard, GroupRow, PersonCard } from './home-cards';
+import { CATS, DISCUSSIONS, EVENTS, FEATURED, GROUPS, ME, NEAR, PEOPLE, TRENDING, UPCOMING } from './home-data';
+import { Empty, FilterChip, SectionBar } from './home-shell';
+import { apiBase } from './home-subscription';
+import { I } from './home-icons';
+import { Communities, Events } from './landing-features';
+
 /* ============================================================
    Samaagum Home — Home feed + Discover
    ============================================================ */
 
-function Greeting({ city }) {
+export function Greeting({ city }) {
   const hr = new Date().getHours();
   const part = hr < 12 ? "Good morning" : hr < 17 ? "Good afternoon" : "Good evening";
   const first = ME.name.split(" ")[0];
@@ -18,7 +26,7 @@ function Greeting({ city }) {
 }
 
 /* category + quick filter bar */
-function FeedFilters({ cat, setCat, quick, setQuick }) {
+export function FeedFilters({ cat, setCat, quick, setQuick }) {
   const quicks = [
     { k:"trending", ic:<I.fire/>, label:"Trending" },
     { k:"nearby", ic:<I.pin/>, label:"Nearby" },
@@ -47,7 +55,7 @@ function FeedFilters({ cat, setCat, quick, setQuick }) {
   );
 }
 
-function HomeFeed({ st, go }) {
+export function HomeFeed({ st, go }) {
   const [cat, setCat] = useState("All");
   const [quick, setQuick] = useState([]);
   const { saved, toggleSave, connected, toggleConnect, registered, city } = st;
@@ -137,7 +145,7 @@ function HomeFeed({ st, go }) {
 }
 
 /* ---------------- Discover (browse) ---------------- */
-function Discover({ st, go }) {
+export function Discover({ st, go }) {
   const [tab, setTab] = useState("groups");
   const [cat, setCat] = useState("All");
   const { saved, toggleSave, registered, city, addJoined, addPending } = st;
@@ -240,4 +248,4 @@ function Discover({ st, go }) {
   );
 }
 
-Object.assign(window, { HomeFeed, Discover, Greeting });
+

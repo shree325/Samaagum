@@ -1,11 +1,17 @@
+import React, { useEffect, useState } from 'react';
+import { PEOPLE, Reveal, Wordmark, gradFor, initials } from './components';
+import { I, REDUCED, clamp, useScrub } from './landing-core';
+import { Communities, Events } from './landing-features';
+import { Networking, Profiles } from './landing-features2';
+
 /* ============================================================
    Samaagum landing — Nav, Hero, Trust marquee
    ============================================================ */
-var { useState, useEffect } = React;
-const AUTH = "pages/Samaagum Auth.html";
+
+export const AUTH = "pages/Samaagum Auth.html";
 
 /* ---------------- Nav ---------------- */
-function Nav() {
+export function Nav() {
   const [stuck, setStuck] = useState(false);
   const [open, setOpen] = useState(false);
   useEffect(() => {
@@ -43,7 +49,7 @@ function Nav() {
 }
 
 /* ---------------- Hero floating chip ---------------- */
-function HeroFloat({ pos, speed, delay = 0, children }) {
+export function HeroFloat({ pos, speed, delay = 0, children }) {
   const ref = useScrub((p, r, vh, el) => {
     const hp = clamp(-r.top / vh);
     el.style.transform = `translateY(${(hp * speed).toFixed(1)}px)`;
@@ -57,7 +63,7 @@ function HeroFloat({ pos, speed, delay = 0, children }) {
   );
 }
 
-function AvaRow({ names, size = 24 }) {
+export function AvaRow({ names, size = 24 }) {
   return (
     <div className="av-stack">
       {names.map((n, i) => <div key={i} className="a" style={{ background: gradFor(n), width: size, height: size }}>{initials(n)}</div>)}
@@ -66,7 +72,7 @@ function AvaRow({ names, size = 24 }) {
 }
 
 /* ---------------- Hero ---------------- */
-function Hero() {
+export function Hero() {
   const meshRef = useScrub((p, r, vh, el) => {
     const hp = clamp(-r.top / vh);
     el.style.transform = `translateY(${(hp * 130).toFixed(1)}px) scale(${(1 + hp * 0.08).toFixed(3)})`;
@@ -157,7 +163,7 @@ function Hero() {
 }
 
 /* ---------------- Trust marquee ---------------- */
-function TrustStrip() {
+export function TrustStrip() {
   const items = [
     ["Founders Club", "#ff6b4a"], ["Design Guild", "#6d5efc"], ["Indie Hackers", "#10b981"],
     ["Sound & City", "#f59e0b"], ["Wellness Collective", "#22c55e"], ["AI Builders", "#2a7fff"],
@@ -180,4 +186,4 @@ function TrustStrip() {
   );
 }
 
-Object.assign(window, { Nav, Hero, TrustStrip, AvaRow, AUTH });
+

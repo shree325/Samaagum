@@ -1,8 +1,14 @@
+import React, { useState } from 'react';
+import { FEATURED, ME } from './home-data';
+import { Avatar, Grain } from './home-icons';
+import { Waitlist } from './home-waitlist';
+import { I } from './home-icons';
+
 /* ============================================================
    Samaagum Home — Event detail (Luma-grade)
    ============================================================ */
 
-function EventDetail({ ev, st, go }) {
+export function EventDetail({ ev, st, go }) {
   const e = ev || FEATURED;
   const { saved, toggleSave, registered, register, city, waitlisted } = st;
   const isSaved = saved.has(e.id);
@@ -189,4 +195,4 @@ function EventDetail({ ev, st, go }) {
   );
 }
 
-Object.assign(window, { EventDetail });
+

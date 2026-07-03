@@ -1,9 +1,34 @@
 // @ts-nocheck
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import ReactDOM from 'react-dom/client';
+import { HashRouter, useNavigate, useLocation } from 'react-router-dom';
+import { Mark } from './components';
+import { CreateEvent } from './create_event';
+import { CreateGroup } from './home-create';
+import { EVENTS, FEATURED, GROUPS, ME, MY_TICKETS } from './home-data';
+import { EventDetail } from './home-event';
+import { Discover, HomeFeed } from './home-feed';
+import { GroupDetail, MyGroups } from './home-group';
+import { useProfileSync } from './home-icons';
+import { InviteLanding } from './home-invite';
+import { Messages } from './home-messages';
+import { Notifications } from './home-notifications';
+import { Profile } from './home-profile';
+import { SettingsPage } from './home-settings';
+import { CityPicker, Sidebar, Topbar } from './home-shell';
+import { apiBase } from './home-subscription';
+import { ClaimFlow, EventDashboard, MyTickets, TicketDetail } from './home-tickets';
+import { Waitlist } from './home-waitlist';
+import { I, tick } from './home-icons';
+import { PublicProfile } from './public-profile';
+import { useTweaks } from './tweaks-panel';
+import { usePlanEntitlements } from './usePlanEntitlements';
+
 /* ============================================================
    Samaagum Home — main app (routing, frame, theme, tweaks)
    ============================================================ */
 
-function useSet(initial = []) {
+export function useSet(initial = []) {
   const [s, setS] = useState(() => new Set(initial));
   const toggle = useCallback((id) => setS(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; }), []);
   const add = useCallback((id) => setS(prev => { const n = new Set(prev); n.add(id); return n; }), []);
@@ -11,7 +36,7 @@ function useSet(initial = []) {
 }
 
 /* mobile bottom tab bar */
-function TabBar({ view, go, counts, chatSettings }) {
+export function TabBar({ view, go, counts, chatSettings }) {
   const showMessages = chatSettings?.allowSiteMessaging !== false;
   const tabs = [
     { k:"home", ic:<I.home/>, label:"Home" },
@@ -36,7 +61,7 @@ function TabBar({ view, go, counts, chatSettings }) {
   );
 }
 
-function MobileTop({ go, counts, city, chatSettings }) {
+export function MobileTop({ go, counts, city, chatSettings }) {
   const showMessages = chatSettings?.allowSiteMessaging !== false;
   return (
     <div className="m-top">
@@ -50,12 +75,12 @@ function MobileTop({ go, counts, city, chatSettings }) {
   );
 }
 
-const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+export const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "dark": false,
   "glass": 18
 }/*EDITMODE-END*/;
 
-function App() {
+export function DashboardApp() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [city, setCity] = useState(() => {
     if (window.ME?.location) return window.ME.location;
@@ -158,7 +183,6 @@ function App() {
       .then(res => {
         if (res.success && res.data) {
           setChatSettings(res.data);
-          window.chatSettings = res.data;
         }
       })
       .catch(err => console.error("Error fetching chat settings:", err));
@@ -269,7 +293,7 @@ function App() {
       chatSocket.on("settings.updated", (updatedSettings) => {
         console.log("⚡ Chat settings updated in real-time:", updatedSettings);
         setChatSettings(updatedSettings);
-        window.chatSettings = updatedSettings;
+        
       });
 
       chatSocket.on("group.notification", (payload) => {
@@ -335,11 +359,11 @@ function App() {
       });
 
       setSocket(chatSocket);
-      window.chatSocket = chatSocket;
+      
 
       return () => {
         chatSocket.disconnect();
-        window.chatSocket = null;
+        
       };
     }
   }, [ioLoaded]);
@@ -352,7 +376,6 @@ function App() {
         .then(res => res.json())
         .then(json => {
           if (json.success) {
-            window.featureSettings = json.data;
             setMeSync(Date.now());
           }
         })
@@ -439,41 +462,44 @@ function App() {
       .catch(err => console.error('Error fetching user profile', err));
   }, []);
 
-  // navigation stack
-  const [stack, setStack] = useState(() => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Support initial path-based and hash-based invite routing
+  useEffect(() => {
     const path = window.location.pathname;
     const hash = window.location.hash;
-    
-    // Support path-based invite routing
     if (path.startsWith('/groups/invite/')) {
-       const token = path.split('/groups/invite/')[1];
-       if (token) return [{ view: "invite", param: token }];
+      const token = path.split('/groups/invite/')[1];
+      if (token) navigate(`/invite`, { state: token, replace: true });
+    } else if (hash.startsWith('#/groups/invite/')) {
+      const token = hash.split('#/groups/invite/')[1];
+      if (token) navigate(`/invite`, { state: token, replace: true });
     }
-    // Support hash-based invite routing as fallback
-    if (hash.startsWith('#/groups/invite/')) {
-       const token = hash.split('#/groups/invite/')[1];
-       if (token) return [{ view: "invite", param: token }];
-    }
-    
-    return [{ view: "home", param: null }];
-  });
-  const cur = stack[stack.length - 1];
+  }, [navigate]);
+
+  // Determine current view and param from React Router
+  const view = location.pathname.substring(1) || "home";
+  const param = location.state;
+  const cur = { view, param };
+
   const curRef = useRef(cur);
   useEffect(() => {
     curRef.current = cur;
   }, [cur]);
 
   const go = useCallback((view, param = null) => {
-    setStack(s => {
-      if (view === "home") return [{ view: "home", param: null }];
-      return [...s, { view, param }];
-    });
+    if (view === "home") {
+      navigate("/", { replace: true });
+    } else {
+      navigate(`/${view}`, { state: param });
+    }
     // scroll the active view to top
     setTimeout(() => { document.querySelectorAll(".scroll").forEach(el => el.scrollTop = 0); }, 0);
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
-    window.samaagum_go = go;
+    
     return () => { delete window.samaagum_go; };
   }, [go]);
 
@@ -716,6 +742,14 @@ function App() {
         ))}
       </div>
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <HashRouter>
+      <DashboardApp />
+    </HashRouter>
   );
 }
 

@@ -1,11 +1,19 @@
 // @ts-nocheck
+import React, { useEffect, useRef, useState } from 'react';
+import { Toggle } from './create_event';
+import { ME } from './home-data';
+import { Profile } from './home-profile';
+import { Empty, Sidebar } from './home-shell';
+import { Footer } from './landing-activity';
+import { I } from './home-icons';
+
 /* ============================================================
    Samaagum Home — Account & Privacy Settings Page
    ============================================================ */
 
-const { useState, useEffect, useRef } = React;
 
-function SettingsPage({ st, go, activeTabParam }) {
+
+export function SettingsPage({ st, go, activeTabParam }) {
   // Navigation tabs in settings page
   const [activeTab, setActiveTab] = useState(activeTabParam || "account");
 
@@ -1182,4 +1190,4 @@ function SettingsPage({ st, go, activeTabParam }) {
   );
 }
 
-Object.assign(window, { SettingsPage });
+

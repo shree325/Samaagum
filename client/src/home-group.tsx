@@ -1,9 +1,23 @@
 // @ts-nocheck
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Lock } from './app';
+import { Mark } from './components';
+import { EVENTS, GROUPS, ME } from './home-data';
+import { Discover } from './home-feed';
+import { Avatar, Grain } from './home-icons';
+import { Empty } from './home-shell';
+import { apiBase } from './home-subscription';
+import { Waitlist } from './home-waitlist';
+import { Discussions, Footer } from './landing-activity';
+import { I } from './home-icons';
+import { Events } from './landing-features';
+import { EventCard } from './home-cards';
+
 /* ============================================================
    Samaagum Home — Group detail (forum, events, members, gallery)
    ============================================================ */
 
-function getRelativeTime(d) {
+export function getRelativeTime(d) {
   const diff = Date.now() - new Date(d).getTime();
   if (diff < 60000) return 'Just now';
   if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
@@ -11,7 +25,7 @@ function getRelativeTime(d) {
   return `${Math.floor(diff / 86400000)}d`;
 }
 
-const TAG_COLORS = {
+export const TAG_COLORS = {
   Question: { bg: "#e8f4ff", color: "#0969da" },
   Announcement: { bg: "#fff3e0", color: "#e05000" },
   Help: { bg: "#f3e8ff", color: "#8250df" },
@@ -22,17 +36,17 @@ const TAG_COLORS = {
   General: { bg: "#f6f8fa", color: "#57606a" }
 };
 
-const ALL_FORUM_TAGS = ["Question", "Announcement", "Help", "Bug", "Feature", "News", "Discussion", "General"];
-const EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🎉", "🔥"];
+export const ALL_FORUM_TAGS = ["Question", "Announcement", "Help", "Bug", "Feature", "News", "Discussion", "General"];
+export const EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🎉", "🔥"];
 
-function TagPill({ tag }) {
+export function TagPill({ tag }) {
   const c = TAG_COLORS[tag] || TAG_COLORS.General;
   return (
     <span style={{ background: c.bg, color: c.color, fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 12, display: "inline-block", letterSpacing: "0.02em", whiteSpace: "nowrap" }}>{tag}</span>
   );
 }
 
-function VoteWidget({ score, userVote, onUpvote, onDownvote }) {
+export function VoteWidget({ score, userVote, onUpvote, onDownvote }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, minWidth: 32 }}>
       <button onClick={e => { e.stopPropagation(); onUpvote(); }} style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 6px", fontSize: 15, fontWeight: 800, color: userVote === 1 ? "var(--accent-2)" : "var(--ink-3)", lineHeight: 1 }} title="Upvote">▲</button>
@@ -42,7 +56,7 @@ function VoteWidget({ score, userVote, onUpvote, onDownvote }) {
   );
 }
 
-function EmojiBar({ counts, onReact }) {
+export function EmojiBar({ counts, onReact }) {
   const [showPicker, setShowPicker] = useState(false);
   const hasAny = EMOJIS.some(e => (counts || {})[e] > 0);
   return (
@@ -66,7 +80,7 @@ function EmojiBar({ counts, onReact }) {
   );
 }
 
-function SortBar({ sort, onSort }) {
+export function SortBar({ sort, onSort }) {
   const opts = [["new", "New"], ["hot", "🔥 Hot"], ["top", "Top"], ["pinned", "📌 Pinned"]];
   return (
     <div style={{ display: "flex", gap: 2, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: 3 }}>
@@ -77,7 +91,7 @@ function SortBar({ sort, onSort }) {
   );
 }
 
-function ThreadCard({ p, onOpen, voteData, onVote, reactions, onReact, isLiked, onLike }) {
+export function ThreadCard({ p, onOpen, voteData, onVote, reactions, onReact, isLiked, onLike }) {
   const timeStr = p.created_at ? getRelativeTime(p.created_at) : 'Just now';
   const authorName = p.author_name || p.author_username || 'Unknown';
   const displayTitle = p.title || (p.body ? p.body.slice(0, 90) + (p.body.length > 90 ? '…' : '') : 'Untitled thread');
@@ -128,7 +142,7 @@ function ThreadCard({ p, onOpen, voteData, onVote, reactions, onReact, isLiked, 
   );
 }
 
-function CommentItem({ c, depth, canReply, isOwner, currentUserId, replyingToId, inlineReplyDraft, submittingInlineReply, commentVotes, onVote, onDelete, onStartReply, onCancelReply, onInlineReplyChange, onSubmitInlineReply, canEdit, editingCommentId, editCommentDraft, onEditStart, onEditCancel, onEditChange, onEditSubmit }) {
+export function CommentItem({ c, depth, canReply, isOwner, currentUserId, replyingToId, inlineReplyDraft, submittingInlineReply, commentVotes, onVote, onDelete, onStartReply, onCancelReply, onInlineReplyChange, onSubmitInlineReply, canEdit, editingCommentId, editCommentDraft, onEditStart, onEditCancel, onEditChange, onEditSubmit }) {
   const timeStr = c.created_at ? getRelativeTime(c.created_at) : 'Just now';
   const votes = commentVotes[c.id] || {};
   const score = votes.score !== undefined ? votes.score : (c.vote_score || 0);
@@ -214,7 +228,7 @@ function CommentItem({ c, depth, canReply, isOwner, currentUserId, replyingToId,
   );
 }
 
-function MemberOnlyScreen({ onJoin, isPending }) {
+export function MemberOnlyScreen({ onJoin, isPending }) {
   return (
     <div style={{ textAlign: "center", padding: "80px 20px", color: "var(--ink-3)", background: "var(--surface)", borderRadius: "var(--r-md)", border: "1px dashed var(--border)" }}>
       <I.lock style={{ width: 48, height: 48, marginBottom: 16, opacity: 0.3 }} />
@@ -229,7 +243,7 @@ function MemberOnlyScreen({ onJoin, isPending }) {
   );
 }
 
-function GroupDetail({ group, st, go }) {
+export function GroupDetail({ group, st, go }) {
   const [fullGroup, setFullGroup] = useState(null);
   const [membershipState, setMembershipState] = useState(null);
   const g = fullGroup || group || GROUPS[0];
@@ -242,12 +256,8 @@ function GroupDetail({ group, st, go }) {
   const { joined, pending, toggleJoin } = st;
   const isJoined = joined.has(g.id) || membershipState === 'active';
   const isPending = pending.has(g.id) || membershipState === 'pending';
-  
-  const isAccessRestricted = !isJoined && !isOwner;
-  // Public groups (visibility=public, joinMode=open) allow non-members to read all tabs
-  const isPublicGroup = g.visibility === 'public' && g.joinMode === 'open';
-  const protectedTabs = ['discussion', 'events', 'members', 'gallery'];
-  const showMemberOnlyScreen = isAccessRestricted && !isPublicGroup && protectedTabs.includes(tab);
+  const [isOwner, setIsOwner] = useState(ME.name === g.owner);
+  const isMember = isOwner || isJoined;
 
   const chatSettings = st.chatSettings || {
     allowSiteMessaging: true,
@@ -671,7 +681,6 @@ function GroupDetail({ group, st, go }) {
     ["discussion", <span style={{ fontSize: 13, fontWeight: 600 }}>Discussions</span>]
   ];
   const [members, setMembers] = useState(g.memberNames || []);
-  const [isOwner, setIsOwner] = useState(ME.name === g.owner);
   const [joinRequests, setJoinRequests] = useState([]);
   const [newJoinRequestNotif, setNewJoinRequestNotif] = useState(false);
   const [invites, setInvites] = useState([]);
@@ -1132,11 +1141,16 @@ function GroupDetail({ group, st, go }) {
   const forumsEnabled = !g.settings?.forums || g.settings.forums.enabled !== false;
   const threadPerm = g.settings?.forums?.threadPerm || "everyone";
   const replyPerm = g.settings?.forums?.replyPerm || "everyone";
-  const isMember = isOwner || isJoined;
   const forumPermissions = g.forumPermissions || [];
   const isArchived = Boolean(g.settings?.isArchived);
   const canPost = !isArchived && forumsEnabled && isMember && (isOwner || threadPerm === "everyone" || threadPerm === "members" || (threadPerm === "selected" && forumPermissions.includes("create_thread")));
   const canReply = !isArchived && forumsEnabled && isMember && (isOwner || replyPerm === "everyone" || replyPerm === "members" || (replyPerm === "selected" && forumPermissions.includes("reply_thread")));
+
+  const isAccessRestricted = !isJoined && !isOwner;
+  // Public groups (visibility=public, joinMode=open) allow non-members to read all tabs
+  const isPublicGroup = g.visibility === 'public' && g.joinMode === 'open';
+  const protectedTabs = ['discussion', 'events', 'members', 'gallery'];
+  const showMemberOnlyScreen = isAccessRestricted && !isPublicGroup && protectedTabs.includes(tab);
 
   const filteredPosts = (activeTag
     ? posts.filter(p => (p.tags || []).some(t => t.name === activeTag))
@@ -2091,7 +2105,7 @@ function GroupDetail({ group, st, go }) {
   );
 }
 
-function MyGroups({ go, param }) {
+export function MyGroups({ go, param }) {
   const [tab, setTab] = useState((param && param.tab) || "joined");
   const [createdSubTab, setCreatedSubTab] = useState((param && param.createdSub) || "active");
   const [ownedGroups, setOwnedGroups] = useState([]);
@@ -2212,7 +2226,7 @@ function MyGroups({ go, param }) {
   );
 }
 
-function MemberManagementPanel({ group, st, go }) {
+export function MemberManagementPanel({ group, st, go }) {
   const g = group || st.createdGroups[0];
   const [members, setMembers] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -2662,4 +2676,4 @@ function MemberManagementPanel({ group, st, go }) {
   );
 }
 
-Object.assign(window, { GroupDetail, MyGroups, MemberManagementPanel });
+

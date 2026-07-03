@@ -1,19 +1,25 @@
 // @ts-nocheck
+import React, { useState } from 'react';
+import { EVENTS, PEOPLE, Reveal } from './components';
+import { Discover } from './home-feed';
+import { COMMUNITIES, I, lerp, range, useScrub } from './landing-core';
+import { AUTH, AvaRow } from './landing-hero';
+
 /* ============================================================
    Samaagum landing — Communities, Events
    ============================================================ */
-var { useState } = React;
-const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+
+export const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
 
 /* ---------------- Communities (scatter → arc) ---------------- */
-const COMM_LAYOUT = [
+export const COMM_LAYOUT = [
   { fx: -430, fy: 36, rot: -7 },
   { fx: -215, fy: -34, rot: -3 },
   { fx: 0, fy: 28, rot: 0 },
   { fx: 215, fy: -34, rot: 3 },
   { fx: 430, fy: 36, rot: 7 },
 ];
-function Communities() {
+export function Communities() {
   const stageRef = useScrub((p, r, vh, el) => {
     const sp = easeOutCubic(range(p, 0.1, 0.52));
     const cards = el.querySelectorAll(".comm-card");
@@ -65,7 +71,7 @@ function Communities() {
 }
 
 /* ---------------- Events (scroll-linked drift) ---------------- */
-function EventCard({ ev }) {
+export function EventCard({ ev }) {
   const [rsvp, setRsvp] = useState(false);
   return (
     <div className="event-card glass-card">
@@ -87,7 +93,7 @@ function EventCard({ ev }) {
     </div>
   );
 }
-function Events() {
+export function Events() {
   const railRef = useScrub((p, r, vh, el) => {
     const drift = lerp(80, -360, range(p, 0.05, 0.95));
     el.style.transform = `translateX(${drift.toFixed(1)}px)`;
@@ -117,4 +123,4 @@ function Events() {
   );
 }
 
-Object.assign(window, { Communities, Events, EventCard, easeOutCubic });
+

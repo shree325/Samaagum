@@ -1,10 +1,22 @@
 // @ts-nocheck
-const { useState, useRef, useEffect, useCallback, useMemo } = React;
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Field } from './components';
+import { COVER_SWATCHES } from './home-create';
+import { COVERS, GROUPS, ME } from './home-data';
+import { Grain } from './home-icons';
+import { Profile } from './home-profile';
+import { Empty } from './home-shell';
+import { Waitlist } from './home-waitlist';
+import { I } from './home-icons';
+import { Communities, Events } from './landing-features';
+import { EventCard } from './home-cards';
+
+
 
 // Reuse existing components and utilities from the project
 // Assuming I, Grain, EventCard, LocationSection, COVERS, GROUPS, ME, etc. are globally available via the app bundle or global namespace.
 
-function UpgradePlanModal({ open, onClose, feature, go, currentPlanName }) {
+export function UpgradePlanModal({ open, onClose, feature, go, currentPlanName }) {
   if (!open) return null;
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 12000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)" }}>
@@ -41,7 +53,7 @@ function UpgradePlanModal({ open, onClose, feature, go, currentPlanName }) {
   );
 }
 
-function CoverPicker({ value, onPick }) {
+export function CoverPicker({ value, onPick }) {
   return (
     <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
       {COVER_SWATCHES.map(s => (
@@ -56,9 +68,9 @@ function CoverPicker({ value, onPick }) {
   );
 }
 
-function Toggle({ on, onClick }) { return <button className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
+export function Toggle({ on, onClick }) { return <button className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
 
-function format24to12(timeStr) {
+export function format24to12(timeStr) {
   if (!timeStr) return "";
   const [hStr, mStr] = timeStr.split(":");
   let h = parseInt(hStr, 10);
@@ -70,7 +82,7 @@ function format24to12(timeStr) {
   return `${String(h).padStart(2, '0')}:${m} ${ampm}`;
 }
 
-function parse12to24(val) {
+export function parse12to24(val) {
   if (!val) return null;
   const match = val.match(/^\s*(\d{1,2})\s*:\s*(\d{2})\s*(am|pm)?\s*$/i);
   if (!match) return null;
@@ -88,7 +100,7 @@ function parse12to24(val) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-function TimePicker({ label = undefined, value, onChange, mobile, compact }) {
+export function TimePicker({ label = undefined, value, onChange, mobile, compact }) {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const containerRef = useRef(null);
@@ -496,7 +508,7 @@ function TimePicker({ label = undefined, value, onChange, mobile, compact }) {
   );
 }
 
-const TIMEZONES = [
+export const TIMEZONES = [
   { value: "UTC +05:30 India", label: "GMT+05:30", city: "Asia/Kolkata" },
   { value: "UTC +00:00 London", label: "GMT+00:00", city: "Europe/London" },
   { value: "UTC -05:00 New York", label: "GMT-05:00", city: "America/New_York" },
@@ -505,7 +517,7 @@ const TIMEZONES = [
   { value: "UTC -08:00 Los Angeles", label: "GMT-08:00", city: "America/Los_Angeles" }
 ];
 
-function addOneHour(timeStr) {
+export function addOneHour(timeStr) {
   if (!timeStr) return "10:00";
   const [hStr, mStr] = timeStr.split(":");
   let h = parseInt(hStr, 10);
@@ -516,7 +528,7 @@ function addOneHour(timeStr) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-function getDurationText(startDate, startTime, endDate, endTime) {
+export function getDurationText(startDate, startTime, endDate, endTime) {
   if (!startDate || !startTime || !endDate || !endTime) return "";
   try {
     const startStr = `${startDate}T${startTime}`;
@@ -546,7 +558,7 @@ function getDurationText(startDate, startTime, endDate, endTime) {
   }
 }
 
-function getTzInfo(tzValue) {
+export function getTzInfo(tzValue) {
   const mapping = {
     "UTC +05:30 India": { main: "GMT+05:30", city: "Asia/Kolkata" },
     "UTC +00:00 London": { main: "GMT+00:00", city: "Europe/London" },
@@ -558,7 +570,7 @@ function getTzInfo(tzValue) {
   return mapping[tzValue] || { main: tzValue || "GMT+05:30", city: "Asia/Kolkata" };
 }
 
-function EligibilityOption({ active, title, desc, onClick }) {
+export function EligibilityOption({ active, title, desc, onClick }) {
   return (
     <button
       type="button"
@@ -586,7 +598,7 @@ function EligibilityOption({ active, title, desc, onClick }) {
   );
 }
 
-function SummaryChip({ icon, label, onClick }: any) {
+export function SummaryChip({ icon, label, onClick }: any) {
   return (
     <span
       onClick={onClick}
@@ -612,7 +624,7 @@ function SummaryChip({ icon, label, onClick }: any) {
   );
 }
 
-function CategorySummaryChip({ type, items, onEditClick }: any) {
+export function CategorySummaryChip({ type, items, onEditClick }: any) {
   return (
     <span
       style={{
@@ -634,7 +646,7 @@ function CategorySummaryChip({ type, items, onEditClick }: any) {
   );
 }
 
-function RuleSummaryChip({ rule, onEditClick }: any) {
+export function RuleSummaryChip({ rule, onEditClick }: any) {
   return (
     <span
       style={{
@@ -655,7 +667,7 @@ function RuleSummaryChip({ rule, onEditClick }: any) {
     </span>
   );
 }
-const ACCESS_TREE = [
+export const ACCESS_TREE = [
   {
     id: "comm-samaagum",
     name: "Samaagum Hub",
@@ -742,7 +754,7 @@ const ACCESS_TREE = [
   }
 ];
 
-const isChecked = (node: any, selected: any): boolean => {
+export const isChecked = (node: any, selected: any): boolean => {
   if (node.type === "group") {
     return selected.groups.includes(node.id);
   }
@@ -753,7 +765,7 @@ const isChecked = (node: any, selected: any): boolean => {
   return node.children.every((child: any) => isChecked(child, selected));
 };
 
-const isIndeterminate = (node: any, selected: any): boolean => {
+export const isIndeterminate = (node: any, selected: any): boolean => {
   if (node.type === "group") return false;
   if (!node.children || node.children.length === 0) return false;
 
@@ -766,7 +778,7 @@ const isIndeterminate = (node: any, selected: any): boolean => {
   return !allChecked && !noneChecked;
 };
 
-const getDescendantIds = (node: any): { communities: string[], subCommunities: string[], groups: string[] } => {
+export const getDescendantIds = (node: any): { communities: string[], subCommunities: string[], groups: string[] } => {
   const res: { communities: string[], subCommunities: string[], groups: string[] } = { communities: [], subCommunities: [], groups: [] };
   if (node.type === "community") {
     res.communities.push(node.id);
@@ -787,7 +799,7 @@ const getDescendantIds = (node: any): { communities: string[], subCommunities: s
   return res;
 };
 
-const findParentPath = (id: string, tree: any[]): any[] => {
+export const findParentPath = (id: string, tree: any[]): any[] => {
   for (const comm of tree) {
     if (comm.id === id) return [];
     if (comm.children) {
@@ -804,7 +816,7 @@ const findParentPath = (id: string, tree: any[]): any[] => {
   return [];
 };
 
-const toggleNodeCheck = (node: any, selected: any) => {
+export const toggleNodeCheck = (node: any, selected: any) => {
   const checked = isChecked(node, selected);
   const desc = getDescendantIds(node);
 
@@ -878,7 +890,7 @@ const toggleNodeCheck = (node: any, selected: any) => {
   };
 };
 
-const nodeMatchesSearch = (node: any, query: string): boolean => {
+export const nodeMatchesSearch = (node: any, query: string): boolean => {
   if (node.name.toLowerCase().includes(query.toLowerCase())) return true;
   if (node.children) {
     return node.children.some((child: any) => nodeMatchesSearch(child, query));
@@ -886,7 +898,7 @@ const nodeMatchesSearch = (node: any, query: string): boolean => {
   return false;
 };
 
-const getSearchAutoExpandedIds = (query: string): Set<string> => {
+export const getSearchAutoExpandedIds = (query: string): Set<string> => {
   const ids = new Set<string>();
   if (!query) return ids;
 
@@ -915,7 +927,7 @@ const getSearchAutoExpandedIds = (query: string): Set<string> => {
   return ids;
 };
 
-function TreeNodeCheckbox({ checked, indeterminate, onChange }: { checked: boolean; indeterminate: boolean; onChange: () => void }) {
+export function TreeNodeCheckbox({ checked, indeterminate, onChange }: { checked: boolean; indeterminate: boolean; onChange: () => void }) {
   return (
     <input
       type="checkbox"
@@ -929,7 +941,7 @@ function TreeNodeCheckbox({ checked, indeterminate, onChange }: { checked: boole
   );
 }
 
-const getTopLevelCheckedNodes = (tree: any[], selected: any): any[] => {
+export const getTopLevelCheckedNodes = (tree: any[], selected: any): any[] => {
   const list: any[] = [];
   const traverse = (node: any) => {
     if (isChecked(node, selected)) {
@@ -944,7 +956,7 @@ const getTopLevelCheckedNodes = (tree: any[], selected: any): any[] => {
   return list;
 };
 
-const getSelectedNodesWithDetails = (tree: any[], selected: any) => {
+export const getSelectedNodesWithDetails = (tree: any[], selected: any) => {
   const result: { id: string; name: string; type: string }[] = [];
   const traverse = (node: any) => {
     if (node.type === "community" && selected.communities.includes(node.id)) {
@@ -962,7 +974,7 @@ const getSelectedNodesWithDetails = (tree: any[], selected: any) => {
   return result;
 };
 
-const findNodeInTree = (id: string, tree: any[]): any => {
+export const findNodeInTree = (id: string, tree: any[]): any => {
   for (const node of tree) {
     if (node.id === id) return node;
     if (node.children) {
@@ -974,7 +986,7 @@ const findNodeInTree = (id: string, tree: any[]): any => {
 };
 
 
-function AccessControlModal({ open, onClose, mode, selectedAccess, setSelectedAccess }: any) {
+export function AccessControlModal({ open, onClose, mode, selectedAccess, setSelectedAccess }: any) {
   const [search, setSearch] = useState("");
   const [expandedNodeIds, setExpandedNodeIds] = useState(new Set<string>());
   const [ruleCommunity, setRuleCommunity] = useState("Samaagum Hub");
@@ -1316,14 +1328,14 @@ function AccessControlModal({ open, onClose, mode, selectedAccess, setSelectedAc
   );
 }
 
-const RECENT_LOCATIONS = [
+export const RECENT_LOCATIONS = [
   {
     name: "Delhi darbar hotel",
     address: "51, Jawahar Marg, Jhanda Chowk, Indore, Madhya Pradesh 452007, India",
   },
 ];
 
-function LocationSection({ venue, setVenue, locType, setLocType }) {
+export function LocationSection({ venue, setVenue, locType, setLocType }) {
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState(venue);
 
@@ -1458,7 +1470,7 @@ function LocationSection({ venue, setVenue, locType, setLocType }) {
 }
 
 /* ---------------- Create Event ---------------- */
-const DEFAULT_FREE_ENTITLEMENTS = {
+export const DEFAULT_FREE_ENTITLEMENTS = {
   group_max_groups: -1,
   group_allowed_visibility: ['unlisted'],
   group_allowed_join_modes: ['open', 'invite_only'],
@@ -1471,7 +1483,7 @@ const DEFAULT_FREE_ENTITLEMENTS = {
   event_can_create_paid_tickets: false
 };
 
-function CreateEvent({ go, mobile, st }) {
+export function CreateEvent({ go, mobile, st }) {
   const entitlements = st?.entitlements || DEFAULT_FREE_ENTITLEMENTS;
   const allowedVisibilities = entitlements.event_allowed_visibility || ['unlisted', 'invite_only'];
   const eventMaxParticipants = entitlements.event_max_participants ?? 100;
@@ -3477,4 +3489,4 @@ function CreateEvent({ go, mobile, st }) {
   );
 }
 
-Object.assign(window, { CreateEvent });
+
