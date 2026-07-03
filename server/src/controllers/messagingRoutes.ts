@@ -888,6 +888,91 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           }
         }
 
+        if (l.template_key === 'event_join_request' && l.provider_ref) {
+          try {
+            const data = JSON.parse(l.provider_ref);
+            return {
+              id: l.id,
+              who: data.requesterName || "A user",
+              type: "registration",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `<b>${data.requesterName}</b> requested to join <b>${data.eventTitle}</b>`,
+              action: "event_request",
+              eventId: data.eventId,
+              eventTitle: data.eventTitle,
+              requesterId: data.requesterId
+            };
+          } catch (e) {
+            return {
+              id: l.id,
+              who: "Someone",
+              type: "registration",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `A user has requested to join your event`,
+              action: "event_request"
+            };
+          }
+        }
+
+        if (l.template_key === 'event_request_accepted' && l.provider_ref) {
+          try {
+            const data = JSON.parse(l.provider_ref);
+            return {
+              id: l.id,
+              who: data.eventTitle || "Event",
+              type: "event",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `Your request to join <b>${data.eventTitle}</b> was accepted! 🎉`,
+              action: "view_event",
+              eventId: data.eventId
+            };
+          } catch (e) {
+            return {
+              id: l.id,
+              who: "Event",
+              type: "event",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `Your request to join the event was accepted!`,
+              action: "view_event"
+            };
+          }
+        }
+
+        if (l.template_key === 'event_request_declined' && l.provider_ref) {
+          try {
+            const data = JSON.parse(l.provider_ref);
+            return {
+              id: l.id,
+              who: data.eventTitle || "Event",
+              type: "system",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `Your request to join <b>${data.eventTitle}</b> was declined`,
+              action: null
+            };
+          } catch (e) {
+            return {
+              id: l.id,
+              who: "Event",
+              type: "system",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `Your request to join the event was declined`,
+              action: null
+            };
+          }
+        }
+
         if (l.template_key === 'group_created') {
           return {
             id: l.id,
@@ -1070,4 +1155,333 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       }
     }
   );
+
+  // POST /api/messaging/events/:id/request-join
+  fastify.post<{ Params: { id: string } }>('/events/:id/request-join', { preHandler: [(fastify as any).authenticate] }, async (request, reply) => {
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply.status(401).send({ success: false, message: 'Unauthorized' });
+    }
+    const eventId = request.params.id;
+    try {
+      const event = await prisma.events.findUnique({
+        where: { id: eventId }
+      });
+      if (!event) {
+        return reply.status(404).send({ success: false, message: 'Event not found' });
+      }
+
+      // Check if access is restricted
+      const venueObj = (event.venue as any) || {};
+      const meta = venueObj.meta || {};
+      const isRestricted = meta.joinEligibility === 'restricted';
+      const approvalRequired = event.approval_required || isRestricted;
+
+      const user = await prisma.users.findUnique({
+        where: { id: userId }
+      });
+      const requesterEmail = user?.primary_email || '';
+
+      const userProfile = await prisma.profiles.findUnique({
+        where: { user_id: userId }
+      });
+      const requesterName = userProfile?.display_name || 
+        [user?.first_name, user?.last_name].filter(Boolean).join(' ') || 
+        (requesterEmail ? requesterEmail.split('@')[0] : 'Guest');
+
+      // Check if already registered or requested
+      const existingBooking = await prisma.bookings.findFirst({
+        where: {
+          event_id: eventId,
+          booker_user_id: userId,
+          status: { in: ['confirmed', 'pending_approval'] }
+        }
+      });
+      if (existingBooking) {
+        return reply.status(400).send({
+          success: false,
+          message: existingBooking.status === 'confirmed' ? 'Already registered for this event.' : 'Join request is already pending approval.'
+        });
+      }
+
+      // Clear any cancelled or expired booking for this user to make room
+      await prisma.bookings.deleteMany({
+        where: {
+          event_id: eventId,
+          booker_user_id: userId,
+          status: { in: ['cancelled', 'expired'] }
+        }
+      });
+
+      // Get or create a ticket type
+      let ticketType = await prisma.ticket_types.findFirst({
+        where: { event_id: eventId }
+      });
+      if (!ticketType) {
+        ticketType = await prisma.ticket_types.create({
+          data: {
+            tenant_id: event.tenant_id,
+            event_id: eventId,
+            name: 'General RSVP',
+            price_amount_minor: 0,
+            price_currency: 'INR',
+            capacity: event.capacity_total
+          }
+        });
+      }
+
+      const answers = request.body || {};
+      const initialStatus = approvalRequired ? 'pending_approval' : 'confirmed';
+      const initialTicketStatus = approvalRequired ? 'reserved' : 'confirmed';
+
+      // Perform transaction to create booking, line item, ticket, and attendee
+      const { booking } = await prisma.$transaction(async (tx) => {
+        const bk = await tx.bookings.create({
+          data: {
+            tenant_id: event.tenant_id,
+            event_id: eventId,
+            booker_user_id: userId,
+            status: initialStatus,
+            payment_method: 'free',
+            total_amount_minor: 0,
+            total_currency: 'INR'
+          }
+        });
+
+        const li = await tx.booking_line_items.create({
+          data: {
+            tenant_id: event.tenant_id,
+            booking_id: bk.id,
+            ticket_type_id: ticketType.id,
+            quantity: 1,
+            unit_price_amount_minor: 0,
+            unit_price_currency: 'INR'
+          }
+        });
+
+        const tk = await tx.tickets.create({
+          data: {
+            tenant_id: event.tenant_id,
+            line_item_id: li.id,
+            attendee_name: requesterName,
+            attendee_email: requesterEmail,
+            qr_token: require('crypto').randomUUID(),
+            status: initialTicketStatus,
+            claimed_by_user_id: userId
+          }
+        });
+
+        await tx.attendees.create({
+          data: {
+            tenant_id: event.tenant_id,
+            booking_id: bk.id,
+            ticket_id: tk.id,
+            user_id: userId,
+            name: requesterName,
+            email: requesterEmail,
+            checkin_status: 'not_checked_in',
+            notes: JSON.stringify(answers)
+          }
+        });
+
+        return { booking: bk };
+      });
+
+      if (approvalRequired) {
+        let ownerUserId = null;
+        const entityRow = await prisma.entities.findUnique({
+          where: { id: event.hosted_by_entity_id }
+        });
+        if (entityRow) {
+          ownerUserId = entityRow.user_id;
+        }
+        if (!ownerUserId) {
+          const ownerRole = await prisma.roles.findFirst({
+            where: { key: 'group_owner' }
+          });
+          if (ownerRole) {
+            const assignment = await prisma.role_assignments.findFirst({
+              where: {
+                scope_entity_id: event.hosted_by_entity_id,
+                role_id: ownerRole.id
+              }
+            });
+            if (assignment) {
+              ownerUserId = assignment.user_id;
+            }
+          }
+        }
+        if (!ownerUserId) {
+          ownerUserId = userId; // Fallback
+        }
+
+        // Create notification for owner/admin
+        const notif = await prisma.notification_log.create({
+          data: {
+            tenant_id: event.tenant_id,
+            user_id: ownerUserId,
+            channel: 'app',
+            template_key: 'event_join_request',
+            status: 'queued',
+            provider_ref: JSON.stringify({
+              eventId,
+              eventTitle: event.title,
+              requesterId: userId,
+              requesterName
+            })
+          }
+        });
+
+        // Trigger socket emit if available
+        const chatNamespace = (fastify as any).io?.of('/chat');
+        if (chatNamespace) {
+          chatNamespace.to(`user:${ownerUserId}`).emit('group.notification', {
+            id: notif.id,
+            type: 'registration',
+            text: `<b>${requesterName}</b> requested to join <b>${event.title}</b>`,
+            eventId: eventId
+          });
+        }
+
+        const groupsNamespace = (fastify as any).io?.of('/groups');
+        if (groupsNamespace) {
+          groupsNamespace.to(`event_${eventId}`).emit('dashboard_updated', { action: 'request-join', eventId });
+        }
+
+        return reply.send({ success: true, status: 'pending', message: 'Join request submitted for approval.' });
+      } else {
+        const groupsNamespace = (fastify as any).io?.of('/groups');
+        if (groupsNamespace) {
+          groupsNamespace.to(`event_${eventId}`).emit('dashboard_updated', { action: 'join', eventId });
+        }
+        return reply.send({ success: true, status: 'confirmed', message: 'Joined event successfully.' });
+      }
+    } catch (err: any) {
+      return reply.status(500).send({ success: false, message: err.message });
+    }
+  });
+
+  // POST /api/messaging/events/requests/:notificationId/action
+  fastify.post<{ Params: { notificationId: string }, Body: { action: 'accept' | 'decline' } }>('/events/requests/:notificationId/action', { preHandler: [(fastify as any).authenticate] }, async (request, reply) => {
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply.status(401).send({ success: false, message: 'Unauthorized' });
+    }
+    const { notificationId } = request.params;
+    const { action } = request.body || {};
+
+    try {
+      const log = await prisma.notification_log.findUnique({
+        where: { id: notificationId }
+      });
+      if (!log || log.template_key !== 'event_join_request') {
+        return reply.status(404).send({ success: false, message: 'Request not found' });
+      }
+
+      const data = JSON.parse(log.provider_ref || '{}');
+      const { eventId, eventTitle, requesterId, requesterName } = data;
+
+      // Mark the original join request notification as read/acted
+      await prisma.notification_log.update({
+        where: { id: notificationId },
+        data: { status: 'read' }
+      });
+
+      // Update the database booking, line items and tickets status
+      const booking = await prisma.bookings.findFirst({
+        where: {
+          event_id: eventId,
+          booker_user_id: requesterId,
+          status: 'pending_approval'
+        }
+      });
+
+      if (booking) {
+        const nextStatus = action === 'accept' ? 'confirmed' : 'cancelled';
+        const nextTicketStatus = action === 'accept' ? 'confirmed' : 'cancelled';
+
+        await prisma.$transaction(async (tx) => {
+          await tx.bookings.update({
+            where: { id: booking.id },
+            data: { status: nextStatus }
+          });
+          const lineItems = await tx.booking_line_items.findMany({
+            where: { booking_id: booking.id }
+          });
+          const liIds = lineItems.map(li => li.id);
+          await tx.tickets.updateMany({
+            where: { line_item_id: { in: liIds } },
+            data: { status: nextTicketStatus }
+          });
+        });
+      }
+
+      if (action === 'accept') {
+        // Send accepted notification to the guest (requester)
+        await prisma.notification_log.create({
+          data: {
+            tenant_id: log.tenant_id,
+            user_id: requesterId,
+            channel: 'app',
+            template_key: 'event_request_accepted',
+            status: 'queued',
+            provider_ref: JSON.stringify({
+              eventId,
+              eventTitle
+            })
+          }
+        });
+
+        // Trigger socket emit to guest
+        const chatNamespace = (fastify as any).io?.of('/chat');
+        if (chatNamespace) {
+          chatNamespace.to(`user:${requesterId}`).emit('group.notification', {
+            type: 'event',
+            text: `Your request to join <b>${eventTitle}</b> was accepted! 🎉`
+          });
+        }
+
+        const groupsNamespace = (fastify as any).io?.of('/groups');
+        if (groupsNamespace) {
+          groupsNamespace.to(`event_${eventId}`).emit('dashboard_updated', { action: 'accept', eventId });
+        }
+
+        return reply.send({ success: true, action: 'accepted' });
+      } else {
+        // Send declined notification to the guest (requester)
+        await prisma.notification_log.create({
+          data: {
+            tenant_id: log.tenant_id,
+            user_id: requesterId,
+            channel: 'app',
+            template_key: 'event_request_declined',
+            status: 'queued',
+            provider_ref: JSON.stringify({
+              eventId,
+              eventTitle
+            })
+          }
+        });
+
+        // Trigger socket emit to guest
+        const chatNamespace = (fastify as any).io?.of('/chat');
+        if (chatNamespace) {
+          chatNamespace.to(`user:${requesterId}`).emit('group.notification', {
+            type: 'system',
+            text: `Your request to join <b>${eventTitle}</b> was declined`
+          });
+        }
+
+        const groupsNamespace = (fastify as any).io?.of('/groups');
+        if (groupsNamespace) {
+          groupsNamespace.to(`event_${eventId}`).emit('dashboard_updated', { action: 'decline', eventId });
+        }
+
+        return reply.send({ success: true, action: 'declined' });
+      }
+    } catch (err: any) {
+      return reply.status(500).send({ success: false, message: err.message });
+    }
+  });
 }
+

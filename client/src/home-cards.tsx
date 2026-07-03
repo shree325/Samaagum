@@ -18,7 +18,7 @@ function SaveBtn({ saved, onClick, Cls = "save" }) {
 function EventCard({ ev, onOpen, saved, onSave, registered }) {
   return (
     <div className="ecard rise" onClick={()=>onOpen(ev)}>
-      <div className="cover" style={{ background: ev.cover }}>
+      <div className="cover" style={{ background: ev.cover && (ev.cover.startsWith("linear-gradient") || ev.cover.startsWith("radial-gradient") || ev.cover.startsWith("var(")) ? ev.cover : `url(${ev.cover}) center/cover no-repeat` }}>
         <Grain/>
         <DateBadge month={ev.month} day={ev.day} />
         <SaveBtn saved={saved} onClick={onSave} />
@@ -48,7 +48,7 @@ function EventCard({ ev, onOpen, saved, onSave, registered }) {
 function FeatureCard({ ev, onOpen, saved, onSave }) {
   return (
     <div className="feature rise" onClick={()=>onOpen(ev)}>
-      <div className="fcover" style={{ background: ev.cover }}>
+      <div className="fcover" style={{ background: ev.cover && (ev.cover.startsWith("linear-gradient") || ev.cover.startsWith("radial-gradient") || ev.cover.startsWith("var(")) ? ev.cover : `url(${ev.cover}) center/cover no-repeat` }}>
         <Grain/>
         {ev.live && <span className="live"><span className="pulse"/>Selling fast</span>}
         <span className="ftag">{ev.cat}</span>

@@ -9,5 +9,11 @@ export const startGroupsSocket = async (io: Server) => {
         socket.on('leave_group', (groupId: string) => {
             socket.leave(`group_${groupId}`);
         });
+        socket.on('join_event', (eventId: string) => {
+            socket.join(`event_${eventId}`);
+        });
+        socket.on('leave_event', (eventId: string) => {
+            socket.leave(`event_${eventId}`);
+        });
     });
 };

@@ -521,7 +521,18 @@ function App() {
     return null;
   }); // { email, role }
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [darkMode, setDarkMode] = useState(true);
+  const [darkMode, setDarkMode] = useState(() => {
+    const stored = localStorage.getItem('samaagum_tweaks');
+    if (stored) {
+      try {
+        const tweaks = JSON.parse(stored);
+        if (typeof tweaks.dark === 'boolean') {
+          return tweaks.dark;
+        }
+      } catch (e) {}
+    }
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
 
   // Lists powered by the unified API / local storage fallback
   const [kycList, setKycList] = useState(() => adminApi._getLocalState("kyc", INITIAL_KYC));
@@ -630,6 +641,13 @@ function App() {
   // Toggle Theme
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
+    try {
+      const stored = localStorage.getItem('samaagum_tweaks') || '{}';
+      const tweaks = JSON.parse(stored);
+      tweaks.dark = darkMode;
+      localStorage.setItem('samaagum_tweaks', JSON.stringify(tweaks));
+      window.dispatchEvent(new CustomEvent('tweakchange', { detail: { dark: darkMode } }));
+    } catch (e) {}
   }, [darkMode]);
 
   // Load categories and tags from database

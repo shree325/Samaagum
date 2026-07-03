@@ -284,7 +284,22 @@ function Profile({ st, go }) {
   const [networkHasMore, setNetworkHasMore] = useState(false);
   const [networkConnectStates, setNetworkConnectStates] = useState({});
   const [isEditing, setIsEditing] = useState(false);
-  const [theme, setTheme] = useState("light");
+  const [theme, setTheme] = useState(() => {
+    return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  });
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    document.documentElement.setAttribute('data-theme', nextTheme);
+    try {
+      const stored = localStorage.getItem('samaagum_tweaks') || '{}';
+      const tweaks = JSON.parse(stored);
+      tweaks.dark = (nextTheme === 'dark');
+      localStorage.setItem('samaagum_tweaks', JSON.stringify(tweaks));
+      window.dispatchEvent(new CustomEvent('tweakchange', { detail: { dark: tweaks.dark } }));
+    } catch (e) {}
+  };
 
   const [isEditingLinks, setIsEditingLinks] = useState(false);
   const [linkForm, setLinkForm] = useState({
@@ -487,7 +502,7 @@ function Profile({ st, go }) {
 
           {/* Top Navbar */}
           <div style={{ display: "flex", justifyContent: "space-between", padding: "16px 20px" }}>
-            <button onClick={() => setTheme(isDark ? "light" : "dark")} style={{ width: 44, height: 44, borderRadius: "50%", background: colors.navBg, backdropFilter: "blur(4px)", color: colors.textMain, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(0,0,0,0.05)", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+            <button onClick={toggleTheme} style={{ width: 44, height: 44, borderRadius: "50%", background: colors.navBg, backdropFilter: "blur(4px)", color: colors.textMain, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(0,0,0,0.05)", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
               {isDark ? <I.sun style={{ width: 20, height: 20 }} /> : <I.moon style={{ width: 20, height: 20 }} />}
             </button>
             <div style={{ display: "flex", gap: 12 }}>

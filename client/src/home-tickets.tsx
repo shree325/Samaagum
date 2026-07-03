@@ -7,29 +7,68 @@
 function MyTickets({ st, go }) {
   const [tab, setTab] = useState("upcoming");
   const tickets = st.myTickets || [];
-  const upcoming = tickets.filter(t => t.status !== "used" && t.status !== "voided");
+  const joinedEvents = st.joinedEvents || [];
+  
+  const upcoming = [
+    ...tickets.filter(t => t.status !== "used" && t.status !== "voided"),
+    ...joinedEvents.filter(j => j.bookingStatus === "confirmed")
+  ];
+  const pending = joinedEvents.filter(j => j.bookingStatus === "pending_approval");
   const past = tickets.filter(t => t.status === "used");
   
   const waitlistIds = Array.from(st.waitlisted || []);
   const waitlistedEvents = [FEATURED, ...EVENTS].filter(e => waitlistIds.includes(e.id));
   
-  const createdList = st.createdEvents || [];
+  const createdListRaw = st.createdEvents || [];
+  const createdList = createdListRaw.map(e => {
+    if (e.date && typeof e.venue === 'string') return e;
+    const startsAt = e.starts_at ? new Date(e.starts_at) : null;
+    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+    const month = startsAt ? months[startsAt.getMonth()] : "TBD";
+    const day = startsAt ? startsAt.getDate().toString() : "TBD";
+    const time = startsAt ? startsAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : "Time TBD";
+    const dateStr = startsAt ? startsAt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : "Date TBD";
+
+    const venueObj = e.venue || {};
+    const meta = venueObj.meta || {};
+    return {
+      ...e,
+      cover: e.cover || meta.cover || "",
+      cat: meta.category || e.cat || "General",
+      online: e.location_type === 'online',
+      month,
+      day,
+      date: dateStr,
+      time,
+      venue: e.location_type === 'online' ? 'Online' : (venueObj.name || venueObj.address || 'Venue TBD'),
+    };
+  });
+
   const list = tab === "upcoming" ? upcoming 
+             : tab === "pending" ? pending
              : tab === "past" ? past 
              : tab === "waitlist" ? waitlistedEvents 
              : createdList;
+
+  const getVenueStr = (v) => {
+    if (typeof v === 'object' && v !== null) {
+      return v.name || v.address || 'Venue TBD';
+    }
+    return v || 'Venue TBD';
+  };
   
   return (
     <div className="scroll">
       <div className="page view-enter">
         <div className="sec-bar" style={{ marginBottom: 18 }}>
-          <h2 style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <h2 style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => go("discover", "events")}>
             My Events
-            <span style={{ fontSize: 18, color: "var(--ink-3)", fontWeight: 500 }}>{tickets.length + waitlistedEvents.length + createdList.length}</span>
+            <span style={{ fontSize: 18, color: "var(--ink-3)", fontWeight: 500 }}>{tickets.length + joinedEvents.length + waitlistedEvents.length + createdList.length}</span>
           </h2>
           <div style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
             <div className="seg-tabs">
               <button className={tab === "upcoming" ? "on" : ""} onClick={() => setTab("upcoming")}>Upcoming · {upcoming.length}</button>
+              <button className={tab === "pending" ? "on" : ""} onClick={() => setTab("pending")}>Pending · {pending.length}</button>
               <button className={tab === "waitlist" ? "on" : ""} onClick={() => setTab("waitlist")}>Waitlist · {waitlistedEvents.length}</button>
               <button className={tab === "created" ? "on" : ""} onClick={() => setTab("created")}>Created · {createdList.length}</button>
               <button className={tab === "past" ? "on" : ""} onClick={() => setTab("past")}>Past · {past.length}</button>
@@ -41,16 +80,50 @@ function MyTickets({ st, go }) {
         </div>
 
         {tab === "waitlist" && waitlistedEvents.length === 0 ? (
-          <Empty icon={<I.groups />} title="No waitlisted events" text="You aren't on the waitlist for any events yet." action={<button className="hbtn hbtn--primary" onClick={() => go("discover")}>Discover events</button>} />
+          <Empty icon={<I.groups />} title="No waitlisted events" text="You aren't on the waitlist for any events yet." action={<button className="hbtn hbtn--primary" onClick={() => go("discover", "events")}>Discover events</button>} />
         ) : tab === "created" && createdList.length === 0 ? (
           <Empty icon={<I.plus />} title="No hosted events" text="Create and share your first event to host it here." action={<button className="hbtn hbtn--primary" onClick={() => go("create-event")}>Create Event</button>} />
         ) : list.length === 0 ? (
-          <Empty icon={<I.ticket />} title="No tickets yet" text="When you book or RSVP to an event, your tickets live here." action={<button className="hbtn hbtn--primary" onClick={() => go("discover")}>Discover events</button>} />
+          <Empty icon={<I.ticket />} title="No events yet" text="When you book or RSVP to an event, your activity lives here." action={<button className="hbtn hbtn--primary" onClick={() => go("discover", "events")}>Discover events</button>} />
+        ) : tab === "pending" ? (
+          <div className="wallet-grid">
+            {pending.map(e => {
+              const startsAt = e.starts_at ? new Date(e.starts_at) : null;
+              const dateStr = startsAt ? startsAt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : "Date TBD";
+              const timeStr = startsAt ? startsAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : "";
+              let venueObj = {};
+              if (typeof e.venue === 'object' && e.venue !== null) venueObj = e.venue;
+              else if (typeof e.venue === 'string') { try { venueObj = JSON.parse(e.venue); } catch { venueObj = { name: e.venue }; } }
+              const venueStr = e.location_type === 'online' ? 'Online' : (venueObj.name || venueObj.address || 'Venue TBD');
+              return (
+                <div key={e.id} className="tkt" onClick={() => go("event", { ...e, bookingStatus: 'pending_approval' })}>
+                  <div className="tkt-cov" style={{ background: e.cover && !e.cover.startsWith('http') ? e.cover : `url(${e.cover || ''}) center/cover no-repeat` }}>
+                    <Grain />
+                    <span className="pill" style={{ background: "rgba(245,158,11,0.92)", color: "#fff" }}>
+                      <span className="pdot" style={{ background: "#fff" }} />Pending Approval
+                    </span>
+                  </div>
+                  <span className="perf l" /><span className="perf r" />
+                  <div className="tkt-body">
+                    <div className="tkt-ttl">{e.title}</div>
+                    <div className="tkt-meta">
+                      <span><I.cal style={{ width: 14, height: 14 }} /> {dateStr} · {timeStr}</span>
+                      <span>{e.location_type === 'online' ? <I.online style={{ width: 14, height: 14 }} /> : <I.pin style={{ width: 14, height: 14 }} />} {venueStr}</span>
+                    </div>
+                    <div className="tkt-foot">
+                      <span className="tkt-id">#{e.id?.slice(0, 8)}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "#f59e0b" }}>Awaiting host ⏳</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         ) : tab === "waitlist" ? (
           <div className="wallet-grid">
             {waitlistedEvents.map(e => (
               <div key={e.id} className="tkt" onClick={() => go("waitlist", e)}>
-                <div className="tkt-cov" style={{ background: e.cover }}>
+                <div className="tkt-cov" style={{ background: e.cover && (e.cover.startsWith("linear-gradient") || e.cover.startsWith("radial-gradient") || e.cover.startsWith("var(")) ? e.cover : `url(${e.cover}) center/cover no-repeat` }}>
                   <Grain />
                   <span className="pill" style={{ background: "rgba(0,0,0,0.32)", color: "#fff", backdropFilter: "blur(8px)" }}>{e.cat}</span>
                   <span className="pill violet" style={{ background: "rgba(255,255,255,0.92)", color: "var(--accent-2)" }}><span className="pdot" style={{ background: "var(--accent-2)" }} />Waitlisted</span>
@@ -75,8 +148,8 @@ function MyTickets({ st, go }) {
         ) : tab === "created" ? (
           <div className="wallet-grid">
             {createdList.map(e => (
-              <div key={e.id} className="tkt" onClick={() => go("event-dashboard", e)}>
-                <div className="tkt-cov" style={{ background: e.cover }}>
+              <div key={e.id} className="tkt" onClick={() => go("event", e)}>
+                <div className="tkt-cov" style={{ background: e.cover && (e.cover.startsWith("linear-gradient") || e.cover.startsWith("radial-gradient") || e.cover.startsWith("var(")) ? e.cover : `url(${e.cover}) center/cover no-repeat` }}>
                   <Grain />
                   <span className="pill" style={{ background: "rgba(0,0,0,0.32)", color: "#fff", backdropFilter: "blur(8px)" }}>{e.cat}</span>
                   <span className="pill green" style={{ background: "rgba(255,255,255,0.92)", color: "#1f9d57" }}><span className="pdot" style={{ background: "#1f9d57" }} />Hosting</span>
@@ -101,8 +174,15 @@ function MyTickets({ st, go }) {
         ) : (
           <div className="wallet-grid">
             {list.map(t => (
-              <div key={t.id} className={`tkt ${t.status === "used" ? "used" : ""}`} onClick={() => go("ticket", t)}>
-                <div className="tkt-cov" style={{ background: t.cover }}>
+              <div key={t.id} className={`tkt ${t.status === "used" ? "used" : ""}`} onClick={() => {
+                const evObj = [FEATURED, ...EVENTS].find(e => e.title === t.ev || e.id === t.eventId);
+                if (evObj) {
+                  go("event", evObj);
+                } else {
+                  go("ticket", t);
+                }
+              }}>
+                <div className="tkt-cov" style={{ background: t.cover && (t.cover.startsWith("linear-gradient") || t.cover.startsWith("radial-gradient") || t.cover.startsWith("var(")) ? t.cover : `url(${t.cover}) center/cover no-repeat` }}>
                   <Grain />
                   <span className="pill" style={{ background: "rgba(0,0,0,0.32)", color: "#fff", backdropFilter: "blur(8px)" }}>{t.tier}</span>
                   {t.status === "used" ? (
@@ -149,7 +229,7 @@ function TicketDetail({ tkt, st, go }) {
         </div>
 
         <div className="qr-ticket">
-          <div className="qt-cov" style={{ background: t.cover }}>
+          <div className="qt-cov" style={{ background: t.cover && (t.cover.startsWith("linear-gradient") || t.cover.startsWith("radial-gradient") || t.cover.startsWith("var(")) ? t.cover : `url(${t.cover}) center/cover no-repeat` }}>
             <Grain />
             <span className="pill" style={{ background: "rgba(0,0,0,0.3)", color: "#fff", backdropFilter: "blur(8px)" }}>{t.tier}</span>
           </div>
@@ -228,7 +308,7 @@ function ClaimFlow({ st, go }) {
           <>
             <div style={{ textAlign: "center", padding: "10px 0 6px" }}><Wordmark size={20} /></div>
             <div className="fcard" style={{ marginTop: 18 }}>
-              <div className="qt-cov" style={{ background: t.cover, height: 120, position: "relative", display: "flex", alignItems: "flex-end", padding: 16 }}>
+              <div className="qt-cov" style={{ background: t.cover && (t.cover.startsWith("linear-gradient") || t.cover.startsWith("radial-gradient") || t.cover.startsWith("var(")) ? t.cover : `url(${t.cover}) center/cover no-repeat`, height: 120, position: "relative", display: "flex", alignItems: "flex-end", padding: 16 }}>
                 <Grain />
                 <span className="pill" style={{ background: "rgba(0,0,0,0.3)", color: "#fff", backdropFilter: "blur(8px)" }}>{t.tier}</span>
               </div>
@@ -290,18 +370,129 @@ function ClaimFlow({ st, go }) {
 
 function EventDashboard({ ev, st, go }) {
   const e = ev || st.createdEvents[0];
-  const [attendees, setAttendees] = useState(e.attendees || ["Dev Kapoor", "Mira Shah", "Leo Patel", "Zoya Nair", "Ishaan Malhotra"]);
-  const [requests, setRequests] = useState(["Kabir Anand", "Mira Shah", "Riya Thomas"]);
-  
-  const handleApprove = (name) => {
-    setRequests(prev => prev.filter(r => r !== name));
-    setAttendees(prev => [...prev, name]);
-  };
-  const handleDecline = (name) => {
-    setRequests(prev => prev.filter(r => r !== name));
+  const [stats, setStats] = useState({ totalAttendees: 0, checkedInCount: 0, pendingRequestsCount: 0, revenue: 0, capacity: 120, confirmed: [], requests: [] });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const fetchStats = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${apiBase}/api/events/${e.id}/dashboard-stats`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      const data = await res.json();
+      if (data.success) {
+        setStats(data.data);
+      } else {
+        setError(data.message || "Failed to load dashboard data.");
+      }
+    } catch (err) {
+      setError("Network error loading dashboard.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const revenue = e.type === "Free" ? "Free" : `₹${(parseInt(e.price?.replace(/[^\d]/g, "") || "499") * attendees.length).toLocaleString()}`;
+  useEffect(() => {
+    fetchStats();
+  }, [e.id]);
+
+  useEffect(() => {
+    if (!e?.id || !window.io) return;
+    const socketUrl = apiBase ? `${apiBase}/groups` : "/groups";
+    const socket = window.io(socketUrl, { transports: ['websocket'] });
+    socket.emit('join_event', e.id);
+    socket.on('dashboard_updated', () => {
+      fetchStats();
+    });
+    return () => {
+      socket.emit('leave_event', e.id);
+      socket.disconnect();
+    };
+  }, [e.id]);
+
+  const handleAction = async (bookingId, action) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${apiBase}/api/events/${e.id}/requests/${bookingId}/action`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ action })
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchStats();
+      } else {
+        alert(data.message || `Failed to ${action} request.`);
+      }
+    } catch (err) {
+      alert("Network error updating request.");
+    }
+  };
+
+  const handleCheckin = async (attendeeId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${apiBase}/api/events/${e.id}/attendees/${attendeeId}/checkin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchStats();
+      } else {
+        alert(data.message || "Failed to check in attendee.");
+      }
+    } catch (err) {
+      alert("Network error checking in attendee.");
+    }
+  };
+
+  const renderAnswers = (answers) => {
+    if (!answers || Object.keys(answers).length === 0) return null;
+    const fields = e.venue?.meta?.formFields || [];
+    return (
+      <div style={{ marginTop: 8, padding: "10px 12px", background: "var(--bg-2)", borderRadius: 8, border: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 8, width: "100%", boxSizing: "border-box" }}>
+        <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-3)", letterSpacing: "0.05em" }}>Questionnaire Response</div>
+        {Object.entries(answers).map(([key, val]) => {
+          const field = fields.find(f => f.id === key);
+          const label = field ? field.question : key;
+          return (
+            <div key={key} style={{ fontSize: 12 }}>
+              <div style={{ color: "var(--ink-3)", marginBottom: 1, fontSize: 11 }}>{label}</div>
+              <div style={{ color: "var(--ink)", fontWeight: 500 }}>{String(val)}</div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", color: "var(--ink-3)" }}>
+        <Spinner /> <span style={{ marginLeft: 8 }}>Loading host dashboard...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", padding: 24, textAlign: "center" }}>
+        <div style={{ color: "red", fontSize: 16, fontWeight: 600, marginBottom: 12 }}>⚠️ Error</div>
+        <div style={{ color: "var(--ink-2)", marginBottom: 20 }}>{error}</div>
+        <button className="hbtn hbtn--primary" onClick={() => go("events")}>Back to Events</button>
+      </div>
+    );
+  }
+
+  const revenueDisplay = stats.revenue === 0 ? "Free" : `₹${stats.revenue.toLocaleString()}`;
 
   return (
     <div className="scroll">
@@ -316,7 +507,7 @@ function EventDashboard({ ev, st, go }) {
 
         <div className="fcard" style={{ padding: 20 }}>
           <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 20 }}>
-            <div style={{ width: 80, height: 60, borderRadius: 8, background: e.cover, flexShrink: 0 }} />
+            <div style={{ width: 80, height: 60, borderRadius: 8, background: e.cover ? (e.cover.startsWith("linear-gradient") ? e.cover : `url(${e.cover}) center/cover no-repeat`) : "var(--border-2)", flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <h3 style={{ fontSize: 18, fontWeight: 600, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.title}</h3>
               <div style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 4 }}>{e.date} · {e.time}</div>
@@ -326,38 +517,48 @@ function EventDashboard({ ev, st, go }) {
             </button>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 24 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12, marginBottom: 24 }}>
             <div style={{ background: "var(--field)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
               <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Total Attendees</div>
-              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>{attendees.length} <span style={{ fontSize: 13, fontWeight: 400, color: "var(--ink-3)" }}>/ {e.cap || 120}</span></div>
+              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>{stats.totalAttendees} <span style={{ fontSize: 13, fontWeight: 400, color: "var(--ink-3)" }}>/ {stats.capacity}</span></div>
             </div>
             <div style={{ background: "var(--field)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
               <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Estimated Revenue</div>
-              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: e.type === "Free" ? "var(--ink-3)" : "#1f9d57" }}>{revenue}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: stats.revenue === 0 ? "var(--ink-3)" : "#1f9d57" }}>{revenueDisplay}</div>
             </div>
             <div style={{ background: "var(--field)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
               <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Pending Requests</div>
-              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: requests.length > 0 ? "var(--accent-2)" : "var(--ink)" }}>{requests.length}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: stats.pendingRequestsCount > 0 ? "var(--accent-2)" : "var(--ink)" }}>{stats.pendingRequestsCount}</div>
+            </div>
+            <div style={{ background: "var(--field)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Checked In</div>
+              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: "var(--accent-2)" }}>{stats.checkedInCount} <span style={{ fontSize: 13, fontWeight: 400, color: "var(--ink-3)" }}>/ {stats.totalAttendees}</span></div>
             </div>
           </div>
 
-          {requests.length > 0 && (
+          {stats.requests.length > 0 && (
             <div style={{ marginBottom: 24 }}>
               <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10, display: "flex", gap: 6, alignItems: "center" }}>
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent-2)" }} />
-                Pending Approvals ({requests.length})
+                Pending Approvals ({stats.requests.length})
               </h4>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {requests.map(r => (
-                  <div key={r} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: 10, border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <Avatar name={r} size={32} />
-                      <span style={{ fontSize: 13.5, fontWeight: 600 }}>{r}</span>
+                {stats.requests.map(r => (
+                  <div key={r.id} style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <Avatar name={r.name} size={32} />
+                        <div style={{ display: "flex", flexDirection: "column" }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 600 }}>{r.name}</span>
+                          <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{r.email}</span>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button className="hbtn hbtn--soft hbtn--sm" onClick={() => handleAction(r.bookingId, 'decline')} style={{ color: "#ef4444" }}>Decline</button>
+                        <button className="hbtn hbtn--primary hbtn--sm" onClick={() => handleAction(r.bookingId, 'accept')}>Approve</button>
+                      </div>
                     </div>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button className="hbtn hbtn--soft hbtn--sm" onClick={() => handleDecline(r)} style={{ color: "#ef4444" }}>Decline</button>
-                      <button className="hbtn hbtn--primary hbtn--sm" onClick={() => handleApprove(r)}>Approve</button>
-                    </div>
+                    {renderAnswers(r.answers)}
                   </div>
                 ))}
               </div>
@@ -365,15 +566,28 @@ function EventDashboard({ ev, st, go }) {
           )}
 
           <div>
-            <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Confirmed Attendees ({attendees.length})</h4>
+            <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Confirmed Attendees ({stats.confirmed.length})</h4>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {attendees.map(a => (
-                <div key={a} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <Avatar name={a} size={28} />
-                    <span style={{ fontSize: 13, fontWeight: 500 }}>{a}</span>
+              {stats.confirmed.map(a => (
+                <div key={a.id} style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <Avatar name={a.name} size={28} />
+                      <div style={{ display: "flex", flexDirection: "column" }}>
+                        <span style={{ fontSize: 13, fontWeight: 500 }}>{a.name}</span>
+                        <span style={{ fontSize: 11, color: "var(--ink-3)" }}>{a.email}</span>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontSize: 11.5, color: "#1f9d57", display: "flex", alignItems: "center", gap: 4 }}><I.check style={{ width: 12, height: 12 }} /> Confirmed</span>
+                      {a.checkinStatus === 'checked_in' ? (
+                        <span style={{ fontSize: 11, fontWeight: 600, color: "var(--accent-2)", background: "rgba(124, 90, 255, 0.1)", padding: "3px 8px", borderRadius: 999 }}>Checked In</span>
+                      ) : (
+                        <button className="hbtn hbtn--primary hbtn--sm" onClick={() => handleCheckin(a.id)} style={{ padding: "2px 8px", fontSize: 11, height: 24 }}>Check In</button>
+                      )}
+                    </div>
                   </div>
-                  <span style={{ fontSize: 11.5, color: "#1f9d57", display: "flex", alignItems: "center", gap: 4 }}><I.check style={{ width: 12, height: 12 }} /> Confirmed</span>
+                  {renderAnswers(a.answers)}
                 </div>
               ))}
             </div>

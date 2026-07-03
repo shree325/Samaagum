@@ -67,6 +67,39 @@ function NotifRow({ n, st, go, onRead }) {
     }
   };
 
+  const handleEventRequest = async (action) => {
+    setLoading(action);
+    try {
+      const res = await fetch(`${API_BASE}/api/messaging/events/requests/${n.id}/action`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders()
+        },
+        body: JSON.stringify({ action })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setActed(action === 'accept' ? 'accepted' : 'declined');
+        onRead();
+        if (window.toast) {
+          const msg = action === 'accept' ? "Request approved! 🎉" : "Request declined.";
+          window.toast(msg, action === 'accept' ? "success" : "warning");
+        }
+        if (action === 'accept' && st.register) {
+          st.register(n.eventId);
+        }
+        if (st.fetchCounts) st.fetchCounts();
+      } else {
+        if (window.toast) window.toast(data.message || "Something went wrong.", "warning");
+      }
+    } catch (err) {
+      if (window.toast) window.toast("Network error. Please try again.", "warning");
+    } finally {
+      setLoading(null);
+    }
+  };
+
   return (
     <div className={`notif ${n.unread && !acted ? "unread" : ""}`} onClick={acted ? undefined : () => {
       onRead();
@@ -106,6 +139,29 @@ function NotifRow({ n, st, go, onRead }) {
           </div>
         )}
 
+        {/* Event Join Request Actions (from notification feed) */}
+        {n.action === "event_request" && !acted && (
+          <div className="nacts" style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+            <button
+              className="hbtn hbtn--primary hbtn--sm"
+              disabled={!!loading}
+              onClick={(e) => { e.stopPropagation(); handleEventRequest("accept"); }}
+              style={{ opacity: loading === "accept" ? 0.7 : 1 }}
+            >
+              <I.check/>
+              {loading === "accept" ? "Accepting…" : "Accept"}
+            </button>
+            <button
+              className="hbtn hbtn--ghost hbtn--sm"
+              disabled={!!loading}
+              onClick={(e) => { e.stopPropagation(); handleEventRequest("decline"); }}
+              style={{ opacity: loading === "decline" ? 0.7 : 1 }}
+            >
+              {loading === "decline" ? "Declining…" : "Decline"}
+            </button>
+          </div>
+        )}
+
         {/* Post-action badges */}
         {n.action === "connect" && acted && (
           <div style={{ marginTop: 8 }}>
@@ -122,7 +178,32 @@ function NotifRow({ n, st, go, onRead }) {
           </div>
         )}
 
+        {n.action === "event_request" && acted && (
+          <div style={{ marginTop: 8 }}>
+            {acted === "accepted" && (
+              <span style={{ display:"inline-flex", alignItems:"center", gap:6, background:"rgba(34,197,94,0.1)", color:"rgb(34,197,94)", padding:"4px 10px", borderRadius:"var(--r-pill)", fontSize:"12px", fontWeight:600 }}>
+                <I.check style={{width:12,height:12}}/> Accepted
+              </span>
+            )}
+            {acted === "declined" && (
+              <span style={{ display:"inline-flex", alignItems:"center", gap:6, background:"rgba(0,0,0,0.05)", color:"var(--ink-3)", padding:"4px 10px", borderRadius:"var(--r-pill)", fontSize:"12px", fontWeight:600 }}>
+                Request declined
+              </span>
+            )}
+          </div>
+        )}
+
         {n.action==="ticket" && <div className="nacts"><button className="hbtn hbtn--soft hbtn--sm" onClick={(e)=>{e.stopPropagation(); go("event", FEATURED);}}><I.ticket/>View ticket</button></div>}
+        {n.action==="view_event" && <div className="nacts"><button className="hbtn hbtn--soft hbtn--sm" onClick={(e)=>{
+          e.stopPropagation();
+          onRead();
+          const evObj = [FEATURED, ...EVENTS].find(ev => ev.id === n.eventId);
+          if (evObj) {
+            go("event", evObj);
+          } else {
+            go("events");
+          }
+        }}><I.ticket/>View Event</button></div>}
         {n.action==="reply"  && <div className="nacts"><button className="hbtn hbtn--soft hbtn--sm" onClick={(e)=>{e.stopPropagation(); go("messages");}}><I.msg/>Reply</button></div>}
         {n.action==="view"   && <div className="nacts"><button className="hbtn hbtn--ghost hbtn--sm" onClick={(e)=>{
           e.stopPropagation();
