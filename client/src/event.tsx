@@ -118,7 +118,8 @@ function EventPage({ ev, st, go }) {
     try {
       const token = localStorage.getItem('token');
       // Use the preserved raw venue object — NOT the display string
-      const currentVenue = currentEvent.venue_raw || {};
+      const rawVenue = currentEvent.venue_raw;
+      const currentVenue = (typeof rawVenue === 'object' && rawVenue !== null) ? rawVenue : {};
       const currentMeta = currentVenue.meta || {};
       
       const newMeta = { ...currentMeta, ...updatedVenueMeta };
@@ -377,6 +378,7 @@ function EventPage({ ev, st, go }) {
   ]);
   const [newInviteEmail, setNewInviteEmail] = useState("");
   const [guestSearch, setGuestSearch] = useState("");
+  const [memberSearch, setMemberSearch] = useState("");
 
   const galleryInputRef = useRef(null);
   const attendees = currentEvent.attendees || [];
@@ -570,7 +572,6 @@ function EventPage({ ev, st, go }) {
 
               {/* Tab 2: Members — consolidated (pending requests + confirmed list) */}
               {tab === "members" && (() => {
-                const [memberSearch, setMemberSearch] = React.useState("");
                 const confirmedAttendees = hostStats?.confirmed || attendees || [];
                 const pendingRequests = hostStats?.requests || [];
 
@@ -699,7 +700,7 @@ function EventPage({ ev, st, go }) {
                                   <span style={{ fontSize: 11, fontWeight: 600, color: "#1f9d57", background: "rgba(31,157,87,0.1)", padding: "3px 8px", borderRadius: 999 }}>
                                     Attending
                                   </span>
-                                  {userId && <I.chevronR style={{ width: 14, color: "var(--ink-3)" }} />}
+                                  {userId && <I.arrowR style={{ width: 14, color: "var(--ink-3)" }} />}
                                 </div>
                               </div>
                             );

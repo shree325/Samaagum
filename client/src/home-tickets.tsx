@@ -8,10 +8,40 @@ function MyTickets({ st, go }) {
   const [tab, setTab] = useState("upcoming");
   const tickets = st.myTickets || [];
   const joinedEvents = st.joinedEvents || [];
-  
+
+  const getVenueStr = (v) => {
+    if (typeof v === 'object' && v !== null) {
+      return v.name || v.address || 'Venue TBD';
+    }
+    return v || 'Venue TBD';
+  };
+
+  const normalizeJoinedEvent = (e) => {
+    const startsAt = e.starts_at ? new Date(e.starts_at) : null;
+    const dateStr = startsAt ? startsAt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : "Date TBD";
+    const timeStr = startsAt ? startsAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : "";
+    const venueObj = (typeof e.venue === 'object' && e.venue !== null) ? e.venue : {};
+    const meta = venueObj.meta || {};
+    const firstTicket = Array.isArray(e.tickets) ? e.tickets[0] : null;
+    return {
+      ...e,
+      ev: e.title || e.ev,
+      cover: e.cover || meta.cover || "",
+      tier: firstTicket?.name || "General",
+      paid: (e.registration_mode === 'free' || e.registration_mode === 'free_rsvp')
+        ? 'Free'
+        : (firstTicket?.price_amount_minor != null ? `₹${(firstTicket.price_amount_minor / 100).toFixed(0)}` : '—'),
+      online: e.location_type === 'online',
+      date: dateStr,
+      time: timeStr,
+      venue: e.location_type === 'online' ? 'Online' : getVenueStr(e.venue),
+      status: e.status === 'cancelled' ? 'voided' : 'confirmed',
+    };
+  };
+
   const upcoming = [
     ...tickets.filter(t => t.status !== "used" && t.status !== "voided"),
-    ...joinedEvents.filter(j => j.bookingStatus === "confirmed")
+    ...joinedEvents.filter(j => j.bookingStatus === "confirmed").map(normalizeJoinedEvent)
   ];
   const pending = joinedEvents.filter(j => j.bookingStatus === "pending_approval");
   const past = tickets.filter(t => t.status === "used");
@@ -50,13 +80,6 @@ function MyTickets({ st, go }) {
              : tab === "waitlist" ? waitlistedEvents 
              : createdList;
 
-  const getVenueStr = (v) => {
-    if (typeof v === 'object' && v !== null) {
-      return v.name || v.address || 'Venue TBD';
-    }
-    return v || 'Venue TBD';
-  };
-  
   return (
     <div className="scroll">
       <div className="page view-enter">
