@@ -2225,7 +2225,6 @@ function MemberManagementPanel({ group, st, go }) {
   const QUESTIONNAIRE_INIT = { loading: false, error: null, hasForm: null, data: null };
   const [questionnaireData, setQuestionnaireData] = useState(QUESTIONNAIRE_INIT);
 
-  React.useEffect(() => {
   const fetchMembers = React.useCallback(async () => {
     const token = localStorage.getItem('token');
     let uid = null;
@@ -2534,14 +2533,8 @@ function MemberManagementPanel({ group, st, go }) {
             return (
               <div key={m.user_id} style={{ position: "relative", zIndex: openMenuId === m.user_id ? 50 : 1, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)" }}>
                 <div 
-                  style={{ display: "flex", alignItems: "center", gap: 12, cursor: canViewResponses ? 'pointer' : 'default' }}
-                  onClick={() => {
-                    if (!canViewResponses) return;
-                    setSelectedMember(m);
-                    fetchQuestionnaire(m.user_id);
-                  }}
-                  onClick={() => m.users && go("public-profile", m.users)}
                   style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
+                  onClick={() => m.users && go("public-profile", m.users)}
                 >
                   <Avatar name={m.users?.display_name || "Unknown"} size={40} />
                   <div style={{ display: "flex", flexDirection: "column" }}>
@@ -2550,6 +2543,20 @@ function MemberManagementPanel({ group, st, go }) {
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  {canViewResponses && (
+                    <button 
+                      className="hbtn hbtn--ghost hbtn--sm" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedMember(m);
+                        fetchQuestionnaire(m.user_id);
+                      }}
+                      title="View Join Responses"
+                      style={{ padding: "4px 8px", fontSize: 12, display: "flex", alignItems: "center", gap: 4, height: 28 }}
+                    >
+                      Responses
+                    </button>
+                  )}
                   <span style={{ fontSize: 13, fontWeight: 600, color: roleColors[targetRole] }}>
                     {roleLabels[targetRole]}
                   </span>
