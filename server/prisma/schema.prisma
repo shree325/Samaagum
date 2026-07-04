@@ -184,6 +184,7 @@ model bookings {
   created_at            DateTime                @default(now()) @db.Timestamptz(6)
   updated_at            DateTime                @default(now()) @db.Timestamptz(6)
   affiliate_commissions affiliate_commissions[]
+  attendees             attendees[]
   booking_line_items    booking_line_items[]
   users                 users                   @relation(fields: [booker_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   events                events                  @relation(fields: [event_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -192,7 +193,6 @@ model bookings {
   disputes              disputes[]
   payments              payments[]
   referral_clicks       referral_clicks[]
-  attendees             attendees[]
 
   @@index([booker_user_id], map: "idx_bookings_booker_user_id")
   @@index([event_id], map: "idx_bookings_event_id")
@@ -479,15 +479,15 @@ model entities {
   marketplace_listings                                                   marketplace_listings[]
   media_assets                                                           media_assets[]
   membership_tiers                                                       membership_tiers[]
+  org_domains                                                            org_domains[]
   orgs                                                                   orgs?
   role_assignments                                                       role_assignments[]
   settlements                                                            settlements[]
   sponsors                                                               sponsors[]
+  sub_communities_community                                              sub_communities[]       @relation("sub_communities_community_entity_idToentities")
+  sub_communities_entity                                                 sub_communities?        @relation("sub_communities_entity_idToentities")
   subscriptions                                                          subscriptions[]
   takeover_requests                                                      takeover_requests[]
-  org_domains                                                            org_domains[]
-  sub_communities_community                                              sub_communities[] @relation("sub_communities_community_entity_idToentities")
-  sub_communities_entity                                                 sub_communities?  @relation("sub_communities_entity_idToentities")
 
   @@index([parent_entity_id], map: "idx_entities_parent_entity_id")
   @@index([tenant_id], map: "idx_entities_tenant_id")
@@ -552,9 +552,9 @@ model events {
   registration_form_id   String?                  @db.Uuid
   cash_enabled           Boolean                  @default(false)
   financial_locked_at    DateTime?                @db.Timestamptz(6)
-  instruction            String?
   created_at             DateTime                 @default(now()) @db.Timestamptz(6)
   updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  instruction            String?
   addons                 addons[]
   bookings               bookings[]
   bundles                bundles[]
@@ -675,8 +675,8 @@ model forum_comments {
   status               content_status   @default(active)
   created_at           DateTime         @default(now()) @db.Timestamptz(6)
   updated_at           DateTime         @default(now()) @db.Timestamptz(6)
-  deleted_at           DateTime?        @db.Timestamptz(6)
   parent_id            String?          @db.Uuid
+  deleted_at           DateTime?        @db.Timestamptz(6)
   users                users            @relation(fields: [author_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   forum_comments       forum_comments?  @relation("forum_commentsToforum_comments", fields: [parent_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   other_forum_comments forum_comments[] @relation("forum_commentsToforum_comments")
@@ -686,7 +686,6 @@ model forum_comments {
   @@index([parent_id], map: "idx_forum_comments_parent")
   @@index([post_id, deleted_at], map: "idx_forum_comments_post_del")
 }
-
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -774,14 +773,14 @@ model groups {
   join_mode         join_mode           @default(open)
   join_form_id      String?             @db.Uuid
   listed            listed_state        @default(unlisted)
-  banner            String?
-  banner_data       Bytes?
-  category          String?
-  cover             String?
   description       String?
+  category          String?
   icon              String?
-  icon_data         Bytes?
+  cover             String?
+  banner            String?
   settings          Json?               @default("{}")
+  banner_data       Bytes?
+  icon_data         Bytes?
   group_invitations group_invitations[]
   forms             forms?              @relation(fields: [join_form_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_groups_join_form")
   entities          entities            @relation(fields: [entity_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -935,10 +934,10 @@ model marketplace_listings {
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model media_assets {
-  id                                             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id                                      String           @db.Uuid
-  owner_entity_id                                String?          @db.Uuid
-  owner_user_id                                  String?          @db.Uuid
+  id                                             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                                      String            @db.Uuid
+  owner_entity_id                                String?           @db.Uuid
+  owner_user_id                                  String?           @db.Uuid
   storage_key                                    String
   mime                                           String?
   visibility                                     visibility_level  @default(public)
@@ -946,12 +945,12 @@ model media_assets {
   updated_at                                     DateTime          @default(now()) @db.Timestamptz(6)
   eventMedias                                    event_media[]
   gallery_media                                  gallery_media[]
-  entities                                       entities?        @relation(fields: [owner_entity_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users                                          users?           @relation(fields: [owner_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tenants                                        tenants          @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  entities                                       entities?         @relation(fields: [owner_entity_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users                                          users?            @relation(fields: [owner_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenants                                        tenants           @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   payments                                       payments[]
-  profiles_profiles_cover_asset_idTomedia_assets profiles[]       @relation("profiles_cover_asset_idTomedia_assets")
-  profiles_profiles_photo_asset_idTomedia_assets profiles[]       @relation("profiles_photo_asset_idTomedia_assets")
+  profiles_profiles_cover_asset_idTomedia_assets profiles[]        @relation("profiles_cover_asset_idTomedia_assets")
+  profiles_profiles_photo_asset_idTomedia_assets profiles[]        @relation("profiles_photo_asset_idTomedia_assets")
   sub_communities                                sub_communities[]
 }
 
@@ -1497,6 +1496,7 @@ model tenants {
   affiliate_payouts        affiliate_payouts[]
   affiliates               affiliates[]
   api_clients              api_clients[]
+  attendees                attendees[]
   audit_log                audit_log[]
   auth_identities          auth_identities[]
   booking_line_items       booking_line_items[]
@@ -1537,8 +1537,10 @@ model tenants {
   membership_subscriptions membership_subscriptions[]
   membership_tiers         membership_tiers[]
   messages                 messages[]
+  ml_feature_store         ml_feature_store[]
   moderation_reports       moderation_reports[]
   notification_log         notification_log[]
+  org_domains              org_domains[]
   payments                 payments[]
   platform_settings        platform_settings[]
   profile_links            profile_links[]
@@ -1554,6 +1556,7 @@ model tenants {
   sponsors                 sponsors[]
   sponsorship_orders       sponsorship_orders[]
   sponsorship_packages     sponsorship_packages[]
+  sub_communities          sub_communities[]
   subscription_orders      subscription_orders[]
   subscriptions            subscriptions[]
   support_cases            support_cases[]
@@ -1565,10 +1568,6 @@ model tenants {
   users                    users[]
   waitlist_entries         waitlist_entries[]
   wishlists                wishlists[]
-  attendees                attendees[]
-  ml_feature_store         ml_feature_store[]
-  org_domains              org_domains[]
-  sub_communities          sub_communities[]
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -1629,12 +1628,12 @@ model tickets {
   claimed_by_user_id String?            @db.Uuid
   created_at         DateTime           @default(now()) @db.Timestamptz(6)
   updated_at         DateTime           @default(now()) @db.Timestamptz(6)
+  attendees          attendees[]
   checkins           checkins[]
   ticket_claims      ticket_claims[]
   users              users?             @relation(fields: [claimed_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   booking_line_items booking_line_items @relation(fields: [line_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenants            tenants            @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  attendees          attendees[]
 
   @@index([line_item_id], map: "idx_tickets_line_item_id")
   @@index([qr_token], map: "idx_tickets_qr_token")
@@ -1750,6 +1749,8 @@ model users {
   message_versions                                                     message_versions[]
   message_visibilities                                                 message_visibilities[]
   messages                                                             messages[]
+  received_messaging_requests                                          messaging_requests[]         @relation("received_messaging_requests")
+  sent_messaging_requests                                              messaging_requests[]         @relation("sent_messaging_requests")
   ml_feature_store_ml_feature_store_created_byTousers                  ml_feature_store[]           @relation("ml_feature_store_created_byTousers")
   ml_feature_store_ml_feature_store_last_upd_byTousers                 ml_feature_store[]           @relation("ml_feature_store_last_upd_byTousers")
   moderation_actions                                                   moderation_actions[]
@@ -1779,8 +1780,6 @@ model users {
   sub_communities_sub_communities_created_byTousers                    sub_communities[]            @relation("sub_communities_created_byTousers")
   sub_communities_sub_communities_updated_byTousers                    sub_communities[]            @relation("sub_communities_updated_byTousers")
   subscription_orders                                                  subscription_orders[]
-  sent_messaging_requests                                              messaging_requests[]         @relation("sent_messaging_requests")
-  received_messaging_requests                                          messaging_requests[]         @relation("received_messaging_requests")
   support_cases_support_cases_assigned_toTousers                       support_cases[]              @relation("support_cases_assigned_toTousers")
   support_cases_support_cases_raised_by_user_idTousers                 support_cases[]              @relation("support_cases_raised_by_user_idTousers")
   takeover_requests                                                    takeover_requests[]
@@ -1918,6 +1917,7 @@ model admin_subscription_plans {
   tenant_id           String?               @db.Uuid
   created_at          DateTime              @default(now()) @db.Timestamptz(6)
   updated_at          DateTime              @default(now()) @db.Timestamptz(6)
+  is_default          Boolean?              @default(false)
   admin_positions     admin_positions?      @relation(fields: [rbac_position_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   admin_roles         admin_roles?          @relation(fields: [rbac_role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenants             tenants?              @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -1986,6 +1986,7 @@ model subscription_orders {
   completed_at             DateTime?                @db.Timestamptz(6)
   created_at               DateTime                 @default(now()) @db.Timestamptz(6)
   updated_at               DateTime                 @default(now()) @db.Timestamptz(6)
+  invoices                 invoices?
   admin_subscription_plans admin_subscription_plans @relation(fields: [plan_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenants                  tenants?                 @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   users                    users                    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -2592,6 +2593,31 @@ model group_invitations {
   users        users?    @relation(fields: [invited_by], references: [id])
 }
 
+model messaging_requests {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sender_id   String   @db.Uuid
+  receiver_id String   @db.Uuid
+  status      String   @default("PENDING")
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+  receiver    users    @relation("received_messaging_requests", fields: [receiver_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  sender      users    @relation("sent_messaging_requests", fields: [sender_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([sender_id, receiver_id])
+}
+
+model invoices {
+  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoice_number      String              @unique
+  order_id            String              @unique @db.Uuid
+  created_at          DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime            @default(now()) @db.Timestamptz(6)
+  pdf_data            Bytes
+  subscription_orders subscription_orders @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([order_id], map: "idx_invoices_order")
+}
+
 enum assignment_state {
   invited
   active
@@ -2879,18 +2905,4 @@ enum ConversationParticipantStatus {
   BLOCKED
   LEFT
   EXPIRED
-}
-
-model messaging_requests {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  sender_id    String   @db.Uuid
-  receiver_id  String   @db.Uuid
-  status       String   @default("PENDING") // PENDING, ACCEPTED, DECLINED
-  created_at   DateTime @default(now()) @db.Timestamptz(6)
-  updated_at   DateTime @default(now()) @db.Timestamptz(6)
-
-  sender       users    @relation("sent_messaging_requests", fields: [sender_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  receiver     users    @relation("received_messaging_requests", fields: [receiver_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@unique([sender_id, receiver_id])
 }
