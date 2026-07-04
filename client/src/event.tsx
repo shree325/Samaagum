@@ -547,13 +547,6 @@ function EventPage({ ev, st, go }) {
                     </div>
                   )}
 
-                  {e.instructions && (
-                    <div className="ev-block" style={{ background: "var(--field)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "16px" }}>
-                      <h3 style={{ marginTop: 0, fontSize: 15, fontWeight: 700 }}>📢 Special Instructions</h3>
-                      <p style={{ margin: "8px 0 0", fontSize: 13.5, lineHeight: 1.5, color: "var(--ink)" }}>{e.instructions}</p>
-                    </div>
-                  )}
-
                   <div className="ev-block">
                     <div className="ev-when">
                       <div className="ev-fact"><span className="ico"><I.cal /></span><div><div className="k">Date & Time</div><div className="v">{e.date}</div><div className="v2">{e.time}</div></div></div>
@@ -567,6 +560,41 @@ function EventPage({ ev, st, go }) {
                       <p>{e.desc || "No description provided."}</p>
                     </div>
                   </div>
+
+                  {!e.online && e.venue && (
+                    <div className="ev-block">
+                      <h3>Location</h3>
+                      <div className="ev-map">
+                        <iframe
+                          title="Event location map"
+                          width="100%"
+                          height="100%"
+                          style={{ border: 0, display: "block" }}
+                          src={`https://maps.google.com/maps?q=${encodeURIComponent(`${e.venue}${e.city ? ", " + e.city : ""}`)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                          allowFullScreen
+                        />
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 13.5, color: "var(--ink-2)" }}>
+                        <I.pin style={{ color: "var(--accent-2)" }} /> {e.venue}{e.city ? `, ${e.city}` : ""}
+                        <a
+                          className="hbtn hbtn--ghost hbtn--sm"
+                          style={{ marginLeft: "auto", textDecoration: "none" }}
+                          href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${e.venue}${e.city ? ", " + e.city : ""}`)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Get directions
+                        </a>
+                      </div>
+                    </div>
+                  )}
+
+                  {e.instructions && (
+                    <div className="ev-block" style={{ background: "var(--field)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "16px" }}>
+                      <h3 style={{ marginTop: 0, fontSize: 15, fontWeight: 700 }}>📢 Special Instructions</h3>
+                      <p style={{ margin: "8px 0 0", fontSize: 13.5, lineHeight: 1.5, color: "var(--ink)" }}>{e.instructions}</p>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1123,6 +1151,31 @@ function EventPage({ ev, st, go }) {
                     <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 10, textAlign: "center" }}>
                       Scan QR at entry gate
                     </div>
+                  </div>
+                </div>
+
+                <div className="ev-block" style={{ marginTop: 16 }}>
+                  <h3 style={{ fontSize: 14, marginTop: 0 }}>{confirmedCount} attending</h3>
+                  <div className="att-grid">
+                    {(hostStats?.confirmed || attendees || []).slice(0, 8).map((a, i) => (
+                      <div
+                        key={a.id || a.userId || a.bookingId || i}
+                        className="att"
+                        style={{ cursor: a.userId ? "pointer" : "default" }}
+                        onClick={() => a.userId && go("profile", { id: a.userId })}
+                      >
+                        <Avatar name={a.name || "Guest"} size={28} />
+                        <span className="nm">{a.name || "Guest"}</span>
+                      </div>
+                    ))}
+                    {confirmedCount > 8 && (
+                      <div className="att" style={{ paddingRight: 14 }}>
+                        <div className="av" style={{ width: 28, height: 28, fontSize: 11, background: "var(--surface-2)", color: "var(--ink-2)" }}>
+                          +{confirmedCount - 8}
+                        </div>
+                        <span className="nm">more</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
