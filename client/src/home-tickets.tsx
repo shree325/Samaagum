@@ -45,10 +45,10 @@ function MyTickets({ st, go }) {
   ];
   const pending = joinedEvents.filter(j => j.bookingStatus === "pending_approval");
   const past = tickets.filter(t => t.status === "used");
-  
+
   const waitlistIds = Array.from(st.waitlisted || []);
   const waitlistedEvents = [FEATURED, ...EVENTS].filter(e => waitlistIds.includes(e.id));
-  
+
   const createdListRaw = st.createdEvents || [];
   const createdList = createdListRaw.map(e => {
     if (e.date && typeof e.venue === 'string') return e;
@@ -74,11 +74,11 @@ function MyTickets({ st, go }) {
     };
   });
 
-  const list = tab === "upcoming" ? upcoming 
-             : tab === "pending" ? pending
-             : tab === "past" ? past 
-             : tab === "waitlist" ? waitlistedEvents 
-             : createdList;
+  const list = tab === "upcoming" ? upcoming
+    : tab === "pending" ? pending
+      : tab === "past" ? past
+        : tab === "waitlist" ? waitlistedEvents
+          : createdList;
 
   return (
     <div className="scroll">
@@ -198,7 +198,8 @@ function MyTickets({ st, go }) {
           <div className="wallet-grid">
             {list.map(t => (
               <div key={t.id} className={`tkt ${t.status === "used" ? "used" : ""}`} onClick={() => {
-                const evObj = [FEATURED, ...EVENTS].find(e => e.title === t.ev || e.id === t.eventId);
+                // If it is a normalized joined event, it already has the event fields, otherwise locate it in our local cache or joinedEvents
+                const evObj = t.starts_at ? t : ([FEATURED, ...EVENTS].find(e => e.title === t.ev || e.id === t.eventId) || st.joinedEvents?.find(je => je.id === t.eventId || je.title === t.ev));
                 if (evObj) {
                   go("event", evObj);
                 } else {
@@ -239,7 +240,7 @@ function TicketDetail({ tkt, st, go }) {
   const tickets = st?.myTickets || [];
   const t = tkt || tickets[0] || {};
   const used = t.status === "used";
-  
+
   return (
     <div className="scroll">
       <div className="flow view-enter" style={{ padding: "26px 24px 80px" }}>
