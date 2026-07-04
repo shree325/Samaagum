@@ -1622,7 +1622,46 @@ function LocationSection({ venue, setVenue, locType, setLocType }) {
 }
 
 /* ---------------- Create Event ---------------- */
-function CreateEvent({ go, mobile, st, editEv, hostGroupId, hostGroupName }: any) {
+function CreateEvent(props: any) {
+  const { editEv } = props;
+  const [eventData, setEventData] = useState(null as any);
+  const [loading, setLoading] = useState(editEv?.id && editEv.id !== 'new');
+
+  useEffect(() => {
+    if (editEv?.id && editEv.id !== 'new') {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {} as any;
+      const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+      fetch(`${apiBase}/api/events/${editEv.id}`, { headers })
+        .then(r => r.json())
+        .then(d => {
+          if (d.success && d.data?.event) {
+            setEventData(d.data.event);
+          }
+          setLoading(false);
+        })
+        .catch(err => {
+          console.error(err);
+          setLoading(false);
+        });
+    } else {
+      setLoading(false);
+    }
+  }, [editEv?.id]);
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "var(--bg-2)", color: "var(--ink-2)" }}>
+        <div style={{ fontSize: 14, fontWeight: 500 }}>Loading event details...</div>
+      </div>
+    );
+  }
+
+  return <CreateEventForm {...props} editEv={eventData || editEv} />;
+}
+
+function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }: any) {
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
@@ -1644,7 +1683,19 @@ function CreateEvent({ go, mobile, st, editEv, hostGroupId, hostGroupName }: any
         // Fetch groups user can host events under
         fetch(`${apiBase}/api/groups/mine/as-host`, { headers })
           .then(r => r.json())
-          .then(d => { if (d.success) setHostGroups(d.data); })
+          .then(d => {
+            if (d.success) {
+              setHostGroups(d.data);
+              if (editEv?.hosted_by_entity_id) {
+                const isGroupHost = d.data.some((g: any) => g.entity_id === editEv.hosted_by_entity_id);
+                if (isGroupHost) {
+                  setHostEntityId(editEv.hosted_by_entity_id);
+                } else {
+                  setHostEntityId("standalone");
+                }
+              }
+            }
+          })
           .catch(console.error);
 
         const res = await fetch(`${apiBase}/api/groups`, {
@@ -1819,6 +1870,9 @@ function CreateEvent({ go, mobile, st, editEv, hostGroupId, hostGroupName }: any
   const [ticketModalOpen, setTicketModalOpen] = useState(false);
   const [joinEligibility, setJoinEligibility] = useState(draft?.joinEligibility ?? editEv?.venue_raw?.meta?.joinEligibility ?? editEv?.venue?.meta?.joinEligibility ?? "public");
   const [accessModalOpen, setAccessModalOpen] = useState(false);
+  const [hostModalOpen, setHostModalOpen] = useState(false);
+  const [hostSearchQuery, setHostSearchQuery] = useState("");
+  const [hostFilterType, setHostFilterType] = useState("all");
   const [selectedAccess, setSelectedAccess] = useState(draft?.selectedAccess ?? editEv?.venue_raw?.meta?.selectedAccess ?? editEv?.venue?.meta?.selectedAccess ?? {
     restricted: {
       communities: [],
@@ -1830,8 +1884,8 @@ function CreateEvent({ go, mobile, st, editEv, hostGroupId, hostGroupName }: any
 
 
   // --- REGISTRATION FORM BUILDER STATES (Phase 3 Schema) ---
-  const [enableRegForm, setEnableRegForm] = useState(draft?.enableRegForm ?? editEv?.venue?.meta?.enableRegForm ?? false);
-  const [formFields, setFormFields] = useState(draft?.formFields ?? editEv?.venue?.meta?.formFields ?? [
+  const [enableRegForm, setEnableRegForm] = useState(draft?.enableRegForm ?? editEv?.venue_raw?.meta?.enableRegForm ?? editEv?.venue?.meta?.enableRegForm ?? false);
+  const [formFields, setFormFields] = useState(draft?.formFields ?? editEv?.venue_raw?.meta?.formFields ?? editEv?.venue?.meta?.formFields ?? [
     { id: "f-1", type: "text", question: "What is your main area of interest?", required: true, responseType: "short" },
     { id: "f-2", type: "social", question: "LinkedIn Profile URL", required: true, platform: "linkedin" }
   ] as any[]);
@@ -1850,11 +1904,11 @@ function CreateEvent({ go, mobile, st, editEv, hostGroupId, hostGroupName }: any
   const [customEntities, setCustomEntities] = useState(draft?.customEntities ?? ["BLR Founders Collective"]);
 
   // --- SPONSORS STATES (Phase 4 Search / Debounce / Pagination) ---
-  const [enableSponsors, setEnableSponsors] = useState(draft?.enableSponsors ?? editEv?.venue?.meta?.enableSponsors ?? false);
-  const [selectedSponsorIds, setSelectedSponsorIds] = useState(draft?.selectedSponsorIds ?? editEv?.venue?.meta?.selectedSponsorIds ?? ["sp-1", "sp-3"]);
+  const [enableSponsors, setEnableSponsors] = useState(draft?.enableSponsors ?? editEv?.venue_raw?.meta?.enableSponsors ?? editEv?.venue?.meta?.enableSponsors ?? false);
+  const [selectedSponsorIds, setSelectedSponsorIds] = useState(draft?.selectedSponsorIds ?? editEv?.venue_raw?.meta?.selectedSponsorIds ?? editEv?.venue?.meta?.selectedSponsorIds ?? ["sp-1", "sp-3"]);
   const [sponsorSearchQuery, setSponsorSearchQuery] = useState("");
   const [debouncedSponsorQuery, setDebouncedSponsorQuery] = useState("");
-  const [sponsorVisibility, setSponsorVisibility] = useState(draft?.sponsorVisibility ?? editEv?.venue?.meta?.sponsorVisibility ?? "public");
+  const [sponsorVisibility, setSponsorVisibility] = useState(draft?.sponsorVisibility ?? editEv?.venue_raw?.meta?.sponsorVisibility ?? editEv?.venue?.meta?.sponsorVisibility ?? "public");
   const [sponsorPage, setSponsorPage] = useState(1);
   const SPONSORS_PER_PAGE = 3;
 
@@ -1875,12 +1929,26 @@ function CreateEvent({ go, mobile, st, editEv, hostGroupId, hostGroupName }: any
     return () => clearTimeout(handler);
   }, [sponsorSearchQuery]);
 
+  // Host Modal escape listener & focus effect
+  useEffect(() => {
+    if (!hostModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setHostModalOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 50);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [hostModalOpen]);
+
   // --- BANNER UPLOAD STATES & MOCK VALIDATIONS (Phase 2) ---
   const [isDraggingBanner, setIsDraggingBanner] = useState(false);
   const [bannerError, setBannerError] = useState("");
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [showBannerMenu, setShowBannerMenu] = useState(false);
   const fileInputRef = useRef(null);
+  const searchInputRef = useRef(null as any);
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
@@ -2304,6 +2372,7 @@ function CreateEvent({ go, mobile, st, editEv, hostGroupId, hostGroupName }: any
   }
 
   return (
+    <>
     <div className={`create ${mobile ? "single" : ""}`}>
       <style>{`
         .create {
@@ -2651,95 +2720,6 @@ function CreateEvent({ go, mobile, st, editEv, hostGroupId, hostGroupName }: any
           <div className="create-container">
             {/* Left Side: Form */}
             <div className="form-section">
-              {/* Host Picker — only shown when user owns/admins at least one group */}
-              {hostGroups.length > 0 && (
-                <div className="form-group-section" style={{ marginBottom: 20, padding: 18, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)" }}>
-                  <div className="cfield" style={{ marginBottom: 0 }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600 }}>
-                      <span style={{ fontSize: 15 }}>🏠</span> Host as
-                    </label>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-                      {/* Standalone option */}
-                      <button
-                        type="button"
-                        onClick={() => setHostEntityId("standalone")}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 8,
-                          padding: "8px 14px", borderRadius: "var(--r-md)",
-                          border: hostEntityId === "standalone"
-                            ? "2px solid var(--accent-2)"
-                            : "1.5px solid var(--border)",
-                          background: hostEntityId === "standalone"
-                            ? "var(--accent-soft)" : "var(--surface)",
-                          cursor: "pointer", fontSize: 13, fontWeight: 500,
-                          transition: "all 0.15s"
-                        }}
-                      >
-                        <Avatar name={ME.name} size={24} />
-                        <div style={{ textAlign: "left" }}>
-                          <div style={{ fontWeight: 600 }}>{ME.name}</div>
-                          <div style={{ fontSize: 11, color: "var(--ink-3)" }}>Personal (standalone)</div>
-                        </div>
-                        {hostEntityId === "standalone" && (
-                          <span style={{ marginLeft: 4, color: "var(--accent-2)", fontSize: 14 }}>✓</span>
-                        )}
-                      </button>
-
-                      {/* Group options */}
-                      {hostGroups.map(grp => (
-                        <button
-                          key={grp.entity_id}
-                          type="button"
-                          onClick={() => setHostEntityId(grp.entity_id)}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 8,
-                            padding: "8px 14px", borderRadius: "var(--r-md)",
-                            border: hostEntityId === grp.entity_id
-                              ? "2px solid var(--accent-2)"
-                              : "1.5px solid var(--border)",
-                            background: hostEntityId === grp.entity_id
-                              ? "var(--accent-soft)" : "var(--surface)",
-                            cursor: "pointer", fontSize: 13, fontWeight: 500,
-                            transition: "all 0.15s"
-                          }}
-                        >
-                          <div style={{
-                            width: 24, height: 24, borderRadius: 6, overflow: "hidden",
-                            background: grp.cover || "var(--accent-2)",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            fontSize: 13, color: "#fff", flexShrink: 0
-                          }}>
-                            {grp.icon || grp.name?.[0]?.toUpperCase()}
-                          </div>
-                          <div style={{ textAlign: "left" }}>
-                            <div style={{ fontWeight: 600 }}>{grp.name}</div>
-                            <div style={{ fontSize: 11, color: "var(--ink-3)" }}>
-                              {grp.role === 'owner' ? 'Owner' : 'Admin'} · Community
-                            </div>
-                          </div>
-                          {hostEntityId === grp.entity_id && (
-                            <span style={{ marginLeft: 4, color: "var(--accent-2)", fontSize: 14 }}>✓</span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Current selection summary */}
-                    {hostEntityId !== "standalone" && (
-                      <div style={{
-                        marginTop: 8, fontSize: 12, color: "var(--ink-3)",
-                        display: "flex", alignItems: "center", gap: 4
-                      }}>
-                        <span>📢</span>
-                        This event will appear under{" "}
-                        <strong style={{ color: "var(--ink)" }}>
-                          {hostGroups.find(g => g.entity_id === hostEntityId)?.name}
-                        </strong>'s events tab.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
 
               {/* Group 1: Basic Information */}
               <div className="form-group-section">
@@ -3199,13 +3179,65 @@ function CreateEvent({ go, mobile, st, editEv, hostGroupId, hostGroupName }: any
               <div id="cover-picker-label" style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 12 }}>
                 Square ratio (JPG, PNG, WEBP)
               </div>
+
+              {/* Host as Card Trigger */}
+              <div 
+                onClick={() => setHostModalOpen(true)}
+                style={{
+                  marginTop: 20,
+                  padding: "16px 18px",
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "var(--r-lg)",
+                  boxShadow: "var(--sh-sm)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  transition: "border-color 0.2s, background 0.2s"
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = "var(--accent-2)";
+                  e.currentTarget.style.background = "var(--bg-2)";
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = "var(--border)";
+                  e.currentTarget.style.background = "var(--surface)";
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  {hostEntityId === "standalone" ? (
+                    <Avatar name={ME.name} size={32} />
+                  ) : (() => {
+                    const grp = hostGroups.find(g => g.entity_id === hostEntityId);
+                    return (
+                      <div style={{
+                        width: 32, height: 32, borderRadius: 8, overflow: "hidden",
+                        background: grp?.cover || "var(--accent-2)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 14, color: "#fff", fontWeight: "bold"
+                      }}>
+                        {grp?.icon || grp?.name?.[0]?.toUpperCase() || "👥"}
+                      </div>
+                    );
+                  })()}
+                  <div style={{ textAlign: "left" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Host as</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", marginTop: 2 }}>
+                      {hostEntityId === "standalone" ? ME.name : (hostGroups.find(g => g.entity_id === hostEntityId)?.name || "Select Host")}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ color: "var(--ink-3)", display: "flex", alignItems: "center" }}>
+                  <I.chevD style={{ width: 16, height: 16 }} />
+                </div>
+              </div>
             </div>
 
           </div>
         </div>
       </div>
 
-      {/* Full Modals */}
       {tzModalOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
           <div style={{ background: "var(--surface)", width: 400, borderRadius: "var(--r-xl)", padding: 32, boxShadow: "var(--sh-xl)" }}>
@@ -3253,6 +3285,215 @@ function CreateEvent({ go, mobile, st, editEv, hostGroupId, hostGroupName }: any
           </div>
         </div>
       )}
+
+      {/* Host Selection Modal */}
+      {hostModalOpen && (() => {
+        const modalWidth = mobile ? "100%" : "520px";
+        const modalHeight = mobile ? "80%" : "auto";
+        const modalAlignSelf = mobile ? "flex-end" : "center";
+        const modalBorderRadius = mobile ? "20px 20px 0 0" : "var(--r-xl)";
+
+        const isCommunity = (g: any) => {
+          const name = (g.name || "").toLowerCase();
+          return name.includes("community") || 
+                 name.includes("hub") || 
+                 name.includes("collective") || 
+                 name.includes("network") || 
+                 name.includes("association") || 
+                 name.includes("tech") || 
+                 name.includes("india") || 
+                 name.includes("society");
+        };
+
+        const filteredPersonal = (hostSearchQuery.trim() === "" || ME.name.toLowerCase().includes(hostSearchQuery.toLowerCase())) && (hostFilterType === "all");
+        
+        const filteredGroups = hostGroups.filter(g => {
+          const matchesSearch = g.name.toLowerCase().includes(hostSearchQuery.toLowerCase());
+          const matchesFilter = hostFilterType === "all" || hostFilterType === "group";
+          return matchesSearch && matchesFilter && !isCommunity(g);
+        });
+
+        const filteredCommunities = hostGroups.filter(g => {
+          const matchesSearch = g.name.toLowerCase().includes(hostSearchQuery.toLowerCase());
+          const matchesFilter = hostFilterType === "all" || hostFilterType === "community";
+          return matchesSearch && matchesFilter && isCommunity(g);
+        });
+
+        const handleOverlayClick = (e: any) => {
+          if (e.target === e.currentTarget) {
+            setHostModalOpen(false);
+          }
+        };
+
+        return (
+          <div 
+            onClick={handleOverlayClick}
+            style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: modalAlignSelf, justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+          >
+            <div style={{ background: "var(--surface)", width: modalWidth, maxHeight: mobile ? "90%" : "650px", height: modalHeight, borderRadius: modalBorderRadius, display: "flex", flexDirection: "column", boxShadow: "var(--sh-xl)", overflow: "hidden" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: "1px solid var(--border)" }}>
+                <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: "var(--ink)" }}>Host As</h2>
+                <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => setHostModalOpen(false)} style={{ border: "none" }}><I.x /></button>
+              </div>
+              
+              {/* Search and Filter Row */}
+              <div style={{ padding: "16px 24px 8px 24px", display: "flex", gap: 10 }}>
+                <input
+                  ref={searchInputRef}
+                  className="cinput"
+                  placeholder="Search..."
+                  value={hostSearchQuery}
+                  onChange={e => setHostSearchQuery(e.target.value)}
+                  style={{ flex: 1, height: 40, background: "var(--field)", border: "1px solid var(--border)" }}
+                />
+                <select
+                  className="cselect"
+                  value={hostFilterType}
+                  onChange={e => setHostFilterType(e.target.value as any)}
+                  style={{ width: 140, height: 40, background: "var(--field)", border: "1px solid var(--border)" }}
+                >
+                  <option value="all">All Types</option>
+                  <option value="group">Groups</option>
+                  <option value="community">Communities</option>
+                </select>
+              </div>
+
+              {/* List options */}
+              <div style={{ flex: 1, overflowY: "auto", padding: "12px 24px" }}>
+                {/* Personal Section */}
+                {filteredPersonal && (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 8, letterSpacing: "0.05em" }}>Personal</div>
+                    <button
+                      type="button"
+                      onClick={() => setHostEntityId("standalone")}
+                      style={{
+                        width: "100%", display: "flex", alignItems: "center", justifyItems: "flex-start", gap: 12,
+                        padding: "10px 14px", borderRadius: "var(--r-md)",
+                        border: hostEntityId === "standalone" ? "2px solid var(--accent-2)" : "1px solid var(--border)",
+                        background: hostEntityId === "standalone" ? "var(--accent-soft)" : "var(--surface)",
+                        cursor: "pointer", transition: "all 0.15s", textAlign: "left"
+                      }}
+                    >
+                      <input type="radio" checked={hostEntityId === "standalone"} readOnly style={{ accentColor: "var(--accent-2)" }} />
+                      <Avatar name={ME.name} size={28} />
+                      <div>
+                        <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: 13 }}>{ME.name}</div>
+                        <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 1 }}>Personal profile</div>
+                      </div>
+                    </button>
+                  </div>
+                )}
+
+                {/* Groups Section */}
+                {filteredGroups.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 8, letterSpacing: "0.05em" }}>Groups</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {filteredGroups.map(grp => (
+                        <button
+                          key={grp.entity_id}
+                          type="button"
+                          onClick={() => setHostEntityId(grp.entity_id)}
+                          style={{
+                            width: "100%", display: "flex", alignItems: "center", justifyItems: "flex-start", gap: 12,
+                            padding: "10px 14px", borderRadius: "var(--r-md)",
+                            border: hostEntityId === grp.entity_id ? "2px solid var(--accent-2)" : "1px solid var(--border)",
+                            background: hostEntityId === grp.entity_id ? "var(--accent-soft)" : "var(--surface)",
+                            cursor: "pointer", transition: "all 0.15s", textAlign: "left"
+                          }}
+                        >
+                          <input type="radio" checked={hostEntityId === grp.entity_id} readOnly style={{ accentColor: "var(--accent-2)" }} />
+                          <div style={{
+                            width: 28, height: 28, borderRadius: 6, overflow: "hidden",
+                            background: grp.cover || "var(--accent-2)",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: 12, color: "#fff", fontWeight: "bold", flexShrink: 0
+                          }}>
+                            {grp.icon || grp.name?.[0]?.toUpperCase()}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: 13 }}>{grp.name}</div>
+                            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 1 }}>
+                              {grp.role === 'owner' ? 'Owner' : 'Admin'} · Group
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Communities Section */}
+                {filteredCommunities.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 8, letterSpacing: "0.05em" }}>Communities</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {filteredCommunities.map(grp => (
+                        <button
+                          key={grp.entity_id}
+                          type="button"
+                          onClick={() => setHostEntityId(grp.entity_id)}
+                          style={{
+                            width: "100%", display: "flex", alignItems: "center", justifyItems: "flex-start", gap: 12,
+                            padding: "10px 14px", borderRadius: "var(--r-md)",
+                            border: hostEntityId === grp.entity_id ? "2px solid var(--accent-2)" : "1px solid var(--border)",
+                            background: hostEntityId === grp.entity_id ? "var(--accent-soft)" : "var(--surface)",
+                            cursor: "pointer", transition: "all 0.15s", textAlign: "left"
+                          }}
+                        >
+                          <input type="radio" checked={hostEntityId === grp.entity_id} readOnly style={{ accentColor: "var(--accent-2)" }} />
+                          <div style={{
+                            width: 28, height: 28, borderRadius: 6, overflow: "hidden",
+                            background: grp.cover || "var(--accent-2)",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: 12, color: "#fff", fontWeight: "bold", flexShrink: 0
+                          }}>
+                            {grp.icon || grp.name?.[0]?.toUpperCase()}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: 13 }}>{grp.name}</div>
+                            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 1 }}>
+                              {grp.role === 'owner' ? 'Owner' : 'Admin'} · Community
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* No results empty state */}
+                {!filteredPersonal && filteredGroups.length === 0 && filteredCommunities.length === 0 && (
+                  <div style={{ textAlign: "center", padding: "32px 16px", color: "var(--ink-3)", fontSize: 14 }}>
+                    No host profiles match your search criteria.
+                  </div>
+                )}
+              </div>
+
+              {/* Footer buttons */}
+              <div style={{ display: "flex", gap: 12, padding: "16px 24px", borderTop: "1px solid var(--border)", background: "var(--bg-2)" }}>
+                <button 
+                  type="button" 
+                  className="hbtn hbtn--ghost" 
+                  style={{ flex: 1 }} 
+                  onClick={() => setHostModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="button" 
+                  className="hbtn hbtn--primary" 
+                  style={{ flex: 1 }} 
+                  onClick={() => setHostModalOpen(false)}
+                >
+                  Select
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {calModalOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
@@ -3454,6 +3695,7 @@ function CreateEvent({ go, mobile, st, editEv, hostGroupId, hostGroupName }: any
         </button>
       </div>
     </div>
+    </>
   );
 }
 

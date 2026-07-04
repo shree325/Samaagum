@@ -122,17 +122,36 @@ export class EventService {
     return { event, tickets };
   }
 
-  static async updateEvent(id: string, userId: string, body: any) {
-    // Basic authorization check: verify the event belongs to this user
-    const event = await this.eventsRepo.getById(id);
-    if (!event) throw new Error('Event not found');
-
+  static async verifyEventHostOrCoHost(userId: string, eventId: string): Promise<boolean> {
+    const event = await prisma.events.findUnique({ where: { id: eventId } });
+    if (!event) return false;
     const entityRows = await prisma.$queryRawUnsafe<{ user_id: string }[]>(
       `SELECT user_id FROM entities WHERE id = $1::uuid LIMIT 1`,
       event.hosted_by_entity_id
     );
-    if (entityRows[0]?.user_id !== userId) {
-      throw new Error('Forbidden: You do not own this event');
+    if (entityRows[0]?.user_id === userId) return true;
+
+    const assignment = await prisma.event_team_assignments.findFirst({
+      where: {
+        event_id: eventId,
+        user_id: userId,
+        state: 'active',
+        roles: {
+          key: { in: ['event_host', 'event_cohost'] }
+        }
+      },
+      include: { roles: true }
+    });
+    return !!assignment;
+  }
+
+  static async updateEvent(id: string, userId: string, body: any) {
+    const event = await this.eventsRepo.getById(id);
+    if (!event) throw new Error('Event not found');
+
+    const isAuthorized = await this.verifyEventHostOrCoHost(userId, id);
+    if (!isAuthorized) {
+      throw new Error('Forbidden: You do not have permission to edit this event');
     }
 
     const updated = await this.eventsRepo.update(id, {
@@ -553,5 +572,362 @@ export class EventService {
       throw new Error('Forbidden');
     }
     await this.forumPostsRepo.updateLockStatus(postId, locked);
+  }
+
+  static async getEventMembers(eventId: string) {
+    const assignments = await prisma.event_team_assignments.findMany({
+      where: { event_id: eventId },
+      include: {
+        users_event_team_assignments_user_idTousers: { select: { id: true, first_name: true, last_name: true, primary_email: true, profiles: { select: { display_name: true } } } },
+        roles: true
+      }
+    });
+
+    const bookings = await prisma.bookings.findMany({
+      where: { event_id: eventId, status: { in: ['confirmed', 'pending_approval'] } },
+      include: {
+        users: { select: { id: true, first_name: true, last_name: true, primary_email: true, profiles: { select: { display_name: true } } } }
+      }
+    });
+
+    const memberMap = new Map();
+
+    for (const a of assignments) {
+      if (a.users_event_team_assignments_user_idTousers) {
+        memberMap.set(a.user_id, {
+          id: a.users_event_team_assignments_user_idTousers.id,
+          name: a.users_event_team_assignments_user_idTousers.first_name ? `${a.users_event_team_assignments_user_idTousers.first_name} ${a.users_event_team_assignments_user_idTousers.last_name || ''}`.trim() : 'Unknown',
+          display_name: a.users_event_team_assignments_user_idTousers.profiles?.display_name || a.users_event_team_assignments_user_idTousers.first_name,
+          picture: null,
+          email: a.users_event_team_assignments_user_idTousers.primary_email,
+          role: a.roles?.key || 'event_member',
+          state: a.state
+        });
+      }
+    }
+
+    for (const b of bookings) {
+      if (!memberMap.has(b.booker_user_id) && b.users) {
+        memberMap.set(b.booker_user_id, {
+          id: b.users.id,
+          name: b.users.first_name ? `${b.users.first_name} ${b.users.last_name || ''}`.trim() : 'Unknown',
+          display_name: b.users.profiles?.display_name || b.users.first_name,
+          picture: null,
+          email: b.users.primary_email,
+          role: 'event_member',
+          state: b.status === 'pending_approval' ? 'pending' : 'active'
+        });
+      }
+    }
+
+    const event = await prisma.events.findUnique({ where: { id: eventId } });
+    if (event) {
+        const entity = await prisma.entities.findUnique({ where: { id: event.hosted_by_entity_id }, include: { users: { select: { id: true, first_name: true, last_name: true, primary_email: true, profiles: { select: { display_name: true } } } } }});
+        if (entity && entity.entity_type === 'user' && !memberMap.has(entity.user_id) && entity.users) {
+            memberMap.set(entity.user_id, {
+                id: entity.users.id,
+                name: entity.users.first_name ? `${entity.users.first_name} ${entity.users.last_name || ''}`.trim() : 'Unknown',
+                display_name: entity.users.profiles?.display_name || entity.users.first_name,
+                picture: null,
+                email: entity.users.primary_email,
+                role: 'event_host',
+                state: 'active'
+            });
+        }
+    }
+
+    return Array.from(memberMap.values());
+  }
+
+  static async updateMemberRole(eventId: string, targetUserId: string, newRoleKey: string, currentUserId: string) {
+    const callerAssignment = await prisma.event_team_assignments.findFirst({
+      where: { event_id: eventId, user_id: currentUserId },
+      include: { roles: true }
+    });
+    
+    const event = await prisma.events.findUnique({ where: { id: eventId } });
+    if (!event) throw new Error('Event not found');
+
+    let isOwner = false;
+    const creatorEntity = await prisma.entities.findFirst({ where: { id: event.hosted_by_entity_id, user_id: currentUserId }});
+    if (creatorEntity) isOwner = true;
+
+    const callerRole = isOwner ? 'event_host' : callerAssignment?.roles?.key;
+    if (!callerRole || callerRole === 'event_member') {
+      throw new Error('Forbidden: You do not have permission to change roles.');
+    }
+
+    const hierarchy: Record<string, number> = {
+      'event_host': 4,
+      'event_cohost': 3,
+      'event_scanner': 2,
+      'event_member': 1
+    };
+
+    const callerLevel = hierarchy[callerRole] || 0;
+    const targetLevel = hierarchy[newRoleKey] || 0;
+
+    if (callerLevel <= targetLevel && !isOwner) {
+      throw new Error('Forbidden: Cannot assign a role equal to or higher than your own.');
+    }
+
+    const targetAssignment = await prisma.event_team_assignments.findFirst({
+      where: { event_id: eventId, user_id: targetUserId },
+      include: { roles: true }
+    });
+
+    const currentTargetRole = targetAssignment?.roles?.key || 'event_member';
+    const currentTargetLevel = hierarchy[currentTargetRole] || 0;
+
+    if (callerLevel <= currentTargetLevel && !isOwner) {
+      throw new Error('Forbidden: Cannot change the role of someone with equal or higher permissions.');
+    }
+
+    const newRole = await prisma.roles.findUnique({ where: { key: newRoleKey } });
+    if (!newRole) throw new Error('Role not found');
+
+    if (targetAssignment) {
+      await prisma.event_team_assignments.update({
+        where: { id: targetAssignment.id },
+        data: { role_id: newRole.id }
+      });
+    } else {
+      await prisma.event_team_assignments.create({
+        data: {
+          tenant_id: event.tenant_id,
+          event_id: eventId,
+          user_id: targetUserId,
+          role_id: newRole.id,
+          state: 'active'
+        }
+      });
+    }
+    return { success: true };
+  }
+
+  static async getEventUserRole(userId: string, eventId: string): Promise<string> {
+    const event = await prisma.events.findUnique({ where: { id: eventId } });
+    if (!event) return 'none';
+
+    const entityRows = await prisma.$queryRawUnsafe<{ user_id: string }[]>(
+      `SELECT user_id FROM entities WHERE id = $1::uuid LIMIT 1`,
+      event.hosted_by_entity_id
+    );
+    if (entityRows[0]?.user_id === userId) return 'event_host';
+
+    const assignment = await prisma.event_team_assignments.findFirst({
+      where: { event_id: eventId, user_id: userId, state: 'active' },
+      include: { roles: true }
+    });
+    if (assignment?.roles?.key) {
+      return assignment.roles.key; // 'event_host', 'event_cohost', 'event_scanner'
+    }
+
+    const booking = await prisma.bookings.findFirst({
+      where: { event_id: eventId, booker_user_id: userId, status: 'confirmed' }
+    });
+    if (booking) return 'event_member';
+
+    return 'none';
+  }
+
+  static async getEventGallery(eventId: string, userId: string) {
+    const event = await prisma.events.findUnique({ where: { id: eventId } });
+    if (!event) throw new Error('Event not found');
+
+    const venue = (event.venue as any) || {};
+    const meta = venue.meta || {};
+    const gallery = meta.gallery || {};
+    const items = gallery.items || [];
+
+    const role = await this.getEventUserRole(userId, eventId);
+    const isHostOrCoHost = role === 'event_host' || role === 'event_cohost';
+    const isScanner = role === 'event_scanner';
+
+    const user = await prisma.users.findUnique({ where: { id: userId } });
+    const isGlobalStaff = user?.role && (user.role.toLowerCase().includes('admin') || user.role.toLowerCase().includes('moderator'));
+
+    if (isHostOrCoHost || isScanner || isGlobalStaff) {
+      return items;
+    }
+    return items.filter((item: any) => item.approved);
+  }
+
+  static async uploadToEventGallery(eventId: string, userId: string, body: any) {
+    const event = await prisma.events.findUnique({ where: { id: eventId } });
+    if (!event) throw new Error('Event not found');
+
+    const venue = (event.venue as any) || {};
+    const meta = venue.meta || {};
+    const gallery = meta.gallery || {};
+    const items = gallery.items || [];
+
+    const role = await this.getEventUserRole(userId, eventId);
+    const isHostOrCoHost = role === 'event_host' || role === 'event_cohost';
+    const isScanner = role === 'event_scanner';
+    const isMember = role === 'event_member';
+
+    const user = await prisma.users.findUnique({ where: { id: userId } });
+    const uploaderName = user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.primary_email.split('@')[0] : 'Unknown';
+
+    if (!gallery.enabled) {
+      throw new Error('Gallery is disabled for this event');
+    }
+
+    const uploadRoles = gallery.uploadRoles || { owner: true, admin: true, moderator: true, public: false };
+    const canUpload = uploadRoles.public ||
+      (isMember && uploadRoles.member) ||
+      (isHostOrCoHost && (uploadRoles.owner !== false || uploadRoles.admin !== false)) ||
+      (isScanner && uploadRoles.moderator !== false);
+
+    if (!canUpload) {
+      throw new Error('You do not have permission to upload to this gallery');
+    }
+
+    const needsApproval = gallery.approvalRequired;
+    const isAuthorizedApprover = isHostOrCoHost || isScanner;
+    const approved = !(needsApproval && !isAuthorizedApprover);
+
+    const newItem = {
+      id: Date.now(),
+      url: body.url,
+      type: body.type || 'image',
+      approved,
+      uploadedBy: uploaderName,
+      uploaderId: userId,
+      created_at: new Date().toISOString()
+    };
+
+    const nextItems = [...items, newItem];
+    const newMeta = { ...meta, gallery: { ...gallery, items: nextItems } };
+    const newVenue = { ...venue, meta: newMeta };
+
+    await prisma.events.update({
+      where: { id: eventId },
+      data: { venue: newVenue }
+    });
+
+    return newItem;
+  }
+
+  static async approveEventGalleryItem(eventId: string, itemId: number, userId: string) {
+    const event = await prisma.events.findUnique({ where: { id: eventId } });
+    if (!event) throw new Error('Event not found');
+
+    const role = await this.getEventUserRole(userId, eventId);
+    const isHostOrCoHost = role === 'event_host' || role === 'event_cohost';
+    const isScanner = role === 'event_scanner';
+
+    if (!isHostOrCoHost && !isScanner) {
+      throw new Error('Forbidden: Only organizers can approve media');
+    }
+
+    const venue = (event.venue as any) || {};
+    const meta = venue.meta || {};
+    const gallery = meta.gallery || {};
+    const items = gallery.items || [];
+
+    const nextItems = items.map((item: any) => {
+      if (item.id === itemId) {
+        return { ...item, approved: true };
+      }
+      return item;
+    });
+
+    const newMeta = { ...meta, gallery: { ...gallery, items: nextItems } };
+    const newVenue = { ...venue, meta: newMeta };
+
+    await prisma.events.update({
+      where: { id: eventId },
+      data: { venue: newVenue }
+    });
+  }
+
+  static async deleteEventGalleryItem(eventId: string, itemId: number, userId: string) {
+    const event = await prisma.events.findUnique({ where: { id: eventId } });
+    if (!event) throw new Error('Event not found');
+
+    const role = await this.getEventUserRole(userId, eventId);
+    const isHostOrCoHost = role === 'event_host' || role === 'event_cohost';
+    const isScanner = role === 'event_scanner';
+
+    const venue = (event.venue as any) || {};
+    const meta = venue.meta || {};
+    const gallery = meta.gallery || {};
+    const items = gallery.items || [];
+
+    const itemToDelete = items.find((item: any) => item.id === itemId);
+    if (!itemToDelete) throw new Error('Item not found');
+
+    const isUploader = itemToDelete.uploaderId === userId;
+
+    if (!isHostOrCoHost && !isScanner && !isUploader) {
+      throw new Error('Forbidden: You do not have permission to delete this media');
+    }
+
+    const nextItems = items.filter((item: any) => item.id !== itemId);
+
+    const newMeta = { ...meta, gallery: { ...gallery, items: nextItems } };
+    const newVenue = { ...venue, meta: newMeta };
+
+    await prisma.events.update({
+      where: { id: eventId },
+      data: { venue: newVenue }
+    });
+  }
+
+  static async leaveEvent(eventId: string, userId: string) {
+    const event = await prisma.events.findUnique({ where: { id: eventId } });
+    if (!event) throw new Error('Event not found');
+
+    const entityRows = await prisma.$queryRawUnsafe<{ user_id: string }[]>(
+      `SELECT user_id FROM entities WHERE id = $1::uuid LIMIT 1`,
+      event.hosted_by_entity_id
+    );
+    const isOwner = entityRows[0]?.user_id === userId;
+
+    const hostRole = await prisma.roles.findFirst({ where: { key: 'event_host' } });
+    const hostAssignment = await prisma.event_team_assignments.findFirst({
+      where: { event_id: eventId, role_id: hostRole?.id, state: 'active' }
+    });
+    const isAssignedHost = hostAssignment?.user_id === userId;
+
+    if (isOwner || isAssignedHost) {
+      const otherHostsCount = await prisma.event_team_assignments.count({
+        where: {
+          event_id: eventId,
+          role_id: hostRole?.id,
+          state: 'active',
+          NOT: { user_id: userId }
+        }
+      });
+      if (otherHostsCount === 0) {
+        throw new Error('Host cannot leave event without assigning another Host first.');
+      }
+    }
+
+    await prisma.event_team_assignments.deleteMany({
+      where: { event_id: eventId, user_id: userId }
+    });
+
+    const bookings = await prisma.bookings.findMany({
+      where: { event_id: eventId, booker_user_id: userId }
+    });
+    for (const b of bookings) {
+      await prisma.$transaction(async (tx) => {
+        await tx.bookings.update({
+          where: { id: b.id },
+          data: { status: 'cancelled' }
+        });
+        const lineItems = await tx.booking_line_items.findMany({
+          where: { booking_id: b.id }
+        });
+        const liIds = lineItems.map(li => li.id);
+        await tx.tickets.updateMany({
+          where: { line_item_id: { in: liIds } },
+          data: { status: 'cancelled' }
+        });
+      });
+    }
   }
 }

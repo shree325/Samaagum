@@ -779,7 +779,7 @@ function App() {
       const isAdmin = ME.role && ME.role.toLowerCase().includes("admin");
       const isModerator = ME.role && ME.role.toLowerCase().includes("moderator");
       
-      // Check if user has a confirmed or pending booking for this event
+      // Check if user has a confirmed or pending booking/membership for this event
       const joinedEntry = st.joinedEvents && st.joinedEvents.find(je => je.id === e.id);
       const bookingStatus = e.bookingStatus || joinedEntry?.bookingStatus || null;
       const hasConfirmedBooking = bookingStatus === 'confirmed';
@@ -790,7 +790,10 @@ function App() {
                         (st.myTickets && st.myTickets.some(t => t.eventId === e.id || t.ev === e.title)) ||
                         (e.attendees && Array.isArray(e.attendees) && e.attendees.includes(ME.name)) ||
                         (typeof UPCOMING !== 'undefined' && Array.isArray(UPCOMING) && UPCOMING.some(ue => ue.id === e.id));
-      const isReg = hasJoined || isOwner || isAdmin || isModerator;
+      
+      // Determine if Host or Co-host (via event team assignments)
+      const isEventStaff = isOwner || isAdmin || isModerator || (joinedEntry && joinedEntry.role && ['event_host', 'event_cohost'].includes(joinedEntry.role));
+      const isReg = hasJoined || isEventStaff;
 
       // Merge bookingStatus into the event object so EventPage and JoinEventPage can use it
       const evWithStatus = { ...e, bookingStatus };
@@ -801,6 +804,7 @@ function App() {
         // User has a pending request - show EventPage with pending state visible
         return <EventPage ev={evWithStatus} st={st} go={go} />;
       } else {
+        // Redirect to JoinEventPage
         return <JoinEventPage ev={evWithStatus} st={st} go={go} />;
       }
     }
