@@ -163,7 +163,7 @@ function ProfileMenu({ go, dark, onToggleTheme }) {
   const isAdmin = ME.role && ME.role.toLowerCase().includes("admin");
   const items = [
     { k:"profile", ic:<I.user/>, t:"My profile" },
-    { k:"events", ic:<I.ticket/>, t:"My tickets" },
+    { k:"tickets", ic:<I.ticket/>, t:"My tickets" },
     { k:"groups", ic:<I.groups/>, t:"My groups" },
     { k:"upgrade", ic:<I.crown style={{ color: "var(--accent-1)" }}/>, t:"Upgrade Plan" },
     ...(isAdmin ? [{ k:"admin", ic:<I.compass/>, t:"Admin Console" }] : []),

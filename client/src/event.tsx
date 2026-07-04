@@ -464,6 +464,7 @@ function EventPage({ ev, st, go }) {
 
   const tabs = e.id === "new" ? [["about", "About"]] : [
     ["about", "About"],
+    ...(effectiveIsMember ? [["dashboard", "Dashboard"]] : []),
     ...(effectiveIsMember ? [["members", `Members${pendingCount > 0 && (isHostOrCoHost || isAdmin || isModerator) ? ` · 🔴${pendingCount}` : ""}`]] : []),
     ...(canViewGallery ? [["gallery", "Gallery"]] : []),
     ...(discussionEnabled && effectiveIsMember ? [["discussion", "Discussion"]] : []),
@@ -492,6 +493,10 @@ function EventPage({ ev, st, go }) {
   const [ticketSearch, setTicketSearch] = useState("");
   const [couponSearch, setCouponSearch] = useState("");
   const [referralSearch, setReferralSearch] = useState("");
+
+  // Member response modal — shows the questionnaire answers a member submitted at
+  // registration, opened from the "Response" button on their row in the Members tab.
+  const [responseMember, setResponseMember] = useState(null);
 
   // Ticket modal state
   const [ticketModalOpen, setTicketModalOpen] = useState(false);
@@ -792,6 +797,72 @@ function EventPage({ ev, st, go }) {
                 </div>
               )}
 
+              {/* Tab: Dashboard — quick-glance stats for the event (members, attendees, posts, ...) */}
+              {tab === "dashboard" && (() => {
+                const memberCount = eventMembers ? eventMembers.filter(m => m.state === 'active').length : attendees.length;
+                const revenueDisplay = !hostStats ? null : (hostStats.revenue === 0 ? "Free" : `₹${hostStats.revenue.toLocaleString()}`);
+
+                const StatCard = ({ label, value, sub, color }) => (
+                  <div style={{ background: "var(--field)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
+                    <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: color || "var(--ink)" }}>
+                      {value}{sub && <span style={{ fontSize: 13, fontWeight: 400, color: "var(--ink-3)" }}> {sub}</span>}
+                    </div>
+                  </div>
+                );
+
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                    <div className="ev-block">
+                      <h3>Event Dashboard</h3>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginTop: 12 }}>
+                        <StatCard label="Total Members" value={memberCount} />
+                        <StatCard label="Confirmed Attendees" value={confirmedCount} />
+                        <StatCard label="Gallery Posts" value={galleryItems.length} />
+                        {discussionEnabled && (
+                          <StatCard label="Discussion" value={discussionEnabled ? "Enabled" : "Off"} />
+                        )}
+                        {(isHostOrCoHost || isAdmin || isModerator) && (
+                          <StatCard label="Pending Requests" value={pendingCount} color={pendingCount > 0 ? "var(--accent-2)" : undefined} />
+                        )}
+                        {hostStats && (
+                          <StatCard label="Checked In" value={hostStats.checkedInCount || 0} sub={`/ ${hostStats.totalAttendees || 0}`} color="var(--accent-2)" />
+                        )}
+                        {hostStats && isPaidEvent && (
+                          <StatCard label="Estimated Revenue" value={revenueDisplay} color={hostStats.revenue === 0 ? "var(--ink-3)" : "#1f9d57"} />
+                        )}
+                      </div>
+                    </div>
+
+                    {(isHostOrCoHost || isAdmin || isModerator) && (
+                      <div className="ev-block">
+                        <h3>Recent Members</h3>
+                        {!eventMembers ? (
+                          <div style={{ color: "var(--ink-3)", fontSize: 13.5, padding: "8px 0" }}>Loading…</div>
+                        ) : memberCount === 0 ? (
+                          <div style={{ color: "var(--ink-3)", fontSize: 13.5, padding: "8px 0" }}>No members yet.</div>
+                        ) : (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+                            {eventMembers.filter(m => m.state === 'active').slice(0, 6).map(m => (
+                              <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8 }}>
+                                <Avatar name={m.name} size={30} />
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ fontSize: 13.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</div>
+                                  <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{m.role === 'event_host' ? 'Host' : m.role === 'event_cohost' ? 'Co-host' : 'Member'}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {memberCount > 6 && (
+                          <button className="hbtn hbtn--ghost hbtn--sm" style={{ marginTop: 10 }} onClick={() => setTab("members")}>View all {memberCount} members</button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* Tab 2: Members — consolidated (pending requests + confirmed list) */}
               {tab === "members" && (() => {
                 const confirmedAttendees = hostStats?.confirmed || attendees || [];
@@ -942,6 +1013,13 @@ function EventPage({ ev, st, go }) {
                               const theirLevel = hierarchy[a.role] || 0;
                               const canChangeRole = myLevel > theirLevel && myLevel > 1;
 
+                              // Questionnaire answers this member submitted at registration
+                              // (sourced from their booking's notes, via dashboard-stats).
+                              const memberBooking = (hostStats?.confirmed || []).find(c => c.userId === userId);
+                              const memberAnswers = memberBooking?.answers || null;
+                              const hasAnswers = memberAnswers && Object.keys(memberAnswers).length > 0;
+                              const statsLoaded = !!hostStats;
+
                               return (
                                 <div key={userId || name + i}
                                   style={{
@@ -979,6 +1057,15 @@ function EventPage({ ev, st, go }) {
                                       <span style={{ fontSize: 11, fontWeight: 600, color: a.role === 'event_host' ? "#9333ea" : a.role === 'event_cohost' ? "#2563eb" : a.role === 'event_scanner' ? "#ea580c" : "#1f9d57", background: "rgba(0,0,0,0.05)", padding: "3px 8px", borderRadius: 999 }}>
                                         {roleDisplayMap[a.role] || 'Member'}
                                       </span>
+                                    )}
+                                    {(isHostOrCoHost || isAdmin || isModerator) && (
+                                      <button
+                                        className="hbtn hbtn--soft hbtn--sm"
+                                        style={{ fontSize: 11.5, padding: "4px 10px" }}
+                                        onClick={() => setResponseMember({ ...a, name, email, answers: memberAnswers })}
+                                      >
+                                        Response{!statsLoaded ? "…" : (hasAnswers ? "" : " (none)")}
+                                      </button>
                                     )}
                                     {userId && <I.arrowR style={{ width: 14, color: "var(--ink-3)" }} />}
                                   </div>
@@ -1874,7 +1961,7 @@ function EventPage({ ev, st, go }) {
                         Your Event Ticket
                       </div>
                       <div style={{ padding: 10, background: "#fff", borderRadius: "var(--r-md)", boxShadow: "0 4px 12px rgba(0,0,0,0.06)", width: 140, height: 140, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <QRCode seed={e.id || "test"} size={120} />
+                        <TicketQR token={e.qrToken || e.attendeeId || e.id || "test"} size={120} />
                       </div>
                       <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 10, textAlign: "center" }}>
                         Scan QR at entry gate
@@ -1964,6 +2051,43 @@ function EventPage({ ev, st, go }) {
           }
         });
       })}
+
+      {/* Member Response Modal — questionnaire answers for a member, opened from the
+          "Response" button on their row in the Members tab. */}
+      {responseMember && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setResponseMember(null)}>
+          <div style={{ background: "var(--surface)", width: "min(480px,95vw)", maxHeight: "80vh", overflowY: "auto", borderRadius: "var(--r-xl)", boxShadow: "var(--sh-xl)", display: "flex", flexDirection: "column" }} onClick={ev => ev.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <Avatar name={responseMember.name} size={34} />
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>{responseMember.name}</div>
+                  {responseMember.email && <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{responseMember.email}</div>}
+                </div>
+              </div>
+              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => setResponseMember(null)} style={{ border: "none" }}>✕</button>
+            </div>
+            <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
+              {responseMember.answers && Object.keys(responseMember.answers).length > 0 ? (
+                Object.entries(responseMember.answers).map(([key, val]) => {
+                  const field = (currentEvent.formFields || []).find(f => f.id === key);
+                  const label = field ? field.question : key;
+                  return (
+                    <div key={key}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>{label}</div>
+                      <div style={{ fontSize: 14, color: "var(--ink)", background: "var(--field)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px" }}>{String(val)}</div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div style={{ textAlign: "center", padding: "24px 0", color: "var(--ink-3)", fontSize: 13.5 }}>
+                  This member didn't submit any questionnaire responses.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

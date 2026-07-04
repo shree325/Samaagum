@@ -536,6 +536,7 @@ function App() {
           ];
         });
         if (window.toast) window.toast("Joined event successfully! 🎉", "success");
+        fetchJoinedEvents();
         setTimeout(() => {
           go("event", evObj);
         }, 50);
@@ -707,6 +708,30 @@ function App() {
       .catch(err => console.error('Error fetching joined events', err));
   }, [apiBase]);
 
+  // Events the user is hosting/co-hosting — powers the "Created" tab in My Tickets.
+  const fetchCreatedEvents = useCallback(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    fetch(`${apiBase}/api/events/my`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.data) {
+          setCreatedEvents(res.data);
+        }
+      })
+      .catch(err => console.error('Error fetching created events', err));
+  }, [apiBase]);
+
+  // Both lists are session-derived (joined via bookings, created via hosted events) —
+  // fetch them once on load so My Tickets shows real data immediately, not just what
+  // was added client-side during the current session.
+  useEffect(() => {
+    fetchJoinedEvents();
+    fetchCreatedEvents();
+  }, [fetchJoinedEvents, fetchCreatedEvents]);
+
   const addCreatedEvent = useCallback((ev) => {
     setCreatedEvents(prev => {
       if (prev.some(x => x.id === ev.id)) {
@@ -736,7 +761,7 @@ function App() {
   const st = {
     saved, toggleSave, joined, pending, toggleJoin: handleJoin, connected, toggleConnect, registered, register, city,
     myTickets, setMyTickets, waitlisted, toggleWaitlist, addClaimedTicket,
-    createdEvents, setCreatedEvents, createdGroups, setCreatedGroups,
+    createdEvents, setCreatedEvents, createdGroups, setCreatedGroups, fetchCreatedEvents,
     joinedEvents, setJoinedEvents, fetchJoinedEvents,
     addCreatedEvent, addCreatedGroup,
     subscription, setSubscription,
@@ -772,6 +797,7 @@ function App() {
     if (v === "home") return <HomeFeed st={st} go={go} />;
     if (v === "discover") return <Discover st={st} go={go} param={cur.param} />;
     if (v === "events") return <MyTickets st={st} go={go} />;
+    if (v === "tickets") return <AllTickets st={st} go={go} />;
     if (v === "groups") return <MyGroups st={st} go={go} param={cur.param} />;
     if (v === "event") {
       const e = cur.param || FEATURED;
