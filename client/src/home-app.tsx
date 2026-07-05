@@ -692,6 +692,7 @@ function App() {
 
   const [createdEvents, setCreatedEvents] = useState(() => []);
   const [joinedEvents, setJoinedEvents] = useState([]);
+  const [eventRoles, setEventRoles] = useState([]);
 
   const fetchJoinedEvents = useCallback(() => {
     const token = localStorage.getItem('token');
@@ -708,30 +709,44 @@ function App() {
       .catch(err => console.error('Error fetching joined events', err));
   }, [apiBase]);
 
-  // Events the user is hosting/co-hosting — powers the "Created" tab in My Tickets.
-  const fetchCreatedEvents = useCallback(() => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    fetch(`${apiBase}/api/events/my`, {
-      headers: { 'Authorization': `Bearer ${token}` }
+  const fetchEventRoles = useCallback(() => {
+  const token = localStorage.getItem('token');
+  if (!token) return;
+
+  fetch(`${apiBase}/api/events/available-roles`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then(res => res.json())
+    .then(res => {
+      if (res.success && res.data) {
+        setEventRoles(res.data);
+      }
     })
-      .then(res => res.json())
-      .then(res => {
-        if (res.success && res.data) {
-          setCreatedEvents(res.data);
-        }
-      })
-      .catch(err => console.error('Error fetching created events', err));
-  }, [apiBase]);
+    .catch(err => console.error('Error fetching event roles', err));
+}, [apiBase]);
 
-  // Both lists are session-derived (joined via bookings, created via hosted events) —
-  // fetch them once on load so My Tickets shows real data immediately, not just what
-  // was added client-side during the current session.
-  useEffect(() => {
-    fetchJoinedEvents();
-    fetchCreatedEvents();
-  }, [fetchJoinedEvents, fetchCreatedEvents]);
+// Events the user is hosting/co-hosting — powers the "Created" tab in My Tickets.
+const fetchCreatedEvents = useCallback(() => {
+  const token = localStorage.getItem('token');
+  if (!token) return;
 
+  fetch(`${apiBase}/api/events/my`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then(res => res.json())
+    .then(res => {
+      if (res.success && res.data) {
+        setCreatedEvents(res.data);
+      }
+    })
+    .catch(err => console.error('Error fetching created events', err));
+}, [apiBase]);
+
+useEffect(() => {
+  fetchEventRoles();
+  fetchJoinedEvents();
+  fetchCreatedEvents();
+}, [fetchEventRoles, fetchJoinedEvents, fetchCreatedEvents]);
   const addCreatedEvent = useCallback((ev) => {
     setCreatedEvents(prev => {
       if (prev.some(x => x.id === ev.id)) {
@@ -763,6 +778,7 @@ function App() {
     myTickets, setMyTickets, waitlisted, toggleWaitlist, addClaimedTicket,
     createdEvents, setCreatedEvents, createdGroups, setCreatedGroups, fetchCreatedEvents,
     joinedEvents, setJoinedEvents, fetchJoinedEvents,
+    eventRoles, fetchEventRoles,
     addCreatedEvent, addCreatedGroup,
     subscription, setSubscription,
     fetchCounts,
@@ -817,8 +833,10 @@ function App() {
                         (e.attendees && Array.isArray(e.attendees) && e.attendees.includes(ME.name)) ||
                         (typeof UPCOMING !== 'undefined' && Array.isArray(UPCOMING) && UPCOMING.some(ue => ue.id === e.id));
       
-      // Determine if Host or Co-host (via event team assignments)
-      const isEventStaff = isOwner || isAdmin || isModerator || (joinedEntry && joinedEntry.role && ['event_host', 'event_cohost'].includes(joinedEntry.role));
+      // Determine if Host or Co-host (via event team assignments) — dynamic RBAC capability check
+      const joinedRoleMeta = joinedEntry?.role ? (st.eventRoles || []).find(r => r.key === joinedEntry.role) : null;
+      const isEventStaff = isOwner || isAdmin || isModerator ||
+        !!(joinedRoleMeta && (joinedRoleMeta.capabilities?.includes('event.manage') || joinedRoleMeta.capabilities?.includes('event.configure_tickets')));
       const isReg = hasJoined || isEventStaff;
 
       // Merge bookingStatus into the event object so EventPage and JoinEventPage can use it

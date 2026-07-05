@@ -1857,12 +1857,49 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
   const [tags, setTags] = useState(draft?.tags ?? editEv?.venue_raw?.meta?.tags ?? editEv?.venue?.meta?.tags ?? ["Startup", "Technology"]);
   const [tagInput, setTagInput] = useState("");
 
-  const [cat, setCat] = useState(draft?.cat ?? editEv?.venue_raw?.meta?.category ?? editEv?.venue?.meta?.category ?? "Startups");
+  const [cat, setCat] = useState(draft?.cat ?? editEv?.venue_raw?.meta?.category ?? editEv?.venue?.meta?.category ?? "");
+  const [categoriesList, setCategoriesList] = useState([] as any[]);
   const [seoExpanded, setSeoExpanded] = useState(false);
   const [calModalOpen, setCalModalOpen] = useState(false);
   const [descModalOpen, setDescModalOpen] = useState(false);
   const [instructions, setInstructions] = useState(draft?.instructions ?? editEv?.venue_raw?.meta?.instructions ?? editEv?.venue?.meta?.instructions ?? editEv?.instructions ?? editEv?.instructions ?? "");
   const [instModalOpen, setInstModalOpen] = useState(false);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const res = await fetch(`${apiBase}/api/public/categories`);
+        const data = await res.json();
+        if (data.success && data.data) {
+          const active = data.data.filter((c: any) => c.status === 'active' && !c.is_deleted);
+          setCategoriesList(active);
+          // Set default only when no value is chosen yet
+          setCat(prev => prev || (active[0]?.name ?? ""));
+        }
+      } catch (e) {
+        console.error("Failed to fetch categories", e);
+      }
+    };
+
+    // Initial load
+    fetchCategories();
+
+    // Refetch whenever the user switches back to this tab (covers admin changes in another tab/window)
+    const handleFocus = () => fetchCategories();
+    const handleVisibility = () => { if (document.visibilityState === "visible") fetchCategories(); };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    // Poll every 60 s while the form is open (covers same-device same-tab admin edits)
+    const pollInterval = setInterval(fetchCategories, 60_000);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      clearInterval(pollInterval);
+    };
+  }, []);
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [aiInstModalOpen, setAiInstModalOpen] = useState(false);
   const [capacityModalOpen, setCapacityModalOpen] = useState(false);
@@ -2758,11 +2795,12 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                       onChange={(e) => setCat(e.target.value)}
                       style={{ background: "var(--field)", border: "1px solid var(--border)", height: 42 }}
                     >
-                      <option value="Startups">Startups</option>
-                      <option value="Technology">Technology</option>
-                      <option value="Design">Design</option>
-                      <option value="Social">Social</option>
-                      <option value="Workshops">Workshops</option>
+                      <option value="">Select category...</option>
+                      {categoriesList.map((c: any) => (
+                        <option key={c.id} value={c.name}>
+                          {c.icon_value ? `${c.icon_value} ` : ""}{c.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>

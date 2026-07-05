@@ -41,7 +41,15 @@ export class R_forumPosts extends PostgresBaseRepository<IForumPost> implements 
     `, groupId, userId, limit, skip, ...queryParams);
   }
 
-  async getEventPostsRaw(eventId: string, userId: string | null, limit: number, skip: number, orderBy: string, whereExtra: string, queryParams: any[]): Promise<any[]> {
+  async getEventPostsRaw(eventId: string, userId: string | null, limit: number, skip: number, orderBy: string, whereExtra: string, queryParams: any[], isPrivileged?: boolean): Promise<any[]> {
+    // Privileged users (owners/hosts/admins) see all posts incl. hidden (pending approval).
+    // Regular users see active posts OR their own hidden posts (so author sees their pending thread).
+    const statusFilter = isPrivileged
+      ? `AND fp.status IN ('active', 'hidden')`
+      : userId
+        ? `AND (fp.status = 'active' OR (fp.status = 'hidden' AND fp.author_user_id = $2::uuid))`
+        : `AND fp.status = 'active'`;
+
     return await prisma.$queryRawUnsafe(`
         SELECT
             fp.id, fp.title, fp.body, fp.pinned, fp.locked, fp.solved, fp.archived,
@@ -55,7 +63,7 @@ export class R_forumPosts extends PostgresBaseRepository<IForumPost> implements 
         LEFT JOIN users u ON u.id = fp.author_user_id
         LEFT JOIN forum_votes fv ON fv.target_id = fp.id AND fv.target_type = 'post'
         LEFT JOIN forum_comments fc ON fc.post_id = fp.id AND fc.deleted_at IS NULL
-        WHERE fp.scope_type = 'event' AND fp.scope_id = $1::uuid AND fp.deleted_at IS NULL${whereExtra}
+        WHERE fp.scope_type = 'event' AND fp.scope_id = $1::uuid AND fp.deleted_at IS NULL ${statusFilter}${whereExtra}
         GROUP BY fp.id, u.first_name, u.last_name, u.primary_email
         ORDER BY ${orderBy}
         LIMIT $3 OFFSET $4
