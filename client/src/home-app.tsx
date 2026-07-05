@@ -536,6 +536,7 @@ function App() {
           ];
         });
         if (window.toast) window.toast("Joined event successfully! 🎉", "success");
+        fetchJoinedEvents();
         setTimeout(() => {
           go("event", evObj);
         }, 50);
@@ -709,24 +710,43 @@ function App() {
   }, [apiBase]);
 
   const fetchEventRoles = useCallback(() => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    fetch(`${apiBase}/api/events/available-roles`, {
-      headers: { 'Authorization': `Bearer ${token}` }
+  const token = localStorage.getItem('token');
+  if (!token) return;
+
+  fetch(`${apiBase}/api/events/available-roles`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then(res => res.json())
+    .then(res => {
+      if (res.success && res.data) {
+        setEventRoles(res.data);
+      }
     })
-      .then(res => res.json())
-      .then(res => {
-        if (res.success && res.data) {
-          setEventRoles(res.data);
-        }
-      })
-      .catch(err => console.error('Error fetching event roles', err));
-  }, [apiBase]);
+    .catch(err => console.error('Error fetching event roles', err));
+}, [apiBase]);
 
-  useEffect(() => {
-    fetchEventRoles();
-  }, [fetchEventRoles]);
+// Events the user is hosting/co-hosting — powers the "Created" tab in My Tickets.
+const fetchCreatedEvents = useCallback(() => {
+  const token = localStorage.getItem('token');
+  if (!token) return;
 
+  fetch(`${apiBase}/api/events/my`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then(res => res.json())
+    .then(res => {
+      if (res.success && res.data) {
+        setCreatedEvents(res.data);
+      }
+    })
+    .catch(err => console.error('Error fetching created events', err));
+}, [apiBase]);
+
+useEffect(() => {
+  fetchEventRoles();
+  fetchJoinedEvents();
+  fetchCreatedEvents();
+}, [fetchEventRoles, fetchJoinedEvents, fetchCreatedEvents]);
   const addCreatedEvent = useCallback((ev) => {
     setCreatedEvents(prev => {
       if (prev.some(x => x.id === ev.id)) {
@@ -756,7 +776,7 @@ function App() {
   const st = {
     saved, toggleSave, joined, pending, toggleJoin: handleJoin, connected, toggleConnect, registered, register, city,
     myTickets, setMyTickets, waitlisted, toggleWaitlist, addClaimedTicket,
-    createdEvents, setCreatedEvents, createdGroups, setCreatedGroups,
+    createdEvents, setCreatedEvents, createdGroups, setCreatedGroups, fetchCreatedEvents,
     joinedEvents, setJoinedEvents, fetchJoinedEvents,
     eventRoles, fetchEventRoles,
     addCreatedEvent, addCreatedGroup,
@@ -793,6 +813,7 @@ function App() {
     if (v === "home") return <HomeFeed st={st} go={go} />;
     if (v === "discover") return <Discover st={st} go={go} param={cur.param} />;
     if (v === "events") return <MyTickets st={st} go={go} />;
+    if (v === "tickets") return <AllTickets st={st} go={go} />;
     if (v === "groups") return <MyGroups st={st} go={go} param={cur.param} />;
     if (v === "event") {
       const e = cur.param || FEATURED;

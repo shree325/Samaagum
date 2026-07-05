@@ -4,11 +4,91 @@
    · Claim-your-ticket (F4: S-090 landing, S-091 OTP)
    ============================================================ */
 
+// Shared helpers — used by both the My Events wallet (MyTickets) and the My Tickets
+// page (AllTickets) so a "joined event" booking is normalized into ticket-shaped data
+// exactly the same way in both places.
+function getVenueStr(v) {
+  if (typeof v === 'object' && v !== null) {
+    return v.name || v.address || 'Venue TBD';
+  }
+  return v || 'Venue TBD';
+}
+
+function normalizeJoinedEvent(e) {
+  const startsAt = e.starts_at ? new Date(e.starts_at) : null;
+  const dateStr = startsAt ? startsAt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : "Date TBD";
+  const timeStr = startsAt ? startsAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : "";
+  const venueObj = (typeof e.venue === 'object' && e.venue !== null) ? e.venue : {};
+  const meta = venueObj.meta || {};
+  const firstTicket = Array.isArray(e.tickets) ? e.tickets[0] : null;
+  return {
+    ...e,
+    ev: e.title || e.ev,
+    cover: e.cover || meta.cover || "",
+    tier: firstTicket?.name || "General",
+    paid: (e.registration_mode === 'free' || e.registration_mode === 'free_rsvp')
+      ? 'Free'
+      : (firstTicket?.price_amount_minor != null ? `₹${(firstTicket.price_amount_minor / 100).toFixed(0)}` : '—'),
+    online: e.location_type === 'online',
+    date: dateStr,
+    time: timeStr,
+    venue: e.location_type === 'online' ? 'Online' : getVenueStr(e.venue),
+    attendee: (typeof window !== 'undefined' && window.ME?.name) || ME.name,
+    qty: 1,
+    status: e.status === 'cancelled' ? 'voided' : 'confirmed',
+    // Real per-attendee verification token (from tickets.qr_token via GET /joined) — the
+    // event's own id is kept as `t.id` for display/keys, but the QR/verification content
+    // must use qrToken (falls back to attendeeId, then event id, if a token isn't set yet).
+    qrToken: e.qrToken || e.attendeeId || null,
+    ticketId: e.ticketId || null,
+    attendeeId: e.attendeeId || null,
+    checkedIn: e.checkinStatus === 'checked_in',
+  };
+}
+
+// Real, scannable QR code for a ticket's verification token. Generated server-side
+// (server/src/controllers/eventRoutes.ts `GET /api/events/qr/:token`, via the Node
+// `qrcode` package) and rendered as a plain <img> — the client-side `qrcode` CDN build
+// (window.QRCodeLib, unpkg.com/qrcode@1.5.3/build/qrcode.min.js) 404s for this package
+// version, which is why QR codes were silently falling back to the fake placeholder
+// below. Still falls back to the decorative QRCode placeholder if there's no token yet
+// (e.g. a ticket that hasn't resolved to a real backend booking) or the image errors.
+function TicketQR({ token, size = 120 }) {
+  const [failed, setFailed] = useState(false);
+  const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+
+  useEffect(() => { setFailed(false); }, [token]);
+
+  if (!token || failed) {
+    return <QRCode seed={token || "ticket"} size={size} />;
+  }
+  const src = `${apiBase}/api/events/qr/${encodeURIComponent(token)}`;
+  return (
+    <img
+      src={src}
+      width={size}
+      height={size}
+      alt="Ticket QR code"
+      style={{ display: "block" }}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+// A locally-synthesized ticket (added optimistically at registration time, before the
+// server round-trip resolves) never carries a real qr_token — it's a placeholder with a
+// random "BL-xxxx" id. Once the same event shows up in joinedEvents (the real, backend-
+// sourced booking with a real qr_token), the real one must win so opening a ticket always
+// shows a valid QR + unique token. Drop any local placeholder that's now superseded.
+function dropSupersededLocalTickets(tickets, joinedEvents) {
+  const realTitles = new Set(joinedEvents.map(j => j.title).filter(Boolean));
+  return tickets.filter(t => !t.qrToken && !realTitles.has(t.ev));
+}
+
 function MyTickets({ st, go }) {
   const [tab, setTab] = useState("upcoming");
-  const tickets = st.myTickets || [];
   const joinedEvents = st.joinedEvents || [];
-
+  const tickets = dropSupersededLocalTickets(st.myTickets || [], joinedEvents);
   const getVenueStr = (v) => {
     if (typeof v === 'object' && v !== null) {
       return v.name || v.address || 'Venue TBD';
@@ -38,7 +118,24 @@ function MyTickets({ st, go }) {
     };
   };
 
-  const now = new Date();
+  // Real bookings (joinedEvents) carry a machine-parseable starts_at, so split them into
+  // upcoming/past by whether the event has already happened. Locally-cached synthetic
+  // tickets (myTickets) only carry a formatted date string, so those fall back to the
+  // "used" flag, same as before.
+  const now = Date.now();
+  const isPastEvent = (j) => j.starts_at ? new Date(j.starts_at).getTime() < now : false;
+  const confirmedJoined = joinedEvents.filter(j => j.bookingStatus === "confirmed");
+
+  const upcoming = [
+    ...tickets.filter(t => t.status !== "used" && t.status !== "voided"),
+    ...confirmedJoined.filter(j => !isPastEvent(j)).map(normalizeJoinedEvent)
+  ];
+  const pending = joinedEvents.filter(j => j.bookingStatus === "pending_approval");
+  const past = [
+    ...tickets.filter(t => t.status === "used"),
+    ...confirmedJoined.filter(isPastEvent).map(normalizeJoinedEvent)
+  ];
+
 
   // Returns the best available "end" time: ends_at → starts_at → null
   const getEndTime = (e) => {
@@ -342,8 +439,13 @@ function MyTickets({ st, go }) {
           </div>
         ) : (
           <div className="wallet-grid">
-            {list.map(t => (
-              <div key={t.id} className={`tkt ${t.status === "used" ? "used" : ""}`} onClick={() => {
+            {list.map(t => {
+              // A ticket is "attended" (past) either because it's explicitly marked used,
+              // or because it's rendering under the Past tab (real bookings whose event
+              // date has already elapsed, computed above from starts_at).
+              const isPast = t.status === "used" || tab === "past";
+              return (
+              <div key={t.id} className={`tkt ${isPast ? "used" : ""}`} onClick={() => {
                 // If it is a normalized joined event, it already has the event fields, otherwise locate it in our local cache or joinedEvents
                 const evObj = t.starts_at ? t : ([FEATURED, ...EVENTS].find(e => e.title === t.ev || e.id === t.eventId) || st.joinedEvents?.find(je => je.id === t.eventId || je.title === t.ev));
                 if (evObj) {
@@ -355,8 +457,8 @@ function MyTickets({ st, go }) {
                 <div className="tkt-cov" style={{ background: t.cover && (t.cover.startsWith("linear-gradient") || t.cover.startsWith("radial-gradient") || t.cover.startsWith("var(")) ? t.cover : `url(${t.cover}) center/cover no-repeat` }}>
                   <Grain />
                   <span className="pill" style={{ background: "rgba(0,0,0,0.32)", color: "#fff", backdropFilter: "blur(8px)" }}>{t.tier}</span>
-                  {t.status === "used" ? (
-                    <span className="pill gray">Used</span>
+                  {isPast ? (
+                    <span className="pill gray">Attended</span>
                   ) : (
                     <span className="pill green" style={{ background: "rgba(255,255,255,0.92)" }}><span className="pdot" />Confirmed</span>
                   )}
@@ -374,7 +476,8 @@ function MyTickets({ st, go }) {
                   </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -382,10 +485,196 @@ function MyTickets({ st, go }) {
   );
 }
 
+/* ---------------- My Tickets (F: dedicated ticket wallet — S-085 refined) ----------------
+   Distinct from MyTickets/"My Events" above: this shows every ticket the user holds as a
+   ticket-shaped card — QR code, price, attendee name, date/venue — not an event browser. */
+function AllTickets({ st, go }) {
+  const joinedEvents = st.joinedEvents || [];
+  const tickets = dropSupersededLocalTickets(st.myTickets || [], joinedEvents);
+
+  const confirmedJoined = joinedEvents
+    .filter(j => j.bookingStatus === "confirmed")
+    .map(normalizeJoinedEvent);
+  const pendingJoined = joinedEvents.filter(j => j.bookingStatus === "pending_approval");
+
+  // Every real/synthetic ticket the user holds — newest first, voided ones dropped.
+  // Real, backend-sourced tickets (confirmedJoined, each carrying a genuine qr_token) are
+  // listed first so the ones with a valid QR + unique token surface before any leftover
+  // local placeholder that hasn't been superseded yet.
+  const allTickets = [
+    ...confirmedJoined,
+    ...tickets.filter(t => t.status !== "voided")
+  ];
+
+  const totalCount = allTickets.length + pendingJoined.length;
+
+  return (
+    <div className="scroll">
+      <div className="page view-enter">
+        <div className="sec-bar" style={{ marginBottom: 18 }}>
+          <h2>My Tickets <span style={{ fontSize: 18, color: "var(--ink-3)", fontWeight: 500 }}>{totalCount}</span></h2>
+        </div>
+
+        {totalCount === 0 ? (
+          <Empty
+            icon={<I.ticket />}
+            title="No tickets yet"
+            text="When you book or RSVP to an event, your ticket — with QR code, price and details — will show up here."
+            action={<button className="hbtn hbtn--primary" onClick={() => go("discover", "events")}>Discover events</button>}
+          />
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {pendingJoined.map(p => {
+              const startsAt = p.starts_at ? new Date(p.starts_at) : null;
+              const dateStr = startsAt ? startsAt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : "Date TBD";
+              const timeStr = startsAt ? startsAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : "";
+              const venueStr = p.location_type === 'online' ? 'Online' : getVenueStr(p.venue);
+              return (
+                <div
+                  key={p.id}
+                  className="tkt-row"
+                  style={{ display: "flex", alignItems: "center", gap: 16, padding: 16, border: "1px solid var(--border)", borderRadius: "var(--r-md)", background: "var(--surface)", cursor: "pointer" }}
+                  onClick={() => go("event", { ...p, bookingStatus: 'pending_approval' })}
+                >
+                  <div style={{ width: 64, height: 64, borderRadius: 10, flexShrink: 0, background: "rgba(245,158,11,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>⏳</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</div>
+                    <div style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 3 }}>{dateStr} · {timeStr} · {venueStr}</div>
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#f59e0b", flexShrink: 0 }}>Awaiting approval ⏳</span>
+                </div>
+              );
+            })}
+
+            {allTickets.map((t, i) => {
+              const attended = t.status === "used";
+              return (
+                <div
+                  key={t.id || i}
+                  className="tkt-row"
+                  style={{ display: "flex", alignItems: "center", gap: 16, padding: 16, border: "1px solid var(--border)", borderRadius: "var(--r-md)", background: "var(--surface)", cursor: "pointer" }}
+                  onClick={() => go("ticket", t)}
+                >
+                  <div style={{ width: 64, height: 64, borderRadius: 10, flexShrink: 0, background: "#fff", padding: 6, boxSizing: "border-box", boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
+                    <TicketQR token={t.qrToken || t.id || t.ev || "ticket"} size={52} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.ev}</div>
+                    <div style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 3 }}>{t.date} · {t.time} · {t.online ? "Online" : t.venue}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 6, flexWrap: "wrap" }}>
+                      <span className="pill" style={{ background: "var(--field)", color: "var(--ink-2)", fontSize: 11 }}>{t.tier}</span>
+                      <span style={{ fontSize: 12, color: "var(--ink-3)", display: "flex", alignItems: "center", gap: 4 }}><I.user style={{ width: 12, height: 12 }} /> {t.attendee || ME.name}</span>
+                      <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>#{t.id}</span>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: t.paid === "Free" ? "#1f9d57" : "var(--ink)" }}>{t.paid}</div>
+                    {attended ? (
+                      <span className="pill gray" style={{ marginTop: 6, display: "inline-block" }}>Attended</span>
+                    ) : (
+                      <span className="pill green" style={{ marginTop: 6, display: "inline-block" }}><span className="pdot" />Confirmed</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function downloadInvoice(t) {
+  const win = window.open("", "_blank");
+  if (!win) { alert("Please allow pop-ups to download the invoice."); return; }
+  const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+  const token = t.qrToken || t.id || "";
+  const qrSrc = token ? `${apiBase}/api/events/qr/${encodeURIComponent(token)}` : "";
+  const rows = [
+    ["Event", t.ev || "—"],
+    ["Attendee", t.attendee || "—"],
+    ["Ticket tier", t.tier || "General"],
+    ["Ticket / Token #", t.qrToken || t.id || "—"],
+    ["Date", `${t.date || ""} ${t.time ? "· " + t.time : ""}`.trim() || "—"],
+    [t.online ? "Location" : "Venue", t.venue || "—"],
+    ["Quantity", String(t.qty || 1)],
+    ["Amount paid", t.paid || "—"],
+  ];
+  win.document.write(`
+    <html>
+      <head>
+        <title>Invoice · ${t.ev || "Ticket"}</title>
+        <style>
+          body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 40px; color: #111827; }
+          h1 { font-size: 20px; margin-bottom: 4px; }
+          .sub { color: #6b7280; font-size: 13px; margin-bottom: 28px; }
+          table { width: 100%; border-collapse: collapse; }
+          td { padding: 10px 0; border-bottom: 1px solid #e5e7eb; font-size: 14px; }
+          td:first-child { color: #6b7280; width: 40%; }
+          td:last-child { font-weight: 600; text-align: right; }
+          .qr-block { margin-top: 28px; display: flex; flex-direction: column; align-items: center; }
+          .qr-block img { width: 160px; height: 160px; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; }
+          .qr-block .cap { margin-top: 10px; font-size: 12px; color: #6b7280; }
+          .qr-block .tok { margin-top: 4px; font-size: 10.5px; color: #9ca3af; font-family: monospace; word-break: break-all; text-align: center; }
+          .foot { margin-top: 32px; font-size: 12px; color: #9ca3af; }
+        </style>
+      </head>
+      <body>
+        <h1>Samaagum · Ticket Invoice</h1>
+        <div class="sub">Issued ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</div>
+        <table>${rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("")}</table>
+        ${qrSrc ? `
+        <div class="qr-block">
+          <img src="${qrSrc}" alt="Ticket QR code" />
+          <div class="cap">Show this QR code at the gate for scanning</div>
+          <div class="tok">Token: ${token}</div>
+        </div>` : ""}
+        <div class="foot">This invoice was generated automatically and serves as proof of booking.</div>
+        <script>
+          (() => {
+            const img = document.querySelector('.qr-block img');
+            const go = () => window.print();
+            if (img && !img.complete) {
+              img.addEventListener('load', go);
+              img.addEventListener('error', go);
+              setTimeout(go, 3000);
+            } else {
+              window.onload = go;
+            }
+          })();
+        <\/script>
+      </body>
+    </html>
+  `);
+  win.document.close();
+}
+
+async function shareTicket(t) {
+  const url = `${window.location.origin}${window.location.pathname}#ticket/${encodeURIComponent(t.qrToken || t.id || "")}`;
+  const shareData = {
+    title: `${t.ev || "My ticket"} · Samaagum`,
+    text: `My ticket for ${t.ev || "this event"} — ${t.date || ""}`,
+    url
+  };
+  if (navigator.share) {
+    try { await navigator.share(shareData); return; } catch (e) { /* user cancelled or unsupported, fall through */ }
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(url);
+      alert("Link copied to clipboard!");
+      return;
+    } catch (e) { /* fall through */ }
+  }
+  alert(url);
+}
+
 function TicketDetail({ tkt, st, go }) {
   const tickets = st?.myTickets || [];
   const t = tkt || tickets[0] || {};
-  const used = t.status === "used";
+  const used = t.status === "used" || t.checkedIn;
+  const verifyToken = t.qrToken || t.id;
 
   return (
     <div className="scroll">
@@ -412,8 +701,13 @@ function TicketDetail({ tkt, st, go }) {
               </div>
             ) : (
               <div className="qr-container" style={{ display: "flex", flexDirection: "column", alignItems: "center", margin: "20px 0 24px" }}>
-                <div className="qr-box" style={{ padding: 14, background: "#fff", borderRadius: "var(--r-md)", boxShadow: "var(--sh-sm)", width: 200, height: 200 }}><QRCode seed={t.id || "test"} size={172} /></div>
-                <div className="qr-caption" style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 12, textAlign: "center" }}>Show this at the gate · refreshes every scan</div>
+                <div className="qr-box" style={{ padding: 14, background: "#fff", borderRadius: "var(--r-md)", boxShadow: "var(--sh-sm)", width: 200, height: 200 }}><TicketQR token={verifyToken || "test"} size={172} /></div>
+                <div className="qr-caption" style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 12, textAlign: "center" }}>Show this at the gate for scanning</div>
+                {verifyToken && (
+                  <div style={{ marginTop: 8, fontSize: 11, color: "var(--ink-3)", fontFamily: "monospace", letterSpacing: "0.02em", wordBreak: "break-all", textAlign: "center", padding: "0 10px" }}>
+                    Token: {verifyToken}
+                  </div>
+                )}
               </div>
             )}
 
@@ -436,9 +730,9 @@ function TicketDetail({ tkt, st, go }) {
             </div>
 
             <div style={{ display: "flex", gap: 9, marginTop: 18 }}>
-              <button className="hbtn hbtn--ghost" style={{ flex: 1 }} onClick={() => alert("Downloading PDF Invoice...")}><I.download /> Invoice</button>
+              <button className="hbtn hbtn--ghost" style={{ flex: 1 }} onClick={() => downloadInvoice(t)}><I.download /> Invoice</button>
               <button className="hbtn hbtn--ghost" style={{ flex: 1 }} onClick={() => alert("Event added to your calendar.")}><I.cal /> Add to calendar</button>
-              <button className="hbtn hbtn--ghost" style={{ flex: 1 }} onClick={() => alert("Link copied to clipboard!")}><I.share /> Share</button>
+              <button className="hbtn hbtn--ghost" style={{ flex: 1 }} onClick={() => shareTicket(t)}><I.share /> Share</button>
             </div>
           </div>
         </div>
@@ -534,6 +828,162 @@ function ClaimFlow({ st, go }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ---------------- Verify Ticket panel (manual token entry + camera QR scan) ----------------
+   Used inside EventDashboard so hosts/staff can check attendees in by scanning or typing
+   the unique token embedded in their ticket's QR code. Hits GET/POST /:id/verify/:qrToken. */
+function VerifyTicketPanel({ eventId, onCheckedIn }) {
+  const [tokenInput, setTokenInput] = useState("");
+  const [result, setResult] = useState(null); // { valid, alreadyCheckedIn, name, ... } | { valid: false }
+  const [busy, setBusy] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const rafRef = useRef(null);
+
+  const lookup = async (token) => {
+    const t = (token || "").trim();
+    if (!t) return;
+    setBusy(true);
+    setResult(null);
+    try {
+      const authToken = localStorage.getItem('token');
+      const res = await fetch(`${apiBase}/api/events/${eventId}/verify/${encodeURIComponent(t)}`, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+      });
+      const data = await res.json();
+      if (data.success) {
+        setResult({ ...data.data, token: t });
+      } else {
+        setResult({ valid: false, reason: data.message || "Lookup failed" });
+      }
+    } catch (err) {
+      setResult({ valid: false, reason: "Network error" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmCheckin = async () => {
+    if (!result?.valid || result.alreadyCheckedIn) return;
+    setBusy(true);
+    try {
+      const authToken = localStorage.getItem('token');
+      const res = await fetch(`${apiBase}/api/events/${eventId}/verify/${encodeURIComponent(result.token)}/checkin`, {
+        method: 'POST',
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+      });
+      const data = await res.json();
+      if (data.success) {
+        setResult(r => ({ ...r, alreadyCheckedIn: true }));
+        onCheckedIn && onCheckedIn();
+      } else {
+        alert(data.message || "Check-in failed.");
+      }
+    } catch (err) {
+      alert("Network error confirming check-in.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Camera scanning loop — decodes frames with jsQR (CDN-loaded, see Samaagum Home.html).
+  // Guarded: if jsQR/camera isn't available, the scan button simply won't do anything harmful.
+  useEffect(() => {
+    if (!scanning) return;
+    if (typeof jsQR === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      setScanning(false);
+      alert("Camera scanning isn't available in this browser. Use manual entry instead.");
+      return;
+    }
+    let stopped = false;
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then(stream => {
+        if (stopped) { stream.getTracks().forEach(tr => tr.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play();
+        }
+        const tick = () => {
+          if (stopped) return;
+          const video = videoRef.current, canvas = canvasRef.current;
+          if (video && canvas && video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imgData.data, imgData.width, imgData.height);
+            if (code && code.data) {
+              setScanning(false);
+              setTokenInput(code.data);
+              lookup(code.data);
+              return;
+            }
+          }
+          rafRef.current = requestAnimationFrame(tick);
+        };
+        rafRef.current = requestAnimationFrame(tick);
+      })
+      .catch(() => {
+        setScanning(false);
+        alert("Couldn't access the camera. Check permissions, or use manual entry.");
+      });
+    return () => {
+      stopped = true;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (streamRef.current) streamRef.current.getTracks().forEach(tr => tr.stop());
+    };
+  }, [scanning]);
+
+  return (
+    <div className="fcard" style={{ padding: 16, marginBottom: 20, background: "var(--surface)", border: "1px solid var(--border)" }}>
+      <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+        <I.ticket style={{ width: 15, height: 15 }} /> Verify Ticket
+      </h4>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input
+          value={tokenInput}
+          onChange={ev2 => setTokenInput(ev2.target.value)}
+          onKeyDown={ev2 => { if (ev2.key === 'Enter') lookup(tokenInput); }}
+          placeholder="Paste or type ticket token…"
+          style={{ flex: 1, padding: "9px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)", fontSize: 13 }}
+        />
+        <button className="hbtn hbtn--primary hbtn--sm" disabled={busy || !tokenInput.trim()} onClick={() => lookup(tokenInput)}>Verify</button>
+        <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => setScanning(s => !s)}>{scanning ? "Stop scan" : "Scan QR"}</button>
+      </div>
+
+      {scanning && (
+        <div style={{ marginTop: 12, position: "relative", width: "100%", maxWidth: 320, borderRadius: 10, overflow: "hidden", background: "#000" }}>
+          <video ref={videoRef} style={{ width: "100%", display: "block" }} muted playsInline />
+          <canvas ref={canvasRef} style={{ display: "none" }} />
+        </div>
+      )}
+
+      {result && (
+        <div style={{ marginTop: 12, padding: 12, borderRadius: 8, border: "1px solid var(--border)", background: result.valid ? (result.alreadyCheckedIn ? "var(--field)" : "rgba(31,157,87,0.08)") : "rgba(239,68,68,0.08)" }}>
+          {result.valid ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 13.5 }}>{result.name}</div>
+                {result.email && <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{result.email}</div>}
+              </div>
+              {result.alreadyCheckedIn ? (
+                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--accent-2)", background: "rgba(124,90,255,0.1)", padding: "4px 10px", borderRadius: 999 }}>Already checked in</span>
+              ) : (
+                <button className="hbtn hbtn--primary hbtn--sm" disabled={busy} onClick={confirmCheckin}>Confirm Check-in</button>
+              )}
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, color: "#ef4444" }}>Invalid ticket — {result.reason === 'not_found' ? "no matching ticket for this event." : (result.reason || "not recognized.")}</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -706,6 +1156,8 @@ function EventDashboard({ ev, st, go }) {
             </div>
           </div>
 
+          <VerifyTicketPanel eventId={e.id} onCheckedIn={fetchStats} />
+
           {stats.requests.length > 0 && (
             <div style={{ marginBottom: 24 }}>
               <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10, display: "flex", gap: 6, alignItems: "center" }}>
@@ -768,4 +1220,4 @@ function EventDashboard({ ev, st, go }) {
   );
 }
 
-Object.assign(window, { MyTickets, TicketDetail, ClaimFlow, EventDashboard });
+Object.assign(window, { MyTickets, AllTickets, TicketDetail, ClaimFlow, EventDashboard, TicketQR });

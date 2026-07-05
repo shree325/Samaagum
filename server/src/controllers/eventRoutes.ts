@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { EventService } from '../services/EventService';
 import prisma from '../config/prisma';
+import QRCode from 'qrcode';
 
 export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
 
@@ -13,6 +14,29 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             return reply.status(500).send({ success: false, message: e.message });
         }
     });
+
+    // GET /qr/:token - real scannable QR code image for a ticket's qr_token.
+    // No auth required: an <img> tag can't send an Authorization header, and the
+    // token itself is an opaque random UUID that only the ticket holder / event
+    // admins already have access to, so rendering it as an image leaks nothing new.
+    fastify.get('/qr/:token', async (request: any, reply) => {
+        try {
+            const { token } = request.params;
+            if (!token) return reply.status(400).send({ success: false, message: 'token is required' });
+            const buffer = await QRCode.toBuffer(String(token), {
+                type: 'png',
+                width: 320,
+                margin: 1,
+                errorCorrectionLevel: 'M'
+            });
+            reply.header('Content-Type', 'image/png');
+            reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+            return reply.send(buffer);
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
 
     // POST /
     fastify.post('', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
@@ -90,11 +114,33 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                     early_bird_price_amount_minor: t.early_bird_price_amount_minor !== null && t.early_bird_price_amount_minor !== undefined ? Number(t.early_bird_price_amount_minor) : null
                 }));
 
+                // Fetch this user's own attendee row (real ticket + verification token) for this booking
+                let attendeeId: string | null = null;
+                let ticketId: string | null = null;
+                let qrToken: string | null = null;
+                let checkinStatus: string | null = null;
+                if (bookingId) {
+                    const myAttendee = await prisma.attendees.findFirst({
+                        where: { booking_id: bookingId, user_id: userId },
+                        include: { tickets: true }
+                    });
+                    if (myAttendee) {
+                        attendeeId = myAttendee.id;
+                        ticketId = myAttendee.ticket_id;
+                        qrToken = myAttendee.tickets?.qr_token || null;
+                        checkinStatus = myAttendee.checkin_status;
+                    }
+                }
+
                 results.push({
                     ...event,
                     tickets,
                     bookingStatus,
-                    bookingId
+                    bookingId,
+                    attendeeId,
+                    ticketId,
+                    qrToken,
+                    checkinStatus
                 });
             };
 
@@ -565,7 +611,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
 
             // Confirmed attendees
             const confirmedAttendees = await prisma.attendees.findMany({
-                where: { bookings: { event_id: id, status: 'confirmed' } }
+                where: { bookings: { event_id: id, status: 'confirmed' } },
+                include: { tickets: true }
             });
 
             // Pending join requests
@@ -599,6 +646,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                             name: a.name,
                             email: a.email,
                             checkinStatus: a.checkin_status,
+                            ticketId: a.ticket_id,
+                            qrToken: (a as any).tickets?.qr_token || null,
                             answers: parsedAnswers
                         };
                     }),
@@ -723,12 +772,131 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 data: { checkin_status: 'checked_in' }
             });
 
+            if (attendee.ticket_id) {
+                await prisma.tickets.update({
+                    where: { id: attendee.ticket_id },
+                    data: { status: 'checked_in' }
+                }).catch(() => {});
+                await prisma.checkins.create({
+                    data: {
+                        tenant_id: attendee.tenant_id,
+                        ticket_id: attendee.ticket_id,
+                        method: 'attendee_search',
+                        staff_user_id: request.user.id
+                    }
+                }).catch(() => {});
+            }
+
             const groupsNamespace = (fastify as any).io?.of('/groups');
             if (groupsNamespace) {
                 groupsNamespace.to(`event_${id}`).emit('dashboard_updated', { action: 'checkin', eventId: id });
             }
 
             return reply.send({ success: true, data: updated, message: 'Attendee checked in successfully.' });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // GET /:id/verify/:qrToken - host looks up a ticket by its QR token (manual entry or scanned)
+    fastify.get('/:id/verify/:qrToken', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, qrToken } = request.params as any;
+
+            const isAdmin = await EventService.verifyEventAdmin(request.user.id, id);
+            if (!isAdmin) {
+                return reply.status(403).send({ success: false, message: 'Forbidden' });
+            }
+
+            const ticket = await prisma.tickets.findFirst({
+                where: { qr_token: qrToken },
+                include: {
+                    booking_line_items: { include: { bookings: true } },
+                    attendees: true
+                }
+            });
+
+            if (!ticket || ticket.booking_line_items?.bookings?.event_id !== id) {
+                return reply.send({ success: true, data: { valid: false, reason: 'not_found' } });
+            }
+
+            const attendee = ticket.attendees?.[0] || null;
+            const alreadyCheckedIn = ticket.status === 'checked_in' || attendee?.checkin_status === 'checked_in';
+
+            return reply.send({
+                success: true,
+                data: {
+                    valid: true,
+                    alreadyCheckedIn,
+                    ticketId: ticket.id,
+                    qrToken: ticket.qr_token,
+                    attendeeId: attendee?.id || null,
+                    name: attendee?.name || ticket.attendee_name || 'Guest',
+                    email: attendee?.email || ticket.attendee_email || null,
+                    status: ticket.status
+                }
+            });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // POST /:id/verify/:qrToken/checkin - confirm check-in for a scanned/entered token
+    fastify.post('/:id/verify/:qrToken/checkin', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, qrToken } = request.params as any;
+
+            const isAdmin = await EventService.verifyEventAdmin(request.user.id, id);
+            if (!isAdmin) {
+                return reply.status(403).send({ success: false, message: 'Forbidden' });
+            }
+
+            const ticket = await prisma.tickets.findFirst({
+                where: { qr_token: qrToken },
+                include: {
+                    booking_line_items: { include: { bookings: true } },
+                    attendees: true
+                }
+            });
+
+            if (!ticket || ticket.booking_line_items?.bookings?.event_id !== id) {
+                return reply.status(404).send({ success: false, message: 'Ticket not found for this event.' });
+            }
+
+            const attendee = ticket.attendees?.[0] || null;
+            if (ticket.status === 'checked_in' || attendee?.checkin_status === 'checked_in') {
+                return reply.status(409).send({ success: false, message: 'This ticket has already been checked in.' });
+            }
+
+            await prisma.$transaction(async (tx) => {
+                await tx.tickets.update({
+                    where: { id: ticket.id },
+                    data: { status: 'checked_in' }
+                });
+                if (attendee) {
+                    await tx.attendees.update({
+                        where: { id: attendee.id },
+                        data: { checkin_status: 'checked_in' }
+                    });
+                }
+                await tx.checkins.create({
+                    data: {
+                        tenant_id: ticket.tenant_id,
+                        ticket_id: ticket.id,
+                        method: 'qr',
+                        staff_user_id: request.user.id
+                    }
+                });
+            });
+
+            const groupsNamespace = (fastify as any).io?.of('/groups');
+            if (groupsNamespace) {
+                groupsNamespace.to(`event_${id}`).emit('dashboard_updated', { action: 'checkin', eventId: id });
+            }
+
+            return reply.send({ success: true, message: `${attendee?.name || 'Attendee'} checked in successfully.` });
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });
         }
