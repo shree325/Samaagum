@@ -1683,7 +1683,7 @@ function EventPage({ ev, st, go }) {
                       <div style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <div style={{ background: "var(--surface)", width: "min(560px,95vw)", maxHeight: "88vh", overflowY: "auto", borderRadius: "var(--r-xl)", boxShadow: "var(--sh-xl)", display: "flex", flexDirection: "column" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: "1px solid var(--border)" }}>
-                            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{editingTicket ? "Edit Ticket Type" : "New Ticket Type"}</h2>
+                            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{editingTicket ? "Edit Ticket" : "Create Ticket"}</h2>
                             <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => setTicketModalOpen(false)} style={{ border: "none" }}>✕</button>
                           </div>
                           <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -1701,12 +1701,7 @@ function EventPage({ ev, st, go }) {
                               <div style={fieldStyle}><label style={labelStyle}>Sale Start</label><input className="cinput" type="datetime-local" value={ticketForm.sale_start} onChange={ev => setTicketForm(f => ({...f, sale_start: ev.target.value}))} /></div>
                               <div style={fieldStyle}><label style={labelStyle}>Sale End</label><input className="cinput" type="datetime-local" value={ticketForm.sale_end} onChange={ev => setTicketForm(f => ({...f, sale_end: ev.target.value}))} /></div>
                             </div>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 4 }}>Early Bird (Optional)</div>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-                              <div style={fieldStyle}><label style={labelStyle}>EB Price</label><input className="cinput" type="number" min="0" step="0.01" value={ticketForm.early_bird_price} onChange={ev => setTicketForm(f => ({...f, early_bird_price: ev.target.value}))} placeholder="0.00" /></div>
-                              <div style={fieldStyle}><label style={labelStyle}>EB Currency</label><input className="cinput" value={ticketForm.early_bird_currency} onChange={ev => setTicketForm(f => ({...f, early_bird_currency: ev.target.value}))} placeholder="INR" /></div>
-                              <div style={fieldStyle}><label style={labelStyle}>EB Ends At</label><input className="cinput" type="datetime-local" value={ticketForm.early_bird_ends_at} onChange={ev => setTicketForm(f => ({...f, early_bird_ends_at: ev.target.value}))} /></div>
-                            </div>
+
                             <div style={fieldStyle}>
                               <label style={labelStyle}>Visibility</label>
                               <div style={{ display: "flex", gap: 16 }}>

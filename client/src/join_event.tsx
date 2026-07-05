@@ -77,11 +77,7 @@ function JoinEventPage({ ev, st, go }) {
           }))
         : (e.type === "Free"
             ? [{ id: "rsvp", n: "General RSVP", d: "Free entry · approval-based", p: "Free", free: true }]
-            : [
-                { id: "early", n: "Early Bird", d: "Limited · ends Jun 14", p: priceStr, early: true },
-                { id: "std", n: "General Admission", d: "Standard entry", p: priceStr.replace(/\d+/, m => String(Math.round(+m * 1.4))) },
-                { id: "vip", n: "VIP · Front tables", d: "Reserved seating + drink", p: priceStr.replace(/\d+/, m => String(Math.round(+m * 2.2))) },
-            ]);
+            : [{ id: "general", n: "General Admission", d: "Standard entry", p: priceStr }]);
     const [tier, setTier] = useState(tiers[0].id);
     const [qty, setQty] = useState(1);
     const sel = tiers.find(t => t.id === tier);

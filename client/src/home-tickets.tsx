@@ -118,24 +118,11 @@ function MyTickets({ st, go }) {
     };
   };
 
-  // Real bookings (joinedEvents) carry a machine-parseable starts_at, so split them into
-  // upcoming/past by whether the event has already happened. Locally-cached synthetic
-  // tickets (myTickets) only carry a formatted date string, so those fall back to the
-  // "used" flag, same as before.
+  // now is used by isPast() in the priority classification below.
+  // isPastEvent / confirmedJoined are kept for normalizeJoinedEvent calls.
   const now = Date.now();
   const isPastEvent = (j) => j.starts_at ? new Date(j.starts_at).getTime() < now : false;
   const confirmedJoined = joinedEvents.filter(j => j.bookingStatus === "confirmed");
-
-  const upcoming = [
-    ...tickets.filter(t => t.status !== "used" && t.status !== "voided"),
-    ...confirmedJoined.filter(j => !isPastEvent(j)).map(normalizeJoinedEvent)
-  ];
-  const pending = joinedEvents.filter(j => j.bookingStatus === "pending_approval");
-  const past = [
-    ...tickets.filter(t => t.status === "used"),
-    ...confirmedJoined.filter(isPastEvent).map(normalizeJoinedEvent)
-  ];
-
 
   // Returns the best available "end" time: ends_at → starts_at → null
   const getEndTime = (e) => {
