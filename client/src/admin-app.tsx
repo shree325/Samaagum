@@ -1,13 +1,26 @@
 // @ts-nocheck
+import React, { Fragment, useEffect, useRef, useState } from 'react';
+import ReactDOM from 'react-dom/client';
+import { Field, Mark, ROLES } from './components';
+import { Toggle, isChecked } from './create_event';
+import { AdminApiClient } from './generated/api-client';
+import { Discover } from './home-feed';
+import { Sidebar, Topbar } from './home-shell';
+import { apiBase } from './home-subscription';
+import { Waitlist } from './home-waitlist';
+import { Events } from './landing-features';
+import { Networking } from './landing-features2';
+import { AUTH } from './landing-hero';
+
 /* ============================================================
    Samaagum Admin Panel — React Application
    Requires React, ReactDOM, and Babel in browser.
    ============================================================ */
 
-var { useState, useEffect, useRef } = React;
+
 
 // --- INLINE SVG ICONS ---
-const Icons = {
+export const Icons = {
   messageSquare: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>,
   shield: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>,
   users: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>,
@@ -31,7 +44,7 @@ const Icons = {
 };
 
 // --- INITIAL MOCK DATA ---
-const INITIAL_USERS = [
+export const INITIAL_USERS = [
   { id: "usr-1", name: "Aanya Reddy", email: "aanya@samaagum.co", role: "Super Admin", status: "Active", joined: "1 month ago" },
   { id: "usr-2", name: "Dev Kapoor", email: "dev@samaagum.co", role: "Platform Admin", status: "Active", joined: "3 weeks ago" },
   { id: "usr-3", name: "Mira Shah", email: "mira@gmail.com", role: "Event Host", status: "Active", joined: "2 weeks ago" },
@@ -39,7 +52,7 @@ const INITIAL_USERS = [
   { id: "usr-5", name: "SpamBot99", email: "spambot99@scam.org", role: "Participant", status: "Suspended", joined: "3 days ago" },
 ];
 
-const INITIAL_CATEGORIES = [
+export const INITIAL_CATEGORIES = [
   { id: 'cat-1', name: 'Technology', slug: 'technology', description: 'Software, AI, hardware, and digital innovation events', iconType: 'emoji', iconValue: '💻', displayOrder: 1, status: 'active', subcategoryCount: 6, eventCount: 142, isDeleted: false, createdAt: '2025-12-01T10:00:00Z' },
   { id: 'cat-2', name: 'Sports & Fitness', slug: 'sports-fitness', description: 'Cricket, football, gym, running, and outdoor sports', iconType: 'emoji', iconValue: '🏏', displayOrder: 2, status: 'active', subcategoryCount: 5, eventCount: 89, isDeleted: false, createdAt: '2025-12-01T10:01:00Z' },
   { id: 'cat-3', name: 'Education', slug: 'education', description: 'Workshops, seminars, training, and learning events', iconType: 'emoji', iconValue: '🎓', displayOrder: 3, status: 'active', subcategoryCount: 4, eventCount: 67, isDeleted: false, createdAt: '2025-12-01T10:02:00Z' },
@@ -52,7 +65,7 @@ const INITIAL_CATEGORIES = [
   { id: 'cat-10', name: 'Health & Wellness', slug: 'health-wellness', description: 'Yoga, meditation, mental health, and wellness sessions', iconType: 'emoji', iconValue: '🧘', displayOrder: 10, status: 'active', subcategoryCount: 0, eventCount: 23, isDeleted: false, createdAt: '2025-12-01T10:09:00Z' },
 ];
 
-const INITIAL_TAGS = [
+export const INITIAL_TAGS = [
   { id: 'tag-1', name: 'Web3 & Crypto', slug: 'web3-crypto', category: 'Technology', status: 'active', eventCount: 24, isDeleted: false, createdAt: '2026-01-01T10:00:00Z' },
   { id: 'tag-2', name: 'Yoga Flow', slug: 'yoga-flow', category: 'Health & Wellness', status: 'active', eventCount: 15, isDeleted: false, createdAt: '2026-01-01T10:01:00Z' },
   { id: 'tag-3', name: 'SaaS & AI Startups', slug: 'saas-ai-startups', category: 'Business & Startup', status: 'active', eventCount: 42, isDeleted: false, createdAt: '2026-01-01T10:02:00Z' },
@@ -63,7 +76,7 @@ const INITIAL_TAGS = [
   { id: 'tag-8', name: 'Fitness & Running', slug: 'fitness-running', category: 'Sports & Fitness', status: 'inactive', eventCount: 5, isDeleted: false, createdAt: '2026-01-01T10:07:00Z' }
 ];
 
-const EMOJI_SETS = {
+export const EMOJI_SETS = {
   'Tech': ['💻', '🤖', '🔧', '⚡', '📱', '🌐', '🔬', '💡'],
   'Sports': ['🏏', '⚽', '🏀', '🎾', '🏃', '🏋️', '🚴', '⛳'],
   'Education': ['🎓', '📚', '✏️', '🏫', '📖', '🧪', '📐', '🎒'],
@@ -76,31 +89,31 @@ const EMOJI_SETS = {
   'Health': ['🧘', '💪', '🏥', '💊', '🧠', '🌿', '🍎', '😌'],
 };
 
-const INITIAL_KYC = [
+export const INITIAL_KYC = [
   { id: "kyc-1", name: "Echo Collective", type: "Event Host", email: "echo@collective.in", submitted: "2 hours ago", docName: "Certificate of Incorporation & PAN", docNumber: "AAACE9912A", status: "Pending", notes: "" },
   { id: "kyc-2", name: "Letterform Lab", type: "Event Host", email: "admin@letterform.org", submitted: "1 day ago", docName: "Aadhaar Card & GST Registry", docNumber: "GST-29AAAAA1111A1Z1", status: "Pending", notes: "" },
   { id: "kyc-3", name: "Still Mind Collective", type: "Event Host", email: "shanti@stillmind.in", submitted: "3 days ago", docName: "PAN Card & Address Proof", docNumber: "BBBPX9012K", status: "Verified", notes: "Verified by admin on June 12" }
 ];
 
-const INITIAL_DISPUTES = [
+export const INITIAL_DISPUTES = [
   { id: "disp-1", user: "Arjun V", event: "Sunset Rooftop Sessions: Indie Live", amount: "₹350", reason: "Host cancelled but refund didn't trigger automatically.", submitted: "5 hours ago", status: "Open", maker: "", checker: "" },
   { id: "disp-2", user: "Meera J", event: "Street Food Crawl: VV Puram", amount: "₹600", reason: "Accidentally booked twice, requested cancellation.", submitted: "Yesterday", status: "Refund Requested", maker: "admin@samaagum.co", checker: "" },
   { id: "disp-3", user: "Karan Sethi", event: "Morning Flow + Community Brunch", amount: "₹250", reason: "Waitlist spot expired early due to system lag.", submitted: "4 days ago", status: "Closed", maker: "admin@samaagum.co", checker: "superadmin@samaagum.co" }
 ];
 
-const INITIAL_MODERATION = [
+export const INITIAL_MODERATION = [
   { id: "mod-1", reporter: "Mira Shah", reportedUser: "SpamBot99", entityType: "Post", entityContent: "Invest ₹1000 and earn ₹10000 daily! Click here: bit.ly/spam-link", reason: "Spam / Financial scam", submitted: "3 hours ago", status: "Pending" },
   { id: "mod-2", reporter: "Zoya N", reportedUser: "AnonymousUser", entityType: "Comment", entityContent: "This event is garbage and the host is a crook.", reason: "Abusive language", submitted: "1 day ago", status: "Pending" },
   { id: "mod-3", reporter: "Nina P", reportedUser: "SpammyHost", entityType: "Event", entityContent: "Free Cryptocurrency Webinar", reason: "Scam / Commercial promo", submitted: "2 days ago", status: "Suspended" }
 ];
 
-const INITIAL_TENANTS = [
+export const INITIAL_TENANTS = [
   { id: "ten-1", name: "Indiranagar Tech Hub", slug: "indiranagar-tech", plan: "Enterprise", entitlements: ["Waitlist Priority Boosts", "PWA Check-in"], status: "Active" },
   { id: "ten-2", name: "Koramangala Culturals", slug: "koramangala-culture", plan: "Standard", entitlements: ["Offline Cash Payments"], status: "Active" },
   { id: "ten-3", name: "Cubbon Athletic Collective", slug: "cubbon-athletics", plan: "Free Trial", entitlements: ["PWA Check-in"], status: "Pending Approval" }
 ];
 
-const INITIAL_RBAC = [
+export const INITIAL_RBAC = [
   { permission: "Book/RSVP/Waitlist", desc: "Discover, join, RSVP, waitlist and message on the end-user side", roles: ["Participant", "Event Host", "Group Organizer", "Community Admin", "Platform Admin", "Super Admin"] },
   { permission: "Create & Run Events", desc: "Manage event lifecycle, edit details, custom fields, waitlists", roles: ["Event Host", "Group Organizer", "Community Admin", "Platform Admin", "Super Admin"] },
   { permission: "Refund Bookings (Maker)", desc: "Initiate or request refunds for event tickets", roles: ["Event Host", "Platform Admin", "Super Admin"] },
@@ -112,14 +125,14 @@ const INITIAL_RBAC = [
   { permission: "Tenant Provisioning & Entitlements", desc: "Approve, create, configure and entitle new tenants", roles: ["Super Admin"] },
 ];
 
-const INITIAL_AUDIT = [
+export const INITIAL_AUDIT = [
   { time: "2026-06-15 10:14:02", actor: "System", action: "Tenant 'Indiranagar Tech Hub' successfully provisioned on Enterprise plan." },
   { time: "2026-06-15 11:02:15", actor: "superadmin@samaagum.co", action: "Updated global feature flag: Enabled 'Waitlist Boosts'." },
   { time: "2026-06-15 11:45:30", actor: "admin@samaagum.co", action: "Closed dispute ticket disp-3 and verified offline audit trail." },
   { time: "2026-06-15 12:12:08", actor: "superadmin@samaagum.co", action: "Role permission matrix initialized." }
 ];
 
-const FEATURE_FLAGS = [
+export const FEATURE_FLAGS = [
   { id: "ff-1", name: "Waitlist Referral Boosts", desc: "Allows users to boost waitlist priority via sharing referrals.", active: true },
   { id: "ff-2", name: "Offline Proof Verification", desc: "Allows uploading cash payment proofs for event tickets.", active: true },
   { id: "ff-3", name: "PWA Check-in Gate", desc: "Enables host-side offline QR validation.", active: false },
@@ -127,9 +140,9 @@ const FEATURE_FLAGS = [
 ];
 
 // --- UNIFIED API CLIENT FOR ADMIN PANEL ---
-const apiClient = new window.AdminApiClient();
+export const apiClient = new window.AdminApiClient();
 
-const adminApi = {
+export const adminApi = {
   // Provider settings from unified-admin-service.yaml configuration logic
   activeProviders: {
     categories: "database",
@@ -492,16 +505,16 @@ const adminApi = {
   }
 };
 
-window.adminApi = adminApi;
 
 
-const GeoLocationsView = window.GeoLocationsView;
-const ChatControlsView = window.ChatControlsView;
-const GeoIpv4View = window.GeoIpv4View;
-const GeoIpv6View = window.GeoIpv6View;
+
+export const GeoLocationsView = window.GeoLocationsView;
+export const ChatControlsView = window.ChatControlsView;
+export const GeoIpv4View = window.GeoIpv4View;
+export const GeoIpv6View = window.GeoIpv6View;
 
 // --- APP COMPONENT ---
-function App() {
+export function App() {
   const [user, setUser] = useState(() => {
     try {
       const token = localStorage.getItem('samaagum_admin_token');
@@ -679,7 +692,7 @@ function App() {
   }, [user]);
 
   useEffect(() => {
-    window.samaagum_admin_setActiveTab = setActiveTab;
+    
     window.samaagum_admin_login = (email) => {
       handleLogin(email, "superadmin");
     };
@@ -998,6 +1011,10 @@ function App() {
             <Icons.credit /> Subscription Plans
           </button>
 
+          <button className={`sidebar-item ${activeTab === "billing" ? "active" : ""}`} onClick={() => setActiveTab("billing")}>
+            <Icons.credit style={{ stroke: "var(--accent-2)" }} /> Billing &amp; Revenue
+          </button>
+
           <button className={`sidebar-item ${activeTab === "coupons" ? "active" : ""}`} onClick={() => setActiveTab("coupons")}>
             <Icons.tag /> Coupon Management
           </button>
@@ -1146,6 +1163,10 @@ function App() {
 
           {activeTab === "subscriptions" && (
             <SubscriptionPlansView user={user} apiBase={apiBase} />
+          )}
+
+          {activeTab === "billing" && (
+            <BillingDashboardView apiBase={apiBase} />
           )}
 
           {activeTab === "coupons" && (
@@ -1354,7 +1375,7 @@ function App() {
 // --- SUB-COMPONENTS & VIEWS ---
 
 // Login Form Component
-function LoginForm({ onSubmit }) {
+export function LoginForm({ onSubmit }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -1395,7 +1416,7 @@ function LoginForm({ onSubmit }) {
 }
 
 // Dashboard Home View
-function DashboardView({ kyc, disputes, moderation, tenants, user, setActiveTab }) {
+export function DashboardView({ kyc, disputes, moderation, tenants, user, setActiveTab }) {
   const pendingKyc = kyc.filter(k => k.status === "Pending").length;
   const unresolvedDisputes = disputes.filter(d => d.status === "Open" || d.status === "Refund Requested").length;
   const pendingMod = moderation.filter(m => m.status === "Pending").length;
@@ -1515,7 +1536,7 @@ function DashboardView({ kyc, disputes, moderation, tenants, user, setActiveTab 
 }
 
 // KYC Verification View
-function KycView({ kyc, onView }) {
+export function KycView({ kyc, onView }) {
   return (
     <div className="data-panel">
       <div className="panel-header">
@@ -1568,7 +1589,7 @@ function KycView({ kyc, onView }) {
 }
 
 // Disputes & Refunds View
-function DisputesView({ disputes, onView, user }) {
+export function DisputesView({ disputes, onView, user }) {
   return (
     <div className="data-panel">
       <div className="panel-header">
@@ -1620,7 +1641,7 @@ function DisputesView({ disputes, onView, user }) {
 }
 
 // Moderation View
-function ModerationView({ moderation, onAction }) {
+export function ModerationView({ moderation, onAction }) {
   return (
     <div className="data-panel">
       <div className="panel-header">
@@ -1681,7 +1702,7 @@ function ModerationView({ moderation, onAction }) {
 }
 
 // Tenants View (Super Admin only)
-function TenantsView({ tenants, newTenant, onFormChange, onCheckboxChange, onSubmit, featureFlags, onToggleFlag }) {
+export function TenantsView({ tenants, newTenant, onFormChange, onCheckboxChange, onSubmit, featureFlags, onToggleFlag }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "32px" }}>
       {/* List */}
@@ -1838,7 +1859,7 @@ function TenantsView({ tenants, newTenant, onFormChange, onCheckboxChange, onSub
 }
 
 // RBAC View (Dynamic PostgreSQL Integration)
-function RbacView({ user }) {
+export function RbacView({ user }) {
   const isSuper = user.role === "Super Admin" || user.role === "Platform Admin"; // Let both view; super admin can modify.
   const isSuperAdmin = user.role === "Super Admin";
 
@@ -2901,7 +2922,7 @@ function RbacView({ user }) {
 
 
 // System Audit Logs View
-function AuditView({ logs }) {
+export function AuditView({ logs }) {
   return (
     <div className="data-panel" style={{ padding: "24px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
@@ -2926,7 +2947,7 @@ function AuditView({ logs }) {
 }
 
 // User Management View
-function UsersView({ users, onUpdateUser, onAddUser, onDeleteUser }) {
+export function UsersView({ users, onUpdateUser, onAddUser, onDeleteUser }) {
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("All");
   const [showAddModal, setShowAddModal] = useState(false);
@@ -3199,7 +3220,7 @@ function UsersView({ users, onUpdateUser, onAddUser, onDeleteUser }) {
 }
 
 // ── SUBSCRIPTION PLANS VIEW ─────────────────────────────────────────────────
-function SubscriptionPlansView({ user, apiBase }) {
+export function SubscriptionPlansView({ user, apiBase }) {
   const isSuperAdmin = user.role === "Super Admin";
   const [plans, setPlans] = useState([]);
   const [roles, setRoles] = useState([]);
@@ -3210,7 +3231,7 @@ function SubscriptionPlansView({ user, apiBase }) {
   const [editItem, setEditItem] = useState(null);
   const emptyForm = {
     name: "", displayName: "", description: "", category: "individual",
-    planType: "monthly", isActive: true, isPopular: false, groupName: "",
+    planType: "monthly", isActive: true, isPopular: false, isDefault: false, groupName: "",
     pricing: { monthly: 0, yearly: 0, yearlyDiscount: 0 },
     metadata: { maxEvents: 5, maxAttendees: 100, maxGroups: 1, supportLevel: "basic", customBranding: false, whiteLabel: false },
     features: [],
@@ -3219,6 +3240,63 @@ function SubscriptionPlansView({ user, apiBase }) {
     rbac: { assignedRole: "", assignedPosition: "", autoAssignRole: true }
   };
   const [form, setForm] = useState({ ...emptyForm });
+  const [entitlementsOpen, setEntitlementsOpen] = useState(false);
+  const [entitlementsPlan, setEntitlementsPlan] = useState(null);
+  const [entForm, setEntForm] = useState({
+    group_max_groups: -1,
+    group_allowed_visibility: [],
+    group_allowed_join_modes: [],
+    group_max_capacity: 25,
+    group_can_restricted_access: false,
+    event_allowed_registration_modes: [],
+    event_allowed_visibility: [],
+    event_max_participants: 100,
+    event_checkin_methods: [],
+    event_can_create_paid_tickets: false
+  });
+
+  const openEntitlements = (p) => {
+    setEntitlementsPlan(p);
+    const limits = p.limits || {};
+    setEntForm({
+      group_max_groups: typeof limits.group_max_groups === 'number' ? limits.group_max_groups : -1,
+      group_allowed_visibility: Array.isArray(limits.group_allowed_visibility) ? limits.group_allowed_visibility : ['unlisted'],
+      group_allowed_join_modes: Array.isArray(limits.group_allowed_join_modes) ? limits.group_allowed_join_modes : ['open', 'invite_only'],
+      group_max_capacity: typeof limits.group_max_capacity === 'number' ? limits.group_max_capacity : 25,
+      group_can_restricted_access: typeof limits.group_can_restricted_access === 'boolean' ? limits.group_can_restricted_access : false,
+      event_allowed_registration_modes: Array.isArray(limits.event_allowed_registration_modes) ? limits.event_allowed_registration_modes : ['free', 'cash'],
+      event_allowed_visibility: Array.isArray(limits.event_allowed_visibility) ? limits.event_allowed_visibility : ['unlisted', 'invite_only'],
+      event_max_participants: typeof limits.event_max_participants === 'number' ? limits.event_max_participants : 100,
+      event_checkin_methods: Array.isArray(limits.event_checkin_methods) ? limits.event_checkin_methods : ['scanner'],
+      event_can_create_paid_tickets: typeof limits.event_can_create_paid_tickets === 'boolean' ? limits.event_can_create_paid_tickets : false
+    });
+    setEntitlementsOpen(true);
+  };
+
+  const handleSaveEntitlements = async (e) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${apiBase}/api/admin/plans/${entitlementsPlan.id}/entitlements`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ entitlements: entForm })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert("Plan entitlements updated successfully!");
+        setEntitlementsOpen(false);
+        load();
+      } else {
+        alert(data.message || "Failed to update entitlements.");
+      }
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -3253,7 +3331,7 @@ function SubscriptionPlansView({ user, apiBase }) {
     setEditItem(p);
     setForm({
       name: p.name, displayName: p.display_name, description: p.description || "",
-      category: p.category, planType: p.plan_type, isActive: p.is_active, isPopular: p.is_popular,
+      category: p.category, planType: p.plan_type, isActive: p.is_active, isPopular: p.is_popular, isDefault: p.is_default || false,
       groupName: p.group_name || "",
       pricing: {
         monthly: p.pricing?.monthly?.amount ?? p.pricing?.monthly ?? 0,
@@ -3274,7 +3352,7 @@ function SubscriptionPlansView({ user, apiBase }) {
     try {
       const payload = {
         name: form.name, displayName: form.displayName, description: form.description,
-        category: form.category, planType: form.planType, isActive: form.isActive, isPopular: form.isPopular,
+        category: form.category, planType: form.planType, isActive: form.isActive, isPopular: form.isPopular, isDefault: form.isDefault,
         groupName: form.groupName,
         pricing: { monthly: { amount: Number(form.pricing.monthly), currency: "INR" }, yearly: { amount: Number(form.pricing.yearly), currency: "INR", discount: Number(form.pricing.yearlyDiscount) } },
         metadata: form.metadata,
@@ -3293,6 +3371,23 @@ function SubscriptionPlansView({ user, apiBase }) {
     try {
       await adminApi.plans.deletePlan(id);
       load();
+    } catch (err) { alert(err.message); }
+  };
+
+  const handleSetDefault = async (plan) => {
+    if (!confirm(`Set "${plan.display_name}" as the default plan for all new users?`)) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${apiBase}/api/admin/plans/${plan.id}/set-default`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const json = await res.json();
+      if (json.success) {
+        load();
+      } else {
+        alert(json.message || 'Failed to set default plan');
+      }
     } catch (err) { alert(err.message); }
   };
 
@@ -3330,7 +3425,11 @@ function SubscriptionPlansView({ user, apiBase }) {
                 <tr key={p.id}>
                   <td>
                     <div>
-                      <span style={{ fontWeight: "600", display: "block" }}>{p.display_name} {p.is_popular && <span style={{ color: "var(--accent-1)", fontSize: "11px" }}>★ Popular</span>}</span>
+                      <span style={{ fontWeight: "600", display: "block" }}>
+                        {p.display_name}
+                        {p.is_popular && <span style={{ color: "var(--accent-1)", fontSize: "11px", marginLeft: 4 }}>★ Popular</span>}
+                        {p.is_default && <span style={{ background: "#059669", color: "#fff", fontSize: "10px", fontWeight: "700", padding: "2px 7px", borderRadius: "10px", marginLeft: 6 }}>⭐ Default</span>}
+                      </span>
                       <span style={{ fontSize: "11px", color: "var(--ink-3)" }}>{p.name}</span>
                     </div>
                   </td>
@@ -3343,6 +3442,8 @@ function SubscriptionPlansView({ user, apiBase }) {
                   {isSuperAdmin && (
                     <td style={{ textAlign: "right" }}>
                       <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                        <button className="btn-sm btn-sm-ghost" onClick={() => openEntitlements(p)}>Entitlements</button>
+                        {!p.is_default && <button className="btn-sm btn-sm-ghost" style={{ color: "#059669", borderColor: "#059669" }} onClick={() => handleSetDefault(p)}>Set Default</button>}
                         <button className="btn-sm btn-sm-ghost" onClick={() => openEdit(p)}>Edit</button>
                         <button className="btn-sm btn-sm-danger" onClick={() => handleDelete(p.id)}>Delete</button>
                       </div>
@@ -3546,13 +3647,17 @@ function SubscriptionPlansView({ user, apiBase }) {
                   </label>
                 </div>
 
-                <div style={{ display: "flex", gap: "20px" }}>
+                <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
                   {[{ k: "isActive", l: "Active" }, { k: "isPopular", l: "Mark as Popular" }].map(item => (
                     <label key={item.k} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
                       <input type="checkbox" checked={form[item.k]} onChange={e => setF(item.k, e.target.checked)} />
                       {item.l}
                     </label>
                   ))}
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer", color: form.isDefault ? "#059669" : undefined }}>
+                    <input type="checkbox" checked={form.isDefault} onChange={e => setF("isDefault", e.target.checked)} />
+                    ⭐ Set as Default Plan (auto-assigned to new users)
+                  </label>
                 </div>
 
                 <div style={{ display: "flex", gap: "20px" }}>
@@ -3576,12 +3681,204 @@ function SubscriptionPlansView({ user, apiBase }) {
           </div>
         </div>
       )}
+
+      {entitlementsOpen && entitlementsPlan && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: "580px", maxHeight: "90vh", overflowY: "auto" }}>
+            <div className="modal-header">
+              <h3>Manage Entitlements: {entitlementsPlan.display_name}</h3>
+              <button onClick={() => setEntitlementsOpen(false)} style={{ background: "transparent", border: "none", color: "var(--ink)", cursor: "pointer" }}><Icons.close /></button>
+            </div>
+            <form onSubmit={handleSaveEntitlements}>
+              <div className="modal-body" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <p style={{ margin: 0, fontSize: "13px", color: "var(--ink-3)" }}>
+                  Configure the technical validation limits and locked features associated with this subscription tier.
+                </p>
+
+                {/* Groups Section */}
+                <div style={{ border: "1px solid var(--border)", borderRadius: "8px", padding: "16px", background: "var(--surface-2)" }}>
+                  <h4 style={{ margin: "0 0 12px 0", fontSize: "14px", fontWeight: "600", color: "var(--accent-2)" }}>👥 Group Entitlements</h4>
+                  
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+                    <div className="form-group">
+                      <label>Max Groups (-1 = unlimited)</label>
+                      <input 
+                        type="number" 
+                        className="form-control" 
+                        value={entForm.group_max_groups} 
+                        onChange={e => setEntForm({ ...entForm, group_max_groups: Number(e.target.value) })} 
+                        required 
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Max Capacity per Group (-1 = unlimited)</label>
+                      <input 
+                        type="number" 
+                        className="form-control" 
+                        value={entForm.group_max_capacity} 
+                        onChange={e => setEntForm({ ...entForm, group_max_capacity: Number(e.target.value) })} 
+                        required 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: "12px" }}>
+                    <label style={{ fontWeight: "600" }}>Allowed Visibilities</label>
+                    <div style={{ display: "flex", gap: "16px", marginTop: "6px" }}>
+                      {['public', 'unlisted', 'restricted'].map(vis => (
+                        <label key={vis} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", textTransform: "capitalize", cursor: "pointer" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={entForm.group_allowed_visibility.includes(vis)} 
+                            onChange={e => {
+                              const list = e.target.checked 
+                                ? [...entForm.group_allowed_visibility, vis]
+                                : entForm.group_allowed_visibility.filter(x => x !== vis);
+                              setEntForm({ ...entForm, group_allowed_visibility: list });
+                            }}
+                          />
+                          {vis}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: "12px" }}>
+                    <label style={{ fontWeight: "600" }}>Allowed Join Modes</label>
+                    <div style={{ display: "flex", gap: "16px", marginTop: "6px", flexWrap: "wrap" }}>
+                      {['open', 'invite_only', 'restricted_access'].map(mode => (
+                        <label key={mode} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", cursor: "pointer" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={entForm.group_allowed_join_modes.includes(mode)} 
+                            onChange={e => {
+                              const list = e.target.checked 
+                                ? [...entForm.group_allowed_join_modes, mode]
+                                : entForm.group_allowed_join_modes.filter(x => x !== mode);
+                              setEntForm({ ...entForm, group_allowed_join_modes: list });
+                            }}
+                          />
+                          {mode.replace('_', ' ')}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+                    <input 
+                      type="checkbox" 
+                      checked={entForm.group_can_restricted_access} 
+                      onChange={e => setEntForm({ ...entForm, group_can_restricted_access: e.target.checked })} 
+                    />
+                    Enable Restricted Group Access Controls
+                  </label>
+                </div>
+
+                {/* Events Section */}
+                <div style={{ border: "1px solid var(--border)", borderRadius: "8px", padding: "16px", background: "var(--surface-2)" }}>
+                  <h4 style={{ margin: "0 0 12px 0", fontSize: "14px", fontWeight: "600", color: "var(--accent-2)" }}>📅 Event Entitlements</h4>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "12px", marginBottom: "12px" }}>
+                    <div className="form-group">
+                      <label>Max Participants per Event (-1 = unlimited)</label>
+                      <input 
+                        type="number" 
+                        className="form-control" 
+                        value={entForm.event_max_participants} 
+                        onChange={e => setEntForm({ ...entForm, event_max_participants: Number(e.target.value) })} 
+                        required 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: "12px" }}>
+                    <label style={{ fontWeight: "600" }}>Allowed Visibilities</label>
+                    <div style={{ display: "flex", gap: "16px", marginTop: "6px" }}>
+                      {['public', 'unlisted', 'invite_only'].map(vis => (
+                        <label key={vis} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", cursor: "pointer" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={entForm.event_allowed_visibility.includes(vis)} 
+                            onChange={e => {
+                              const list = e.target.checked 
+                                ? [...entForm.event_allowed_visibility, vis]
+                                : entForm.event_allowed_visibility.filter(x => x !== vis);
+                              setEntForm({ ...entForm, event_allowed_visibility: list });
+                            }}
+                          />
+                          {vis.replace('_', ' ')}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: "12px" }}>
+                    <label style={{ fontWeight: "600" }}>Allowed Registration / Payment Modes</label>
+                    <div style={{ display: "flex", gap: "16px", marginTop: "6px" }}>
+                      {['free', 'cash', 'paid'].map(mode => (
+                        <label key={mode} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", textTransform: "capitalize", cursor: "pointer" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={entForm.event_allowed_registration_modes.includes(mode)} 
+                            onChange={e => {
+                              const list = e.target.checked 
+                                ? [...entForm.event_allowed_registration_modes, mode]
+                                : entForm.event_allowed_registration_modes.filter(x => x !== mode);
+                              setEntForm({ ...entForm, event_allowed_registration_modes: list });
+                            }}
+                          />
+                          {mode}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: "12px" }}>
+                    <label style={{ fontWeight: "600" }}>Ticket Check-in Options</label>
+                    <div style={{ display: "flex", gap: "16px", marginTop: "6px" }}>
+                      {['scanner', 'manual', 'gate'].map(method => (
+                        <label key={method} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", textTransform: "capitalize", cursor: "pointer" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={entForm.event_checkin_methods.includes(method)} 
+                            onChange={e => {
+                              const list = e.target.checked 
+                                ? [...entForm.event_checkin_methods, method]
+                                : entForm.event_checkin_methods.filter(x => x !== method);
+                              setEntForm({ ...entForm, event_checkin_methods: list });
+                            }}
+                          />
+                          {method}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+                    <input 
+                      type="checkbox" 
+                      checked={entForm.event_can_create_paid_tickets} 
+                      onChange={e => setEntForm({ ...entForm, event_can_create_paid_tickets: e.target.checked })} 
+                    />
+                    Allow Paid Ticket Creations
+                  </label>
+                </div>
+
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-sm btn-sm-ghost" onClick={() => setEntitlementsOpen(false)}>Cancel</button>
+                <button type="submit" className="btn-sm btn-sm-primary">Save Entitlements</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ── COUPONS VIEW ──────────────────────────────────────────────────────────────
-function CouponsView({ user, apiBase }) {
+export function CouponsView({ user, apiBase }) {
   const isSuperAdmin = user.role === "Super Admin";
   const [coupons, setCoupons] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -3840,7 +4137,7 @@ function CouponsView({ user, apiBase }) {
 
 
 
-function SettingsView({ user, logAction, addToast }) {
+export function SettingsView({ user, logAction, addToast }) {
   const [authSettings, setAuthSettings] = React.useState({
     google: { enabled: false, clientId: '', clientSecret: '' },
     linkedin: { enabled: false, clientId: '', clientSecret: '' }
@@ -4565,7 +4862,7 @@ function SettingsView({ user, logAction, addToast }) {
 }
 
 // --- TAGS VIEW ---
-function TagsView({ tags, setTags, categories, showToast, logAction, user }) {
+export function TagsView({ tags, setTags, categories, showToast, logAction, user }) {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -5026,7 +5323,7 @@ function TagsView({ tags, setTags, categories, showToast, logAction, user }) {
 }
 
 // --- CATEGORIES VIEW ---
-function CategoriesView({ categories, setCategories, tags, setTags, showToast, logAction, user }) {
+export function CategoriesView({ categories, setCategories, tags, setTags, showToast, logAction, user }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [expandedCats, setExpandedCats] = useState(new Set());
@@ -5761,5 +6058,285 @@ function CategoriesView({ categories, setCategories, tags, setTags, showToast, l
   );
 }
 
-// Export for Babel Standalone usage
-window.App = App;
+// ── BILLING & REVENUE VIEW ──────────────────────────────────────────────────
+export function BillingDashboardView({ apiBase }) {
+  const [data, setData] = useState({
+    metrics: { totalRevenue: 0, totalOrders: 0, activeSubscriptions: 0, inactiveSubscriptions: 0 },
+    plansBreakdown: [],
+    transactions: []
+  });
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${apiBase}/api/admin/billing/summary`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const resData = await res.json();
+      if (resData.success) {
+        setData(resData.data);
+      }
+    } catch (err) {
+      console.error("Error loading billing summary:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const downloadInvoice = async (orderId, orderNumber) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${apiBase}/api/subscription/orders/${orderId}/invoice`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        alert("Failed to download invoice");
+        return;
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Invoice-${orderNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (err) {
+      alert("Error downloading invoice: " + err.message);
+    }
+  };
+
+  const filteredTransactions = data.transactions.filter(t => {
+    const matchesSearch = 
+      t.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.userEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.planName.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    if (statusFilter === "all") return matchesSearch;
+    if (statusFilter === "active") return matchesSearch && t.subscriptionStatus === "active";
+    if (statusFilter === "inactive") return matchesSearch && t.subscriptionStatus === "inactive";
+    if (statusFilter === "failed") return matchesSearch && t.paymentStatus === "failed";
+    return matchesSearch;
+  });
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "300px" }}>
+        <div style={{ color: "var(--ink-2)", fontSize: "16px" }}>Loading Billing Ledger & Metrics...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
+        <div>
+          <h2 style={{ fontFamily: "var(--font-display)", fontWeight: "600", fontSize: "24px", margin: "0 0 4px 0" }}>
+            Billing &amp; Revenue Operations
+          </h2>
+          <p style={{ color: "var(--ink-2)", margin: 0, fontSize: "14px" }}>
+            Monitor subscription revenue, active license distributions, and invoices.
+          </p>
+        </div>
+        <button onClick={load} className="btn-sm btn-sm-ghost" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          🔄 Refresh Ledger
+        </button>
+      </div>
+
+      {/* Metrics Cards */}
+      <div className="stats-grid" style={{ marginBottom: "24px" }}>
+        <div className="stat-card">
+          <div className="header">
+            <span>Total Gross Revenue</span>
+            <Icons.credit style={{ color: "var(--accent-1)" }} />
+          </div>
+          <div className="value">₹{data.metrics.totalRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+          <div className="trend" style={{ color: "#10b981", fontWeight: "600" }}>
+            ✓ Fully Cleared &amp; Settled
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="header">
+            <span>Active Paid Licenses</span>
+            <Icons.users style={{ color: "var(--accent-2)" }} />
+          </div>
+          <div className="value">{data.metrics.activeSubscriptions}</div>
+          <div className="trend" style={{ color: "var(--accent-2)", fontWeight: "600" }}>
+            ⚡ Real-Time User sessions
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="header">
+            <span>Inactive/Expired accounts</span>
+            <Icons.alert style={{ color: "#ef4444" }} />
+          </div>
+          <div className="value">{data.metrics.inactiveSubscriptions}</div>
+          <div className="trend" style={{ color: "var(--ink-3)", fontWeight: "600" }}>
+            Churned or downgraded users
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="header">
+            <span>Total Invoice Orders</span>
+            <Icons.doc style={{ color: "#10b981" }} />
+          </div>
+          <div className="value">{data.metrics.totalOrders}</div>
+          <div className="trend" style={{ color: "#10b981", fontWeight: "600" }}>
+            🧾 Lifetime transactions
+          </div>
+        </div>
+      </div>
+
+      {/* Plans breakdown progress bars */}
+      <div className="data-panel" style={{ marginBottom: "24px", padding: "24px" }}>
+        <h3 style={{ margin: "0 0 16px 0", fontSize: "16px", fontWeight: "600" }}>Subscription Tier Breakdown</h3>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "24px" }}>
+          {data.plansBreakdown.length === 0 ? (
+            <div style={{ color: "var(--ink-3)", fontSize: "14px" }}>No active subscriptions to display breakdown.</div>
+          ) : (
+            data.plansBreakdown.map(p => {
+              const totalActive = data.metrics.activeSubscriptions || 1;
+              const percentage = Math.round((p.activeCount / totalActive) * 100);
+              return (
+                <div key={p.planId} style={{ background: "var(--surface-2)", padding: "16px", borderRadius: "12px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                    <span style={{ fontWeight: "600", fontSize: "14px" }}>{p.displayName}</span>
+                    <span style={{ fontSize: "12px", color: "var(--ink-2)" }}>{p.activeCount} active ({percentage}%)</span>
+                  </div>
+                  <div style={{ height: "8px", background: "var(--surface-3)", borderRadius: "4px", overflow: "hidden", marginBottom: "12px" }}>
+                    <div style={{ width: `${percentage}%`, height: "100%", background: "linear-gradient(90deg, var(--accent-1), var(--accent-2))", borderRadius: "4px" }}></div>
+                  </div>
+                  <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>
+                    Revenue Contribution: <b style={{ color: "var(--ink)" }}>₹{p.revenue.toLocaleString('en-IN')}</b>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Transaction List Panel */}
+      <div className="data-panel" style={{ padding: "24px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px", marginBottom: "20px" }}>
+          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "600" }}>Transaction Ledger &amp; Invoices</h3>
+          
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            <input
+              type="text"
+              placeholder="Search order #, email, name..."
+              className="form-control"
+              style={{ width: "220px", fontSize: "13px", padding: "6px 12px" }}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            
+            <select
+              className="form-control"
+              style={{ width: "160px", fontSize: "13px", padding: "6px 12px" }}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="all">All Subscriptions</option>
+              <option value="active">Active Plans</option>
+              <option value="inactive">Inactive Plans</option>
+              <option value="failed">Failed Payments</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="table-wrapper">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Order #</th>
+                <th>User / Email</th>
+                <th>Plan Name</th>
+                <th>Billing Cycle</th>
+                <th>Revenue (Gross)</th>
+                <th>Payment</th>
+                <th>Subscription</th>
+                <th>Date Completed</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTransactions.length === 0 ? (
+                <tr>
+                  <td colSpan="9" style={{ textAlign: "center", padding: "32px", color: "var(--ink-3)" }}>
+                    No matching billing records found.
+                  </td>
+                </tr>
+              ) : (
+                filteredTransactions.map(t => (
+                  <tr key={t.id}>
+                    <td style={{ fontWeight: "600" }}>{t.orderNumber}</td>
+                    <td>
+                      <div>
+                        <span style={{ fontWeight: "600", display: "block" }}>{t.userName}</span>
+                        <span style={{ fontSize: "11px", color: "var(--ink-3)" }}>{t.userEmail}</span>
+                      </div>
+                    </td>
+                    <td><span className="badge" style={{ background: "var(--surface-3)", color: "var(--ink)" }}>{t.planName}</span></td>
+                    <td style={{ textTransform: "capitalize" }}>{t.planType}</td>
+                    <td style={{ fontWeight: "600" }}>
+                      ₹{t.total.toFixed(2)}
+                      {t.taxTotal > 0 && (
+                        <span style={{ display: "block", fontSize: "10px", color: "var(--ink-3)", fontWeight: "normal" }}>
+                          Incl. ₹{t.taxTotal.toFixed(2)} GST
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      <span className={`badge-status ${t.paymentStatus === 'completed' ? 'active' : t.paymentStatus === 'failed' ? 'inactive' : 'pending'}`}>
+                        {t.paymentStatus}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`badge-status ${t.subscriptionStatus === 'active' ? 'active' : 'inactive'}`}>
+                        {t.subscriptionStatus}
+                      </span>
+                    </td>
+                    <td>{t.completedAt ? new Date(t.completedAt).toLocaleDateString('en-IN') : 'Pending'}</td>
+                    <td>
+                      {t.paymentStatus === 'completed' ? (
+                        <button
+                          onClick={() => downloadInvoice(t.id, t.orderNumber)}
+                          className="btn-sm btn-sm-ghost"
+                          style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "4px 8px" }}
+                        >
+                          📄 Download Invoice
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: "12px", color: "var(--ink-3)" }}>—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const container = document.getElementById('root');
+if (container) {
+  const root = ReactDOM.createRoot(container);
+  root.render(<App />);
+}
+

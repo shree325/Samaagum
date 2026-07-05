@@ -1,12 +1,16 @@
+import React from 'react';
+import { Avatar, Grain } from './home-icons';
+import { I } from './home-icons';
+
 /* ============================================================
    Samaagum Home — shared cards (event, group, person, discussion)
    ============================================================ */
 
-function DateBadge({ month, day }) {
+export function DateBadge({ month, day }) {
   return <div className="date-badge"><div className="m">{month}</div><div className="d">{day}</div></div>;
 }
 
-function SaveBtn({ saved, onClick, Cls = "save" }) {
+export function SaveBtn({ saved, onClick, Cls = "save" }) {
   return (
     <button className={`${Cls} ${saved?"on":""}`} onClick={(e)=>{ e.stopPropagation(); onClick(); }} title={saved?"Saved":"Save"}>
       {saved ? <I.bookmarkF/> : <I.bookmark/>}
@@ -15,7 +19,7 @@ function SaveBtn({ saved, onClick, Cls = "save" }) {
 }
 
 /* ---------------- Event card (rail / grid) ---------------- */
-function EventCard({ ev, onOpen, saved, onSave, registered }) {
+export const EventCard = React.memo(function EventCard({ ev, onOpen, saved, onSave, registered }) {
   return (
     <div className="ecard rise" onClick={()=>onOpen(ev)}>
       <div className="cover" style={{ background: ev.cover && (ev.cover.startsWith("linear-gradient") || ev.cover.startsWith("radial-gradient") || ev.cover.startsWith("var(")) ? ev.cover : `url(${ev.cover}) center/cover no-repeat` }}>
@@ -42,10 +46,10 @@ function EventCard({ ev, onOpen, saved, onSave, registered }) {
       </div>
     </div>
   );
-}
+});
 
 /* ---------------- Featured (hero) ---------------- */
-function FeatureCard({ ev, onOpen, saved, onSave }) {
+export const FeatureCard = React.memo(function FeatureCard({ ev, onOpen, saved, onSave }) {
   return (
     <div className="feature rise" onClick={()=>onOpen(ev)}>
       <div className="fcover" style={{ background: ev.cover && (ev.cover.startsWith("linear-gradient") || ev.cover.startsWith("radial-gradient") || ev.cover.startsWith("var(")) ? ev.cover : `url(${ev.cover}) center/cover no-repeat` }}>
@@ -70,15 +74,28 @@ function FeatureCard({ ev, onOpen, saved, onSave }) {
       </div>
     </div>
   );
-}
+});
 
-/* ---------------- Group card ---------------- */
-function GroupCard({ g, onOpen, joined, onJoin }) {
+/* ---------------- Group card (grid) ---------------- */
+export const GroupCard = React.memo(function GroupCard({ g, onOpen, joined, onJoin }) {
   const _apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
   const _resolveImg = (url) => url && !url.startsWith('blob:') ? (url.startsWith('/api/') ? _apiBase + url : url) : null;
   const bannerSrc = _resolveImg(g.banner);
   const iconSrc = _resolveImg(g.icon);
   const isCustomIcon = iconSrc && (iconSrc.startsWith("http") || iconSrc.startsWith("data:") || iconSrc.includes("/"));
+  
+  let displayLocation = null;
+  const loc = g.settings?.location;
+  if (loc) {
+    if (loc.city && loc.state && loc.country) displayLocation = `${loc.city}, ${loc.state}, ${loc.country}`;
+    else if (loc.city && loc.state) displayLocation = `${loc.city}, ${loc.state}`;
+    else if (loc.city && loc.country) displayLocation = `${loc.city}, ${loc.country}`;
+    else if (loc.city) displayLocation = loc.city;
+    else if (typeof loc === 'string') displayLocation = loc;
+  } else if (g.settings?.city) {
+    displayLocation = g.settings.city;
+  }
+
   return (
     <div className="gcard rise" onClick={()=>onOpen(g)}>
       <div className="gcov" style={{
@@ -97,10 +114,14 @@ function GroupCard({ g, onOpen, joined, onJoin }) {
           {g.visibility === "hidden" && <I.eyeOff style={{ width: 14, height: 14, color: "var(--ink-3)" }} title="Hidden Group" />}
         </div>
         <div className="gdsc">{g.description || g.desc}</div>
+        {displayLocation && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--ink)", fontSize: 13, fontWeight: 500, margin: "8px 0", overflow: "hidden" }}>
+            <I.pin style={{ width: 14, height: 14, flexShrink: 0, color: "var(--ink-2)" }} />
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayLocation}</span>
+          </div>
+        )}
         <div className="gstats" style={{ display: "flex", flexWrap: "wrap", gap: "8px 12px", alignItems: "center" }}>
-          <span><b style={{ color:"var(--ink-2)" }}>{(g.members || 1).toLocaleString()}</b> members</span>
-          <span className="live"><span className="d"/>{g.online || 1} online</span>
-          {g.location && <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><I.pin style={{ width: 13, height: 13 }} /> {g.location}</span>}
+          <span><b style={{ color:"var(--ink-2)" }}>{(g.members || 0).toLocaleString()}</b> members</span>
           <span style={{ fontSize: 11, fontWeight: 600, background: "var(--surface-2)", color: "var(--ink-2)", padding: "2px 6px", borderRadius: 4 }}>Free</span>
         </div>
         <div className="gfoot">
@@ -113,14 +134,27 @@ function GroupCard({ g, onOpen, joined, onJoin }) {
       </div>
     </div>
   );
-}
+});
 
 /* ---------------- Group row (trending list) ---------------- */
-function GroupRow({ g, rank, onOpen, joined, onJoin }) {
+export const GroupRow = React.memo(function GroupRow({ g, rank, onOpen, joined, onJoin }) {
   const _apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
   const _resolveImg = (url) => url && !url.startsWith('blob:') ? (url.startsWith('/api/') ? _apiBase + url : url) : null;
   const iconSrc = _resolveImg(g.icon);
   const isCustomIcon = iconSrc && (iconSrc.startsWith("http") || iconSrc.startsWith("data:") || iconSrc.includes("/"));
+  
+  let displayLocation = null;
+  const loc = g.settings?.location;
+  if (loc) {
+    if (loc.city && loc.state && loc.country) displayLocation = `${loc.city}, ${loc.state}, ${loc.country}`;
+    else if (loc.city && loc.state) displayLocation = `${loc.city}, ${loc.state}`;
+    else if (loc.city && loc.country) displayLocation = `${loc.city}, ${loc.country}`;
+    else if (loc.city) displayLocation = loc.city;
+    else if (typeof loc === 'string') displayLocation = loc;
+  } else if (g.settings?.city) {
+    displayLocation = g.settings.city;
+  }
+
   return (
     <div className="grow" onClick={()=>onOpen(g)}>
       {rank!=null && <span className="rank">{rank}</span>}
@@ -132,7 +166,10 @@ function GroupRow({ g, rank, onOpen, joined, onJoin }) {
           {g.name}
           {g.visibility === "private" && <I.lock style={{ width: 12, height: 12, color: "var(--ink-3)" }} />}
         </div>
-        <div className="s">{(g.members || 1).toLocaleString()} members · {g.category || g.cat || "Community"}</div>
+        <div className="s" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {displayLocation && <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><I.pin style={{ width: 12, height: 12 }} /> {displayLocation}</span>}
+          <span>{(g.members || 1).toLocaleString()} members · {g.category || g.cat || "Community"}</span>
+        </div>
       </div>
       <button className={`hbtn hbtn--sm ${joined ? "hbtn--ghost" : "hbtn--soft"}`}
         onClick={(e)=>{ e.stopPropagation(); onJoin(g); }}>
@@ -140,10 +177,10 @@ function GroupRow({ g, rank, onOpen, joined, onJoin }) {
       </button>
     </div>
   );
-}
+});
 
-/* ---------------- Person card (suggested connection) ---------------- */
-function PersonCard({ p, onConnect, connected }) {
+/* ---------------- Person card (horizontal scroll) ---------------- */
+export const PersonCard = React.memo(function PersonCard({ p, connected, onConnect }) {
   return (
     <div className="pcard rise">
       <div className="pc-cov" style={{ background: p.cover }} />
@@ -160,10 +197,10 @@ function PersonCard({ p, onConnect, connected }) {
       </div>
     </div>
   );
-}
+});
 
-/* ---------------- Discussion row ---------------- */
-function DiscussionRow({ d, onOpen }) {
+/* ---------------- Discussion row (feed) ---------------- */
+export const DiscussionRow = React.memo(function DiscussionRow({ d, onOpen }) {
   return (
     <div className="disc" onClick={onOpen}>
       <Avatar name={d.who} size={40} />
@@ -183,6 +220,6 @@ function DiscussionRow({ d, onOpen }) {
       </div>
     </div>
   );
-}
+});
 
-Object.assign(window, { EventCard, FeatureCard, GroupCard, GroupRow, PersonCard, DiscussionRow, DateBadge, SaveBtn });
+

@@ -1,12 +1,21 @@
 // @ts-nocheck
+import React, { useEffect, useRef, useState } from 'react';
+import { VirtualCard } from './VirtualCard';
+import { LocationSelector } from './components';
+import { GroupCard } from './home-cards';
+import { COVERS, EVENTS, GROUPS, ME } from './home-data';
+import { Avatar } from './home-icons';
+import { I } from './home-icons';
+import { Events } from './landing-features';
+
 /* ============================================================
    Samaagum Home — Public profile (TAPOnn-grade)
    ============================================================ */
 
-const UploadIcon = (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
-const UserIcon = (p) => <svg viewBox="0 0 24 24" fill="none" width="24" height="24" {...p}><circle cx="12" cy="8" r="5" stroke="currentColor" strokeWidth="2" /><path d="M20 21a8 8 0 10-16 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>;
+export const UploadIcon = (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+export const UserIcon = (p) => <svg viewBox="0 0 24 24" fill="none" width="24" height="24" {...p}><circle cx="12" cy="8" r="5" stroke="currentColor" strokeWidth="2" /><path d="M20 21a8 8 0 10-16 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>;
 
-const handleImageUpload = (e, callback) => {
+export const handleImageUpload = (e, callback) => {
   const file = e.target.files?.[0];
   if (!file) return;
   const reader = new FileReader();
@@ -14,7 +23,7 @@ const handleImageUpload = (e, callback) => {
   reader.readAsDataURL(file);
 };
 
-function EditProfileForm({ profile, onCancel }) {
+export function EditProfileForm({ profile, onCancel }) {
   const [form, setForm] = React.useState({
     name: profile.name || "",
     role: profile.role || "",
@@ -201,8 +210,8 @@ function EditProfileForm({ profile, onCancel }) {
               {window.featureSettings?.location_active !== false && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, position: "relative" }}>
                   <label style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-2)" }}>Location</label>
-                  {window.LocationSelector && (
-                    <window.LocationSelector
+                  {LocationSelector && (
+                    <LocationSelector
                       value={{
                         location_name: form.locationName || form.location,
                         address: form.address || form.location,
@@ -269,7 +278,7 @@ function EditProfileForm({ profile, onCancel }) {
   );
 }
 
-function Profile({ st, go }) {
+export function Profile({ st, go }) {
   const [tab, setTab] = useState("about");
   const tabs = [["about", "About"], ["events", "Events"], ["groups", "Groups"]];
   const myEvents = [EVENTS[0], EVENTS[5], EVENTS[1]];
@@ -1080,5 +1089,5 @@ function Profile({ st, go }) {
   );
 }
 
-Object.assign(window, { Profile });
+
 

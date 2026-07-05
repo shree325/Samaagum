@@ -1,7 +1,10 @@
 // @ts-nocheck
+import React from 'react';
+import { apiBase } from '../home-subscription';
+
 // Auto-generated type-safe API client for Samaagum Admin Services
 
-class AdminApiClient {
+export class AdminApiClient {
   private apiBase: string;
 
   constructor(apiBase: string = '') {
@@ -316,5 +319,5 @@ class AdminApiClient {
 }
 
 if (typeof window !== 'undefined') {
-  window.AdminApiClient = AdminApiClient;
+  
 }

@@ -1,20 +1,61 @@
 // @ts-nocheck
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import ReactDOM from 'react-dom/client';
+import { HashRouter, useNavigate, useLocation } from 'react-router-dom';
+import { Mark, LocationSelector } from './components';
+(window as any).LocationSelector = LocationSelector;
+import { CreateEvent } from './create_event';
+import { CreateGroup } from './home-create';
+import { EVENTS, FEATURED, GROUPS, ME, MY_TICKETS } from './home-data';
+import { EventDetail } from './home-event';
+import { Discover, HomeFeed } from './home-feed';
+import { GroupDetail, MyGroups } from './home-group';
+import { useProfileSync } from './home-icons';
+import { InviteLanding } from './home-invite';
+import { Messages } from './home-messages';
+import { Notifications } from './home-notifications';
+import { Profile } from './home-profile';
+import { SettingsPage } from './home-settings';
+import { CityPicker, Sidebar, Topbar } from './home-shell';
+import { apiBase } from './home-subscription';
+import { ClaimFlow, EventDashboard, MyTickets, TicketDetail } from './home-tickets';
+import { Waitlist } from './home-waitlist';
+import { I, tick } from './home-icons';
+import { PublicProfile } from './public-profile';
+import { useTweaks } from './tweaks-panel';
+import { usePlanEntitlements } from './usePlanEntitlements';
+
 /* ============================================================
    Samaagum Home — main app (routing, frame, theme, tweaks)
    ============================================================ */
 
-function useSet(initial = []) {
+export function useSet(initial = []) {
   const [s, setS] = useState(() => {
     const val = typeof initial === 'function' ? initial() : initial;
     return new Set(val);
   });
-  const toggle = useCallback((id) => setS(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; }), []);
-  const add = useCallback((id) => setS(prev => { const n = new Set(prev); n.add(id); return n; }), []);
+
+  const toggle = useCallback((id) =>
+    setS(prev => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    }), []
+  );
+
+  const add = useCallback((id) =>
+    setS(prev => {
+      const n = new Set(prev);
+      n.add(id);
+      return n;
+    }), []
+  );
+
   return [s, toggle, add];
 }
 
 /* mobile bottom tab bar */
-function TabBar({ view, go, counts, chatSettings }) {
+export function TabBar({ view, go, counts, chatSettings }) {
   const showMessages = chatSettings?.allowSiteMessaging !== false;
   const tabs = [
     { k:"home", ic:<I.home/>, label:"Home" },
@@ -39,7 +80,7 @@ function TabBar({ view, go, counts, chatSettings }) {
   );
 }
 
-function MobileTop({ go, counts, city, chatSettings }) {
+export function MobileTop({ go, counts, city, chatSettings }) {
   const showMessages = chatSettings?.allowSiteMessaging !== false;
   return (
     <div className="m-top">
@@ -53,14 +94,21 @@ function MobileTop({ go, counts, city, chatSettings }) {
   );
 }
 
-const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+export const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "dark": false,
   "glass": 18
 }/*EDITMODE-END*/;
 
-function App() {
+export function DashboardApp() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const [city, setCity] = useState(window.ME?.location || "Global");
+  const [city, setCity] = useState(() => {
+    if (window.ME?.location) return window.ME.location;
+    const manual = localStorage.getItem('samaagum_selected_city');
+    if (manual) { try { return JSON.parse(manual).city_name || "Global"; } catch { return manual; } }
+    const detected = localStorage.getItem('samaagum_detected_city');
+    if (detected) { try { return JSON.parse(detected).city_name || "Global"; } catch { return detected; } }
+    return "Global";
+  });
   const [chatSettings, setChatSettings] = useState({
     allowSiteMessaging: true,
     allowDirectMessaging: true,
@@ -70,6 +118,7 @@ function App() {
   const [cityOpen, setCityOpen] = useState(false);
   const [meSync, setMeSync] = useState(0); // Add a tick to force re-render when ME updates asynchronously
 
+  const { entitlements, plan, planDisplayName, loading: entitlementsLoading, refetch: refetchEntitlements } = usePlanEntitlements();
   const [subscription, setSubscription] = useState({ plan: 'free', status: 'active' });
   const [socket, setSocket] = useState(null);
   const [counts, setCounts] = useState({ notifs: 0, messages: 0 });
@@ -88,6 +137,34 @@ function App() {
   }, []);
 
   const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+
+  // IP-based location detection — runs once on mount
+  useEffect(() => {
+     if (localStorage.getItem('samaagum_location_locked')) return;
+     if (window.ME?.location) return;
+     if (localStorage.getItem('samaagum_detected_city')) return;
+
+    const lastAttempt = localStorage.getItem('samaagum_detect_attempted_at');
+    if (lastAttempt) {
+      const hoursSince = (Date.now() - new Date(lastAttempt).getTime()) / 3_600_000;
+      if (hoursSince < 24) return;
+    }
+
+    fetch(`${apiBase}/api/public/detect-location`)
+      .then(r => r.json())
+      .then(res => {
+        localStorage.setItem('samaagum_detect_attempted_at', new Date().toISOString());
+        if (res.success && res.data?.city_name) {
+          localStorage.setItem('samaagum_detected_city', JSON.stringify(res.data));
+          if (!localStorage.getItem('samaagum_location_locked') && !window.ME?.location) {
+            setCity(res.data.city_name);
+          }
+        }
+      })
+      .catch(() => {
+        localStorage.setItem('samaagum_detect_attempted_at', new Date().toISOString());
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Set up global toast helper and initial fetch
   useEffect(() => {
@@ -125,7 +202,6 @@ function App() {
       .then(res => {
         if (res.success && res.data) {
           setChatSettings(res.data);
-          window.chatSettings = res.data;
         }
       })
       .catch(err => console.error("Error fetching chat settings:", err));
@@ -249,17 +325,68 @@ function App() {
       chatSocket.on("settings.updated", (updatedSettings) => {
         console.log("⚡ Chat settings updated in real-time:", updatedSettings);
         setChatSettings(updatedSettings);
-        window.chatSettings = updatedSettings;
+        
       });
 
 
 
+      chatSocket.on("subscription.activated", (payload) => {
+        fetchCounts();
+        // Real-time plan activation: fetch new subscription status from API
+        const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+        const tok = localStorage.getItem('token');
+        if (tok) {
+          fetch(`${apiBase}/api/subscription/status`, {
+            headers: { 'Authorization': `Bearer ${tok}` }
+          })
+          .then(r => r.json())
+          .then(res => {
+            if (res.success && res.data?.subscription) {
+              setSubscription(res.data.subscription);
+              // Notify entitlements hook to immediately refetch
+              window.dispatchEvent(new CustomEvent('subscription_changed'));
+            }
+          })
+          .catch(err => console.error('Error refreshing subscription after activation:', err));
+        }
+        // Show beautiful toast
+        if (window.toast) {
+          const name = payload?.planName || 'Standard';
+          window.toast(`🎉 Your ${name} Plan is now active! Enjoy your new features.`, "success");
+        }
+      });
+
+      chatSocket.on("subscription.expiring", (payload) => {
+        if (window.toast) {
+          const planName = payload?.planName || 'your';
+          window.toast(`⚠️ Your ${planName} Plan expires soon. Renew to keep access.`, "warning");
+        }
+      });
+
+      chatSocket.on("entitlements.updated", (payload) => {
+        console.log("⚡ Plan entitlements updated in real-time:", payload);
+        window.dispatchEvent(new CustomEvent('subscription_changed'));
+        if (window.toast) {
+          window.toast(`⚡ Your plan (${payload.planName || 'Plan'}) features have been updated!`, "info");
+        }
+      });
+
+      chatSocket.on("notification:count", (payload) => {
+        if (payload && typeof payload.count === 'number') {
+          setCounts(prev => ({ ...prev, notifs: payload.count }));
+        }
+      });
+
+      chatSocket.on("notification:updated", (payload) => {
+        fetchCounts();
+      });
+
       setSocket(chatSocket);
-      window.chatSocket = chatSocket;
+      
 
       return () => {
         chatSocket.disconnect();
-        window.chatSocket = null;
+        
       };
     }
   }, [ioLoaded]);
@@ -272,7 +399,6 @@ function App() {
         .then(res => res.json())
         .then(json => {
           if (json.success) {
-            window.featureSettings = json.data;
             setMeSync(Date.now());
           }
         })
@@ -294,6 +420,8 @@ function App() {
           if (res.data.role) {
             ME.role = res.data.role.displayName || res.data.role.name;
           }
+          // Notify entitlements hook to refetch
+          window.dispatchEvent(new CustomEvent('subscription_changed'));
         }
       })
       .catch(err => console.error('Error fetching subscription status', err));
@@ -381,41 +509,44 @@ function App() {
       .catch(err => console.error('Error fetching joined events', err));
   }, []);
 
-  // navigation stack
-  const [stack, setStack] = useState(() => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Support initial path-based and hash-based invite routing
+  useEffect(() => {
     const path = window.location.pathname;
     const hash = window.location.hash;
-    
-    // Support path-based invite routing
     if (path.startsWith('/groups/invite/')) {
-       const token = path.split('/groups/invite/')[1];
-       if (token) return [{ view: "invite", param: token }];
+      const token = path.split('/groups/invite/')[1];
+      if (token) navigate(`/invite`, { state: token, replace: true });
+    } else if (hash.startsWith('#/groups/invite/')) {
+      const token = hash.split('#/groups/invite/')[1];
+      if (token) navigate(`/invite`, { state: token, replace: true });
     }
-    // Support hash-based invite routing as fallback
-    if (hash.startsWith('#/groups/invite/')) {
-       const token = hash.split('#/groups/invite/')[1];
-       if (token) return [{ view: "invite", param: token }];
-    }
-    
-    return [{ view: "home", param: null }];
-  });
-  const cur = stack[stack.length - 1];
+  }, [navigate]);
+
+  // Determine current view and param from React Router
+  const view = location.pathname.substring(1) || "home";
+  const param = location.state;
+  const cur = { view, param };
+
   const curRef = useRef(cur);
   useEffect(() => {
     curRef.current = cur;
   }, [cur]);
 
   const go = useCallback((view, param = null) => {
-    setStack(s => {
-      if (view === "home") return [{ view: "home", param: null }];
-      return [...s, { view, param }];
-    });
+    if (view === "home") {
+      navigate("/", { replace: true });
+    } else {
+      navigate(`/${view}`, { state: param });
+    }
     // scroll the active view to top
     setTimeout(() => { document.querySelectorAll(".scroll").forEach(el => el.scrollTop = 0); }, 0);
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
-    window.samaagum_go = go;
+    
     return () => { delete window.samaagum_go; };
   }, [go]);
 
@@ -463,8 +594,8 @@ function App() {
 
       // engagement state
   const [saved, toggleSave] = useSet([]);
-  const [joined, toggleJoin] = useSet(["g1", "g2", "g4"]);
-  const [pending, togglePending] = useSet([]);
+  const [joined, toggleJoin, addJoined] = useSet(["g1", "g2", "g4"]);
+  const [pending, togglePending, addPending] = useSet([]);
   const [createdGroups, setCreatedGroups] = useState(() => [GROUPS[1]]);
   const [connected, toggleConnect] = useSet([]);
   const [registered, , registerAdd] = useSet(() => {
@@ -774,7 +905,7 @@ useEffect(() => {
   }, [toggleJoin, togglePending]);
 
   const st = {
-    saved, toggleSave, joined, pending, toggleJoin: handleJoin, connected, toggleConnect, registered, register, city,
+    saved, toggleSave, joined, addJoined, pending, addPending, toggleJoin: handleJoin, connected, toggleConnect, registered, register, city,
     myTickets, setMyTickets, waitlisted, toggleWaitlist, addClaimedTicket,
     createdEvents, setCreatedEvents, createdGroups, setCreatedGroups, fetchCreatedEvents,
     joinedEvents, setJoinedEvents, fetchJoinedEvents,
@@ -782,7 +913,8 @@ useEffect(() => {
     addCreatedEvent, addCreatedGroup,
     subscription, setSubscription,
     fetchCounts,
-    chatSettings, setChatSettings
+    chatSettings, setChatSettings,
+    entitlements, plan, planDisplayName, refetchEntitlements
   };
 
   // sidebar collapsed state
@@ -1096,6 +1228,14 @@ useEffect(() => {
         </div>
       )}
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <HashRouter>
+      <DashboardApp />
+    </HashRouter>
   );
 }
 

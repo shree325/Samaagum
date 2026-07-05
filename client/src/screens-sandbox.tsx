@@ -1,12 +1,25 @@
 // @ts-nocheck
+import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import ReactDOM from 'react-dom/client';
+import { Discover } from './home-feed';
+import { Brand } from './home-icons';
+import { Notifications } from './home-notifications';
+import { Profile } from './home-profile';
+import { Sidebar } from './home-shell';
+import { Waitlist } from './home-waitlist';
+import { Discussions } from './landing-activity';
+import { I, range } from './landing-core';
+import { Events } from './landing-features';
+import { AUTH, Nav } from './landing-hero';
+
 /* ============================================================
    Samaagum Spec Explorer & Screen Sandbox
    High-fidelity, interactive sandbox for 94 screens.
    ============================================================ */
 
-var { useState, useEffect, useRef, useMemo, useCallback } = React;
 
-const SCREENS_SPEC = [
+
+export const SCREENS_SPEC = [
   { id: "S-001", name: "Authenticated app shell", area: "Shell", exp: "Shared", purpose: "Nav + entry after login", state: "L,X", phase: "MVP-0", action: { type: "native", view: "home" } },
   { id: "S-002", name: "OTP email entry", area: "Auth", exp: "User", purpose: "Enter email for OTP", state: "L,X", phase: "MVP-0", action: { type: "url", url: "Samaagum Auth.html" } },
   { id: "S-003", name: "OTP verify", area: "Auth", exp: "User", purpose: "Enter code", state: "L,X (lockout)", phase: "MVP-0", action: { type: "url", url: "Samaagum Auth.html" } },
@@ -109,7 +122,7 @@ const SCREENS_SPEC = [
   { id: "S-227", name: "Group rules / guidelines", area: "Configuration", exp: "Community", purpose: "Enforce guidelines, auto-decline on mismatch options", state: "L,X", phase: "Phase-1.5", action: { type: "simulated", mockId: "group_guidelines" } },
 ];
 
-const SANDBOX_STYLE = `
+export const SANDBOX_STYLE = `
   .ss-trigger {
     position: fixed;
     right: 20px;
@@ -454,7 +467,7 @@ const SANDBOX_STYLE = `
   }
 `;
 
-function ScreensSandboxOverlay() {
+export function ScreensSandboxOverlay() {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("ALL");

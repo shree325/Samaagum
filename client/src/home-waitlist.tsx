@@ -1,11 +1,16 @@
 // @ts-nocheck
+import React, { useEffect, useState } from 'react';
+import { ME, WAITLIST_ME } from './home-data';
+import { Grain } from './home-icons';
+import { I } from './home-icons';
+
 /* ============================================================
    Samaagum — Waitlist full lifecycle (F9 · S-160 / S-161)
    QUEUED → INVITED → CONVERTED / EXPIRED
    Notify-and-claim (collect-and-settle, no auth holds).
    ============================================================ */
 
-function CircleProgress({ pct, size = 168, children }) {
+export function CircleProgress({ pct, size = 168, children }) {
   const r = (size - 16) / 2, c = 2 * Math.PI * r;
   return (
     <div className="wl-ring" style={{ width: size, height: size, position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
@@ -20,7 +25,7 @@ function CircleProgress({ pct, size = 168, children }) {
   );
 }
 
-function useWaitlistCountdown(initialSeconds, active, onExpire) {
+export function useWaitlistCountdown(initialSeconds, active, onExpire) {
   const [seconds, setSeconds] = useState(initialSeconds);
   useEffect(() => {
     if (!active) {
@@ -50,7 +55,7 @@ function useWaitlistCountdown(initialSeconds, active, onExpire) {
   };
 }
 
-function Waitlist({ ev, st, go }) {
+export function Waitlist({ ev, st, go }) {
   const base = WAITLIST_ME;
   const targetId = ev?.id || "ev-feat";
   const e = ev ? { ...base, ev: ev.title || base.ev, cover: ev.cover || base.cover, date: ev.date || base.date, time: ev.time || base.time, venue: ev.venue || base.venue } : base;
@@ -214,4 +219,4 @@ function Waitlist({ ev, st, go }) {
   );
 }
 
-Object.assign(window, { Waitlist, CircleProgress });
+

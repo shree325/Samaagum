@@ -1,11 +1,19 @@
 // @ts-nocheck
+import React, { useEffect, useRef, useState } from 'react';
+import { Toggle } from './create_event';
+import { ME } from './home-data';
+import { Profile } from './home-profile';
+import { Empty, Sidebar } from './home-shell';
+import { Footer } from './landing-activity';
+import { I } from './home-icons';
+
 /* ============================================================
    Samaagum Home — Account & Privacy Settings Page
    ============================================================ */
 
-const { useState, useEffect, useRef } = React;
 
-function SettingsPage({ st, go, activeTabParam }) {
+
+export function SettingsPage({ st, go, activeTabParam }) {
   // Navigation tabs in settings page
   const [activeTab, setActiveTab] = useState(activeTabParam || "account");
 
@@ -215,6 +223,37 @@ function SettingsPage({ st, go, activeTabParam }) {
     setProfile(prev => ({ ...prev, img: "" }));
     if (window.toast) {
       window.toast("Profile picture removed");
+    }
+  };
+
+  const downloadInvoice = async (orderId, orderNumber) => {
+    try {
+      const api = window.location.port === "8080" ? "http://localhost:3000" : window.location.origin;
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${api}/api/subscription/orders/${orderId}/invoice`, {
+        headers: {
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        }
+      });
+      if (!response.ok) {
+        throw new Error('Failed to download invoice');
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Invoice-${orderNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+    } catch (err) {
+      console.error(err);
+      if (window.toast) {
+        window.toast("Error downloading invoice. Please try again.");
+      } else {
+        alert("Error downloading invoice. Please try again.");
+      }
     }
   };
 
@@ -604,6 +643,7 @@ function SettingsPage({ st, go, activeTabParam }) {
                                   <th style={{ padding: "12px 16px", fontWeight: 600, color: "var(--ink-2)" }}>Total</th>
                                   <th style={{ padding: "12px 16px", fontWeight: 600, color: "var(--ink-2)" }}>Payment Method</th>
                                   <th style={{ padding: "12px 16px", fontWeight: 600, color: "var(--ink-2)" }}>Status</th>
+                                  <th style={{ padding: "12px 16px", fontWeight: 600, color: "var(--ink-2)" }}>Actions</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -633,6 +673,31 @@ function SettingsPage({ st, go, activeTabParam }) {
                                       }}>
                                         {order.status}
                                       </span>
+                                    </td>
+                                    <td style={{ padding: "12px 16px" }}>
+                                      {order.status === "completed" && (
+                                        <button 
+                                          onClick={() => downloadInvoice(order.id, order.order_number)}
+                                          style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "6px",
+                                            padding: "6px 12px",
+                                            borderRadius: "6px",
+                                            border: "1px solid var(--border)",
+                                            background: "var(--surface)",
+                                            color: "var(--ink-2)",
+                                            fontSize: "12px",
+                                            fontWeight: 500,
+                                            cursor: "pointer",
+                                            transition: "all 0.2s"
+                                          }}
+                                          onMouseEnter={e => { e.currentTarget.style.color = "var(--primary)"; e.currentTarget.style.borderColor = "var(--primary)"; }}
+                                          onMouseLeave={e => { e.currentTarget.style.color = "var(--ink-2)"; e.currentTarget.style.borderColor = "var(--border)"; }}
+                                        >
+                                          <I.download style={{ width: 13, height: 13 }} /> Invoice
+                                        </button>
+                                      )}
                                     </td>
                                   </tr>
                                 ))}
@@ -1125,4 +1190,4 @@ function SettingsPage({ st, go, activeTabParam }) {
   );
 }
 
-Object.assign(window, { SettingsPage });
+

@@ -1,11 +1,22 @@
 // @ts-nocheck
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { GroupCard } from './home-cards';
+import { COVERS, ME } from './home-data';
+import { Discover } from './home-feed';
+import { Grain } from './home-icons';
+import { apiBase } from './home-subscription';
+import { Waitlist } from './home-waitlist';
+import { Footer } from './landing-activity';
+import { I } from './home-icons';
+import { Communities } from './landing-features';
+
 /* ============================================================
    Samaagum Home — Create event + Create group (Luma-grade, live preview)
    ============================================================ */
 
-const COVER_SWATCHES = Object.entries(COVERS).map(([k, v]) => ({ k, v }));
+export const COVER_SWATCHES = Object.entries(COVERS).map(([k, v]) => ({ k, v }));
 
-function CoverPicker({ value, onPick }) {
+export function CoverPicker({ value, onPick }) {
   return (
     <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
       {COVER_SWATCHES.map(s => (
@@ -20,11 +31,48 @@ function CoverPicker({ value, onPick }) {
   );
 }
 
-function Toggle({ on, onClick }) { return <button className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
+export function Toggle({ on, onClick }) { return <button className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
 
 
 
-function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
+export function UpgradePlanModal({ open, onClose, feature, go, currentPlanName }) {
+  if (!open) return null;
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 12000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)" }}>
+      <div style={{ background: "var(--surface)", width: 440, borderRadius: "var(--r-xl)", padding: 32, boxShadow: "var(--sh-xl)", border: "1px solid var(--border)", position: "relative", textAlign: "center" }}>
+        <button onClick={onClose} style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", color: "var(--ink-3)", cursor: "pointer" }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
+        <h2 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 8px 0", color: "var(--ink)" }}>Upgrade Required</h2>
+        <p style={{ fontSize: 14, color: "var(--ink-2)", margin: "0 0 24px 0", lineHeight: 1.6 }}>
+          The feature <strong>{feature}</strong> is locked under your current plan ({currentPlanName || "Free Plan"}). Please upgrade your plan to unlock premium options, unlimited capacity, and advanced host features!
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <button 
+            className="hbtn hbtn--primary" 
+            style={{ width: "100%", justifyContent: "center", padding: "12px", fontSize: 15, fontWeight: 600 }}
+            onClick={() => {
+              onClose();
+              go("upgrade");
+            }}
+          >
+            Upgrade Plan
+          </button>
+          <button 
+            className="hbtn hbtn--ghost" 
+            style={{ width: "100%", justifyContent: "center", padding: "12px", fontSize: 14 }}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
   const [tempCity, setTempCity] = useState(selectedCity || "");
   const [customLocationName, setCustomLocationName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -45,7 +93,9 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
             y: Math.max(10, Math.min(90, (90 - Number(c.latitude)) / 180 * 100)),
             info: `${c.state_name || ''}, ${c.country_name || ''}`.replace(/^,\s*/, ''),
             lat: Number(c.latitude),
-            lon: Number(c.longitude)
+            lon: Number(c.longitude),
+            state: c.state_name,
+            country: c.country_name
           })));
         }
       });
@@ -54,7 +104,7 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
 
   React.useEffect(() => {
     if (tempCity && dynamicCities.length > 0) {
-      const isActive = dynamicCities.some(c => c.name.toLowerCase() === tempCity.toLowerCase());
+      const isActive = dynamicCities.some(c => (c.name || "").toLowerCase() === (tempCity || "").toLowerCase());
       setIsCityActive(isActive);
     } else {
       setIsCityActive(true); // default true while loading or if not checked yet
@@ -223,7 +273,7 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
     if (!searchQuery.trim()) return;
 
     // Match local cities first
-    const match = dynamicCities.find(c => c.name.toLowerCase() === searchQuery.trim().toLowerCase());
+    const match = dynamicCities.find(c => (c.name || "").toLowerCase() === searchQuery.trim().toLowerCase());
     if (match) {
       setTempCity(match.name);
       setCustomLocationName(match.info);
@@ -239,7 +289,7 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
         const filteredData = data.filter((item: any) => {
           const locationName = (item.name || item.display_name.split(',')[0]).toLowerCase().trim();
           return dynamicCities.some(dc => {
-            const dcName = dc.name.toLowerCase();
+            const dcName = (dc.name || "").toLowerCase();
             return locationName === dcName || 
                    locationName === dcName + " city" || 
                    dcName === locationName + " city";
@@ -270,7 +320,7 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
     }
   };
 
-  const filtered = dynamicCities.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filtered = dynamicCities.filter(c => (c.name || "").toLowerCase().includes((searchQuery || "").toLowerCase())).slice(0, 50);
 
   if (!open) return null;
 
@@ -359,9 +409,9 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
 
               {/* Local Predefined Cities */}
               {filtered.length > 0 && <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-3)", padding: "4px 8px" }}>Popular Cities</div>}
-              {filtered.map(c => (
+              {filtered.map((c, idx) => (
                 <button
-                  key={c.name}
+                  key={`${c.name}-${c.state}-${c.country}-${idx}`}
                   type="button"
                   onClick={() => {
                     setTempCity(c.name);
@@ -515,7 +565,7 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
             style={{ opacity: !isCityActive ? 0.5 : 1, cursor: !isCityActive ? "not-allowed" : "pointer" }}
             onClick={() => {
               if (tempCity && isCityActive) {
-                onSelectCity(tempCity);
+                onSelectCity(tempCity, activeCityObj);
               }
               onClose();
             }}
@@ -569,7 +619,7 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
 }
 
 /* ---------------- Questionnaire Builder Modal ---------------- */
-function QuestionnaireBuilderModal({ open, onClose, questions, setQuestions }) {
+export function QuestionnaireBuilderModal({ open, onClose, questions, setQuestions }) {
   const [activeTab, setActiveTab] = useState("selected");
   const [customQ, setCustomQ] = useState("");
   const [customType, setCustomType] = useState("short");
@@ -717,18 +767,24 @@ function QuestionnaireBuilderModal({ open, onClose, questions, setQuestions }) {
 }
 
 
-function CapacitySettingsModal({ open, onClose, limitCap, setLimitCap, maxCap, setMaxCap, waitlist, setWaitlist }) {
+export function CapacitySettingsModal({ open, onClose, limitCap, setLimitCap, maxCap, setMaxCap, waitlist, setWaitlist, entitlementMaxCap = -1, triggerUpgrade }) {
   const [tempLimitCap, setTempLimitCap] = React.useState(limitCap);
   const [tempMaxCap, setTempMaxCap] = React.useState(maxCap);
   const [tempWaitlist, setTempWaitlist] = React.useState(waitlist);
 
   React.useEffect(() => {
     if (open) {
-      setTempLimitCap(limitCap);
-      setTempMaxCap(maxCap);
+      // Force limitCap to true if plan capacity limit is active and they had it disabled
+      if (entitlementMaxCap !== -1 && !limitCap) {
+        setTempLimitCap(true);
+        setTempMaxCap(String(entitlementMaxCap));
+      } else {
+        setTempLimitCap(limitCap);
+        setTempMaxCap(maxCap || (entitlementMaxCap !== -1 ? String(entitlementMaxCap) : ""));
+      }
       setTempWaitlist(waitlist);
     }
-  }, [open, limitCap, maxCap, waitlist]);
+  }, [open, limitCap, maxCap, waitlist, entitlementMaxCap]);
 
   if (!open) return null;
 
@@ -752,12 +808,27 @@ function CapacitySettingsModal({ open, onClose, limitCap, setLimitCap, maxCap, s
             Close registration when reaching the capacity. Only approved attendees count toward capacity.
           </p>
 
+          {entitlementMaxCap !== -1 && (
+            <div style={{ padding: "10px 12px", background: "var(--field-2, var(--field))", borderRadius: "var(--r-sm)", border: "1px dashed var(--accent)", fontSize: "12px", color: "var(--ink-2)" }}>
+              🔒 Under your current plan, capacity is capped at a maximum of <strong>{entitlementMaxCap}</strong> members. Upgrade to Standard for unlimited capacity.
+            </div>
+          )}
+
           {/* Option 1: Limit Event Capacity */}
           <div className="toggle-row" style={{ padding: "4px 0", background: "transparent", border: "none", margin: 0 }}>
             <div className="ti">
               <div className="t" style={{ fontSize: "13.5px", fontWeight: 600 }}>Enable Capacity Limit</div>
             </div>
-            <Toggle on={tempLimitCap} onClick={() => setTempLimitCap(!tempLimitCap)} />
+            <Toggle 
+              on={tempLimitCap} 
+              onClick={() => {
+                if (tempLimitCap && entitlementMaxCap !== -1) {
+                  triggerUpgrade("Unlimited Group Capacity");
+                  return;
+                }
+                setTempLimitCap(!tempLimitCap);
+              }} 
+            />
           </div>
 
           {tempLimitCap && (
@@ -798,6 +869,11 @@ function CapacitySettingsModal({ open, onClose, limitCap, setLimitCap, maxCap, s
                 alert("Please enter a valid capacity (at least 1).");
                 return;
               }
+              if (tempLimitCap && entitlementMaxCap !== -1 && parseInt(tempMaxCap) > entitlementMaxCap) {
+                alert(`Capacity cannot exceed ${entitlementMaxCap} members under your current plan.`);
+                triggerUpgrade(`Group Capacity > ${entitlementMaxCap}`);
+                return;
+              }
               setLimitCap(tempLimitCap);
               setMaxCap(tempLimitCap ? tempMaxCap : "");
               setWaitlist(tempWaitlist);
@@ -812,7 +888,7 @@ function CapacitySettingsModal({ open, onClose, limitCap, setLimitCap, maxCap, s
   );
 }
 
-function getDynamicHierarchy(apiData = null) {
+export function getDynamicHierarchy(apiData = null) {
   // If real data from API is available, build from it
   if (apiData && apiData.communities && apiData.communities.length > 0) {
     const tree = [];
@@ -827,14 +903,14 @@ function getDynamicHierarchy(apiData = null) {
   return [];
 };
 
-const getHierarchyContext = (id, tree) => {
+export const getHierarchyContext = (id, tree) => {
   const item = tree.find(x => x.id === id);
   if (!item) return "";
   if (!item.parentId) return item.name;
   return `${getHierarchyContext(item.parentId, tree)} > ${item.name}`;
 };
 
-const getAllDescendants = (id, tree) => {
+export const getAllDescendants = (id, tree) => {
   let descendants = [];
   const children = tree.filter(x => x.parentId === id);
   for (const child of children) {
@@ -844,7 +920,7 @@ const getAllDescendants = (id, tree) => {
   return descendants;
 };
 
-const CATEGORY_ICONS = {
+export const CATEGORY_ICONS = {
   'Startups': '🚀', 'Design': '🎨', 'Music': '🎵', 'Tech': '💻',
   'Wellness': '💚', 'Food & Drink': '🍽️', 'Art': '🖼️', 'General': '📌',
   'Academic': '📚', 'Sports': '⚽', 'Cultural': '🎭', 'Professional': '💼',
@@ -852,7 +928,7 @@ const CATEGORY_ICONS = {
   'Health': '🏥', 'Finance': '💰', 'Education': '🎓', 'Environment': '🌿',
 };
 
-function AccessControlModal({ open, onClose, mode, selectedAccess, setSelectedAccess, hierarchyData, myManagedGroups }) {
+export function AccessControlModal({ open, onClose, mode, selectedAccess, setSelectedAccess, hierarchyData, myManagedGroups }) {
   const isRuleMode = mode === "selected_members";
 
   const [activeTab, setActiveTab] = React.useState("communities");
@@ -1715,7 +1791,7 @@ function AccessControlModal({ open, onClose, mode, selectedAccess, setSelectedAc
 }
 
 /* ---------------- Category Selection Summary Chip ---------------- */
-function CategorySummaryChip({ type, items, onEditClick }) {
+export function CategorySummaryChip({ type, items, onEditClick }) {
   const [open, setOpen] = React.useState(false);
   const containerRef = React.useRef(null);
   const [coords, setCoords] = React.useState({ top: 0, left: 0 });
@@ -1929,7 +2005,7 @@ function CategorySummaryChip({ type, items, onEditClick }) {
 
 
 /* ---------------- Rule Selection Summary Chip ---------------- */
-function RuleSummaryChip({ rule, onEditClick }) {
+export function RuleSummaryChip({ rule, onEditClick }) {
   const [open, setOpen] = React.useState(false);
   const containerRef = React.useRef(null);
   const [coords, setCoords] = React.useState({ top: 0, left: 0 });
@@ -2134,7 +2210,7 @@ function RuleSummaryChip({ rule, onEditClick }) {
 }
 
 /* ---------------- Rule Community Summary Chip ---------------- */
-function RuleCommunitySummaryChip({ rule, onEditClick }) {
+export function RuleCommunitySummaryChip({ rule, onEditClick }) {
   const [open, setOpen] = React.useState(false);
   const containerRef = React.useRef(null);
   const [coords, setCoords] = React.useState({ top: 0, left: 0 });
@@ -2333,7 +2409,7 @@ function RuleCommunitySummaryChip({ rule, onEditClick }) {
 }
 
 /* ---------------- Rule Group Summary Chip ---------------- */
-function RuleGroupSummaryChip({ rule, onEditClick }) {
+export function RuleGroupSummaryChip({ rule, onEditClick }) {
   const [open, setOpen] = React.useState(false);
   const containerRef = React.useRef(null);
   const [coords, setCoords] = React.useState({ top: 0, left: 0 });
@@ -2529,8 +2605,36 @@ function RuleGroupSummaryChip({ rule, onEditClick }) {
   );
 }
 
+export const DEFAULT_FREE_ENTITLEMENTS = {
+  group_max_groups: -1,
+  group_allowed_visibility: ['unlisted'],
+  group_allowed_join_modes: ['open', 'invite_only'],
+  group_max_capacity: 25,
+  group_can_restricted_access: false,
+  event_allowed_registration_modes: ['free', 'cash'],
+  event_allowed_visibility: ['unlisted', 'invite_only'],
+  event_max_participants: 100,
+  event_checkin_methods: ['scanner', 'manual', 'gate'],
+  event_can_create_paid_tickets: false
+};
+
 /* ---------------- Create Group ---------------- */
-function CreateGroup({ mode, editGroup, go, mobile }) {
+export function CreateGroup({ mode, editGroup, go, mobile, st }) {
+  const entitlements = st?.entitlements || DEFAULT_FREE_ENTITLEMENTS;
+  const allowedVisibilities = entitlements.group_allowed_visibility || ['unlisted'];
+  const allowedJoinModes = entitlements.group_allowed_join_modes || ['open', 'invite_only'];
+  const entitlementMaxCap = entitlements.group_max_capacity ?? 25;
+  const canJoinRestricted = allowedJoinModes.includes('restricted_access');
+  const canPublic = allowedVisibilities.includes('public');
+  const canRestricted = allowedVisibilities.includes('restricted');
+
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [upgradeFeature, setUpgradeFeature] = useState("");
+  const triggerUpgrade = (feat) => {
+    setUpgradeFeature(feat);
+    setUpgradeModalOpen(true);
+  };
+
   const isEdit = mode === "edit" && editGroup;
 
   // Try loading draft only if not editing
@@ -2565,7 +2669,9 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
   const [locationType, setLocationType] = useState(savedDraft.locationType || "");
   const [venueName, setVenueName] = useState(savedDraft.venueName || "");
   const [address, setAddress] = useState(savedDraft.address || "");
-  const [city, setCity] = useState(savedDraft.city || "");
+  const [city, setCity] = useState(isEdit ? (editGroup.settings?.location?.city || editGroup.settings?.city || "") : (savedDraft.city || ""));
+  const [locationState, setLocationState] = useState(isEdit ? (editGroup.settings?.location?.state || "") : (savedDraft.locationState || ""));
+  const [locationCountry, setLocationCountry] = useState(isEdit ? (editGroup.settings?.location?.country || "") : (savedDraft.locationCountry || ""));
   const [platform, setPlatform] = useState(savedDraft.platform || "zoom");
   const [meetingLink, setMeetingLink] = useState(savedDraft.meetingLink || "");
 
@@ -2714,15 +2820,21 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
       name, icon, cover, banner, cat, desc, visibility, joinElig,
       limitCap, maxCap, waitlist, questionnaire, questions, forums, threadPerm, replyPerm, gallery,
       galleryAllow, galleryImageOnly, galleryVideoOnly, galleryApprove,
-      locationType, venueName, address, city, platform, meetingLink,
+      locationType, venueName, address, city, locationState, locationCountry, platform, meetingLink,
       selectedAccess, visibilityAccess, approval
     }));
-  }, [name, icon, cover, banner, cat, desc, visibility, joinElig, limitCap, maxCap, waitlist, questionnaire, questions, forums, threadPerm, replyPerm, gallery, galleryAllow, galleryImageOnly, galleryVideoOnly, galleryApprove, locationType, venueName, address, city, platform, meetingLink, selectedAccess, visibilityAccess, approval]);
+  }, [name, icon, cover, banner, cat, desc, visibility, joinElig, limitCap, maxCap, waitlist, questionnaire, questions, forums, threadPerm, replyPerm, gallery, galleryAllow, galleryImageOnly, galleryVideoOnly, galleryApprove, locationType, venueName, address, city, locationState, locationCountry, platform, meetingLink, selectedAccess, visibilityAccess, approval]);
 
   const [loading, setLoading] = useState(false);
 
 
   const handleCreateGroup = async (isDraftSubmit = false) => {
+    if (!isDraftSubmit && !city) {
+      if (window.toast) window.toast("Please select a location for the group.", "error");
+      else alert("Please select a location for the group.");
+      return;
+    }
+
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
@@ -2735,15 +2847,16 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
         banner,
         joinMode: approval ? "approval" : joinElig === "invite" ? "invite_only" : joinElig === "communities" ? "restricted" : "open",
         visibility,
-        listed: isDraftSubmit ? "unlisted" : "listed",
+        listed: isDraftSubmit ? "unlisted" : (visibility === "public" ? "listed" : "unlisted"),
         settings: {
           isDraft: isDraftSubmit,
           joinElig: joinElig === "communities" ? "restricted" : joinElig,
+          location: { city, state: locationState, country: locationCountry },
           restrictedAccess: {
             join: selectedAccess,
             visibility: visibilityAccess
           },
-          capacity: { limit: limitCap, max: maxCap ? parseInt(maxCap) : 0, waitlist },
+          capacity: { limit: limitCap, max: Number(maxCap) || null, waitlist },
           questionnaires: questionnaire ? questions : [],
           forums: { enabled: forums, threadPerm, replyPerm },
           gallery: { enabled: gallery, allow: galleryAllow, imageOnly: galleryImageOnly, videoOnly: galleryVideoOnly, approve: galleryApprove }
@@ -2776,7 +2889,7 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
           const groupName = name;
 
           if (!isEdit && pendingInviteEmails.length > 0) {
-            // Generate individual invite tokens and open mailto: for each
+            // Generate individual invite tokens and send email for each
             for (const email of pendingInviteEmails) {
               try {
                 const res = await fetch(`${apiBase}/api/groups/${groupId}/invites`, {
@@ -2785,12 +2898,8 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
                   body: JSON.stringify({ targets: [{ email }] })
                 });
                 const d = await res.json();
-                if (d.success && d.data[0]?.success) {
-                  const tkn = d.data[0].token;
-                  const inviteLink = `${window.location.origin}${window.location.pathname}#/groups/invite/${tkn}`;
-                  const subject = encodeURIComponent(`You're invited to join ${groupName} on Samaagum`);
-                  const body = encodeURIComponent(`Hi!\n\n${senderEmail || "Someone"} has invited you to join "${groupName}" on Samaagum.\n\nClick the link below to accept:\n${inviteLink}\n\nThis link is for your use only.`);
-                  window.open(`mailto:${email}?subject=${subject}&body=${body}`);
+                if (!d.success || !d.data[0]?.success) {
+                  console.error(`Failed to invite ${email}:`, d.message || d.data?.[0]?.message || "Unknown error");
                 }
               } catch (err) {
                 console.error(`Failed to invite ${email}:`, err);
@@ -2950,7 +3059,7 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
     name: name || "Your group name", icon, cover, banner, cat,
     location: city ? `${city}, India` : "Location TBD",
     desc: desc || "A short description of what your community is about and who it's for.",
-    members: 1, online: 1, memberNames: [{ name: ME.name, role: "owner" }], owner: ME.name,
+    members: 1, online: 0, memberNames: [{ name: ME.name, role: "owner" }], owner: ME.name,
     visibility,
     joinMode: joinElig === "invite" ? "invite" : "approval"
   };
@@ -2959,7 +3068,13 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
     <div className={`create ${mobile ? "single" : ""}`}>
       {/* Modals placed outside layout structure */}
       
-      <LocationModal open={locationModalOpen} onClose={() => setLocationModalOpen(false)} selectedCity={city} onSelectCity={setCity} />
+      <LocationModal open={locationModalOpen} onClose={() => setLocationModalOpen(false)} selectedCity={city} onSelectCity={(selected, obj) => {
+        setCity(selected);
+        if (obj) {
+          setLocationState(obj.state);
+          setLocationCountry(obj.country);
+        }
+      }} />
       <AccessControlModal
         open={accessModal}
         onClose={() => setAccessModal(false)}
@@ -2985,7 +3100,7 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
           setVisibilityAccess(nextValue.restricted);
         }}
       />
-      <CapacitySettingsModal open={capModal} onClose={() => setCapModal(false)} limitCap={limitCap} setLimitCap={setLimitCap} maxCap={maxCap} setMaxCap={setMaxCap} waitlist={waitlist} setWaitlist={setWaitlist} />
+      <CapacitySettingsModal open={capModal} onClose={() => setCapModal(false)} limitCap={limitCap} setLimitCap={setLimitCap} maxCap={maxCap} setMaxCap={setMaxCap} waitlist={waitlist} setWaitlist={setWaitlist} entitlementMaxCap={entitlementMaxCap} triggerUpgrade={triggerUpgrade} />
 
       {/* Description Modal */}
       {descModal && (
@@ -3332,13 +3447,41 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
               <div className="cfield">
                 <label>Visibility</label>
                 <div className="vis-pills">
-                  <button type="button" className={`vis-pill ${visibility === "public" ? "on" : ""}`} onClick={() => setVisibility("public")}>Public</button>
-                  <button type="button" className={`vis-pill ${visibility === "private" ? "on" : ""}`} onClick={() => setVisibility("private")}>Unlisted</button>
-                  <button type="button" className={`vis-pill ${visibility === "hidden" ? "on" : ""}`} onClick={() => {
-                    setVisibility("hidden");
-                    setAccessModalTarget("visibility");
-                    setAccessModal(true);
-                  }}>Restricted-Access</button>
+                  <button 
+                    type="button" 
+                    className={`vis-pill ${visibility === "public" ? "on" : ""}`} 
+                    onClick={() => {
+                      if (!canPublic) {
+                        triggerUpgrade("Public Group Visibility");
+                        return;
+                      }
+                      setVisibility("public");
+                    }}
+                  >
+                    {!canPublic && "🔒 "}Public
+                  </button>
+                  <button 
+                    type="button" 
+                    className={`vis-pill ${visibility === "private" ? "on" : ""}`} 
+                    onClick={() => setVisibility("private")}
+                  >
+                    Unlisted
+                  </button>
+                  <button 
+                    type="button" 
+                    className={`vis-pill ${visibility === "hidden" ? "on" : ""}`} 
+                    onClick={() => {
+                      if (!canRestricted) {
+                        triggerUpgrade("Restricted-Access Group Visibility");
+                        return;
+                      }
+                      setVisibility("hidden");
+                      setAccessModalTarget("visibility");
+                      setAccessModal(true);
+                    }}
+                  >
+                    {!canRestricted && "🔒 "}Restricted-Access
+                  </button>
                 </div>
                 {visibility === "private" && (
                   <div style={{ marginTop: 10, padding: "10px 12px", background: "var(--field)", borderRadius: "var(--r-md)", border: "1px solid var(--border-2)" }}>
@@ -3405,6 +3548,10 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
                 value={joinElig}
                 onChange={(e) => {
                   const val = e.target.value;
+                  if (val === "restricted" && !canJoinRestricted) {
+                    triggerUpgrade("Restricted Join Eligibility");
+                    return;
+                  }
                   setJoinElig(val);
                   if (val === "restricted") {
                     setAccessModalTarget("join");
@@ -3414,7 +3561,7 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
                 style={{ padding: "10px 14px", fontSize: 13.5, width: "100%", marginBottom: 12 }}
               >
                 <option value="anyone">Public</option>
-                <option value="restricted">Restricted Access</option>
+                <option value="restricted">{!canJoinRestricted && "🔒 "}Restricted Access</option>
                 <option value="invite">Invite Only</option>
               </select>
 
@@ -3521,11 +3668,7 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
                 });
                 const data = await res.json();
                 if (data.success && data.data[0]?.success) {
-                  const tkn = data.data[0].token;
-                  const inviteLink = `${window.location.origin}${window.location.pathname}#/groups/invite/${tkn}`;
-                  const subject = encodeURIComponent(`You're invited to join ${name} on Samaagum`);
-                  const body = encodeURIComponent(`Hi!\n\n${senderEmail || "Someone"} has invited you to join "${name}" on Samaagum.\n\nClick the link below to accept:\n${inviteLink}\n\nThis link is for your use only.`);
-                  window.open(`mailto:${inviteEmail}?subject=${subject}&body=${body}`);
+                  alert("Invitation email sent successfully!");
                   setInviteEmail("");
                 } else {
                   alert("Failed to generate invite: " + (data.data?.[0]?.message || data.message || "Unknown error"));
@@ -3746,8 +3889,17 @@ function CreateGroup({ mode, editGroup, go, mobile }) {
           </div>
         </div>
       )}
+      {upgradeModalOpen && (
+        <UpgradePlanModal 
+          open={upgradeModalOpen} 
+          onClose={() => setUpgradeModalOpen(false)} 
+          feature={upgradeFeature} 
+          go={go} 
+          currentPlanName={st?.planDisplayName}
+        />
+      )}
     </div>
   );
 }
 
-Object.assign(window, { CreateGroup });
+

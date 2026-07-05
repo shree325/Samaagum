@@ -1,10 +1,17 @@
+import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Icons } from './admin-app';
+import { Discover } from './home-feed';
+import { Avatar } from './home-icons';
+import { apiBase } from './home-subscription';
+import { Networking } from './landing-features2';
+
 /* ============================================================
    Samaagum — shared atoms, icons, data, immersive panel
    ============================================================ */
-var { useState, useRef, useEffect, useCallback } = React;
+
 
 /* ---------------- Icons ---------------- */
-const Ic = {
+export const Ic = {
   arrowL: (p) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" {...p}><path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   arrowR: (p) => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" {...p}><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   mail: (p) => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" {...p}><rect x="3" y="5" width="18" height="14" rx="3" stroke="currentColor" strokeWidth="1.8"/><path d="M4 7l8 6 8-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
@@ -23,7 +30,7 @@ const Ic = {
 };
 
 /* ---------------- Logo ---------------- */
-function Mark({ size = 28 }) {
+export function Mark({ size = 28 }) {
   const id = "mk" + Math.round(size);
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" fill="none" aria-hidden="true">
@@ -38,7 +45,7 @@ function Mark({ size = 28 }) {
     </svg>
   );
 }
-function Wordmark({ size = 20, color, mark = true }) {
+export function Wordmark({ size = 20, color, mark = true }) {
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
       {mark && <Mark size={size * 1.35} />}
@@ -48,17 +55,17 @@ function Wordmark({ size = 20, color, mark = true }) {
 }
 
 /* ---------------- Avatar helper ---------------- */
-function gradFor(seed) {
+export function gradFor(seed) {
   let h = 0; for (let i = 0; i < seed.length; i++) h = seed.charCodeAt(i) + ((h << 5) - h);
   const a = Math.abs(h) % 360, b = (a + 40) % 360;
   return `linear-gradient(135deg, hsl(${a} 70% 62%), hsl(${b} 72% 52%))`;
 }
-function initials(name) {
+export function initials(name) {
   return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 }
 
 /* ---------------- Buttons ---------------- */
-function SBtn({ variant = "primary", block, loading, children, leftIcon, rightIcon, ...rest }) {
+export function SBtn({ variant = "primary", block, loading, children, leftIcon, rightIcon, ...rest }) {
   return (
     <button className={`sbtn sbtn--${variant} ${block ? "sbtn--block" : ""} focusable`} disabled={loading || rest.disabled} {...rest}>
       {loading ? <span className="spin" /> : leftIcon}
@@ -69,7 +76,7 @@ function SBtn({ variant = "primary", block, loading, children, leftIcon, rightIc
 }
 
 /* ---------------- Field ---------------- */
-function Field({ label, icon, error, ...rest }) {
+export function Field({ label, icon, error, ...rest }) {
   return (
     <div className="sfield">
       {label && <label>{label}</label>}
@@ -83,7 +90,7 @@ function Field({ label, icon, error, ...rest }) {
 }
 
 /* ---------------- OTP input ---------------- */
-function OTPInput({ length = 6, value, onChange, status }) {
+export function OTPInput({ length = 6, value, onChange, status }) {
   const refs = useRef([]);
   const set = (i, v) => {
     const next = value.split("");
@@ -115,7 +122,7 @@ function OTPInput({ length = 6, value, onChange, status }) {
     <div className={`otp ${status || ""}`}>
       {Array.from({ length }).map((_, i) => (
         <input
-          key={i} ref={el => refs.current[i] = el}
+          key={i} ref={el => { refs.current[i] = el; }}
           className={`cell focusable ${value[i] ? "filled" : ""}`}
           inputMode="numeric" maxLength={1} value={value[i] || ""}
           onChange={(e) => onInput(i, e)} onKeyDown={(e) => onKey(i, e)}
@@ -128,25 +135,25 @@ function OTPInput({ length = 6, value, onChange, status }) {
 }
 
 /* ---------------- Data ---------------- */
-const INTERESTS = [
+export const INTERESTS = [
   ["Startups", "#ff6b4a"], ["Design", "#6d5efc"], ["Technology", "#2a7fff"], ["Music", "#e5489d"],
   ["Art & Culture", "#f59e0b"], ["Wellness", "#10b981"], ["Food & Drink", "#ef6f53"], ["Networking", "#8b5cf6"],
   ["Investing", "#0ea5a4"], ["Travel", "#3b82f6"], ["Gaming", "#a855f7"], ["Film & Media", "#f43f5e"],
   ["Writing", "#64748b"], ["Sustainability", "#22c55e"], ["Sports", "#f97316"], ["Photography", "#06b6d4"],
 ];
-const ROLES = [
+export const ROLES = [
   ["Founder", "briefcase"], ["Creator", "mic"], ["Investor", "spark"], ["Explorer", "compass"],
 ];
-const CITIES = [];
-const EVENTS = [
+export const CITIES = [];
+export const EVENTS = [
   { t: "Founders & Funders Mixer", d: "Thu · Indiranagar", tag: "Networking", thumb: "linear-gradient(135deg,#ff6b4a,#ff4d8d)", going: 3 },
   { t: "Design Systems Night", d: "Sat · WeWork Galaxy", tag: "Design", thumb: "linear-gradient(135deg,#6d5efc,#2a7fff)", going: 5 },
   { t: "Sunset Rooftop Sessions", d: "Fri · Koramangala", tag: "Music", thumb: "linear-gradient(135deg,#f59e0b,#ef6f53)", going: 4 },
 ];
-const PEOPLE = ["Aanya R", "Dev K", "Mira S", "Leo P", "Zoya N", "Kabir A"];
+export const PEOPLE = ["Aanya R", "Dev K", "Mira S", "Leo P", "Zoya N", "Kabir A"];
 
 /* ---------------- Mesh background ---------------- */
-const MESH_SETS = {
+export const MESH_SETS = {
   sunset: { base: "#1a1330", blobs: [
     { c: "var(--accent-1)", s: 360, x: "-12%", y: "-18%" }, { c: "var(--accent-2)", s: 400, x: "52%", y: "34%" },
     { c: "#ff4d8d", s: 240, x: "8%", y: "62%" }, { c: "#ffb86b", s: 190, x: "72%", y: "-12%" } ] },
@@ -160,7 +167,7 @@ const MESH_SETS = {
     { c: "#e5489d", s: 360, x: "-10%", y: "-14%" }, { c: "#8b5cf6", s: 380, x: "56%", y: "30%" },
     { c: "#ff6b4a", s: 220, x: "14%", y: "64%" }, { c: "#f59e0b", s: 160, x: "70%", y: "72%" } ] },
 };
-function MeshBg({ gradient = "sunset" }) {
+export function MeshBg({ gradient = "sunset" }) {
   const set = MESH_SETS[gradient] || MESH_SETS.sunset;
   return (
     <React.Fragment>
@@ -180,7 +187,7 @@ function MeshBg({ gradient = "sunset" }) {
 }
 
 /* ---------------- Floating event card ---------------- */
-function FloatCard({ ev, style }) {
+export function FloatCard({ ev, style }) {
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const onMove = (e) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -212,11 +219,11 @@ function FloatCard({ ev, style }) {
 }
 
 /* ---------------- Immersive left panel ---------------- */
-const LP_COPY = {
+export const LP_COPY = {
   default: { eye: "Live in your city", title: "Where your\ncommunity\ncomes together.", sub: "Discover curated events, meet your people, and build your network — all in one beautifully simple place." },
   done: { eye: "You're in", title: "Welcome to\nthe gathering.", sub: "Your first events are already waiting. Let's find your people." },
 };
-function LeftPanel({ gradient, phase = "default" }) {
+export function LeftPanel({ gradient, phase = "default" }) {
   const copy = LP_COPY[phase] || LP_COPY.default;
   return (
     <div className="lp">
@@ -247,7 +254,7 @@ function LeftPanel({ gradient, phase = "default" }) {
 }
 
 /* ---------------- Confetti ---------------- */
-function Confetti() {
+export function Confetti() {
   const cols = ["var(--accent-1)", "var(--accent-2)", "#ffb86b", "#6effc0", "#e5489d"];
   const bits = Array.from({ length: 36 });
   return (
@@ -266,7 +273,7 @@ function Confetti() {
 }
 
 /* ---------------- Reveal (transition-based, resting state visible) ---------------- */
-function Reveal({ dir = "f", children, style }) {
+export function Reveal({ dir = "f", children, style }) {
   const [enter, setEnter] = useState(true);
   useEffect(() => {
     const id = setTimeout(() => setEnter(false), 24);
@@ -280,7 +287,7 @@ function Reveal({ dir = "f", children, style }) {
 }
 
 /* countdown hook */
-function useCountdown(start, dep) {
+export function useCountdown(start, dep) {
   const [n, setN] = useState(start);
   useEffect(() => {
     setN(start);
@@ -291,7 +298,7 @@ function useCountdown(start, dep) {
 }
 
 /* ---------------- LocationPreview ---------------- */
-function LocationPreview({ city, lat, lng, address }) {
+export function LocationPreview({ city, lat, lng, address }) {
   if (!city || lat === undefined || lng === undefined) return null;
   
   const latitude = parseFloat(lat);
@@ -343,12 +350,12 @@ function LocationPreview({ city, lat, lng, address }) {
   );
 }
 
-let activeCitiesCache = null;
-let activeCitiesPromise = null;
-let activeCitiesTimestamp = 0;
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+export let activeCitiesCache = null;
+export let activeCitiesPromise = null;
+export let activeCitiesTimestamp = 0;
+export const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-async function getActiveCities(returnFullObjects = false) {
+export async function getActiveCities(returnFullObjects = false) {
   const now = Date.now();
   if (activeCitiesCache && (now - activeCitiesTimestamp < CACHE_TTL)) {
     return returnFullObjects ? activeCitiesCache.full : activeCitiesCache.names;
@@ -383,9 +390,10 @@ async function getActiveCities(returnFullObjects = false) {
   }
   return activeCitiesPromise;
 }
+(window as any).getActiveCities = getActiveCities;
 
 /* ---------------- LocationSelector ---------------- */
-function LocationSelector({ value, onChange, placeholder = "Search for a location...", style = {} }) {
+export function LocationSelector({ value, onChange, placeholder = "Search for a location...", style = {} }) {
   const normalizedValue = React.useMemo(() => {
     if (!value) return null;
     if (Array.isArray(value)) {
@@ -508,8 +516,8 @@ function LocationSelector({ value, onChange, placeholder = "Search for a locatio
             zIndex: 10,
             fontSize: "15px"
           }}
-          onMouseOver={(e) => e.target.style.borderColor = "var(--accent-1)"}
-          onMouseOut={(e) => e.target.style.borderColor = "var(--border)"}
+          onMouseOver={(e) => e.currentTarget.style.borderColor = "var(--accent-1)"}
+          onMouseOut={(e) => e.currentTarget.style.borderColor = "var(--border)"}
         />
         {normalizedValue && (
           <button 
@@ -566,9 +574,4 @@ function LocationSelector({ value, onChange, placeholder = "Search for a locatio
   );
 }
 
-Object.assign(window, {
-  Ic, Mark, Wordmark, SBtn, Field, OTPInput, FloatCard, LeftPanel, MeshBg, Confetti, Reveal, LocationPreview, LocationSelector,
-  gradFor, initials, useCountdown,
-  INTERESTS, ROLES, CITIES, EVENTS, PEOPLE,
-  getActiveCities,
-});
+

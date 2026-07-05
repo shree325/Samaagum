@@ -1,10 +1,17 @@
 // @ts-nocheck
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { VirtualCard } from './VirtualCard';
+import { authHeaders } from './home-notifications';
+import { Profile } from './home-profile';
+import { apiBase } from './home-subscription';
+import { I } from './home-icons';
+
 /**
  * public-profile.tsx
  * Industry-level public profile view with connection-first messaging.
  */
 
-function PublicProfile({ profile, go, socket }) {
+export function PublicProfile({ profile, go, socket }) {
   const User      = (p) => <svg viewBox="0 0 24 24" fill="none" width="24" height="24" {...p}><circle cx="12" cy="8" r="5" stroke="currentColor" strokeWidth="2" /><path d="M20 21a8 8 0 10-16 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>;
   const Mail      = (p) => <svg viewBox="0 0 24 24" fill="none" width="20" height="20" {...p}><rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M2 8l10 7 10-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
   const Share2    = (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><circle cx="18" cy="5" r="3" stroke="currentColor" strokeWidth="2" /><circle cx="6" cy="12" r="3" stroke="currentColor" strokeWidth="2" /><circle cx="18" cy="19" r="3" stroke="currentColor" strokeWidth="2" /><path d="M8.59 13.51l6.83 3.98M15.41 6.51L8.59 10.49" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
@@ -1091,4 +1098,4 @@ function PublicProfile({ profile, go, socket }) {
   );
 }
 
-Object.assign(window, { PublicProfile });
+

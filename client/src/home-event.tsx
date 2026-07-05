@@ -1,3 +1,9 @@
+import React, { useState } from 'react';
+import { FEATURED, ME } from './home-data';
+import { Avatar, Grain } from './home-icons';
+import { Waitlist } from './home-waitlist';
+import { I } from './home-icons';
+
 /* ============================================================
    Samaagum Home — Event detail (Luma-grade)
    ============================================================ */
@@ -238,4 +244,4 @@ function EventDetail({ ev, st, go }) {
   );
 }
 
-Object.assign(window, { EventDetail });
+

@@ -121,6 +121,10 @@ export const adminUserRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
           });
         }
 
+        // Auto-assign the default plan to manually created user
+        const { SubscriptionActivationService } = await import('../services/SubscriptionActivationService');
+        SubscriptionActivationService.assignDefaultPlanToUser(newUser.id, tenantId).catch(console.error);
+
         return { success: true, data: { id: newUser.id, name, email, role, status } };
       }
     } catch (e: any) {
@@ -220,6 +224,10 @@ export const adminUserRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
             },
           });
         }
+
+        // Auto-assign the default plan to invited user
+        const { SubscriptionActivationService } = await import('../services/SubscriptionActivationService');
+        SubscriptionActivationService.assignDefaultPlanToUser(userRecord.id, tenantId).catch(console.error);
       }
 
       // 2. Generate and store token in auth_identities

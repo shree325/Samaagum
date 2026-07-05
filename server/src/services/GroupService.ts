@@ -13,8 +13,14 @@ import { R_forum_reactions } from '../repositories/R_forum_reactions';
 import { R_forum_votes } from '../repositories/R_forum_votes';
 import { R_forum_tags } from '../repositories/R_forum_tags';
 import { R_forum_post_tags } from '../repositories/R_forum_post_tags';
+import { R_cityControls } from '../repositories/R_cityControls';
+import { R_formFields } from '../repositories/R_formFields';
+import { R_formResponses } from '../repositories/R_formResponses';
+import { R_formResponseValues } from '../repositories/R_formResponseValues';
+import { R_audit_log } from '../repositories/R_audit_log';
 import { InvitationService } from './InvitationService';
 import prisma from '../config/prisma';
+import { PlanEntitlementService } from './PlanEntitlementService';
 
 export class GroupService {
     private static groupRepo = new R_groups();
@@ -31,6 +37,23 @@ export class GroupService {
     private static votesRepo = new R_forum_votes();
     private static tagsRepo = new R_forum_tags();
     private static postTagsRepo = new R_forum_post_tags();
+    private static cityControlsRepo = new R_cityControls();
+    private static formFieldsRepo = new R_formFields();
+    private static formResponsesRepo = new R_formResponses();
+    private static formResponseValuesRepo = new R_formResponseValues();
+    private static auditLogRepo = new R_audit_log(prisma);
+
+    private static getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
 
     static toClientGroup(dbGroup: any) {
         const id = dbGroup.entity_id;
@@ -126,8 +149,67 @@ export class GroupService {
         return !!mem;
     }
 
+    static async validateGroupEntitlements(userId: string, body: any, isUpdate = false, existingGroup?: any) {
+        const ents = await PlanEntitlementService.getEntitlements(userId);
+        const planKey = await PlanEntitlementService.getUserPlan(userId);
+        const adminPlan = await prisma.admin_subscription_plans.findFirst({
+            where: { name: planKey }
+        });
+        const planDisplayName = adminPlan?.display_name || (planKey.charAt(0).toUpperCase() + planKey.slice(1) + ' Plan');
+        
+        // 1. Check visibility / listed
+        const listedVal = body.listed !== undefined ? body.listed : (existingGroup ? existingGroup.listed : 'unlisted');
+        const visibilityVal = body.visibility !== undefined ? body.visibility : (existingGroup?.entities?.visibility || 'public');
+
+        let requiredVisibility = 'unlisted';
+        if (listedVal === 'listed' || visibilityVal === 'public') {
+            requiredVisibility = 'public';
+        } else if (visibilityVal === 'hidden' || visibilityVal === 'restricted') {
+            requiredVisibility = 'restricted';
+        }
+
+        if (!ents.group_allowed_visibility.includes(requiredVisibility)) {
+            throw new Error(`Your current plan (${planDisplayName}) does not allow creating ${requiredVisibility} groups. Please upgrade your plan.`);
+        }
+        
+        // 2. Check restricted access in settings
+        const settings = body.settings !== undefined ? body.settings : (existingGroup ? (existingGroup.settings || {}) : {});
+        const hasRestrictedAccess = !!(settings?.restrictedAccess?.enabled || settings?.restrictedAccess?.visibility?.enabled || settings?.restrictedAccess?.join?.enabled);
+        if (hasRestrictedAccess && !ents.group_can_restricted_access) {
+            throw new Error(`Restricted access controls are locked for your current plan (${planDisplayName}). Please upgrade your plan to use them.`);
+        }
+
+        // 3. Check join mode
+        const joinModeVal = body.joinMode !== undefined ? body.joinMode : (existingGroup ? existingGroup.join_mode : 'open');
+        if (joinModeVal === 'restricted' || joinModeVal === 'restricted_access') {
+            if (!ents.group_allowed_join_modes.includes('restricted_access')) {
+                throw new Error(`Restricted join eligibility is locked for your current plan (${planDisplayName}). Please upgrade your plan to use it.`);
+            }
+        }
+
+        // 4. Check group max capacity limit
+        const capacity = settings?.capacity || {};
+        if (ents.group_max_capacity !== -1) {
+            if (capacity.limit === true && capacity.max > ents.group_max_capacity) {
+                throw new Error(`Your plan limits group capacity to a maximum of ${ents.group_max_capacity} members.`);
+            }
+            if (capacity.limit !== true) {
+                if (!body.settings) body.settings = {};
+                if (!body.settings.capacity) body.settings.capacity = {};
+                body.settings.capacity.limit = true;
+                body.settings.capacity.max = ents.group_max_capacity;
+            }
+        }
+    }
+
     static async createGroup(userId: string, tenantId: string, body: any) {
+        await this.validateGroupEntitlements(userId, body);
+
         const slug = body.slug || body.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+        if (!body.settings?.location?.city) {
+            throw new Error("Location is required for group creation.");
+        }
 
         const bannerParsed = body.banner && body.banner.startsWith('data:') ? this.parseDataUri(body.banner) : null;
         const iconParsed = body.icon && body.icon.startsWith('data:') ? this.parseDataUri(body.icon) : null;
@@ -185,10 +267,17 @@ export class GroupService {
         const membershipCounts = await this.groupMembershipsRepo.getMembershipCounts(groupIds);
         const countsMap = new Map(membershipCounts.map(m => [m.group_id, m._count._all]));
 
+        const onlineCounts = await this.groupMembershipsRepo.getOnlineCounts(groupIds);
+        const onlineCountsMap = new Map(onlineCounts.map(m => [m.group_id, m.count]));
+
         for (const m of memberships) {
             const g = groupMap.get(m.group_id);
             if (!g) continue;
-            const clientGroup = { ...this.toClientGroup(g), members: countsMap.get(g.entity_id) || 0 };
+            const clientGroup = { 
+                ...this.toClientGroup(g), 
+                members: countsMap.get(g.entity_id) || 0,
+                online: onlineCountsMap.get(g.entity_id) || 0 
+            };
             const gRoles = rolesByGroup[m.group_id] || [];
             const enhancedGroup = { ...clientGroup, membershipState: m.state, isOwner: gRoles.includes('group_owner') };
 
@@ -340,6 +429,12 @@ export class GroupService {
         (clientGroup as any).isFull = isFull;
         (clientGroup as any).hasWaitlist = hasWaitlist;
 
+        const membershipCounts = await this.groupMembershipsRepo.getMembershipCounts([groupId]);
+        (clientGroup as any).members = membershipCounts[0]?._count?._all || 0;
+
+        const onlineCounts = await this.groupMembershipsRepo.getOnlineCounts([groupId]);
+        (clientGroup as any).online = onlineCounts[0]?.count || 0;
+
         if (group.entities?.visibility === 'private' && membershipState !== 'active' && !isOwner) {
             return { group: clientGroup, membershipState, isOwner, members: [], forumPermissions };
         }
@@ -359,8 +454,14 @@ export class GroupService {
 
         if (!isOwner) throw new Error('Only group owners can edit the group');
 
+        await this.validateGroupEntitlements(userId, body, true, group);
+
         const bannerParsed = body.banner && body.banner.startsWith('data:') ? this.parseDataUri(body.banner) : null;
         const iconParsed = body.icon && body.icon.startsWith('data:') ? this.parseDataUri(body.icon) : null;
+
+        if (body.settings !== undefined && !body.settings?.location?.city) {
+            throw new Error("Location is required for group editing.");
+        }
 
         const updatedGroup = await this.groupRepo.updateGroupTx(groupId, {
             name: body.name ?? group.name,
@@ -396,7 +497,7 @@ export class GroupService {
         await this.groupRepo.deleteGroupTx(groupId);
     }
 
-    static async listGroups(userPayload?: any) {
+    static async listGroups(userPayload?: any, userCityQuery?: string) {
         const groups = await this.groupRepo.getGroupsWithEntities({
             entities: { visibility: { in: ['public', 'private'] } }
         }, { entities: { created_at: 'desc' } });
@@ -433,10 +534,100 @@ export class GroupService {
             }
         }
 
-        return publishedGroups.map(g => ({ ...this.toClientGroup(g), members: countsMap.get(g.entity_id) || 0 }));
+        let refCityName = "";
+        let refStateName = "";
+        let refLat: number | null = null;
+        let refLon: number | null = null;
+
+        if (userCityQuery && userCityQuery !== 'Global') {
+            const queryName = userCityQuery.split(',')[0].trim();
+            const matchedCities = await this.cityControlsRepo.findByCityName(queryName);
+            const refLoc = matchedCities.find(c => c.is_active) || matchedCities[0];
+            if (refLoc) {
+                refCityName = refLoc.city_name;
+                refStateName = refLoc.state_name || "";
+                refLat = Number(refLoc.latitude);
+                refLon = Number(refLoc.longitude);
+            }
+        }
+
+        // Pre-fetch caller's memberships in one shot when authenticated
+        let callerMembershipMap = new Map<string, string>(); // groupId → state | 'owner'
+        if (userPayload?.id) {
+            const callerMemberships = await this.groupMembershipsRepo.findAll({ user_id: userPayload.id });
+            for (const m of callerMemberships) {
+                callerMembershipMap.set(m.group_id, m.state);
+            }
+            // Mark owned groups
+            const ownerRoleRows = await this.rolesRepo.findAll({ key: 'group_owner' });
+            if (ownerRoleRows.length) {
+                const ownerAssignments = await this.roleAssignmentsRepo.findAll({ user_id: userPayload.id, role_id: ownerRoleRows[0].id });
+                for (const a of ownerAssignments) {
+                    callerMembershipMap.set(a.scope_entity_id, 'owner');
+                }
+            }
+        }
+
+        const mappedGroups = publishedGroups.map(g => {
+            const s = (g.settings as any) || {};
+            const membershipState = callerMembershipMap.get(g.entity_id) || null;
+            const isJoined = membershipState === 'active' || membershipState === 'owner';
+            const isPending = membershipState === 'pending';
+            const clientGroup = { ...this.toClientGroup(g), members: countsMap.get(g.entity_id) || 0, membershipState, isJoined, isPending };
+            
+            let isSameCity = false;
+            let isSameState = false;
+            let distance: number | null = null;
+            let hasLocation = false;
+
+            const loc = s.location || (s.city ? { city: s.city } : null);
+            if (loc && loc.city) {
+                hasLocation = true;
+                if (refCityName && loc.city.toLowerCase() === refCityName.toLowerCase()) {
+                    isSameCity = true;
+                }
+                if (refStateName && loc.state && loc.state.toLowerCase() === refStateName.toLowerCase()) {
+                    isSameState = true;
+                }
+                if (refLat !== null && refLon !== null && loc.lat !== undefined && loc.lon !== undefined) {
+                    distance = this.getDistance(refLat, refLon, Number(loc.lat), Number(loc.lon));
+                }
+            }
+            
+            return { ...clientGroup, _isSameCity: isSameCity, _isSameState: isSameState, _distance: distance, _hasLocation: hasLocation, _createdAt: g.entities?.created_at?.getTime() || 0 };
+        });
+
+        if (refCityName) {
+            mappedGroups.sort((a, b) => {
+                // 1. Same City
+                if (a._isSameCity && !b._isSameCity) return -1;
+                if (!a._isSameCity && b._isSameCity) return 1;
+
+                // 2. Nearby Cities (by distance)
+                if (a._distance !== null && b._distance !== null) return a._distance - b._distance;
+                if (a._distance !== null) return -1;
+                if (b._distance !== null) return 1;
+
+                // 3. Same State
+                if (a._isSameState && !b._isSameState) return -1;
+                if (!a._isSameState && b._isSameState) return 1;
+
+                // 4. Remaining Locations
+                if (a._hasLocation && !b._hasLocation) return -1;
+                if (!a._hasLocation && b._hasLocation) return 1;
+
+                // 5. Fallback: Newest first
+                return b._createdAt - a._createdAt;
+            });
+        }
+
+        return mappedGroups.map(g => {
+            const { _isSameCity, _isSameState, _distance, _hasLocation, _createdAt, ...rest } = g;
+            return rest;
+        });
     }
 
-    private static toUnifiedGroup(g: any, memberCount: number, membershipState: string | null, isOwner: boolean) {
+    private static toUnifiedGroup(g: any, memberCount: number, membershipState: string | null, isOwner: boolean, onlineCount: number = 0) {
         const id = g.entity_id;
         const settings = (g.settings as any) || {};
         const iconUrl   = g.icon_data   ? `/api/groups/${id}/icon`   : (g.icon   && !g.icon.startsWith('blob:')   ? g.icon   : null);
@@ -454,6 +645,7 @@ export class GroupService {
             joinMode:        g.join_mode,
             listed:          g.listed,
             memberCount,
+            online:          onlineCount,
             isOwner,
             membershipState,
             isJoined:        membershipState === 'active',
@@ -518,12 +710,18 @@ export class GroupService {
             : [];
         const countsMap = new Map(countRows.map((c: any) => [c.group_id, c._count._all]));
 
+        const onlineRows = groupIdList.length > 0
+            ? await this.groupMembershipsRepo.getOnlineCounts(groupIdList)
+            : [];
+        const onlineCountsMap = new Map(onlineRows.map((c: any) => [c.group_id, c.count]));
+
         let items = rows.map((g: any) => {
             const memberCount = countsMap.get(g.entity_id) || 0;
+            const onlineCount = onlineCountsMap.get(g.entity_id) || 0;
             const memState    = membershipMap.get(g.entity_id) ?? null;
             const isOwner     = ownedGroupIds.has(g.entity_id) ||
                                 (userId ? g.entities?.user_id === userId : false);
-            return this.toUnifiedGroup(g, memberCount, memState, isOwner);
+            return this.toUnifiedGroup(g, memberCount, memState, isOwner, onlineCount);
         });
 
         if (sort === 'members_desc') {
@@ -617,12 +815,10 @@ export class GroupService {
         const group = await this.groupRepo.getGroupWithEntity(groupId);
         if (!group) throw new Error('Group not found');
 
-        if (group.entities?.visibility === 'private') {
-            if (!requestingUser) throw new Error('Private group members are hidden');
-            const membership = await this.getUserMembership(requestingUser.id, groupId);
-            if (membership.state !== 'active' && !membership.isOwner) {
-                throw new Error('Private group members are hidden');
-            }
+        // Public groups allow anyone to view the members list.
+        // Private / restricted / unlisted groups restrict to active members only.
+        if (group.entities?.visibility !== 'public') {
+            await this.requireActiveMember(groupId, requestingUser);
         }
 
         let callerIsAdmin = false;
@@ -701,6 +897,23 @@ export class GroupService {
     static async verifyGroupAdmin(userId: string, groupId: string) {
         const role = await this.getHighestGroupRole(userId, groupId);
         return ['group_owner', 'group_admin', 'group_moderator'].includes(role);
+    }
+
+    static async requireActiveMember(groupId: string, requestingUser?: any) {
+        if (!requestingUser) throw new Error('You must be a member to view this content.');
+        const membership = await this.getUserMembership(requestingUser.id, groupId);
+        if (membership.state !== 'active' && !membership.isOwner) {
+            throw new Error('You must be a member to view this content.');
+        }
+    }
+
+    private static async requireUnarchivedGroup(groupId: string) {
+        const group = await this.groupRepo.findOne({ entity_id: groupId });
+        if (!group) throw new Error('Group not found');
+        if ((group.settings as any)?.isArchived) {
+            throw new Error('This group is archived and is read-only');
+        }
+        return group;
     }
 
     static async checkForumPermission(userId: string, groupId: string, permType: 'create_thread' | 'reply_thread', settings: any): Promise<boolean> {
@@ -909,6 +1122,24 @@ export class GroupService {
             throw new Error('Forbidden');
         }
 
+        const ents = await PlanEntitlementService.getEntitlements(adminUserId);
+        const planKey = await PlanEntitlementService.getUserPlan(adminUserId);
+        const adminPlan = await prisma.admin_subscription_plans.findFirst({
+            where: { name: planKey }
+        });
+        const planDisplayName = adminPlan?.display_name || (planKey.charAt(0).toUpperCase() + planKey.slice(1) + ' Plan');
+
+        let requiredVisibility = 'unlisted';
+        if (visibility === 'public') {
+            requiredVisibility = 'public';
+        } else if (visibility === 'hidden' || visibility === 'restricted') {
+            requiredVisibility = 'restricted';
+        }
+
+        if (!ents.group_allowed_visibility.includes(requiredVisibility)) {
+            throw new Error(`Your current plan (${planDisplayName}) does not allow setting group visibility to ${requiredVisibility}. Please upgrade your plan.`);
+        }
+
         const entity = await this.entitiesRepo.update(groupId, { visibility: visibility as any });
         return entity?.visibility;
     }
@@ -956,27 +1187,6 @@ export class GroupService {
         return this.toClientGroup(updatedGroup);
     }
 
-    static async getDashboardStats(groupId: string, adminUserId: string) {
-        if (!(await this.verifyGroupAdmin(adminUserId, groupId))) {
-            throw new Error('Forbidden');
-        }
-
-        const totalPosts = await this.forumPostsRepo.count({ scope_type: 'group', scope_id: groupId });
-        const pinnedPosts = await this.forumPostsRepo.count({ scope_type: 'group', scope_id: groupId, pinned: true });
-        const lockedPosts = await this.forumPostsRepo.count({ scope_type: 'group', scope_id: groupId, locked: true });
-
-        const groupPosts = await this.forumPostsRepo.findAll({ scope_type: 'group', scope_id: groupId });
-        const groupPostIds = groupPosts.map(p => p.id!);
-        const reportedPosts = await prisma.moderation_reports.count({
-            where: { target_type: 'forum_post', target_id: { in: groupPostIds }, state: 'open' }
-        });
-
-        const activeMembers = await this.groupMembershipsRepo.count({ group_id: groupId, state: 'active' });
-        const pendingMembers = await this.groupMembershipsRepo.count({ group_id: groupId, state: 'pending' });
-
-        return { totalPosts, pinnedPosts, lockedPosts, reportedPosts, activeMembers, pendingMembers };
-    }
-
     // Post / forum operations
     static async getGroupPosts(groupId: string, query: any, requestingUser?: any) {
         const { page = 1, limit = 20, sort = 'new', tag, q } = query;
@@ -984,12 +1194,8 @@ export class GroupService {
         const group = await this.groupRepo.getGroupWithEntity(groupId);
         if (!group) throw new Error('Group not found');
 
-        if (group.entities?.visibility === 'private') {
-            if (!requestingUser) throw new Error('Private group posts are hidden');
-            const membership = await this.getUserMembership(requestingUser.id, groupId);
-            if (membership.state !== 'active' && !membership.isOwner) {
-                throw new Error('Private group posts are hidden');
-            }
+        if (group.entities?.visibility !== 'public') {
+            await this.requireActiveMember(groupId, requestingUser);
         }
 
         const userId = requestingUser?.id || null;
@@ -1061,6 +1267,7 @@ export class GroupService {
     }
 
     static async createGroupPost(groupId: string, user: any, body: any) {
+        await this.requireUnarchivedGroup(groupId);
         const group = await this.groupRepo.findOne({ entity_id: groupId });
         if (!group) throw new Error('Group not found');
 
@@ -1108,6 +1315,7 @@ export class GroupService {
     }
 
     static async editGroupPost(groupId: string, postId: string, user: any, body: any) {
+        await this.requireUnarchivedGroup(groupId);
         const post = await this.forumPostsRepo.findOne({ id: postId, scope_type: 'group', scope_id: groupId, deleted_at: null } as any);
         if (!post) throw new Error('Post not found');
         if (post.author_user_id !== user.id) throw new Error('Only author can edit');
@@ -1193,6 +1401,7 @@ export class GroupService {
     }
 
     static async createGroupComment(groupId: string, postId: string, user: any, body: any) {
+        await this.requireUnarchivedGroup(groupId);
         const post = await this.forumPostsRepo.findOne({ id: postId, scope_type: 'group', scope_id: groupId, deleted_at: null } as any);
         if (!post) throw new Error('Thread not found');
         if (post.locked) throw new Error('This thread is locked');
@@ -1223,6 +1432,7 @@ export class GroupService {
     }
 
     static async editGroupComment(groupId: string, postId: string, commentId: string, user: any, body: any) {
+        await this.requireUnarchivedGroup(groupId);
         const comment = await this.forumCommentsRepo.findOne({ id: commentId, post_id: postId, deleted_at: null } as any);
         if (!comment) throw new Error('Comment not found');
         if (comment.author_user_id !== user.id) throw new Error('Only author can edit');
@@ -1248,6 +1458,7 @@ export class GroupService {
     }
 
     static async voteGroupPost(groupId: string, postId: string, user: any, vote: number) {
+        await this.requireUnarchivedGroup(groupId);
         if (vote === 0) {
             await this.votesRepo.dbModel.deleteMany({
                 where: { user_id: user.id, target_id: postId, target_type: 'post' }
@@ -1267,6 +1478,7 @@ export class GroupService {
     }
 
     static async voteGroupComment(groupId: string, commentId: string, user: any, vote: number) {
+        await this.requireUnarchivedGroup(groupId);
         if (vote === 0) {
             await this.votesRepo.dbModel.deleteMany({
                 where: { user_id: user.id, target_id: commentId, target_type: 'comment' }
@@ -1286,10 +1498,16 @@ export class GroupService {
     }
 
     static async reactGroupPost(groupId: string, postId: string, user: any, emoji: string) {
-        const existing = await this.reactionsRepo.findAll({ user_id: user.id, target_id: postId, target_type: 'post', emoji });
-        if (existing.length > 0) {
-            await this.reactionsRepo.delete(existing[0].id);
-        } else {
+        await this.requireUnarchivedGroup(groupId);
+        const existingAll = await this.reactionsRepo.findAll({ user_id: user.id, target_id: postId, target_type: 'post' });
+        
+        const isSameEmoji = existingAll.some((r: any) => r.emoji === emoji);
+        
+        for (const r of existingAll) {
+            await this.reactionsRepo.delete(r.id);
+        }
+
+        if (!isSameEmoji) {
             await this.reactionsRepo.create({
                 tenant_id: user.tenantId,
                 user_id: user.id,
@@ -1419,6 +1637,13 @@ export class GroupService {
     }
 
     static async getGroupGallery(groupId: string, user: any, isAdmin: boolean) {
+        const group = await this.groupRepo.getGroupWithEntity(groupId);
+        if (!group) throw new Error('Group not found');
+
+        if (group.entities?.visibility !== 'public') {
+            await this.requireActiveMember(groupId, user);
+        }
+
         const statusFilter = isAdmin ? undefined : 'approved';
         const filter: any = { group_id: groupId };
         if (statusFilter) filter.status = statusFilter;
@@ -1429,19 +1654,24 @@ export class GroupService {
 
         return rows.map(r => {
             const u = users.find(userItem => userItem.id === r.uploader_user_id);
-            const uploaderName = u ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : 'Unknown';
+            // Only admins see who uploaded each item; members see null
+            const uploaderName = isAdmin && u
+                ? `${u.first_name || ''} ${u.last_name || ''}`.trim() || 'Unknown'
+                : null;
             return {
                 id: String(r.id),
                 src: r.url,
                 type: r.type,
                 status: r.status,
                 uploaderName,
+                uploaderUserId: String(r.uploader_user_id),
                 created_at: r.created_at
             };
         });
     }
 
     static async uploadToGallery(groupId: string, user: any, body: any) {
+        await this.requireUnarchivedGroup(groupId);
         const mem = await this.getUserMembership(user.id, groupId);
         const isAdmin = await this.verifyGroupAdmin(user.id, groupId);
         if (!isAdmin && mem.state !== 'active') throw new Error('Members only');
@@ -1515,5 +1745,169 @@ export class GroupService {
             where: { id: inviteId, group_id: groupId },
             data: { status: 'revoked' }
         });
+    }
+
+    static async getDashboardStats(groupId: string, user: any) {
+        if (!(await this.verifyGroupAdmin(user.id, groupId))) throw new Error('Forbidden');
+
+        const totalPostsRows = await prisma.$queryRawUnsafe<{count: number}[]>(`
+            SELECT COUNT(*)::int as count FROM forum_posts WHERE scope_type = 'group' AND scope_id = $1::uuid AND deleted_at IS NULL
+        `, groupId);
+        const totalPosts = totalPostsRows[0]?.count || 0;
+
+        const pinnedPostsRows = await prisma.$queryRawUnsafe<{count: number}[]>(`
+            SELECT COUNT(*)::int as count FROM forum_posts WHERE scope_type = 'group' AND scope_id = $1::uuid AND pinned = true AND deleted_at IS NULL
+        `, groupId);
+        const pinnedPosts = pinnedPostsRows[0]?.count || 0;
+
+        const lockedPostsRows = await prisma.$queryRawUnsafe<{count: number}[]>(`
+            SELECT COUNT(*)::int as count FROM forum_posts WHERE scope_type = 'group' AND scope_id = $1::uuid AND locked = true AND deleted_at IS NULL
+        `, groupId);
+        const lockedPosts = lockedPostsRows[0]?.count || 0;
+
+        const activeMembersRows = await prisma.$queryRawUnsafe<{count: number}[]>(`
+            SELECT COUNT(*)::int as count FROM group_memberships WHERE group_id = $1::uuid AND state = 'active'
+        `, groupId);
+        const activeMembers = activeMembersRows[0]?.count || 0;
+
+        const pendingMembersRows = await prisma.$queryRawUnsafe<{count: number}[]>(`
+            SELECT COUNT(*)::int as count FROM group_memberships WHERE group_id = $1::uuid AND state = 'pending'
+        `, groupId);
+        const pendingMembers = pendingMembersRows[0]?.count || 0;
+
+        return {
+            totalPosts,
+            pinnedPosts,
+            lockedPosts,
+            reportedPosts: 0,
+            activeMembers,
+            pendingMembers
+        };
+    }
+
+    static async getMemberQuestionnaire(groupId: string, targetMemberId: string, requestingUser: any) {
+        if (!requestingUser || !requestingUser.id) {
+            throw new Error("401: Unauthorized");
+        }
+
+        const requesterMembership = await this.groupMembershipsRepo.getByGroupAndUser(groupId, requestingUser.id);
+        if (!requesterMembership) {
+            throw new Error("403: You must be a member of this group");
+        }
+
+        const role = await this.getHighestGroupRole(requestingUser.id, groupId);
+        const canView = role === 'group_owner' || role === 'group_admin' || role === 'group_moderator' || requestingUser.id === targetMemberId;
+        
+        if (!canView) {
+            throw new Error("403: Insufficient permissions");
+        }
+
+        const group = await this.groupRepo.findOne({ entity_id: groupId });
+        if (!group) {
+            throw new Error("404: Group not found");
+        }
+
+        const targetMembership = await this.groupMembershipsRepo.getByGroupAndUser(groupId, targetMemberId);
+        if (!targetMembership) {
+            throw new Error("404: Member not found");
+        }
+
+        if (targetMembership.state === 'rejected') {
+            throw new Error("403: Cannot view responses for rejected members");
+        }
+
+        let legacySettingsQuestions: any[] = [];
+        const qs = (group.settings as any)?.questionnaires;
+        if (qs && Array.isArray(qs) && qs.length > 0) {
+            legacySettingsQuestions = qs;
+        }
+
+        if (!group.join_form_id && legacySettingsQuestions.length === 0) {
+            return { hasForm: false };
+        }
+
+        let questions: any[] = [];
+        if (group.join_form_id) {
+            questions = await this.formFieldsRepo.findByFormId(group.join_form_id);
+        } else {
+            questions = legacySettingsQuestions.map((q: any, idx: number) => ({
+                field_id: q.id || String(idx),
+                position: idx + 1,
+                label: q.q || `Question ${idx + 1}`,
+                field_type: q.type || 'long_text',
+                required: q.required !== false
+            }));
+        }
+        let answersMap: Record<string, any> = {};
+        let submittedAt = targetMembership.created_at;
+
+        if (targetMembership.form_response_id) {
+            const formResponse = await this.formResponsesRepo.findById(targetMembership.form_response_id);
+            if (formResponse) {
+                submittedAt = formResponse.submitted_at || submittedAt;
+                const formResponseValues = await this.formResponseValuesRepo.findByResponseId(targetMembership.form_response_id);
+                for (const val of formResponseValues) {
+                    if (val.field_id) {
+                        answersMap[val.field_id] = val.value;
+                    }
+                }
+            }
+        } else if (targetMembership.answers) {
+            answersMap = (targetMembership.answers as Record<string, any>) || {};
+        }
+
+        const structuredQuestions = questions.map((q) => {
+            let rawAnswer = answersMap[q.field_id as string];
+            if (rawAnswer === undefined || rawAnswer === null) {
+                // Fallback for legacy answers keyed by index
+                const legacyIdx = q.position - 1;
+                rawAnswer = answersMap[String(legacyIdx)];
+            }
+            
+            const answered = rawAnswer !== undefined && rawAnswer !== null && rawAnswer !== "";
+            let answer = rawAnswer;
+            
+            if (q.field_type === 'checkbox') {
+                answer = answered ? Boolean(rawAnswer) : false;
+            } else if (q.field_type === 'multiple_choice') {
+                answer = answered ? (Array.isArray(rawAnswer) ? rawAnswer : [rawAnswer]) : [];
+            }
+
+            return {
+                fieldId: q.field_id,
+                number: q.position,
+                label: q.label,
+                type: q.field_type,
+                required: q.required,
+                answer: answer,
+                answered: answered
+            };
+        });
+
+        const targetUser = await this.usersRepo.findOne({ id: targetMemberId });
+        const targetRole = await this.getHighestGroupRole(targetMemberId, groupId);
+
+        await this.auditLogRepo.create({
+            bu_id: requestingUser.tenant_id || group.tenant_id,
+            actor_id: requestingUser.id,
+            action: 'view_questionnaire_response',
+            resource_type: 'group_membership',
+            resource_id: targetMemberId,
+            metadata: { group_id: groupId }
+        }).catch(err => console.error("Audit log error:", err));
+
+        return {
+            hasForm: true,
+            submittedAt: submittedAt,
+            member: {
+                userId: targetMemberId,
+                displayName: targetUser?.display_name || "Unknown",
+                username: targetUser?.username,
+                role: targetRole,
+                state: targetMembership.state,
+                joinedAt: targetMembership.created_at
+            },
+            questions: structuredQuestions
+        };
     }
 }

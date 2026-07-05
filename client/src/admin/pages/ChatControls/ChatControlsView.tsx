@@ -1,7 +1,13 @@
 // @ts-nocheck
-const { useEffect, useState } = React;
+import React, { useEffect, useState } from 'react';
+import { apiClient } from '../../../admin-app';
+import { Toggle } from '../../../create_event';
+import { Messages } from '../../../home-messages';
+import { Footer } from '../../../landing-activity';
 
-const ToggleSwitch = ({ active, onClick }) => (
+
+
+export const ToggleSwitch = ({ active, onClick }) => (
   <button
     type="button"
     onClick={onClick}
@@ -25,7 +31,7 @@ const ToggleSwitch = ({ active, onClick }) => (
   </button>
 );
 
-function ChatControlsView({ user, logAction, addToast }) {
+export function ChatControlsView({ user, logAction, addToast }) {
   const [systemRoles, setSystemRoles] = useState([]);
   const [chatSettings, setChatSettings] = useState({
     allowSiteMessaging: true,
@@ -803,4 +809,4 @@ function ChatControlsView({ user, logAction, addToast }) {
   );
 }
 
-window.ChatControlsView = ChatControlsView;
+

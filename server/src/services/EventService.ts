@@ -11,6 +11,7 @@ import { R_users } from '../repositories/R_users';
 import prisma from '../config/prisma';
 import accessControlService from './AccessControlService';
 import { sendNotificationToUser } from './messagingSocket';
+import { PlanEntitlementService } from './PlanEntitlementService';
 
 export class EventService {
   private static eventsRepo = new R_events(prisma);
@@ -23,7 +24,43 @@ export class EventService {
   private static reactionsRepo = new R_forum_reactions();
   private static usersRepo = new R_users(prisma);
 
+  /**
+   * Validates event creation and update parameters against user plan entitlements.
+   */
+  static async validateEventEntitlements(userId: string, eventData: any) {
+    const ents = await PlanEntitlementService.getEntitlements(userId);
+
+    // 1. Max participants limit
+    const capacity = eventData.capacity_total || eventData.capacity;
+    if (capacity !== undefined && ents.event_max_participants !== -1 && capacity > ents.event_max_participants) {
+      throw new Error(`Your plan limits event participants to a maximum of ${ents.event_max_participants}.`);
+    }
+
+    // 2. Event type (registration mode and payment options)
+    const isPaid = eventData.registration_mode === 'paid' || !!eventData.price;
+    if (isPaid && !ents.event_can_create_paid_tickets) {
+      throw new Error('Paid events are locked for your current plan. Upgrade to Standard to sell tickets.');
+    }
+
+    // 3. Event visibility (listed state)
+    const listedVal = eventData.listed;
+    if (listedVal === 'listed') {
+      if (!ents.event_allowed_visibility.includes('public')) {
+        throw new Error('Your current plan only allows creating unlisted events. Upgrade to Standard to create public events.');
+      }
+    }
+
+    // 4. Ticket check-in check
+    const checkinMethod = eventData.checkin_method;
+    if (checkinMethod && ents.event_checkin_methods && !ents.event_checkin_methods.includes(checkinMethod)) {
+      throw new Error(`The selected check-in method (${checkinMethod}) is not available on your plan.`);
+    }
+  }
+
   static async createEvent(userId: string, tenantId: string, body: any) {
+    // 0. Enforce plan entitlements before doing any writes
+    await this.validateEventEntitlements(userId, body);
+
     // 1. Resolve hosted_by_entity_id (the user's own entity or chosen group)
     let hostedByEntityId = body.host_entity_id;
 
@@ -192,6 +229,9 @@ export class EventService {
   static async updateEvent(id: string, userId: string, body: any) {
     const event = await this.eventsRepo.getById(id);
     if (!event) throw new Error('Event not found');
+
+    // Enforce plan entitlements against the incoming field values before writing.
+    await this.validateEventEntitlements(userId, body);
 
     const isFullyAuthorized = await this.verifyEventHostOrCoHost(userId, id);
     // Co-Hosts/managers who only hold event.configure_tickets (not event.manage) may still push
@@ -677,7 +717,7 @@ export class EventService {
 
     const comment = await this.forumCommentsRepo.create(data);
     const commentUser = await this.usersRepo.findOne({ id: comment.author_user_id });
-    
+
     const username = commentUser?.primary_email ? commentUser.primary_email.split('@')[0] : 'unknown';
     const name = commentUser ? (`${commentUser.first_name || ''} ${commentUser.last_name || ''}`.trim() || username) : 'Unknown User';
 

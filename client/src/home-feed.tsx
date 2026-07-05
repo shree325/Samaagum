@@ -1,9 +1,17 @@
 // @ts-nocheck
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { DiscussionRow, EventCard, FeatureCard, GroupCard, GroupRow, PersonCard } from './home-cards';
+import { CATS, DISCUSSIONS, EVENTS, FEATURED, GROUPS, ME, NEAR, PEOPLE, TRENDING, UPCOMING } from './home-data';
+import { Empty, FilterChip, SectionBar } from './home-shell';
+import { apiBase } from './home-subscription';
+import { I } from './home-icons';
+import { Communities, Events } from './landing-features';
+
 /* ============================================================
    Samaagum Home — Home feed + Discover
    ============================================================ */
 
-function Greeting({ city }) {
+export function Greeting({ city }) {
   const hr = new Date().getHours();
   const part = hr < 12 ? "Good morning" : hr < 17 ? "Good afternoon" : "Good evening";
   const first = ME.name.split(" ")[0];
@@ -18,7 +26,7 @@ function Greeting({ city }) {
 }
 
 /* category + quick filter bar */
-function FeedFilters({ cat, setCat, quick, setQuick }) {
+export function FeedFilters({ cat, setCat, quick, setQuick }) {
   const quicks = [
     { k: "trending", ic: <I.fire />, label: "Trending" },
     { k: "nearby", ic: <I.pin />, label: "Nearby" },
@@ -47,7 +55,7 @@ function FeedFilters({ cat, setCat, quick, setQuick }) {
   );
 }
 
-function HomeFeed({ st, go }) {
+export function HomeFeed({ st, go }) {
   const [cat, setCat] = useState("All");
   const [quick, setQuick] = useState([]);
   const { saved, toggleSave, connected, toggleConnect, registered, city } = st;
@@ -106,11 +114,11 @@ function HomeFeed({ st, go }) {
           </div>
           {/* Trending groups */}
           <div>
-            <SectionBar title="Trending groups" onMore={() => go("discover")} />
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {TRENDING.filter(g => g.visibility !== "hidden").map((g, i) => (
-                <GroupRow key={g.id} g={g} rank={i + 1} onOpen={(g) => go("group", g)}
-                  joined={false} onJoin={() => go("group", g)} />
+            <SectionBar title="Trending groups" onMore={()=>go("discover")} />
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              {TRENDING.filter(g => g.visibility !== "hidden").map((g,i) => (
+                <GroupRow key={g.id} g={g} rank={i+1} onOpen={(g)=>go("group", g)}
+                  joined={g.isJoined || st.joined?.has(g.id) ? true : (g.isPending || st.pending?.has(g.id)) ? "pending" : false} onJoin={(g)=>{ st.toggleJoin(g); }} />
               ))}
             </div>
           </div>
@@ -120,7 +128,7 @@ function HomeFeed({ st, go }) {
         <div className="section">
           <SectionBar title="Communities near you" onMore={() => go("discover")} />
           <div className="ev-grid">
-            {NEAR.filter(g => g.visibility !== "hidden").map(g => <GroupCard key={g.id} g={g} onOpen={(g) => go("group", g)} joined={false} onJoin={() => go("group", g)} />)}
+            {NEAR.filter(g => g.visibility !== "hidden").map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={g.isJoined || st.joined?.has(g.id) ? true : (g.isPending || st.pending?.has(g.id)) ? "pending" : false} onJoin={(g)=>{ st.toggleJoin(g); }} />)}
           </div>
         </div>
 
@@ -137,15 +145,44 @@ function HomeFeed({ st, go }) {
 }
 
 /* ---------------- Discover (browse) ---------------- */
-function Discover({ st, go, param }) {
-  const [tab, setTab] = useState(param === "events" ? "events" : "groups");
+export function Discover({ st, go }) {
+  const [tab, setTab] = useState("groups");
   const [cat, setCat] = useState("All");
-  const { saved, toggleSave, registered } = st;
+  const { saved, toggleSave, registered, city, addJoined, addPending } = st;
+  const evs = EVENTS.filter(e => cat==="All" || e.cat===cat);
   const [dbEvents, setDbEvents] = useState([]);
 
   const [dbGroups, setDbGroups] = useState([]);
   const [categoriesList, setCategoriesList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+
+  const cityRef = React.useRef(city);
+  React.useEffect(() => { cityRef.current = city; }, [city]);
+
+  const fetchGroups = React.useCallback(async (currentCity) => {
+    try {
+      const token = localStorage.getItem('token');
+      const cityQuery = currentCity && currentCity !== "Global" ? `?city=${encodeURIComponent(currentCity)}` : '';
+      const res = await fetch(`${apiBase}/api/groups${cityQuery}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      const data = await res.json();
+      if (data.success) {
+        const groups = data.data || [];
+        setDbGroups(groups);
+        // Seed joined/pending sets from server so cards show correct state on load
+        groups.forEach(g => {
+          if (g.isJoined) addJoined && addJoined(g.id);
+          else if (g.isPending) addPending && addPending(g.id);
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [apiBase]);
 
   React.useEffect(() => {
     const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
@@ -162,6 +199,7 @@ function Discover({ st, go, param }) {
       }
     };
     fetchCategories();
+  }, [apiBase]);
 
     const fetchEvents = async () => {
       try {
@@ -194,6 +232,7 @@ function Discover({ st, go, param }) {
     };
     fetchGroups();
 
+  React.useEffect(() => {
     if (window.io) {
       const socketUrl = apiBase ? `${apiBase}/groups` : "/groups";
       const socket = window.io(socketUrl, { transports: ['websocket'] });
@@ -201,7 +240,7 @@ function Discover({ st, go, param }) {
       socket.on('events_updated', () => fetchEvents());
       return () => socket.disconnect();
     }
-  }, []);
+  }, [apiBase, fetchGroups]);
 
   const grps = dbGroups.filter(g => g.visibility !== "hidden" && (cat === "All" || g.category === cat || g.cat === cat));
 
@@ -268,7 +307,7 @@ function Discover({ st, go, param }) {
           )
         ) : (
           <div className="ev-grid">
-            {loading ? <div style={{ color: "var(--ink-3)", padding: 20 }}>Loading groups...</div> : grps.map(g => <GroupCard key={g.id} g={g} onOpen={(g) => go("group", g)} joined={false} onJoin={() => go("group", g)} />)}
+            {loading ? <div style={{ color: "var(--ink-3)", padding: 20 }}>Loading groups...</div> : grps.map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={g.isJoined || st.joined?.has(g.id) ? true : (g.isPending || st.pending?.has(g.id)) ? "pending" : false} onJoin={(g)=>{ st.toggleJoin(g); }} />)}
           </div>
         )}
       </div>
@@ -276,4 +315,4 @@ function Discover({ st, go, param }) {
   );
 }
 
-Object.assign(window, { HomeFeed, Discover, Greeting });
+

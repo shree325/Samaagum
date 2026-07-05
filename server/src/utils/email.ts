@@ -4,11 +4,13 @@ import prisma from '../config/prisma';
 export async function sendEmail({
   to,
   subject,
-  html
+  html,
+  attachments
 }: {
   to: string;
   subject: string;
   html: string;
+  attachments?: Array<{ filename: string; content: Buffer }>;
 }) {
   const inviterName = 'Admin';
   // 1. Fetch communication settings from database
@@ -30,12 +32,19 @@ export async function sendEmail({
       const apiKey = commSettings.brevoApiKey;
       if (apiKey && apiKey !== 'mock-key' && apiKey.trim() !== '' && !apiKey.includes('••••')) {
         try {
-          const payload = {
+          const payload: any = {
             to: [{ email: to }],
             sender: { name: commSettings.senderName || inviterName, email: commSettings.senderEmail || 'no-reply@samaagum.com' },
             subject,
             htmlContent: html,
           };
+          // Attach PDF invoices if provided
+          if (attachments && attachments.length > 0) {
+            payload.attachment = attachments.map(att => ({
+              content: att.content.toString('base64'),
+              name: att.filename
+            }));
+          }
           const response = await fetch('https://api.brevo.com/v3/smtp/email', {
             method: 'POST',
             headers: {
@@ -72,6 +81,7 @@ export async function sendEmail({
           to,
           subject,
           html,
+          attachments: attachments?.map(att => ({ filename: att.filename, content: att.content }))
         });
         console.log(`Email successfully sent via DB SMTP: ${info.messageId}`);
         return;
@@ -97,6 +107,7 @@ export async function sendEmail({
       to,
       subject,
       html,
+      attachments: attachments?.map(att => ({ filename: att.filename, content: att.content }))
     });
     console.log(`Email successfully sent via env SMTP: ${info.messageId}`);
   } catch (err: any) {

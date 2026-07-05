@@ -50,4 +50,18 @@ export class R_geolite_blocks_ipv4
 
         return rows[0] || null;
     }
+
+    async findByIp(ip: string): Promise<IGeoliteBlockIPv4 | null> {
+        try {
+            const rows = await prisma.$queryRaw<IGeoliteBlockIPv4[]>`
+                SELECT geoname_id, latitude, longitude
+                FROM geolite_blocks_ipv4
+                WHERE network >> ${ip}::inet
+                LIMIT 1
+            `;
+            return rows[0] || null;
+        } catch {
+            return null; // graceful — invalid IP format, missing table, etc.
+        }
+    }
 }

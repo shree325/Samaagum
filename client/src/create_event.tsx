@@ -1,12 +1,60 @@
-const { useState, useRef, useEffect, useCallback, useMemo } = React;
+// @ts-nocheck
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Field } from './components';
+import { COVER_SWATCHES } from './home-create';
+import { COVERS, GROUPS, ME } from './home-data';
+import { Grain } from './home-icons';
+import { Profile } from './home-profile';
+import { Empty } from './home-shell';
+import { Waitlist } from './home-waitlist';
+import { I } from './home-icons';
+import { Communities, Events } from './landing-features';
+import { EventCard } from './home-cards';
+
+
 
 // Reuse existing components and utilities from the project
 // Assuming I, Grain, EventCard, LocationSection, COVERS, GROUPS, ME, etc. are globally available via the app bundle or global namespace.
 const { COVERS, GROUPS, ME, EventCard, Grain, Avatar } = window as any;
 
-const COVER_SWATCHES = Object.entries(COVERS).map(([k, v]) => ({ k, v: v as string }));
+export function UpgradePlanModal({ open, onClose, feature, go, currentPlanName }) {
+  if (!open) return null;
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 12000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)" }}>
+      <div style={{ background: "var(--surface)", width: 440, borderRadius: "var(--r-xl)", padding: 32, boxShadow: "var(--sh-xl)", border: "1px solid var(--border)", position: "relative", textAlign: "center" }}>
+        <button onClick={onClose} style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", color: "var(--ink-3)", cursor: "pointer" }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
+        <h2 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 8px 0", color: "var(--ink)" }}>Upgrade Required</h2>
+        <p style={{ fontSize: 14, color: "var(--ink-2)", margin: "0 0 24px 0", lineHeight: 1.6 }}>
+          The feature <strong>{feature}</strong> is locked under your current plan ({currentPlanName || "Free Plan"}). Please upgrade your plan to unlock premium options, unlimited capacity, and advanced events features!
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <button 
+            className="hbtn hbtn--primary" 
+            style={{ width: "100%", justifyContent: "center", padding: "12px", fontSize: 15, fontWeight: 600 }}
+            onClick={() => {
+              onClose();
+              go("upgrade");
+            }}
+          >
+            Upgrade Plan
+          </button>
+          <button 
+            className="hbtn hbtn--ghost" 
+            style={{ width: "100%", justifyContent: "center", padding: "12px", fontSize: 14 }}
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-function CoverPicker({ value, onPick }) {
+export function CoverPicker({ value, onPick }) {
   return (
     <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
       {COVER_SWATCHES.map(s => (
@@ -21,9 +69,9 @@ function CoverPicker({ value, onPick }) {
   );
 }
 
-function Toggle({ on, onClick }) { return <button className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
+export function Toggle({ on, onClick }) { return <button className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
 
-function format24to12(timeStr) {
+export function format24to12(timeStr) {
   if (!timeStr) return "";
   const [hStr, mStr] = timeStr.split(":");
   let h = parseInt(hStr, 10);
@@ -35,7 +83,7 @@ function format24to12(timeStr) {
   return `${String(h).padStart(2, '0')}:${m} ${ampm}`;
 }
 
-function parse12to24(val) {
+export function parse12to24(val) {
   if (!val) return null;
   const match = val.match(/^\s*(\d{1,2})\s*:\s*(\d{2})\s*(am|pm)?\s*$/i);
   if (!match) return null;
@@ -53,7 +101,7 @@ function parse12to24(val) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-function TimePicker({ label = undefined, value, onChange, mobile, compact }) {
+export function TimePicker({ label = undefined, value, onChange, mobile, compact }) {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const containerRef = useRef(null);
@@ -469,7 +517,6 @@ function TimePicker({ label = undefined, value, onChange, mobile, compact }) {
     </div>
   );
 }
-
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
@@ -660,7 +707,8 @@ function DatePicker({ label = undefined, value, onChange, mobile, compact }) {
   );
 }
 
-const TIMEZONES = [
+export const TIMEZONES = [
+
   { value: "UTC +05:30 India", label: "GMT+05:30", city: "Asia/Kolkata" },
   { value: "UTC +00:00 London", label: "GMT+00:00", city: "Europe/London" },
   { value: "UTC -05:00 New York", label: "GMT-05:00", city: "America/New_York" },
@@ -669,7 +717,7 @@ const TIMEZONES = [
   { value: "UTC -08:00 Los Angeles", label: "GMT-08:00", city: "America/Los_Angeles" }
 ];
 
-function addOneHour(timeStr) {
+export function addOneHour(timeStr) {
   if (!timeStr) return "10:00";
   const [hStr, mStr] = timeStr.split(":");
   let h = parseInt(hStr, 10);
@@ -680,7 +728,7 @@ function addOneHour(timeStr) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-function getDurationText(startDate, startTime, endDate, endTime) {
+export function getDurationText(startDate, startTime, endDate, endTime) {
   if (!startDate || !startTime || !endDate || !endTime) return "";
   try {
     const startStr = `${startDate}T${startTime}`;
@@ -710,7 +758,7 @@ function getDurationText(startDate, startTime, endDate, endTime) {
   }
 }
 
-function getTzInfo(tzValue) {
+export function getTzInfo(tzValue) {
   const mapping = {
     "UTC +05:30 India": { main: "GMT+05:30", city: "Asia/Kolkata" },
     "UTC +00:00 London": { main: "GMT+00:00", city: "Europe/London" },
@@ -722,7 +770,7 @@ function getTzInfo(tzValue) {
   return mapping[tzValue] || { main: tzValue || "GMT+05:30", city: "Asia/Kolkata" };
 }
 
-function EligibilityOption({ active, title, desc, onClick }) {
+export function EligibilityOption({ active, title, desc, onClick }) {
   return (
     <button
       type="button"
@@ -750,7 +798,7 @@ function EligibilityOption({ active, title, desc, onClick }) {
   );
 }
 
-function SummaryChip({ icon, label, onClick }: any) {
+export function SummaryChip({ icon, label, onClick }: any) {
   return (
     <span
       onClick={onClick}
@@ -776,7 +824,7 @@ function SummaryChip({ icon, label, onClick }: any) {
   );
 }
 
-function CategorySummaryChip({ type, items, onEditClick }: any) {
+export function CategorySummaryChip({ type, items, onEditClick }: any) {
   return (
     <span
       style={{
@@ -798,7 +846,7 @@ function CategorySummaryChip({ type, items, onEditClick }: any) {
   );
 }
 
-function RuleSummaryChip({ rule, onEditClick }: any) {
+export function RuleSummaryChip({ rule, onEditClick }: any) {
   return (
     <span
       style={{
@@ -819,7 +867,7 @@ function RuleSummaryChip({ rule, onEditClick }: any) {
     </span>
   );
 }
-let ACCESS_TREE = [
+export const ACCESS_TREE = [
   {
     id: "comm-samaagum",
     name: "Samaagum Hub",
@@ -906,7 +954,7 @@ let ACCESS_TREE = [
   }
 ];
 
-const isChecked = (node: any, selected: any): boolean => {
+export const isChecked = (node: any, selected: any): boolean => {
   if (node.type === "group") {
     return selected.groups.includes(node.id);
   }
@@ -917,7 +965,7 @@ const isChecked = (node: any, selected: any): boolean => {
   return node.children.every((child: any) => isChecked(child, selected));
 };
 
-const isIndeterminate = (node: any, selected: any): boolean => {
+export const isIndeterminate = (node: any, selected: any): boolean => {
   if (node.type === "group") return false;
   if (!node.children || node.children.length === 0) return false;
 
@@ -930,7 +978,7 @@ const isIndeterminate = (node: any, selected: any): boolean => {
   return !allChecked && !noneChecked;
 };
 
-const getDescendantIds = (node: any): { communities: string[], subCommunities: string[], groups: string[] } => {
+export const getDescendantIds = (node: any): { communities: string[], subCommunities: string[], groups: string[] } => {
   const res: { communities: string[], subCommunities: string[], groups: string[] } = { communities: [], subCommunities: [], groups: [] };
   if (node.type === "community") {
     res.communities.push(node.id);
@@ -951,7 +999,7 @@ const getDescendantIds = (node: any): { communities: string[], subCommunities: s
   return res;
 };
 
-const findParentPath = (id: string, tree: any[]): any[] => {
+export const findParentPath = (id: string, tree: any[]): any[] => {
   for (const comm of tree) {
     if (comm.id === id) return [];
     if (comm.children) {
@@ -968,7 +1016,7 @@ const findParentPath = (id: string, tree: any[]): any[] => {
   return [];
 };
 
-const toggleNodeCheck = (node: any, selected: any) => {
+export const toggleNodeCheck = (node: any, selected: any) => {
   const checked = isChecked(node, selected);
   const desc = getDescendantIds(node);
 
@@ -1042,7 +1090,7 @@ const toggleNodeCheck = (node: any, selected: any) => {
   };
 };
 
-const nodeMatchesSearch = (node: any, query: string): boolean => {
+export const nodeMatchesSearch = (node: any, query: string): boolean => {
   if (node.name.toLowerCase().includes(query.toLowerCase())) return true;
   if (node.children) {
     return node.children.some((child: any) => nodeMatchesSearch(child, query));
@@ -1050,7 +1098,7 @@ const nodeMatchesSearch = (node: any, query: string): boolean => {
   return false;
 };
 
-const getSearchAutoExpandedIds = (query: string): Set<string> => {
+export const getSearchAutoExpandedIds = (query: string): Set<string> => {
   const ids = new Set<string>();
   if (!query) return ids;
 
@@ -1079,7 +1127,7 @@ const getSearchAutoExpandedIds = (query: string): Set<string> => {
   return ids;
 };
 
-function TreeNodeCheckbox({ checked, indeterminate, onChange }: { checked: boolean; indeterminate: boolean; onChange: () => void }) {
+export function TreeNodeCheckbox({ checked, indeterminate, onChange }: { checked: boolean; indeterminate: boolean; onChange: () => void }) {
   return (
     <input
       type="checkbox"
@@ -1093,7 +1141,7 @@ function TreeNodeCheckbox({ checked, indeterminate, onChange }: { checked: boole
   );
 }
 
-const getTopLevelCheckedNodes = (tree: any[], selected: any): any[] => {
+export const getTopLevelCheckedNodes = (tree: any[], selected: any): any[] => {
   const list: any[] = [];
   const traverse = (node: any) => {
     if (isChecked(node, selected)) {
@@ -1108,7 +1156,7 @@ const getTopLevelCheckedNodes = (tree: any[], selected: any): any[] => {
   return list;
 };
 
-const getSelectedNodesWithDetails = (tree: any[], selected: any) => {
+export const getSelectedNodesWithDetails = (tree: any[], selected: any) => {
   const result: { id: string; name: string; type: string }[] = [];
   const traverse = (node: any) => {
     if (node.type === "community" && selected.communities.includes(node.id)) {
@@ -1126,7 +1174,7 @@ const getSelectedNodesWithDetails = (tree: any[], selected: any) => {
   return result;
 };
 
-const findNodeInTree = (id: string, tree: any[]): any => {
+export const findNodeInTree = (id: string, tree: any[]): any => {
   for (const node of tree) {
     if (node.id === id) return node;
     if (node.children) {
@@ -1138,7 +1186,7 @@ const findNodeInTree = (id: string, tree: any[]): any => {
 };
 
 
-function AccessControlModal({ open, onClose, mode, selectedAccess, setSelectedAccess }: any) {
+export function AccessControlModal({ open, onClose, mode, selectedAccess, setSelectedAccess }: any) {
   const [search, setSearch] = useState("");
   const [expandedNodeIds, setExpandedNodeIds] = useState(new Set<string>());
   const [ruleCommunity, setRuleCommunity] = useState("Samaagum Hub");
@@ -1480,14 +1528,14 @@ function AccessControlModal({ open, onClose, mode, selectedAccess, setSelectedAc
   );
 }
 
-const RECENT_LOCATIONS = [
+export const RECENT_LOCATIONS = [
   {
     name: "Delhi darbar hotel",
     address: "51, Jawahar Marg, Jhanda Chowk, Indore, Madhya Pradesh 452007, India",
   },
 ];
 
-function LocationSection({ venue, setVenue, locType, setLocType }) {
+export function LocationSection({ venue, setVenue, locType, setLocType }) {
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState(venue);
 
@@ -1622,6 +1670,20 @@ function LocationSection({ venue, setVenue, locType, setLocType }) {
 }
 
 /* ---------------- Create Event ---------------- */
+/* ---------------- Create Event ---------------- */
+export const DEFAULT_FREE_ENTITLEMENTS = {
+  group_max_groups: -1,
+  group_allowed_visibility: ['unlisted'],
+  group_allowed_join_modes: ['open', 'invite_only'],
+  group_max_capacity: 25,
+  group_can_restricted_access: false,
+  event_allowed_registration_modes: ['free', 'cash'],
+  event_allowed_visibility: ['unlisted', 'invite_only'],
+  event_max_participants: 100,
+  event_checkin_methods: ['scanner', 'manual', 'gate'],
+  event_can_create_paid_tickets: false
+};
+
 function CreateEvent(props: any) {
   const { editEv } = props;
   const [eventData, setEventData] = useState(null as any);
@@ -1669,6 +1731,22 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
   const savedDraft = JSON.parse(localStorage.getItem(draftKey) || "{}");
   // Resuming an in-progress draft (e.g. Preview -> Back) restores every field below via `draft`.
   const draft = (editEv && editEv.__draft) || null;
+  const isNewEvent = !editEv?.id || editEv.id === 'new';
+
+  // Plan entitlements gate what a *new* event can default to / offer; an event already saved
+  // keeps its existing values regardless of the current plan (handled per-field below).
+  const entitlements = st?.entitlements || DEFAULT_FREE_ENTITLEMENTS;
+  const allowedVisibilities = entitlements.event_allowed_visibility || ['unlisted', 'invite_only'];
+  const eventMaxParticipants = entitlements.event_max_participants ?? 100;
+  const canCreatePaidTickets = entitlements.event_can_create_paid_tickets ?? false;
+
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [upgradeFeature, setUpgradeFeature] = useState("");
+  const triggerUpgrade = (feat: string) => {
+    setUpgradeFeature(feat);
+    setUpgradeModalOpen(true);
+  };
+
   const [hostEntityId, setHostEntityId] = useState(draft?.hostEntityId || savedDraft.hostEntityId || hostGroupId || "standalone");
   const [hostGroups, setHostGroups] = useState([] as any[]);
   const [dbGroups, setDbGroups] = useState([] as any[]);
@@ -1721,7 +1799,12 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
   const [title, setTitle] = useState(draft?.title ?? editEv?.title ?? "");
   const [slug, setSlug] = useState(draft?.slug ?? editEv?.venue_raw?.meta?.slug ?? editEv?.venue?.meta?.slug ?? "");
   const [cover, setCover] = useState(draft?.cover ?? editEv?.cover ?? editEv?.venue_raw?.meta?.cover ?? editEv?.venue?.meta?.cover ?? "");
-  const [visibility, setVisibility] = useState(draft?.visibility ?? editEv?.venue_raw?.visibility ?? editEv?.venue?.visibility ?? "public");
+  const [visibility, setVisibility] = useState(
+    draft?.visibility
+    ?? editEv?.venue_raw?.visibility
+    ?? editEv?.venue?.visibility
+    ?? (allowedVisibilities.includes("public") ? "public" : (allowedVisibilities[0] || "unlisted"))
+  );
   const [calendar, setCalendar] = useState(draft?.calendar ?? "Main Calendar");
   const initDT = useMemo(() => {
     const now = new Date();
@@ -1729,7 +1812,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const dd = String(now.getDate()).padStart(2, '0');
     const currentDate = `${yyyy}-${mm}-${dd}`;
-    
+
     let currentHour = now.getHours();
     let currentMinute = Math.round(now.getMinutes() / 5) * 5;
     if (currentMinute === 60) {
@@ -1737,10 +1820,10 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
       currentHour = (currentHour + 1) % 24;
     }
     const currentTime = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
-    
+
     let endHour = (currentHour + 1) % 24;
     const currentEndTime = `${String(endHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
-    
+
     let endDateStr = currentDate;
     if (currentHour === 23) {
       const endNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
@@ -1749,13 +1832,13 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
       const edd = String(endNow.getDate()).padStart(2, '0');
       endDateStr = `${eyyyy}-${emm}-${edd}`;
     }
-    
+
     return { currentDate, currentTime, endDateStr, currentEndTime };
   }, []);
 
   const startsAt = editEv?.starts_at ? new Date(editEv.starts_at) : null;
   const endsAt = editEv?.ends_at ? new Date(editEv.ends_at) : null;
-  
+
   // Extract local date and time to avoid UTC shifts
   const editStartDate = startsAt ? `${startsAt.getFullYear()}-${String(startsAt.getMonth() + 1).padStart(2, '0')}-${String(startsAt.getDate()).padStart(2, '0')}` : "";
   const editStartTime = startsAt ? `${String(startsAt.getHours()).padStart(2, '0')}:${String(startsAt.getMinutes()).padStart(2, '0')}` : "";
@@ -1772,23 +1855,23 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
     if (editEv?.id && editEv.id !== 'new') return; // Skip past enforcement when editing existing events
 
     const now = new Date();
-    
+
     // Format YYYY-MM-DD
     const yyyy = now.getFullYear();
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const dd = String(now.getDate()).padStart(2, '0');
     const todayStr = `${yyyy}-${mm}-${dd}`;
-    
+
     // Check start date
     if (startDate && startDate < todayStr) {
       setStartDate(todayStr);
     }
-    
+
     // Check end date
     if (endDate && endDate < todayStr) {
       setEndDate(todayStr);
     }
-    
+
     // If startDate is today, check startTime
     if (startDate === todayStr && startTime) {
       const [sh, sm] = startTime.split(":").map(Number);
@@ -1805,7 +1888,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
         setStartTime(`${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`);
       }
     }
-    
+
     // If endDate is today, check endTime
     if (endDate === todayStr && endTime) {
       const [eh, em] = endTime.split(":").map(Number);
@@ -1823,7 +1906,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
         setEndTime(`${String(endHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`);
       }
     }
-    
+
     // Enforce end date/time is after start date/time
     if (startDate && endDate) {
       if (endDate < startDate) {
@@ -1843,13 +1926,25 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
   const [tzModalOpen, setTzModalOpen] = useState(false);
   const [tzSearchQuery, setTzSearchQuery] = useState("");
 
-  const [type, setType] = useState(draft?.type ?? ((editEv?.registration_mode === 'free_rsvp' || editEv?.registration_mode === 'free') ? 'free' : 'paid'));
+  const [type, setType] = useState(
+    draft?.type
+    ?? (editEv?.registration_mode
+        ? ((editEv.registration_mode === 'free_rsvp' || editEv.registration_mode === 'free') ? 'free' : 'paid')
+        : (canCreatePaidTickets ? 'paid' : 'free'))
+  );
   const [approval, setApproval] = useState(draft?.approval ?? editEv?.approval_required ?? false);
-  const [capacityEnabled, setCapacityEnabled] = useState(draft?.capacityEnabled ?? !!editEv?.capacity_total);
-  const [capacity, setCapacity] = useState(draft?.capacity ?? editEv?.capacity_total ?? "");
+  const [capacityEnabled, setCapacityEnabled] = useState(
+    draft?.capacityEnabled ?? (isNewEvent ? entitlements.event_max_participants !== -1 : !!editEv?.capacity_total)
+  );
+  const [capacity, setCapacity] = useState(
+    draft?.capacity
+    ?? (isNewEvent
+        ? (entitlements.event_max_participants !== -1 ? String(entitlements.event_max_participants) : "")
+        : (editEv?.capacity_total ?? ""))
+  );
   const [waitlist, setWaitlist] = useState(draft?.waitlist ?? editEv?.waitlist ?? false);
-  
-  const initialTickets = editEv?.tickets 
+
+  const initialTickets = editEv?.tickets
     ? editEv.tickets.map((t: any) => ({ n: t.name, cap: String(t.capacity || ""), price: String((t.price_minor || 0) / 100) }))
     : [{ n: "Early Bird", cap: "50", price: "499" }];
   const [tickets, setTickets] = useState(draft?.tickets ?? initialTickets);
@@ -2774,6 +2869,10 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                       value={visibility}
                       onChange={(e) => {
                         const val = e.target.value;
+                        if (val === "public" && !allowedVisibilities.includes("public")) {
+                          triggerUpgrade("Public Event Visibility");
+                          return;
+                        }
                         setVisibility(val);
                         if (val === "custom") {
                           setAccessModalOpen(true);
@@ -2781,7 +2880,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                       }}
                       style={{ background: "var(--field)", border: "1px solid var(--border)", height: 42 }}
                     >
-                      <option value="public">Public</option>
+                      <option value="public">{!allowedVisibilities.includes("public") && "🔒 "}Public</option>
                       <option value="unlisted">Unlisted</option>
                       <option value="custom">Custom Access</option>
                     </select>
@@ -3071,13 +3170,28 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                     onClick={() => setTicketModalOpen(true)}
                   >
                     <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Ticket Price</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4, justifyContent: "center", minHeight: 36 }}>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
-                        {type === "free" ? "Free RSVP" : "Paid Tickets"}
-                      </span>
-                      <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
-                        Click to customize tiers &amp; pricing
-                      </span>
+<div style={{ display: "flex", flexDirection: "column", gap: 4, justifyContent: "center", minHeight: 36 }}>
+                      <select
+                        className="cselect"
+                        value={type}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val === "paid" && !canCreatePaidTickets) {
+                            triggerUpgrade("Paid Events / Tickets");
+                            return;
+                          }
+                          setType(val);
+                        }}
+                        style={{ background: "var(--surface)", height: 36, padding: "6px" }}
+                      >
+                        <option value="free">Free</option>
+                        <option value="paid">{!canCreatePaidTickets && "🔒 "}Paid</option>
+                      </select>
+                      {type === "paid" && (
+                        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                          Click to customize tiers &amp; pricing
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div style={{ padding: 12, background: "var(--field)", borderRadius: "var(--r-md)", border: "1px solid var(--border)" }}>
@@ -3092,13 +3206,31 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                     onClick={() => setCapacityModalOpen(true)}
                   >
                     <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Capacity Limit</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4, justifyContent: "center", minHeight: 36 }}>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
-                        {capacityEnabled ? `${capacity || "—"} Limit` : "Unlimited"}
-                      </span>
-                      <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
-                        {waitlist ? "Waitlist Enabled" : "Waitlist Disabled"}
-                      </span>
+<div style={{ display: "flex", alignItems: "center", gap: 12, height: 36 }}>
+                      <Toggle
+                        on={capacityEnabled}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (capacityEnabled && eventMaxParticipants !== -1) {
+                            triggerUpgrade("Unlimited Event Capacity");
+                            return;
+                          }
+                          const next = !capacityEnabled;
+                          setCapacityEnabled(next);
+                          if (next) {
+                            setCapacityModalOpen(true);
+                          }
+                        }}
+                      />
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4, justifyContent: "center" }}>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
+                          {capacityEnabled ? `${capacity || "—"} Limit` : "Unlimited"}
+                        </span>
+                        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                          {waitlist ? "Waitlist Enabled" : "Waitlist Disabled"}
+                        </span>
+                      </div>
+                    </div>
                     </div>
                   </div>
                 </div>
@@ -3787,10 +3919,15 @@ function CapacitySettingsModal({ open, onClose, capacityEnabled, setCapacityEnab
             </label>
           </div>
 
-          {/* Input: Max Capacity */}
+{/* Input: Max Capacity */}
           {tempEnabled && (
             <div className="cfield" style={{ marginBottom: 0, animation: "fadeIn 0.2s" }}>
               <label style={{ fontSize: 13, color: "var(--ink-3)", fontWeight: 600, marginBottom: 8, display: "block" }}>Max Capacity</label>
+              {eventMaxParticipants !== -1 && (
+                <div style={{ padding: "8px 10px", background: "var(--field-2, var(--field))", borderRadius: "var(--r-sm)", border: "1px dashed var(--accent)", fontSize: "11px", color: "var(--ink-2)", marginBottom: 12 }}>
+                  🔒 Under your current plan, event capacity is capped at a maximum of <strong>{eventMaxParticipants}</strong> participants. Upgrade to Standard for unlimited capacity.
+                </div>
+              )}
               <input
                 type="number"
                 className="cinput"
@@ -3818,8 +3955,7 @@ function CapacitySettingsModal({ open, onClose, capacityEnabled, setCapacityEnab
             </label>
           </div>
         </div>
-
-        {/* Footer */}
+{/* Footer */}
         <div style={{ padding: "16px 24px", background: "var(--bg-2)", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end", gap: "12px" }}>
           <button
             className="hbtn hbtn--ghost"
@@ -3832,6 +3968,35 @@ function CapacitySettingsModal({ open, onClose, capacityEnabled, setCapacityEnab
             className="hbtn hbtn--primary"
             onClick={handleSave}
             style={{ background: "linear-gradient(135deg, #ff4e50, #f9d423)", border: "none", color: "#fff", borderRadius: "999px", padding: "10px 24px", fontWeight: 600, fontSize: 13, boxShadow: "0 4px 12px rgba(255, 78, 80, 0.2)" }}
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CapacityModal({ open, onClose, capacity, setCapacity, waitlist, setWaitlist, eventMaxParticipants, triggerUpgrade }: any) {
+  if (!open) return null;
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
+      <div style={{ background: "var(--surface)", width: 420, borderRadius: "20px", padding: 24, boxShadow: "var(--sh-xl)" }}>
+        {/* NOTE: Max Capacity input + plan-limit notice (merged earlier) render here */}
+
+        <div style={{ display: "flex", gap: 12, marginTop: 32 }}>
+          <button className="hbtn hbtn--ghost" style={{ flex: 1 }} onClick={() => onClose()}>Cancel</button>
+          <button
+            className="hbtn hbtn--primary"
+            style={{ flex: 1 }}
+            onClick={() => {
+              if (eventMaxParticipants !== -1 && (!capacity || parseInt(capacity) > eventMaxParticipants || parseInt(capacity) < 1)) {
+                alert(`Event capacity must be between 1 and ${eventMaxParticipants} participants under your current plan.`);
+                triggerUpgrade(`Event Capacity > ${eventMaxParticipants}`);
+                return;
+              }
+              onClose();
+            }}
           >
             Save
           </button>
@@ -4137,8 +4302,7 @@ function QuestionnaireModal({ open, onClose, formFields, setFormFields, enableRe
                     {editingId ? "Save Changes" : "+ Add Question"}
                   </button>
                 </div>
-              )}
-            </div>
+              )}            </div>
           </>
         ) : (
           <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "var(--ink-3)", padding: 40, textAlign: "center" }}>
@@ -4271,8 +4435,17 @@ function TicketSettingsModal({ open, onClose, type, setType, tickets, setTickets
           </button>
         </div>
       </div>
+      {upgradeModalOpen && (
+        <UpgradePlanModal 
+          open={upgradeModalOpen} 
+          onClose={() => setUpgradeModalOpen(false)} 
+          feature={upgradeFeature} 
+          go={go} 
+          currentPlanName={st?.planDisplayName}
+        />
+      )}
     </div>
   );
 }
 
-Object.assign(window, { CreateEvent });
+

@@ -1,7 +1,16 @@
 // @ts-nocheck
-var { useState, useEffect } = React;
+import React, { useEffect, useState } from 'react';
+import { VirtualCardPage } from './VirtualCardPage';
+import { QRCode, useProfileSync } from './home-icons';
+import { Profile } from './home-profile';
+import { apiBase } from './home-subscription';
+import { I } from './home-icons';
 
-function VirtualCard({ user }) {
+
+
+import QRCodeLib from 'qrcode';
+
+export function VirtualCard({ user }) {
   const [qrCodeUrl, setQrCodeUrl] = useState('');
 
   const photo = user?.img || user?.profilePhoto || user?.profile_photo || user?.profiles?.[0]?.img;
@@ -20,13 +29,13 @@ function VirtualCard({ user }) {
   const p = I.useProfileSync ? I.useProfileSync(userId, { 
     name: displayName, 
     img: photo, 
-    bio: role, 
+    body: role, 
     location: null 
   }) : { name: displayName, img: photo, bio: role, location: null };
 
   const syncedDisplayName = p.name;
   const syncedPhoto = p.img;
-  const syncedRole = p.bio;
+  const syncedRole = p.bio || p.headline || role;
 
   const username = handle.replace('@', '');
   
@@ -35,29 +44,22 @@ function VirtualCard({ user }) {
   const profileUrl = `${apiBase}/pages/VirtualCardPage.html?u=${encodeURIComponent(username)}`;
 
   useEffect(() => {
-    // Generate QR code using the bundled QRCode library via QRCodeLib (to avoid name collision with the custom SVG component)
-    const qrLib = window.QRCodeLib || window.QRCode;
-    if (qrLib && typeof qrLib.toDataURL === 'function') {
-      qrLib.toDataURL(profileUrl, {
-        width: 200,
-        margin: 2,
-        color: {
-          dark: '#111827',
-          light: '#ffffff'
-        }
+    QRCodeLib.toDataURL(profileUrl, {
+      width: 200,
+      margin: 2,
+      color: {
+        dark: '#111827',
+        light: '#ffffff'
+      }
+    })
+      .then(url => {
+        setQrCodeUrl(url);
       })
-        .then(url => {
-          setQrCodeUrl(url);
-        })
-        .catch(err => {
-          console.error('Error generating QR Code', err);
-          // Fallback to quickchart if library fails
-          setQrCodeUrl(`https://quickchart.io/qr?text=${encodeURIComponent(profileUrl)}&size=200&dark=111827&light=ffffff&margin=2`);
-        });
-    } else {
-      // Fallback directly if library is not available
-      setQrCodeUrl(`https://quickchart.io/qr?text=${encodeURIComponent(profileUrl)}&size=200&dark=111827&light=ffffff&margin=2`);
-    }
+      .catch(err => {
+        console.error('Error generating QR Code', err);
+        // Fallback to quickchart if library fails
+        setQrCodeUrl(`https://quickchart.io/qr?text=${encodeURIComponent(profileUrl)}&size=200&dark=111827&light=ffffff&margin=2`);
+      });
   }, [profileUrl]);
 
 
@@ -218,4 +220,4 @@ function VirtualCard({ user }) {
   );
 }
 
-Object.assign(window, { VirtualCard });
+

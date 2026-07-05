@@ -1,4 +1,5 @@
 import prisma from '../config/prisma';
+import { PlanEntitlementService } from './PlanEntitlementService';
 
 export class SubscriptionActivationService {
     /**
@@ -207,10 +208,166 @@ export class SubscriptionActivationService {
                 console.log('Transaction committed');
                 return true;
             });
+            if (result) {
+                const order = await prisma.subscription_orders.findUnique({ where: { id: orderId } });
+                if (order) {
+                    PlanEntitlementService.invalidate(order.user_id);
+                }
+            }
             return result;
         } catch (err: any) {
             console.error('[SubscriptionActivationService] Prisma transaction error:', err);
             return false;
+        }
+    }
+
+    /**
+     * After successful activation, sends real-time socket notification and emails invoice with PDF.
+     * Called non-blocking (fire-and-forget) after the main activate() transaction.
+     */
+    static async notifyAndSendInvoice(orderId: string): Promise<void> {
+        try {
+            const order = await prisma.subscription_orders.findUnique({
+                where: { id: orderId },
+                include: {
+                    admin_subscription_plans: true,
+                    users: { select: { id: true, primary_email: true, first_name: true, last_name: true, profiles: { select: { display_name: true } } } }
+                }
+            });
+            if (!order) {
+                console.error(`[SubscriptionActivationService] notifyAndSendInvoice: Order ${orderId} not found in database.`);
+                return;
+            }
+            if (!order.users) {
+                console.error(`[SubscriptionActivationService] notifyAndSendInvoice: Order ${orderId} has no associated user.`);
+                return;
+            }
+
+            const user = order.users;
+            if (!user.primary_email) {
+                console.warn(`[SubscriptionActivationService] User ${user.id} has no primary email. Cannot send activation invoice/email.`);
+                return;
+            }
+            console.log(`[SubscriptionActivationService] Starting notifyAndSendInvoice for order ${orderId}, user: ${user.id}, email: ${user.primary_email}`);
+            const emailTo = user.primary_email;
+            const planName = order.admin_subscription_plans?.display_name || 'Standard';
+            const displayName = user.profiles?.display_name || [user.first_name, user.last_name].filter(Boolean).join(' ') || emailTo.split('@')[0];
+
+            // 1. Log notification to database so it shows up in in-app notifications
+            try {
+                await prisma.notification_log.create({
+                    data: {
+                        tenant_id: order.tenant_id || "00000000-0000-0000-0000-000000000000",
+                        user_id: user.id,
+                        channel: "socket",
+                        template_key: "subscription_activated",
+                        status: "sent",
+                        provider_ref: JSON.stringify({
+                            planName,
+                            orderId: order.id,
+                            orderNumber: order.order_number
+                        })
+                    }
+                });
+                console.log(`[SubscriptionActivationService] Written subscription_activated notification to notification_log`);
+            } catch (logErr) {
+                console.error('[SubscriptionActivationService] Failed to log subscription activation in notification_log:', logErr);
+            }
+
+            // 1b. Emit real-time socket notification so client updates instantly
+            try {
+                const { sendNotificationToUser } = await import('./messagingSocket');
+                sendNotificationToUser(user.id, 'subscription.activated', {
+                    planName,
+                    orderId: order.id,
+                    orderNumber: order.order_number
+                });
+
+                const { notificationService } = await import('./NotificationService');
+                const unreadCount = await notificationService.getUnreadCount(user.id);
+                sendNotificationToUser(user.id, 'notification:count', { count: unreadCount });
+                sendNotificationToUser(user.id, 'notification:updated', {
+                    type: 'subscription_activated'
+                });
+
+                console.log(`[SubscriptionActivationService] Real-time socket event sent to user ${user.id}`);
+            } catch (socketErr) {
+                console.error('[SubscriptionActivationService] Failed to emit socket event:', socketErr);
+            }
+
+            // 2. Generate invoice (or fetch existing)
+            let invoicePdfData: Buffer | null = null;
+            try {
+                const { InvoiceService } = await import('./InvoiceService');
+                const invoice = await InvoiceService.generateInvoice(orderId);
+                if (invoice?.pdf_data) {
+                    invoicePdfData = Buffer.from(invoice.pdf_data);
+                }
+            } catch (invErr) {
+                console.error('[SubscriptionActivationService] Invoice generation failed:', invErr);
+            }
+
+            // 3. Send confirmation email with invoice PDF attached
+            try {
+                const { sendEmail } = await import('../utils/email');
+                const billingCycleLabel = order.plan_type === 'yearly' ? 'Yearly' : 'Monthly';
+                const startStr = order.subscription_start_date ? new Date(order.subscription_start_date).toLocaleDateString('en-IN') : 'Today';
+                const endStr = order.subscription_end_date ? new Date(order.subscription_end_date).toLocaleDateString('en-IN') : 'N/A';
+
+                const emailHtml = `
+                  <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #f9fafb; border-radius: 12px;">
+                    <div style="background: linear-gradient(135deg, #120865 0%, #6d5efc 100%); padding: 32px; border-radius: 8px; text-align: center; margin-bottom: 24px;">
+                      <h1 style="color: white; margin: 0; font-size: 24px;">🎉 Subscription Activated!</h1>
+                      <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0;">Welcome to ${planName}</p>
+                    </div>
+                    <div style="background: white; padding: 24px; border-radius: 8px; margin-bottom: 16px;">
+                      <p style="margin: 0 0 12px; color: #374151;">Hi <strong>${displayName}</strong>,</p>
+                      <p style="margin: 0 0 16px; color: #374151;">Your <strong>${planName}</strong> plan has been successfully activated. Here are your subscription details:</p>
+                      <table style="width: 100%; border-collapse: collapse;">
+                        <tr style="border-bottom: 1px solid #e5e7eb;">
+                          <td style="padding: 10px 0; color: #6b7280; font-size: 14px;">Plan</td>
+                          <td style="padding: 10px 0; color: #111827; font-weight: 600; text-align: right;">${planName}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #e5e7eb;">
+                          <td style="padding: 10px 0; color: #6b7280; font-size: 14px;">Billing Cycle</td>
+                          <td style="padding: 10px 0; color: #111827; font-weight: 600; text-align: right;">${billingCycleLabel}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #e5e7eb;">
+                          <td style="padding: 10px 0; color: #6b7280; font-size: 14px;">Valid From</td>
+                          <td style="padding: 10px 0; color: #111827; font-weight: 600; text-align: right;">${startStr}</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #e5e7eb;">
+                          <td style="padding: 10px 0; color: #6b7280; font-size: 14px;">Valid Until</td>
+                          <td style="padding: 10px 0; color: #111827; font-weight: 600; text-align: right;">${endStr}</td>
+                        </tr>
+                        <tr>
+                          <td style="padding: 10px 0; color: #6b7280; font-size: 14px;">Order Number</td>
+                          <td style="padding: 10px 0; color: #111827; font-weight: 600; text-align: right;">${order.order_number}</td>
+                        </tr>
+                      </table>
+                    </div>
+                    <p style="color: #6b7280; font-size: 13px; text-align: center; margin: 0;">
+                      ${invoicePdfData ? 'Your tax invoice is attached to this email.' : ''} Thank you for subscribing to Samaagum!
+                    </p>
+                  </div>
+                `;
+
+                const emailAttachments = invoicePdfData
+                    ? [{ filename: `Invoice-${order.order_number}.pdf`, content: invoicePdfData }]
+                    : undefined;
+
+                await sendEmail({
+                    to: emailTo,
+                    subject: `✅ ${planName} Subscription Activated – Invoice ${order.order_number}`,
+                    html: emailHtml,
+                    attachments: emailAttachments
+                });
+                console.log(`[SubscriptionActivationService] Activation email sent to ${emailTo}`);
+            } catch (emailErr) {
+                console.error('[SubscriptionActivationService] Failed to send activation email:', emailErr);
+            }
+        } catch (err) {
+            console.error('[SubscriptionActivationService] notifyAndSendInvoice error:', err);
         }
     }
 
@@ -220,7 +377,7 @@ export class SubscriptionActivationService {
     static async switchPlan(orderId: string): Promise<boolean> {
         console.log(`Subscription switch started for order: ${orderId}`);
         try {
-            return await prisma.$transaction(async (tx) => {
+            const result = await prisma.$transaction(async (tx) => {
                 // 1. Fetch Target Order
                 const targetOrder = await tx.subscription_orders.findUnique({
                     where: { id: orderId }
@@ -338,9 +495,105 @@ export class SubscriptionActivationService {
 
                 return true;
             });
+            if (result) {
+                const order = await prisma.subscription_orders.findUnique({
+                    where: { id: orderId },
+                    include: { admin_subscription_plans: true }
+                });
+                if (order) {
+                    PlanEntitlementService.invalidate(order.user_id);
+                    try {
+                        const { sendNotificationToUser } = await import('./messagingSocket');
+                        sendNotificationToUser(order.user_id, 'entitlements.updated', {
+                            planName: order.admin_subscription_plans?.display_name || 'Plan'
+                        });
+                        sendNotificationToUser(order.user_id, 'subscription.activated', {
+                            planName: order.admin_subscription_plans?.display_name || 'Plan',
+                            orderId: order.id,
+                            orderNumber: order.order_number
+                        });
+                    } catch (e) {}
+                }
+            }
+            return result;
         } catch (err) {
             console.error('[SubscriptionActivationService] Error switching plan:', err);
             return false;
+        }
+    }
+
+    /**
+     * Assigns the default plan (is_default=true) to a newly registered user.
+     * Creates entity + subscription records so the user has a concrete plan from day 1.
+     * Safe to call fire-and-forget — all errors are caught internally.
+     */
+    static async assignDefaultPlanToUser(userId: string, tenantId: string = '00000000-0000-0000-0000-000000000000'): Promise<void> {
+        try {
+            const { getDefaultPlan } = await import('../controllers/adminSubscriptionPlanRoutes');
+            const defaultAdminPlan = await getDefaultPlan();
+            if (!defaultAdminPlan) {
+                console.warn(`[assignDefaultPlanToUser] No default plan found — skipping for user ${userId}`);
+                return;
+            }
+
+            const planNameLower = defaultAdminPlan.name.toLowerCase();
+
+            // Ensure a core plan record exists
+            let corePlan = await prisma.plans.findUnique({ where: { key: planNameLower } });
+            if (!corePlan) {
+                corePlan = await prisma.plans.create({
+                    data: {
+                        key: planNameLower,
+                        plan_type: defaultAdminPlan.plan_type || 'free',
+                        version: 1,
+                        entitlements: defaultAdminPlan.limits || defaultAdminPlan.features || {},
+                        status: 'active'
+                    }
+                });
+            }
+
+            // Ensure entity record exists for this user
+            let userEntity = await prisma.entities.findFirst({
+                where: { user_id: userId, entity_type: 'user' }
+            });
+            if (!userEntity) {
+                userEntity = await prisma.entities.create({
+                    data: {
+                        tenant_id: tenantId,
+                        entity_type: 'user',
+                        user_id: userId,
+                        status: 'active',
+                        visibility: 'public'
+                    }
+                });
+            }
+
+            // Skip if user already has an active subscription
+            const existingActive = await prisma.subscriptions.findFirst({
+                where: { owner_entity_id: userEntity.id, state: 'active' }
+            });
+            if (existingActive) {
+                console.log(`[assignDefaultPlanToUser] User ${userId} already has active subscription — skipping.`);
+                return;
+            }
+
+            // Create a permanent (no expiry) default plan subscription
+            await prisma.subscriptions.create({
+                data: {
+                    tenant_id: tenantId,
+                    plan_id: corePlan.id,
+                    owner_entity_id: userEntity.id,
+                    state: 'active',
+                    valid_from: new Date(),
+                    valid_to: new Date('2099-12-31T23:59:59Z'), // effectively permanent for free plans
+                    created_at: new Date(),
+                    updated_at: new Date()
+                }
+            });
+
+            console.log(`[assignDefaultPlanToUser] Assigned default plan "${defaultAdminPlan.display_name}" to user ${userId}`);
+        } catch (err) {
+            console.error(`[assignDefaultPlanToUser] Error assigning default plan to user ${userId}:`, err);
         }
     }
 }
