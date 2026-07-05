@@ -554,6 +554,7 @@ model events {
   financial_locked_at    DateTime?                @db.Timestamptz(6)
   created_at             DateTime                 @default(now()) @db.Timestamptz(6)
   updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  instruction            String?
   addons                 addons[]
   bookings               bookings[]
   bundles                bundles[]
@@ -1917,6 +1918,7 @@ model admin_subscription_plans {
   tenant_id           String?               @db.Uuid
   created_at          DateTime              @default(now()) @db.Timestamptz(6)
   updated_at          DateTime              @default(now()) @db.Timestamptz(6)
+  is_default          Boolean?              @default(false)
   admin_positions     admin_positions?      @relation(fields: [rbac_position_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   admin_roles         admin_roles?          @relation(fields: [rbac_role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenants             tenants?              @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -1985,6 +1987,7 @@ model subscription_orders {
   completed_at             DateTime?                @db.Timestamptz(6)
   created_at               DateTime                 @default(now()) @db.Timestamptz(6)
   updated_at               DateTime                 @default(now()) @db.Timestamptz(6)
+  invoices                 invoices?
   admin_subscription_plans admin_subscription_plans @relation(fields: [plan_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenants                  tenants?                 @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   users                    users                    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -2616,6 +2619,18 @@ model messaging_requests {
   sender      users    @relation("sent_messaging_requests", fields: [sender_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([sender_id, receiver_id])
+}
+
+model invoices {
+  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoice_number      String              @unique
+  order_id            String              @unique @db.Uuid
+  created_at          DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime            @default(now()) @db.Timestamptz(6)
+  pdf_data            Bytes
+  subscription_orders subscription_orders @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([order_id], map: "idx_invoices_order")
 }
 
 enum assignment_state {

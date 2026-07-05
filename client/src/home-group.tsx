@@ -1436,149 +1436,38 @@ export function GroupDetail({ group, st, go }) {
                   )}
                 </div>
               )}
-              {tab === "discussion" && activeThread !== null && (
+              {tab === "events" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  <button className="hbtn hbtn--ghost hbtn--sm" style={{ alignSelf: "flex-start" }} onClick={() => { setActiveThread(null); setReplyDraft(""); setReplyingToId(null); }}>
-                    <I.arrowL style={{ width: 14, height: 14 }} /> Back to Discussions
-                  </button>
-
-                  <div className={`post ${activeThread.pinned ? "pinned" : ""}`}>
-                    <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-                      <VoteWidget
-                        score={atVoteScore}
-                        userVote={atUserVote}
-                        onUpvote={() => handleVoteThread(activeThread.id, atUserVote === 1 ? 0 : 1)}
-                        onDownvote={() => handleVoteThread(activeThread.id, atUserVote === -1 ? 0 : -1)}
-                      />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
-                          {activeThread.pinned && <span style={{ fontSize: 11, fontWeight: 600, color: "var(--accent-2)", display: "flex", alignItems: "center", gap: 3 }}><I.bookmarkF style={{ width: 10, height: 10 }} />Pinned</span>}
-                          {activeThread.locked && <span style={{ fontSize: 11, fontWeight: 600, color: "#e74c3c", display: "flex", alignItems: "center", gap: 3 }}><I.lock style={{ width: 10, height: 10 }} />Locked</span>}
-                          {activeThread.solved && <span style={{ fontSize: 11, fontWeight: 700, color: "#1a7f37", background: "#e6ffed", borderRadius: 8, padding: "1px 7px" }}>✓ Solved</span>}
-                          {(activeThread.tags || []).map(t => <TagPill key={t.id || t.name} tag={t.name} />)}
-                        </div>
-                        {activeThread.title && <h2 style={{ margin: "0 0 8px 0", fontSize: 20, fontWeight: 700, lineHeight: 1.3 }}>{activeThread.title}</h2>}
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--ink-3)", marginBottom: 12 }}>
-                          <Avatar name={activeThread.author_name || "Unknown"} size={22} />
-                          <span style={{ fontWeight: 500, color: "var(--ink-2)" }}>{activeThread.author_name || "Unknown"}</span>
-                          <span>·</span>
-                          <span>{activeThread.created_at ? getRelativeTime(activeThread.created_at) : 'Just now'}</span>
-                          {activeThread.view_count > 0 && <span>· {activeThread.view_count} views</span>}
-                        </div>
-                        {editingPostId === activeThread.id ? (
-                          <div style={{ marginBottom: 12 }}>
-                            <textarea
-                              autoFocus
-                              value={editPostDraft}
-                              onChange={e => setEditPostDraft(e.target.value)}
-                              rows={4}
-                              style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 14, fontFamily: "inherit", resize: "vertical", outline: "none", background: "var(--surface)", color: "var(--ink)", boxSizing: "border-box" }}
-                            />
-                            <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", marginTop: 8 }}>
-                              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => { setEditingPostId(null); setEditPostDraft(""); }}>Cancel</button>
-                              <button className="hbtn hbtn--primary hbtn--sm" onClick={handleEditPost}>Save</button>
-                            </div>
-                          </div>
-                        ) : (
-                          activeThread.body && <div className="pbody" style={{ marginBottom: 12 }}>{activeThread.body}</div>
-                        )}
-                        <EmojiBar counts={atReactions} onReact={emoji => handleReactThread(activeThread.id, emoji)} />
-                        {isOwner && (
-                          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-                            <button className="hbtn hbtn--ghost hbtn--sm" onClick={async () => {
-                              const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
-                              const r = await fetch(`${apiBase}/api/groups/${g.id}/posts/${activeThread.id}/pin`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }, body: JSON.stringify({ pinned: !activeThread.pinned }) });
-                              const d = await r.json();
-                              if (d.success) { setActiveThread(prev => ({ ...prev, pinned: !prev.pinned })); setPosts(prev => prev.map(p => p.id === activeThread.id ? { ...p, pinned: !p.pinned } : p)); }
-                            }}>{activeThread.pinned ? "Unpin" : "Pin"}</button>
-                            <button className="hbtn hbtn--ghost hbtn--sm" onClick={async () => {
-                              const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
-                              const r = await fetch(`${apiBase}/api/groups/${g.id}/posts/${activeThread.id}/lock`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }, body: JSON.stringify({ locked: !activeThread.locked }) });
-                              const d = await r.json();
-                              if (d.success) { setActiveThread(prev => ({ ...prev, locked: !prev.locked })); setPosts(prev => prev.map(p => p.id === activeThread.id ? { ...p, locked: !p.locked } : p)); }
-                            }}>{activeThread.locked ? "Unlock" : "Lock"}</button>
-                            <button className="hbtn hbtn--ghost hbtn--sm" style={{ color: activeThread.solved ? "var(--ink-2)" : "#1a7f37" }} onClick={() => handleSolveThread(activeThread.id, !activeThread.solved)}>
-                              {activeThread.solved ? "Unmark Solved" : "✓ Mark Solved"}
-                            </button>
-                          </div>
-                        )}
-                        {(isOwner || activeThread.author_user_id === currentUserId) && (
-                          <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-                            {canEdit(activeThread.created_at) && activeThread.author_user_id === currentUserId && (
-                              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => { setEditingPostId(activeThread.id); setEditPostDraft(activeThread.body); }}>
-                                <I.edit style={{ width: 13, height: 13 }} /> Edit thread
-                              </button>
-                            )}
-                            <button className="hbtn hbtn--ghost hbtn--sm" style={{ color: "#e74c3c" }} title="Delete thread" onClick={() => { if (!confirm("Delete this thread and all replies?")) return; handleDeletePost(activeThread.id); setActiveThread(null); }}>
-                              <I.trash style={{ width: 13, height: 13 }} /> Delete thread
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ fontWeight: 600, fontSize: 15, borderBottom: "1px solid var(--border)", paddingBottom: 10 }}>
-                    {loadingThread ? "Loading replies…" : `${(activeThread.comments || []).length} ${(activeThread.comments || []).length === 1 ? 'Reply' : 'Replies'}`}
-                  </div>
-
-                  {loadingThread && (
-                    <div style={{ textAlign: "center", padding: "24px 0", color: "var(--ink-3)" }}>
-                      <div className="spinner" style={{ margin: "0 auto" }} />
+                  {/* Create Event button — visible to group owner and admin */}
+                  {isOwner && (
+                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                      <button
+                        className="hbtn hbtn--primary hbtn--sm"
+                        onClick={() => go("create-event", { hostGroupId: g.entity_id, hostGroupName: g.name })}
+                        style={{ display: "flex", alignItems: "center", gap: 6 }}
+                      >
+                        <I.plus style={{ width: 14 }} />
+                        Create Event
+                      </button>
                     </div>
                   )}
 
-                  {!loadingThread && (activeThread.comments || []).length === 0 && (
-                    <div style={{ textAlign: "center", padding: "32px 20px", color: "var(--ink-3)", background: "var(--surface)", borderRadius: "var(--r-md)", border: "1px dashed var(--border)" }}>
-                      <p style={{ margin: 0, fontSize: 14 }}>{canReply && !activeThread.locked ? "Be the first to reply!" : "No replies yet."}</p>
+                  {gEvents.length > 0 ? (
+                    <div className="ev-grid">
+                      {gEvents.map(ev => <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)} saved={st.saved.has(ev.id)} onSave={() => st.toggleSave(ev.id)} registered={st.registered.has(ev.id)} />)}
                     </div>
-                  )}
-
-                  {!loadingThread && (activeThread.comments || []).map(c => (
-                    <div key={c.id} style={{ padding: "14px 16px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)" }}>
-                      <CommentItem c={c} depth={0} canReply={canReply && !activeThread.locked} isOwner={isOwner} currentUserId={currentUserId} replyingToId={replyingToId} inlineReplyDraft={inlineReplyDraft} submittingInlineReply={submittingInlineReply} commentVotes={commentVotes} onVote={handleVoteComment} onDelete={handleDeleteComment} onStartReply={handleStartReply} onCancelReply={handleCancelReply} onInlineReplyChange={setInlineReplyDraft} onSubmitInlineReply={handleSubmitInlineReply} canEdit={canEdit} editingCommentId={editingCommentId} editCommentDraft={editCommentDraft} onEditStart={(c) => { setEditingCommentId(c.id); setEditCommentDraft(c.body); }} onEditCancel={() => { setEditingCommentId(null); setEditCommentDraft(""); }} onEditChange={v => setEditCommentDraft(v)} onEditSubmit={handleEditComment} />
-                    </div>
-                  ))}
-
-                  {canReply && !activeThread.locked && (
-                    <div className="composer">
-                      <Avatar name={ME.name} img={ME.img} size={36} />
-                      <div className="ci">
-                        <textarea placeholder="Write a reply…" value={replyDraft} onChange={e => setReplyDraft(e.target.value)} rows={replyDraft ? 3 : 1} />
-                        <div className="cbar">
-                          <button className="hbtn hbtn--primary hbtn--sm" style={{ marginLeft: "auto" }} disabled={!replyDraft.trim() || submittingReply} onClick={handleSubmitReply}>
-                            {submittingReply ? 'Posting…' : 'Reply'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {activeThread.locked && (
-                    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, color: "var(--ink-2)" }}>
-                      <I.lock style={{ width: 16, height: 16, opacity: 0.6 }} />
-                      <span style={{ fontSize: 13 }}>This thread is locked. No new replies.</span>
-                    </div>
-                  )}
-                  {!canReply && !activeThread.locked && forumsEnabled && (
-                    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, color: "var(--ink-2)" }}>
-                      <I.lock style={{ width: 16, height: 16, opacity: 0.6 }} />
-                      <span style={{ fontSize: 13 }}>Only {replyPerm === "admins" ? "moderators and admins" : "selected members"} can reply here.</span>
+                  ) : (
+                    <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--ink-3)", background: "var(--surface)", borderRadius: "var(--r-md)", border: "1px dashed var(--border)" }}>
+                      <I.cal style={{ width: 48, height: 48, marginBottom: 16, opacity: 0.3 }} />
+                      <h4 style={{ margin: "0 0 8px 0", color: "var(--ink)", fontSize: 16 }}>No events scheduled</h4>
+                      <p style={{ margin: 0 }}>
+                        {isOwner
+                          ? "Click \"Create Event\" above to host your first group event."
+                          : "There are currently no events scheduled for this group."}
+                      </p>
                     </div>
                   )}
                 </div>
-              )}
-              {tab === "events" && (
-                gEvents.length > 0 ? (
-                  <div className="ev-grid">
-                    {gEvents.map(ev => <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)} saved={st.saved.has(ev.id)} onSave={() => st.toggleSave(ev.id)} registered={st.registered.has(ev.id)} />)}
-                  </div>
-                ) : (
-                  <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--ink-3)", background: "var(--surface)", borderRadius: "var(--r-md)", border: "1px dashed var(--border)" }}>
-                    <I.cal style={{ width: 48, height: 48, marginBottom: 16, opacity: 0.3 }} />
-                    <h4 style={{ margin: "0 0 8px 0", color: "var(--ink)", fontSize: 16 }}>No events scheduled</h4>
-                    <p style={{ margin: 0 }}>There are currently no events scheduled for this group.</p>
-                  </div>
-                )
               )}
               {tab === "members" && (
                 <MemberManagementPanel group={g} st={st} go={go} />
@@ -1944,87 +1833,7 @@ export function GroupDetail({ group, st, go }) {
         </div>
       </div>
 
-      {showNewThreadModal && (
-        <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
-          onClick={e => { if (e.target === e.currentTarget) { setShowNewThreadModal(false); setNewThreadTitle(""); setNewThreadBody(""); setNewThreadTag(""); } }}
-        >
-          <div style={{ width: "100%", maxWidth: 580, maxHeight: "90vh", overflowY: "auto", background: "var(--surface)", borderRadius: 16, display: "flex", flexDirection: "column", boxShadow: "0 8px 40px rgba(0,0,0,0.28)", border: "1px solid var(--border)" }}>
-            {/* Header */}
-            <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--ink)" }}>New Thread</h2>
-                <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--ink-3)" }}>Share something with the group</p>
-              </div>
-              <button className="tool" onClick={() => { setShowNewThreadModal(false); setNewThreadTitle(""); setNewThreadBody(""); setNewThreadTag(""); }}>
-                <I.x style={{ width: 18, height: 18 }} />
-              </button>
-            </div>
 
-            {/* Body */}
-            <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
-              {/* Title */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Title <span style={{ color: "var(--accent-2)" }}>*</span></label>
-                <input
-                  className="cinput"
-                  placeholder="Give your thread a clear, descriptive title"
-                  value={newThreadTitle}
-                  onChange={e => setNewThreadTitle(e.target.value)}
-                  style={{ fontSize: 15, fontWeight: 500 }}
-                  autoFocus
-                />
-              </div>
-
-              {/* Body */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Body</label>
-                <textarea
-                  className="cinput"
-                  placeholder="What's on your mind? Share details, questions, or anything relevant…"
-                  value={newThreadBody}
-                  onChange={e => setNewThreadBody(e.target.value)}
-                  rows={5}
-                  style={{ resize: "vertical", fontFamily: "inherit", fontSize: 14, lineHeight: 1.6, minHeight: 110 }}
-                />
-                <div style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "right" }}>{newThreadBody.length} / 5000</div>
-              </div>
-
-              {/* Tag picker */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Tag <span style={{ color: "var(--ink-3)", fontWeight: 400, textTransform: "none" }}>(optional)</span></label>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    onClick={() => setNewThreadTag("")}
-                    style={{ fontSize: 12, padding: "4px 12px", borderRadius: 20, border: "1px solid var(--border)", background: newThreadTag === "" ? "var(--ink)" : "transparent", color: newThreadTag === "" ? "#fff" : "var(--ink-2)", cursor: "pointer", transition: "all 0.15s" }}
-                  >None</button>
-                  {ALL_FORUM_TAGS.map(t => {
-                    const tc = TAG_COLORS[t] || TAG_COLORS.General;
-                    const isSelected = newThreadTag === t;
-                    return (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setNewThreadTag(isSelected ? "" : t)}
-                        style={{ fontSize: 12, padding: "4px 12px", borderRadius: 20, border: `1px solid ${isSelected ? tc.color : "var(--border)"}`, background: isSelected ? tc.bg : "transparent", color: isSelected ? tc.color : "var(--ink-2)", cursor: "pointer", fontWeight: isSelected ? 700 : 400, transition: "all 0.15s" }}
-                      >{t}</button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div style={{ padding: "14px 24px 20px", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <button className="hbtn hbtn--ghost" onClick={() => { setShowNewThreadModal(false); setNewThreadTitle(""); setNewThreadBody(""); setNewThreadTag(""); }}>Cancel</button>
-              <button className="hbtn hbtn--primary" disabled={!newThreadTitle.trim() || postingThread} onClick={handleNewThread}>
-                {postingThread ? "Posting…" : <><I.check style={{ width: 14 }} /> Post Thread</>}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showQModal && g.settings && g.settings.questionnaires && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={(e) => { if (e.target === e.currentTarget) setShowQModal(false); }}>

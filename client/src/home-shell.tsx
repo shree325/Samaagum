@@ -159,9 +159,7 @@ export function Topbar({ go, counts, dark, onToggleTheme, city, onCity, chatSett
       <button className="tb-icon" onClick={()=>go("notifications")} title="Notifications">
         <I.bell/>{counts.notifs ? <span className="badge">{counts.notifs}</span> : null}
       </button>
-      <button className="tb-icon" onClick={onToggleTheme} title={dark ? "Switch to Light Mode" : "Switch to Dark Mode"}>
-        {dark ? <I.sun/> : <I.moon/>}
-      </button>
+
       <div style={{ position:"relative" }}>
         <button className="tb-icon" style={{ padding:0, border:"none" }} onClick={()=>setProfileOpen(v=>!v)}>
           <I.Avatar userId={window.ME?.id} name={ME.name} img={ME.img} size={40} className="ring" />
@@ -178,7 +176,7 @@ export function ProfileMenu({ go, dark, onToggleTheme }) {
   const isAdmin = ME.role && ME.role.toLowerCase().includes("admin");
   const items = [
     { k:"profile", ic:<I.user/>, t:"My profile" },
-    { k:"events", ic:<I.ticket/>, t:"My tickets" },
+    { k:"tickets", ic:<I.ticket/>, t:"My tickets" },
     { k:"groups", ic:<I.groups/>, t:"My groups" },
     { k:"upgrade", ic:<I.crown style={{ color: "var(--accent-1)" }}/>, t:"Upgrade Plan" },
     ...(isAdmin ? [{ k:"admin", ic:<I.compass/>, t:"Admin Console" }] : []),

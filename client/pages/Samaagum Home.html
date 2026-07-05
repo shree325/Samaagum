@@ -23,6 +23,7 @@
 
   <script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"></script>
   <script>window.QRCodeLib = window.QRCode;</script>
+  <script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
   <script>
     // Load Socket.io client library directly from backend server synchronously
     (function() {
@@ -31,7 +32,32 @@
       document.write('<script src="' + apiBase + '/socket.io/socket.io.js"><\/script>');
     })();
   </script>
-  <script type="module" src="/src/home-app.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/ios-frame.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/tweaks-panel.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/components.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-icons.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-data.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-shell.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-cards.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-feed.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-event.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/discussion-panel.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-group.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-profile.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-settings.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/VirtualCard.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-notifications.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/api/messaging-client.ts"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-messages.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-create.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/create_event.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-tickets.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-waitlist.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-subscription.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/public-profile.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/join_event.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/event.tsx"></script>
+  <script type="text/babel" data-presets="env,react,typescript" src="../src/home-app.tsx"></script>
 </body>
 
 </html>

@@ -41,5 +41,11 @@ export const startGroupsSocket = async (io: Server) => {
             groupUsers.get(meta.groupId)?.delete(meta.userId);
             broadcastOnlineCount(meta.groupId);
         });
+        socket.on('join_event', (eventId: string) => {
+            socket.join(`event_${eventId}`);
+        });
+        socket.on('leave_event', (eventId: string) => {
+            socket.leave(`event_${eventId}`);
+        });
     });
 };

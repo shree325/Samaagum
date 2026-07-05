@@ -137,7 +137,9 @@ fastify.register(publicRoutes, { prefix: '/api/public' });
 fastify.register(messagingTestRoutes, { prefix: '/api/test' });
 fastify.register(messagingRoutes, { prefix: '/api/messaging' });
 fastify.register(connectionRoutes, { prefix: '/api/connections' });
+import { eventRoutes } from './controllers/eventRoutes';
 fastify.register(groupRoutes, { prefix: '/api/groups' });
+fastify.register(eventRoutes, { prefix: '/api/events' });
 
 // Health check route
 fastify.get('/health', async (request, reply) => {
