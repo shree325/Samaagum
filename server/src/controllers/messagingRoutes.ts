@@ -902,7 +902,8 @@ export async function messagingRoutes(fastify: FastifyInstance) {
               action: "event_request",
               eventId: data.eventId,
               eventTitle: data.eventTitle,
-              requesterId: data.requesterId
+              requesterId: data.requesterId,
+              answers: data.answers || {}
             };
           } catch (e) {
             return {
@@ -1030,6 +1031,46 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             text: `New gallery media has been uploaded.`,
             action: "view",
             itemId: l.provider_ref
+          };
+        }
+
+        if (l.template_key === 'forum_thread_pending') {
+          let parsedRef: any = {};
+          try { parsedRef = l.provider_ref ? JSON.parse(l.provider_ref) : {}; } catch {}
+          const postTitle = parsedRef.postTitle || 'a thread';
+          const authorName = parsedRef.authorName || 'Someone';
+          const eventTitle = parsedRef.eventTitle || 'event';
+          return {
+            id: l.id,
+            who: "Discussion",
+            type: "forum_thread_pending",
+            unread: l.status !== 'read',
+            day: dayLabel,
+            time: timeStr,
+            text: `<b>${authorName}</b> created thread <b>"${postTitle}"</b> in <b>${eventTitle}</b> — awaiting your approval.`,
+            action: "view",
+            eventId: parsedRef.eventId,
+            postId: parsedRef.postId
+          };
+        }
+
+        if (l.template_key === 'forum_thread_approved') {
+          let parsedRef: any = {};
+          try { parsedRef = l.provider_ref ? JSON.parse(l.provider_ref) : {}; } catch {}
+          const postTitle = parsedRef.postTitle || 'your thread';
+          const approverName = parsedRef.approverName || 'An organizer';
+          const eventTitle = parsedRef.eventTitle || 'event';
+          return {
+            id: l.id,
+            who: "Discussion",
+            type: "forum_thread_approved",
+            unread: l.status !== 'read',
+            day: dayLabel,
+            time: timeStr,
+            text: `<b>${approverName}</b> approved your thread <b>"${postTitle}"</b> in <b>${eventTitle}</b>! 🎉`,
+            action: "view",
+            eventId: parsedRef.eventId,
+            postId: parsedRef.postId
           };
         }
 
@@ -1205,13 +1246,34 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       }
 
       // Clear any cancelled or expired booking for this user to make room
-      await prisma.bookings.deleteMany({
+      const bookingsToDelete = await prisma.bookings.findMany({
         where: {
           event_id: eventId,
           booker_user_id: userId,
           status: { in: ['cancelled', 'expired'] }
-        }
+        },
+        select: { id: true }
       });
+      if (bookingsToDelete.length > 0) {
+        const deleteIds = bookingsToDelete.map(b => b.id);
+        
+        // Delete related child records to avoid FK violations
+        await prisma.checkins.deleteMany({
+          where: { tickets: { booking_line_items: { booking_id: { in: deleteIds } } } }
+        });
+        await prisma.attendees.deleteMany({
+          where: { booking_id: { in: deleteIds } }
+        });
+        await prisma.tickets.deleteMany({
+          where: { booking_line_items: { booking_id: { in: deleteIds } } }
+        });
+        await prisma.booking_line_items.deleteMany({
+          where: { booking_id: { in: deleteIds } }
+        });
+        await prisma.bookings.deleteMany({
+          where: { id: { in: deleteIds } }
+        });
+      }
 
       // Get or create a ticket type
       let ticketType = await prisma.ticket_types.findFirst({
@@ -1327,7 +1389,8 @@ export async function messagingRoutes(fastify: FastifyInstance) {
               eventId,
               eventTitle: event.title,
               requesterId: userId,
-              requesterName
+              requesterName,
+              answers
             })
           }
         });
@@ -1339,7 +1402,8 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             id: notif.id,
             type: 'registration',
             text: `<b>${requesterName}</b> requested to join <b>${event.title}</b>`,
-            eventId: eventId
+            eventId: eventId,
+            answers
           });
         }
 
@@ -1437,7 +1501,8 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         if (chatNamespace) {
           chatNamespace.to(`user:${requesterId}`).emit('group.notification', {
             type: 'event',
-            text: `Your request to join <b>${eventTitle}</b> was accepted! 🎉`
+            text: `Your request to join <b>${eventTitle}</b> was accepted! 🎉`,
+            eventId
           });
         }
 

@@ -77,7 +77,7 @@ function SortBar({ sort, onSort }) {
   );
 }
 
-function ThreadCard({ p, onOpen, voteData, onVote, reactions, onReact, isLiked, onLike }) {
+function ThreadCard({ p, onOpen, voteData, onVote, reactions, onReact, isLiked, onLike, currentUserId, isPrivileged, onApprove, onReject }) {
   const timeStr = p.created_at ? getRelativeTime(p.created_at) : 'Just now';
   const authorName = p.author_name || p.author_username || 'Unknown';
   const displayTitle = p.title || (p.body ? p.body.slice(0, 90) + (p.body.length > 90 ? '…' : '') : 'Untitled thread');
@@ -88,12 +88,34 @@ function ThreadCard({ p, onOpen, voteData, onVote, reactions, onReact, isLiked, 
   const likeCount = rxCounts['❤️'] || 0;
   const tags = p.tags || [];
   const hasBadges = p.pinned || p.locked || p.solved || tags.length > 0;
+  const isPending = p.status === 'hidden';
+  const isMyPendingPost = isPending && p.author_user_id === currentUserId;
   return (
-    <div className={`post ${p.pinned ? "pinned" : ""}`} style={{ display: "flex", gap: 12, cursor: "pointer" }} onClick={() => onOpen(p)}>
+    <div className={`post ${p.pinned ? "pinned" : ""}`} style={{ display: "flex", gap: 12, cursor: isPending && !isPrivileged ? "default" : "pointer", opacity: isPending && !isPrivileged && !isMyPendingPost ? 0.5 : 1, background: isMyPendingPost ? "var(--surface-2)" : undefined, borderLeft: isMyPendingPost ? "3px solid #f59e0b" : undefined }} onClick={() => !isPending && onOpen(p)}>
       <div onClick={e => e.stopPropagation()}>
         <VoteWidget score={score} userVote={userVote} onUpvote={() => onVote(p.id, userVote === 1 ? 0 : 1)} onDownvote={() => onVote(p.id, userVote === -1 ? 0 : -1)} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
+        {/* Pending approval badge */}
+        {isPending && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#d97706", background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 8, padding: "2px 8px", display: "flex", alignItems: "center", gap: 4 }}>⏳ Pending Approval</span>
+            {isPrivileged && (
+              <>
+                <button
+                  className="hbtn hbtn--primary hbtn--sm"
+                  style={{ fontSize: 11, padding: "2px 10px" }}
+                  onClick={e => { e.stopPropagation(); onApprove && onApprove(p.id); }}
+                >Approve</button>
+                <button
+                  className="hbtn hbtn--ghost hbtn--sm"
+                  style={{ fontSize: 11, padding: "2px 10px", color: "#e74c3c" }}
+                  onClick={e => { e.stopPropagation(); onReject && onReject(p.id); }}
+                >Reject</button>
+              </>
+            )}
+          </div>
+        )}
         {hasBadges && (
           <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 6, flexWrap: "wrap" }}>
             {p.pinned && <span style={{ fontSize: 11, fontWeight: 600, color: "var(--accent-2)", display: "flex", alignItems: "center", gap: 3 }}><I.bookmarkF style={{ width: 10, height: 10 }} />Pinned</span>}
@@ -214,7 +236,7 @@ function CommentItem({ c, depth, canReply, isOwner, currentUserId, replyingToId,
   );
 }
 
-function DiscussionPanel({ entityType, entityId, token, currentUserId, isOwner, isAdmin, isModerator, forumsEnabled, threadPerm, replyPerm, approvalRequired, ME }) {
+function DiscussionPanel({ entityType, entityId, token, currentUserId, isOwner, isAdmin, isModerator, isMember: isMemberProp, myRoleKey, availableRoles, isTicketManager, isScanner, forumsEnabled, threadPerm, replyPerm, approvalRequired, ME }) {
   const { useState, useEffect, useRef, useCallback } = React;
   
   const [posts, setPosts] = useState([]);
@@ -378,13 +400,54 @@ function DiscussionPanel({ entityType, entityId, token, currentUserId, isOwner, 
         setNewThreadBody("");
         setNewThreadTag("");
         setShowNewThreadModal(false);
-        fetchPosts(sort);
+        // If it's pending approval, add it locally so the author can see it with the badge
+        if (data.data?.pendingApproval) {
+          setPosts(prev => [data.data, ...prev]);
+          if (window.toast) window.toast("Thread submitted! Awaiting organizer approval. ⏳", "info");
+        } else {
+          fetchPosts(sort);
+        }
       } else {
         alert(data.message);
       }
     } catch (e) { console.error(e); }
     setPostingThread(false);
   };
+
+  const handleApproveThread = async (postId) => {
+    try {
+      const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+      const res = await fetch(`${apiBase}${apiPathBase}/posts/${postId}/approve`, {
+        method: 'PATCH',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      const data = await res.json();
+      if (data.success) {
+        // Move the post from pending (hidden) to active locally and re-fetch
+        fetchPosts(sort);
+        if (window.toast) window.toast("Thread approved! ✓", "success");
+      } else {
+        if (window.toast) window.toast(data.message || "Failed to approve", "warning");
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const handleRejectThread = async (postId) => {
+    if (!confirm("Reject (delete) this pending thread?")) return;
+    try {
+      const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+      const res = await fetch(`${apiBase}${apiPathBase}/posts/${postId}`, {
+        method: 'DELETE',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPosts(prev => prev.filter(p => p.id !== postId));
+        if (window.toast) window.toast("Thread rejected and removed.", "info");
+      }
+    } catch (e) { console.error(e); }
+  };
+
 
   const handleSubmitReply = async () => {
     if (!replyDraft.trim() || !activeThread) return;
@@ -592,9 +655,21 @@ function DiscussionPanel({ entityType, entityId, token, currentUserId, isOwner, 
     const socketUrl = apiBase ? `${apiBase}/groups` : "/groups";
     const socket = window.io(socketUrl, { transports: ['websocket'] });
 
-    socket.emit('join_group', entityId);
+    const roomType = entityType === 'event' ? 'join_event' : 'join_group';
+    socket.emit(roomType, entityId);
 
     socket.on('new_thread', () => {
+      fetchPosts(sort);
+    });
+
+    socket.on('thread_pending_approval', () => {
+      // Privileged users refresh feed to see new pending thread
+      if (isOwner || isAdmin || isModerator) {
+        fetchPosts(sort);
+      }
+    });
+
+    socket.on('post_approved', () => {
       fetchPosts(sort);
     });
 
@@ -677,32 +752,57 @@ function DiscussionPanel({ entityType, entityId, token, currentUserId, isOwner, 
     });
 
     return () => {
-      socket.emit('leave_group', entityId);
+      const leaveType = entityType === 'event' ? 'leave_event' : 'leave_group';
+      socket.emit(leaveType, entityId);
       socket.disconnect();
     };
   }, [entityId, sort, fetchPosts]);
 
-  // Permissions check
-  const isMember = true; // For event page, any member on the page has general access
-  const hasThreadPerm = threadPerm === "everyone" || threadPerm === "members" ||
-    (threadPerm.public) ||
-    (isOwner && threadPerm.owner) ||
-    (isAdmin && threadPerm.admin) ||
-    (isModerator && threadPerm.moderator);
+  // Permissions check.
+  // Groups (home-group.tsx) pass string perms ('everyone' | 'members' | 'selected') derived
+  // from g.settings?.forums — that path is untouched below. Events pass an object bucket:
+  // either the new dynamic {public, roles: string[]} shape (checked against myRoleKey/
+  // availableRoles) or the legacy {owner,admin,moderator,member,public} shape (checked against
+  // isOwner/isAdmin/isModerator, unchanged) for events whose settings haven't been re-saved yet.
+  // isMemberProp is intentionally NOT AND-gated into canPost/canReply below: hasBucketPerm already
+  // fully decides non-owner access (including a bucket explicitly marked public), and requiring
+  // membership on top of that would wrongly lock out a genuine non-member when public:true is set —
+  // "public means to all" per the Discussion Settings UI, not "all current members".
 
-  const hasReplyPerm = replyPerm === "everyone" || replyPerm === "members" ||
-    (replyPerm.public) ||
-    (isOwner && replyPerm.owner) ||
-    (isAdmin && replyPerm.admin) ||
-    (isModerator && replyPerm.moderator);
+  const hasBucketPerm = (perm) => {
+    if (typeof perm === "string") {
+      // Group path — 'selected' without per-member data defaults to owner/admin only, matching
+      // the "everyone in forumPermissions" checks done elsewhere in home-group.tsx.
+      return perm === "everyone" || perm === "members" || isOwner || isAdmin;
+    }
+    if (!perm) return false;
+    if (Array.isArray(perm.roles)) {
+      return !!isTicketManager || perm.public === true || (!!myRoleKey && perm.roles.includes(myRoleKey));
+    }
+    return !!(
+      perm.public ||
+      (isOwner && perm.owner) ||
+      (isAdmin && perm.admin) ||
+      (isModerator && perm.moderator) ||
+      ((isTicketManager || isScanner) && perm.moderator)
+    );
+  };
 
-  const canPost = forumsEnabled && isMember && (isOwner || hasThreadPerm);
-  const canReply = forumsEnabled && isMember && (isOwner || hasReplyPerm);
+  const hasThreadPerm = hasBucketPerm(threadPerm);
+  const hasReplyPerm = hasBucketPerm(replyPerm);
 
+  const canPost = forumsEnabled && (isOwner || hasThreadPerm);
+  const canReply = forumsEnabled && (isOwner || hasReplyPerm);
+
+  const isPrivilegedUser = isOwner || isAdmin || isModerator;
   const filteredPosts = (activeTag
     ? posts.filter(p => (p.tags || []).some(t => t.name === activeTag))
     : posts
   ).filter(p => {
+    // Exclude pending (hidden) posts from the main feed — they appear in the Pending Approvals section instead
+    // Exception: the author themselves should see their own pending post in the main list with the badge
+    if (p.status === 'hidden' && isPrivilegedUser) return false; // Privileged users see them in the pending section only
+    if (p.status === 'hidden' && p.author_user_id !== currentUserId) return false; // Others can't see pending from other people
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (p.title || '').toLowerCase().includes(q) || (p.body || '').toLowerCase().includes(q);
@@ -741,6 +841,33 @@ function DiscussionPanel({ entityType, entityId, token, currentUserId, isOwner, 
               );
             })}
           </div>
+
+          {/* Pending Approvals section — visible to owners/admins/moderators */}
+          {(isOwner || isAdmin || isModerator) && (() => {
+            const pendingPosts = posts.filter(p => p.status === 'hidden');
+            if (pendingPosts.length === 0) return null;
+            return (
+              <div style={{ background: "linear-gradient(135deg, #fff7ed 0%, #fef3c7 100%)", border: "1px solid #fde68a", borderRadius: "var(--r-md)", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 14, color: "#92400e" }}>
+                  <span>⏳</span>
+                  <span>Pending Thread Approvals ({pendingPosts.length})</span>
+                </div>
+                {pendingPosts.map(p => (
+                  <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: "#fff", borderRadius: 8, border: "1px solid #fde68a", padding: "10px 12px", flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13.5, color: "var(--ink)", marginBottom: 2 }}>{p.title || p.body?.slice(0, 80) || 'Untitled'}</div>
+                      <div style={{ fontSize: 12, color: "var(--ink-3)" }}>by {p.author_name || 'Unknown'} · {getRelativeTime(p.created_at)}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <button className="hbtn hbtn--primary hbtn--sm" style={{ fontSize: 12 }} onClick={() => handleApproveThread(p.id)}>✓ Approve</button>
+                      <button className="hbtn hbtn--ghost hbtn--sm" style={{ fontSize: 12, color: "#e74c3c" }} onClick={() => handleRejectThread(p.id)}>✗ Reject</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
           {!forumsEnabled && (
             <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "16px 20px", display: "flex", alignItems: "center", gap: 12, color: "var(--ink-2)" }}>
               <I.lock style={{ width: 18, height: 18, opacity: 0.5 }} />
@@ -761,7 +888,7 @@ function DiscussionPanel({ entityType, entityId, token, currentUserId, isOwner, 
             </div>
           ) : (
             filteredPosts.map(p => (
-              <ThreadCard key={p.id} p={p} onOpen={openThread} voteData={threadVotes[p.id]} onVote={handleVoteThread} reactions={threadReactions[p.id]} onReact={handleReactThread} isLiked={myLikes.has(p.id)} onLike={handleLikeThread} />
+              <ThreadCard key={p.id} p={p} onOpen={openThread} voteData={threadVotes[p.id]} onVote={handleVoteThread} reactions={threadReactions[p.id]} onReact={handleReactThread} isLiked={myLikes.has(p.id)} onLike={handleLikeThread} currentUserId={currentUserId} isPrivileged={isOwner || isAdmin || isModerator} onApprove={handleApproveThread} onReject={handleRejectThread} />
             ))
           )}
         </div>

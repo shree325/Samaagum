@@ -100,18 +100,24 @@ function EventPage({ ev, st, go }) {
   const { saved, toggleSave, city } = st;
   const isSaved = saved.has(e.id);
 
-  const isOwner = (e.created_by && e.created_by === ME.id) || e.id === "new";
-  const isAdmin = ME.role && ME.role.toLowerCase().includes("admin");
-  const isModerator = ME.role && ME.role.toLowerCase().includes("moderator");
-  // Booking status — passed from home-app router or fetched from server
-  const bookingStatusProp = e.bookingStatus || null;
-  const isJoined = bookingStatusProp === 'confirmed';
-  const isPending = bookingStatusProp === 'pending_approval';
-  const isMember = isOwner || isAdmin || isModerator || isJoined;
-
   const [currentEvent, setCurrentEvent] = useState(e);
   const [hostStats, setHostStats] = useState(null);
   const [eventMembers, setEventMembers] = useState(null);
+  const [availableRoles, setAvailableRoles] = useState(null);
+
+  // isOwner checks both prop (e.created_by) and the richer server-fetched currentEvent.created_by
+  const isOwner = (
+    (e.created_by && e.created_by === ME.id) ||
+    (currentEvent.created_by && currentEvent.created_by === ME.id) ||
+    e.id === "new"
+  );
+  const isAdmin = ME.role && ME.role.toLowerCase().includes("admin");
+  const isModerator = ME.role && ME.role.toLowerCase().includes("moderator");
+  // Booking status — passed from home-app router or fetched from server
+  const bookingStatusProp = currentEvent.bookingStatus || e.bookingStatus || null;
+  const isJoined = bookingStatusProp === 'confirmed';
+  const isPending = bookingStatusProp === 'pending_approval';
+  const isMember = isOwner || isAdmin || isModerator || isJoined;
 
   const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
 
@@ -349,6 +355,21 @@ function EventPage({ ev, st, go }) {
     fetchEventDetails();
     fetchEventMembers();
     fetchEventGallery();
+    (async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${apiBase}/api/events/available-roles`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
+        const data = await res.json();
+        if (data.success) setAvailableRoles(data.data || []);
+      } catch (err) {
+        console.error(err);
+      }
+    })();
+  }, [e.id]);
+
+  useEffect(() => {
     if (isOwner || isAdmin || isModerator) {
       fetchHostStats();
     }
@@ -429,31 +450,42 @@ function EventPage({ ev, st, go }) {
     try { currentUserId = JSON.parse(atob(token.split('.')[1])).id; } catch (err) { }
   }
 
+  const roleHasCap = (roleKey, cap) => (availableRoles || []).find(r => r.key === roleKey)?.capabilities?.includes(cap);
+
   const myMemberEntry = eventMembers ? eventMembers.find(m => m.id === currentUserId || (window.ME && m.id === window.ME.id)) : null;
-  const isHostOrCoHost = isOwner || (myMemberEntry && (myMemberEntry.role === 'event_host' || myMemberEntry.role === 'event_cohost'));
-  const isScanner = myMemberEntry && myMemberEntry.role === 'event_scanner';
+  const isHostOrCoHost = isOwner || !!(myMemberEntry && roleHasCap(myMemberEntry.role, 'event.manage'));
+  const isTicketManager = isHostOrCoHost || !!(myMemberEntry && roleHasCap(myMemberEntry.role, 'event.configure_tickets'));
+  const isScanner = !isTicketManager && !!(myMemberEntry && roleHasCap(myMemberEntry.role, 'checkin.gate_staff'));
   const effectiveIsMember = isMember || !!myMemberEntry;
 
-  // Gallery/Discussion tabs visible to owners, admins, moderators, AND confirmed joiners
-  const canViewGallery = galleryEnabled && (
-    galleryViewRoles?.public ||
-    (effectiveIsMember && galleryViewRoles?.member) ||
-    (isHostOrCoHost && (galleryViewRoles?.owner !== false || galleryViewRoles?.admin !== false)) ||
-    (isScanner && galleryViewRoles?.moderator !== false) ||
-    (isOwner && galleryViewRoles?.owner !== false) ||
-    (isAdmin && galleryViewRoles?.admin !== false) ||
-    (isModerator && galleryViewRoles?.moderator !== false)
-  );
+  // Effective RBAC role key for this user on this event — mirrors EventService.getEventUserRole:
+  // owner -> top seeded role key, staff -> their assigned role key, confirmed booking -> 'member'.
+  const myRoleKey = isOwner ? (availableRoles || [])[0]?.key : (myMemberEntry?.role || (effectiveIsMember ? 'member' : null));
 
-  const canUploadToGallery = galleryEnabled && (
-    galleryUploadRoles?.public ||
-    (effectiveIsMember && galleryUploadRoles?.member) ||
-    (isHostOrCoHost && (galleryUploadRoles?.owner !== false || galleryUploadRoles?.admin !== false)) ||
-    (isScanner && galleryUploadRoles?.moderator !== false) ||
-    (isOwner && galleryUploadRoles?.owner !== false) ||
-    (isAdmin && galleryUploadRoles?.admin !== false) ||
-    (isModerator && galleryUploadRoles?.moderator !== false)
-  );
+  // Evaluates a gallery/discussion permission bucket. New shape ({public, roles}) is checked
+  // dynamically against availableRoles; legacy shape ({owner,admin,moderator,member,public})
+  // keeps its original behavior unchanged until an admin re-saves via the new roles modal.
+  const checkRoleBucket = (bucket, bypass) => {
+    if (bucket && Array.isArray(bucket.roles)) {
+      return !!bypass || bucket.public === true || (!!myRoleKey && bucket.roles.includes(myRoleKey));
+    }
+    return !!bucket && (
+      bucket.public ||
+      (effectiveIsMember && bucket.member) ||
+      (isTicketManager && (bucket.owner !== false || bucket.admin !== false)) ||
+      (isScanner && bucket.moderator !== false) ||
+      (isOwner && bucket.owner !== false) ||
+      (isAdmin && bucket.admin !== false) ||
+      (isModerator && bucket.moderator !== false)
+    );
+  };
+
+  // Gallery/Discussion tabs visible to owners, admins, moderators, AND confirmed joiners
+  const canViewGallery = galleryEnabled && checkRoleBucket(galleryViewRoles, isTicketManager);
+  const canUploadToGallery = galleryEnabled && checkRoleBucket(galleryUploadRoles, isTicketManager);
+  const canAccessDiscussion = effectiveIsMember ||
+    checkRoleBucket(discussionThreadRoles, isTicketManager) ||
+    checkRoleBucket(discussionReplyRoles, isTicketManager);
 
   // Tab State
   const [tab, setTab] = useState("about"); // about | members | gallery | discussion | ticketing | invite | settings
@@ -464,12 +496,12 @@ function EventPage({ ev, st, go }) {
 
   const tabs = e.id === "new" ? [["about", "About"]] : [
     ["about", "About"],
-    ...(effectiveIsMember ? [["members", `Members${pendingCount > 0 && (isHostOrCoHost || isAdmin || isModerator) ? ` · 🔴${pendingCount}` : ""}`]] : []),
+    ...(effectiveIsMember ? [["members", `Members${pendingCount > 0 && (isTicketManager || isAdmin || isModerator) ? ` · 🔴${pendingCount}` : ""}`]] : []),
     ...(canViewGallery ? [["gallery", "Gallery"]] : []),
-    ...(discussionEnabled && effectiveIsMember ? [["discussion", "Discussion"]] : []),
-    ...(isHostOrCoHost && isPaidEvent ? [["ticketing", "🎟 Ticketing"]] : []),
-    ...(isHostOrCoHost ? [["invite", "Invite"]] : []),
-    ...(isHostOrCoHost ? [["settings", "Advance setting"]] : [])
+    ...(discussionEnabled && canAccessDiscussion ? [["discussion", "Discussion"]] : []),
+    ...(isTicketManager && isPaidEvent ? [["ticketing", "🎟 Ticketing"]] : []),
+    ...(isTicketManager ? [["invite", "Invite"]] : []),
+    ...(isTicketManager ? [["settings", "Advance setting"]] : [])
   ];
 
   // Gallery items state
@@ -541,7 +573,7 @@ function EventPage({ ev, st, go }) {
   };
 
   useEffect(() => {
-    if (tab === "ticketing" && isHostOrCoHost && isPaidEvent) {
+    if (tab === "ticketing" && isTicketManager && isPaidEvent) {
       setTcLoading(true);
       Promise.all([fetchTicketTypes(), fetchTcCoupons(), fetchTcReferrals(), fetchAffiliates()])
         .finally(() => setTcLoading(false));
@@ -578,13 +610,62 @@ function EventPage({ ev, st, go }) {
     }
   };
 
-  const getRolesSummary = (roles) => {
-    if (roles.public) return "Public";
+  const handleArchiveEvent = async () => {
+    if (!confirm("Archive this event? It will be marked as cancelled and moved to Archived in My Events. This cannot be undone.")) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${apiBase}/api/events/${e.id}/archive`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        // Update local state so the page shows archived status immediately
+        setCurrentEvent(prev => ({ ...(prev || e), status: 'cancelled' }));
+        // Refresh the created events list in the parent state so My Events tab updates
+        if (st?.setCreatedEvents) {
+          st.setCreatedEvents(prev =>
+            prev.map(ev => ev.id === e.id ? { ...ev, status: 'cancelled' } : ev)
+          );
+        }
+      } else {
+        alert(data.message || "Failed to archive event.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to archive event due to a network error.");
+    }
+  };
+
+  // Translates a legacy {owner,admin,moderator,member,public} bucket into the new dynamic
+  // {public, roles: string[]} shape the first time it's edited via the roles modal below.
+  const legacyBucketToRoleKeys = (bucket) => {
+    const keys = [];
+    if (bucket?.owner) keys.push('event_owner', 'event_manager');
+    if (bucket?.admin) keys.push('co_host');
+    if (bucket?.moderator) keys.push('checkin_lead', 'gate_staff', 'session_gate_staff', 'ticket_scanner');
+    if (bucket?.member) keys.push('member');
+    const validKeys = new Set((availableRoles || []).map(r => r.key));
+    return keys.filter(k => validKeys.has(k));
+  };
+
+  const getRolesSummary = (bucket) => {
+    if (!bucket) return "No one";
+    if (bucket.public) return "Public";
+    if (Array.isArray(bucket.roles)) {
+      if (bucket.roles.length === 0) return "No one";
+      const names = bucket.roles.map(k => (availableRoles || []).find(r => r.key === k)?.display_name || k);
+      if (names.length === 1) return names[0] + " only";
+      if (names.length === 2) return names.join(" and ") + " only";
+      const last = names.pop();
+      return names.join(", ") + " and " + last + " only";
+    }
+    // Legacy shape — unchanged summary logic until re-saved via the new roles modal
     const selected = [];
-    if (roles.owner) selected.push("Host");
-    if (roles.admin) selected.push("Co-Host");
-    if (roles.moderator) selected.push("Scanner");
-    if (roles.member) selected.push("Member");
+    if (bucket.owner) selected.push("Host");
+    if (bucket.admin) selected.push("Co-Host");
+    if (bucket.moderator) selected.push("Scanner");
+    if (bucket.member) selected.push("Member");
 
     if (selected.length === 0) return "No one";
     if (selected.length === 1) return selected[0] + " only";
@@ -593,19 +674,21 @@ function EventPage({ ev, st, go }) {
     return selected.join(", ") + " and " + last + " only";
   };
 
-  const renderRolesModal = (isOpen, onClose, roles, setRoles, titleText, onSave) => {
+  const renderRolesModal = (isOpen, onClose, bucket, setBucket, titleText, onSave) => {
     if (!isOpen) return null;
-    const options = [
-      { key: "owner", label: "Host" },
-      { key: "admin", label: "Co-Host" },
-      { key: "moderator", label: "Scanner" },
-      { key: "member", label: "Member" },
-      { key: "public", label: "Public" }
-    ];
+    const isNewShape = Array.isArray(bucket?.roles);
+    const current = isNewShape ? bucket : { public: !!bucket?.public, roles: legacyBucketToRoleKeys(bucket) };
+
+    const togglePublic = () => {
+      const next = { ...current, public: !current.public };
+      setBucket(next);
+      if (onSave) onSave(next);
+    };
 
     const toggleRole = (key) => {
-      const next = { ...roles, [key]: !roles[key] };
-      setRoles(next);
+      const roles = current.roles.includes(key) ? current.roles.filter(k => k !== key) : [...current.roles, key];
+      const next = { public: current.public, roles };
+      setBucket(next);
       if (onSave) onSave(next);
     };
 
@@ -621,11 +704,18 @@ function EventPage({ ev, st, go }) {
           padding: "24px", boxShadow: "var(--sh-xl)", color: "var(--ink)"
         }}>
           <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700 }}>{titleText}</h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
-            {options.map(opt => (
-              <div key={opt.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 14, fontWeight: 600 }}>{opt.label}</span>
-                <Toggle on={roles[opt.key]} onClick={() => toggleRole(opt.key)} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20, maxHeight: "50vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: "1px solid var(--border-3)" }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>Public (Everyone)</div>
+                <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Opens this to everyone, including non-members — overrides role selection below.</div>
+              </div>
+              <Toggle on={current.public} onClick={togglePublic} />
+            </div>
+            {(availableRoles || []).map(r => (
+              <div key={r.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", opacity: current.public ? 0.5 : 1 }}>
+                <span style={{ fontSize: 14, fontWeight: 600 }}>{r.display_name}</span>
+                <Toggle on={current.roles.includes(r.key)} onClick={() => toggleRole(r.key)} />
               </div>
             ))}
           </div>
@@ -695,12 +785,7 @@ function EventPage({ ev, st, go }) {
                   <button className="hbtn hbtn--soft hbtn--sm" onClick={() => go("edit-event", currentEvent || e)}>
                     <I.edit style={{ width: 14 }} /> Edit Event
                   </button>
-                  <button className="hbtn hbtn--sm" style={{ background: "var(--surface-2)", color: "var(--ink-2)" }} onClick={() => {
-                    if (confirm("Are you sure you want to cancel/archive this event?")) {
-                      alert("Event archived.");
-                      go("home");
-                    }
-                  }}>
+                  <button className="hbtn hbtn--sm" style={{ background: "var(--surface-2)", color: "var(--ink-2)" }} onClick={handleArchiveEvent}>
                     Archive
                   </button>
                 </>
@@ -729,6 +814,17 @@ function EventPage({ ev, st, go }) {
               {/* Tab 1: About */}
               {tab === "about" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+                  {/* Archived banner */}
+                  {currentEvent?.status === 'cancelled' && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(107,114,128,0.12)", border: "1px solid rgba(107,114,128,0.35)", borderRadius: "var(--r-md)", padding: "14px 16px" }}>
+                      <span style={{ fontSize: 22 }}>🗄️</span>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: "var(--ink)" }}>This event has been archived</div>
+                        <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>This event was cancelled and is no longer active. It now appears in the Archived section of My Events.</div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Pending approval banner */}
                   {isPending && (
@@ -801,49 +897,64 @@ function EventPage({ ev, st, go }) {
                   <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
                     {/* Pending join requests — host only */}
-                    {(isHostOrCoHost || isAdmin || isModerator) && pendingRequests.length > 0 && (
-                      <div style={{ border: "1px solid rgba(245,158,11,0.3)", borderRadius: "var(--r-md)", background: "rgba(245,158,11,0.06)", overflow: "hidden" }}>
-                        <div style={{ padding: "14px 18px", borderBottom: "1px solid rgba(245,158,11,0.2)", display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#f59e0b", flexShrink: 0 }} />
-                          <span style={{ fontWeight: 700, fontSize: 14, color: "#92400e" }}>Pending Requests ({pendingRequests.length})</span>
-                          <span style={{ marginLeft: "auto", fontSize: 11, color: "#b45309" }}>Approve or decline below</span>
+                    {/* Pending join requests — host only */}
+                    {(isTicketManager || isAdmin || isModerator) && pendingRequests.length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
+                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#6d5efc", flexShrink: 0 }} />
+                          <span style={{ fontWeight: 700, fontSize: 16, color: "var(--ink)" }}>Pending Approvals ({pendingRequests.length})</span>
                         </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-                          {pendingRequests.map((r, idx) => (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                          {pendingRequests.map((r) => (
                             <div key={r.id || r.bookingId} style={{
-                              padding: "14px 18px",
-                              borderBottom: idx < pendingRequests.length - 1 ? "1px solid rgba(245,158,11,0.15)" : "none",
-                              display: "flex", flexDirection: "column", gap: 8
+                              padding: "16px 20px",
+                              border: "1px solid var(--border)",
+                              borderRadius: "var(--r-md)",
+                              background: "var(--surface)",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 12
                             }}>
                               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}
+                                <div style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
                                   onClick={() => r.userId && go("profile", { id: r.userId })}>
-                                  <Avatar name={r.name || "User"} size={36} />
+                                  <Avatar name={r.name || "User"} size={38} />
                                   <div>
-                                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{r.name || "Unknown"}</div>
-                                    <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{r.email || ""}</div>
+                                    <div style={{ fontWeight: 700, fontSize: 14.5, color: "var(--ink)" }}>{r.name || "Unknown"}</div>
+                                    <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 2 }}>{r.email || ""}</div>
                                   </div>
                                 </div>
-                                <div style={{ display: "flex", gap: 6 }}>
-                                  <button className="hbtn hbtn--soft hbtn--sm"
-                                    style={{ color: "#ef4444", padding: "4px 12px", fontSize: 12 }}
+                                <div style={{ display: "flex", gap: 8 }}>
+                                  <button className="hbtn hbtn--ghost hbtn--sm"
+                                    style={{ color: "#ef4444", background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: "20px", padding: "6px 16px", fontSize: 13, fontWeight: 600 }}
                                     onClick={() => handleHostRequestAction(r.bookingId, 'decline')}>
                                     Decline
                                   </button>
                                   <button className="hbtn hbtn--primary hbtn--sm"
-                                    style={{ padding: "4px 12px", fontSize: 12 }}
+                                    style={{ background: "linear-gradient(135deg,#ff6b4a,#ff4d8d)", border: "none", borderRadius: "20px", padding: "6px 18px", fontSize: 13, fontWeight: 600, color: "#fff" }}
                                     onClick={() => handleHostRequestAction(r.bookingId, 'accept')}>
                                     Approve
                                   </button>
                                 </div>
                               </div>
-                              {/* Questionnaire answers */}
+                              {/* Questionnaire answers box */}
                               {r.answers && Object.keys(r.answers).length > 0 && (
-                                <div style={{ marginLeft: 46, padding: "8px 12px", background: "rgba(0,0,0,0.04)", borderRadius: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+                                <div style={{
+                                  padding: "16px",
+                                  background: "var(--bg-2)",
+                                  border: "1px solid var(--border)",
+                                  borderRadius: "var(--r-md)",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: 12
+                                }}>
+                                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                    Questionnaire Answers
+                                  </div>
                                   {Object.entries(r.answers).map(([key, val]) => (
-                                    <div key={key} style={{ fontSize: 12 }}>
-                                      <span style={{ color: "var(--ink-3)", fontWeight: 500 }}>{key}: </span>
-                                      <span style={{ color: "var(--ink)" }}>{String(val)}</span>
+                                    <div key={key} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                                      <div style={{ fontSize: 13, color: "var(--ink-2)", fontWeight: 500 }}>Q: {key}</div>
+                                      <div style={{ fontSize: 13, color: "var(--ink)", fontWeight: 600 }}>A: {String(val)}</div>
                                     </div>
                                   ))}
                                 </div>
@@ -873,10 +984,9 @@ function EventPage({ ev, st, go }) {
                             style={{ fontSize: 12, background: "var(--field)", border: "1px solid var(--border)", padding: "6px 28px 6px 12px", height: "auto", minHeight: "32px" }}
                           >
                             <option value="all">All Roles</option>
-                            <option value="event_host">Host</option>
-                            <option value="event_cohost">Co-Host</option>
-                            <option value="event_scanner">Scanner</option>
-                            <option value="event_member">Member</option>
+                            {(availableRoles || []).map(r => (
+                              <option key={r.key} value={r.key}>{r.display_name}</option>
+                            ))}
                           </select>
                           <input
                             className="cinput"
@@ -905,12 +1015,8 @@ function EventPage({ ev, st, go }) {
                               const email = a.email || "";
                               const isLast = i === arr.length - 1;
 
-                              const roleDisplayMap = {
-                                'event_host': 'Host',
-                                'event_cohost': 'Co-Host',
-                                'event_scanner': 'Scanner',
-                                'event_member': 'Member'
-                              };
+                              const roleMeta = (key) => (availableRoles || []).find(r => r.key === key);
+                              const ROLE_BADGE_COLORS = ['#9333ea', '#2563eb', '#ea580c', '#0891b2', '#4338ca', '#be185d'];
 
                               const handleRoleChange = async (newRole) => {
                                 try {
@@ -936,11 +1042,10 @@ function EventPage({ ev, st, go }) {
                               };
 
                               // Calculate if current user can change this person's role
-                              const myRole = isOwner ? 'event_host' : (eventMembers.find(m => m.id === ME?.id)?.role || 'event_member');
-                              const hierarchy = { 'event_host': 4, 'event_cohost': 3, 'event_scanner': 2, 'event_member': 1 };
-                              const myLevel = hierarchy[myRole] || 0;
-                              const theirLevel = hierarchy[a.role] || 0;
-                              const canChangeRole = myLevel > theirLevel && myLevel > 1;
+                              const myRoleKey = isOwner ? (availableRoles || [])[0]?.key : (eventMembers.find(m => m.id === ME?.id)?.role || 'member');
+                              const myLevel = roleMeta(myRoleKey)?.hierarchy_level ?? Infinity;
+                              const theirLevel = roleMeta(a.role)?.hierarchy_level ?? Infinity;
+                              const canChangeRole = isHostOrCoHost && myLevel < theirLevel;
 
                               return (
                                 <div key={userId || name + i}
@@ -970,14 +1075,13 @@ function EventPage({ ev, st, go }) {
                                         onChange={(e) => handleRoleChange(e.target.value)}
                                         style={{ fontSize: 12, padding: "4px 24px 4px 8px", background: "var(--field)", border: "1px solid var(--border)" }}
                                       >
-                                        {myLevel > 3 && <option value="event_host">Host</option>}
-                                        {myLevel > 2 && <option value="event_cohost">Co-Host</option>}
-                                        {myLevel > 1 && <option value="event_scanner">Scanner</option>}
-                                        <option value="event_member">Member</option>
+                                        {(availableRoles || []).filter(r => r.hierarchy_level > myLevel).map(r => (
+                                          <option key={r.key} value={r.key}>{r.display_name}</option>
+                                        ))}
                                       </select>
                                     ) : (
-                                      <span style={{ fontSize: 11, fontWeight: 600, color: a.role === 'event_host' ? "#9333ea" : a.role === 'event_cohost' ? "#2563eb" : a.role === 'event_scanner' ? "#ea580c" : "#1f9d57", background: "rgba(0,0,0,0.05)", padding: "3px 8px", borderRadius: 999 }}>
-                                        {roleDisplayMap[a.role] || 'Member'}
+                                      <span style={{ fontSize: 11, fontWeight: 600, color: a.role === 'member' ? "#1f9d57" : (ROLE_BADGE_COLORS[(availableRoles || []).findIndex(r => r.key === a.role) % ROLE_BADGE_COLORS.length] || "#1f9d57"), background: "rgba(0,0,0,0.05)", padding: "3px 8px", borderRadius: 999 }}>
+                                        {roleMeta(a.role)?.display_name || 'Member'}
                                       </span>
                                     )}
                                     {userId && <I.arrowR style={{ width: 14, color: "var(--ink-3)" }} />}
@@ -1082,7 +1186,7 @@ function EventPage({ ev, st, go }) {
                   </div>
 
                   {/* Pending Approval Section */}
-                  {(isHostOrCoHost || isScanner || isOwner || isAdmin || isModerator) && galleryItems.some(item => !item.approved) && (
+                  {(isTicketManager || isScanner || isOwner || isAdmin || isModerator) && galleryItems.some(item => !item.approved) && (
                     <div style={{ background: "rgba(120,90,255,.05)", border: "1px solid rgba(120,90,255,.15)", borderRadius: "var(--r-md)", padding: "16px" }}>
                       <h4 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: "var(--accent-2)" }}>Pending Approval</h4>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 12 }}>
@@ -1154,7 +1258,7 @@ function EventPage({ ev, st, go }) {
                         )}
 
                         {/* Delete button for allowed users */}
-                        {(isHostOrCoHost || isScanner || isOwner || isAdmin || isModerator || item.uploadedBy === ME.name) && (
+                        {(isTicketManager || isScanner || isOwner || isAdmin || isModerator || item.uploadedBy === ME.name) && (
                           <button
                             style={{
                               position: "absolute", top: 6, right: 6,
@@ -1206,6 +1310,11 @@ function EventPage({ ev, st, go }) {
                   isOwner={isOwner}
                   isAdmin={isAdmin}
                   isModerator={isModerator}
+                  isMember={effectiveIsMember}
+                  myRoleKey={myRoleKey}
+                  availableRoles={availableRoles}
+                  isTicketManager={isTicketManager}
+                  isScanner={isScanner}
                   forumsEnabled={discussionEnabled}
                   threadPerm={discussionThreadRoles}
                   replyPerm={discussionReplyRoles}
@@ -1215,7 +1324,7 @@ function EventPage({ ev, st, go }) {
               )}
 
               {/* Tab: Ticketing & Coupons */}
-              {tab === "ticketing" && isHostOrCoHost && isPaidEvent && (() => {
+              {tab === "ticketing" && isTicketManager && isPaidEvent && (() => {
                 const TC_ACCENT = "var(--accent-2)";
                 const fieldStyle = { display: "flex", flexDirection: "column" as const, gap: 4 };
                 const labelStyle = { fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase" as const, letterSpacing: "0.05em" };
@@ -1699,7 +1808,7 @@ function EventPage({ ev, st, go }) {
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid var(--border-3)", paddingTop: 12 }}>
                           <div>
                             <div style={{ fontSize: 13, fontWeight: 600 }}>Permission is required</div>
-                            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Host, Co-Host, and Scanner must accept uploads.</div>
+                            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Event managers and check-in staff must approve uploads before they appear in the gallery.</div>
                           </div>
                           <Toggle on={galleryApprovalRequired} onClick={() => {
                             const next = !galleryApprovalRequired;
@@ -1839,7 +1948,7 @@ function EventPage({ ev, st, go }) {
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid var(--border-3)", paddingTop: 12 }}>
                           <div>
                             <div style={{ fontSize: 13, fontWeight: 600 }}>Approval required to create a thread?</div>
-                            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>New threads must be approved by Host, Co-Host, or Scanner.</div>
+                            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>New threads must be approved by an event manager or check-in staff before they become visible.</div>
                           </div>
                           <Toggle on={discussionApprovalRequired} onClick={() => {
                             const next = !discussionApprovalRequired;

@@ -4,6 +4,16 @@ import prisma from '../config/prisma';
 
 export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
 
+    // GET /available-roles
+    fastify.get('/available-roles', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            const roles = await EventService.getAvailableEventRoles();
+            return reply.send({ success: true, data: roles });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
     // POST /
     fastify.post('', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
         try {
@@ -39,10 +49,11 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const userId = request.user.id;
 
             // Fetch bookings with their related events in a single query
+            // Include 'cancelled' so the client can show them under the Archived tab
             const bookings = await prisma.bookings.findMany({
                 where: {
                     booker_user_id: userId,
-                    status: { in: ['confirmed', 'pending_approval'] }
+                    status: { in: ['confirmed', 'pending_approval', 'cancelled'] }
                 },
                 include: {
                     events: true
@@ -65,7 +76,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 if (seen.has(eventId)) return;
                 seen.add(eventId);
 
-                if (!event || event.status === 'cancelled') return;
+                if (!event) return;
+                // Allow cancelled events through — the client classifies them as Archived
 
                 // Fetch ticket types for this event
                 const ticketsRaw = await prisma.ticket_types.findMany({
@@ -117,6 +129,10 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
         try {
             const { id } = request.params as any;
             const data = await EventService.getEventById(id);
+            if (!data) {
+                return reply.status(404).send({ success: false, message: 'Event not found' });
+            }
+
             let bookingStatus = null;
             let bookingId = null;
             if (request.headers.authorization) {
@@ -146,10 +162,24 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             });
             const attendeeNames = confirmedAttendees.map(a => a.name);
 
+            // Resolve the entity owner to expose created_by on the event
+            let ownerUserId: string | null = null;
+            if (data.event?.hosted_by_entity_id) {
+                const entityRows = await prisma.$queryRawUnsafe<{ user_id: string }[]>(
+                    `SELECT user_id FROM entities WHERE id = $1::uuid LIMIT 1`,
+                    data.event.hosted_by_entity_id
+                );
+                ownerUserId = entityRows[0]?.user_id || null;
+            }
+
             return reply.send({
                 success: true,
                 data: {
                     ...data,
+                    event: {
+                        ...data.event,
+                        created_by: ownerUserId
+                    },
                     bookingStatus,
                     bookingId,
                     attendees: attendeeNames
@@ -168,6 +198,7 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const data = await EventService.updateEvent(id, request.user.id, request.body);
             if ((fastify as any).io) {
                 (fastify as any).io.of('/groups').emit('events_updated', { action: 'update', eventId: id });
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('dashboard_updated', { action: 'settings_update', eventId: id });
             }
             return reply.send({ success: true, data, message: 'Event updated' });
         } catch (e: any) {
@@ -198,6 +229,7 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const data = await EventService.publishDraft(id, request.user.id);
             if ((fastify as any).io) {
                 (fastify as any).io.of('/groups').emit('events_updated', { action: 'publish', eventId: id });
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('dashboard_updated', { action: 'publish', eventId: id });
             }
             return reply.send({ success: true, data });
         } catch (e: any) {
@@ -205,7 +237,23 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
         }
     });
 
-    // GET /:id/members
+    // PATCH /:id/archive — set event status to 'cancelled' (archive)
+    fastify.patch('/:id/archive', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+            const updated = await EventService.updateEvent(id, request.user.id, { status: 'cancelled' });
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').emit('events_updated', { action: 'archive', eventId: id });
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('event_archived', { eventId: id });
+            }
+            return reply.send({ success: true, data: updated, message: 'Event archived successfully' });
+        } catch (e: any) {
+            return reply.status(e.message?.includes('Forbidden') ? 403 : 500).send({ success: false, message: e.message });
+        }
+    });
+
+
     fastify.get('/:id/members', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
         try {
             const members = await EventService.getEventMembers((request.params as any).id);
@@ -247,11 +295,14 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
         try {
             if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
             const { id } = request.params as any;
-            const data = await EventService.createEventPost(id, request.user, request.body);
-            if ((fastify as any).io) {
-                (fastify as any).io.of('/groups').to(`group_${id}`).emit('new_thread', { groupId: id, postId: (data as any).id });
+            const io = (fastify as any).io || null;
+            const data = await EventService.createEventPost(id, request.user, request.body, io);
+            // Only broadcast new_thread to all if the post is NOT pending approval
+            if (!(data as any).pendingApproval && (fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('new_thread', { eventId: id, groupId: id, postId: (data as any).id });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('new_thread', { eventId: id, groupId: id, postId: (data as any).id });
             }
-            return reply.status(201).send({ success: true, data, message: 'Post created' });
+            return reply.status(201).send({ success: true, data, message: (data as any).pendingApproval ? 'Thread submitted for approval' : 'Post created' });
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });
         }
@@ -264,7 +315,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const { id, postId } = request.params as any;
             await EventService.editEventPost(id, postId, request.user, request.body);
             if ((fastify as any).io) {
-                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_edited', { groupId: id, postId });
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('thread_edited', { eventId: id, groupId: id, postId });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_edited', { eventId: id, groupId: id, postId });
             }
             return { success: true, message: 'Post updated' };
         } catch (e: any) {
@@ -279,11 +331,32 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const { id, postId } = request.params as any;
             await EventService.deleteEventPost(id, postId, request.user);
             if ((fastify as any).io) {
-                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_deleted', { groupId: id, postId });
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('thread_deleted', { eventId: id, groupId: id, postId });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_deleted', { eventId: id, groupId: id, postId });
             }
             return { success: true, message: 'Post deleted' };
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // PATCH /:id/posts/:postId/approve  — owner/host approves a pending thread
+    fastify.patch('/:id/posts/:postId/approve', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, postId } = request.params as any;
+            await EventService.approveEventPost(id, postId, request.user.id);
+            if ((fastify as any).io) {
+                // Broadcast new_thread so all clients refresh their feed and see the newly approved thread
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('new_thread', { eventId: id, groupId: id, postId });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('new_thread', { eventId: id, groupId: id, postId });
+                // Also emit post_approved so the discussion panel can remove it from the pending list
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('post_approved', { eventId: id, postId });
+            }
+            return { success: true, message: 'Thread approved' };
+        } catch (e: any) {
+            const code = e.message?.startsWith('Forbidden') ? 403 : e.message?.startsWith('Thread') ? 404 : 500;
+            return reply.status(code).send({ success: false, message: e.message });
         }
     });
 
@@ -307,7 +380,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             if (!request.body.body?.trim()) return reply.status(400).send({ success: false, message: 'Reply cannot be empty' });
             const data = await EventService.createEventComment(id, postId, request.user, request.body);
             if ((fastify as any).io) {
-                (fastify as any).io.of('/groups').to(`group_${id}`).emit('new_comment', { groupId: id, postId, commentId: (data as any).id });
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('new_comment', { eventId: id, groupId: id, postId, commentId: (data as any).id });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('new_comment', { eventId: id, groupId: id, postId, commentId: (data as any).id });
             }
             return reply.status(201).send({ success: true, data, message: 'Reply added' });
         } catch (e: any) {
@@ -322,7 +396,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const { id, postId, commentId } = request.params as any;
             await EventService.editEventComment(id, postId, commentId, request.user, request.body);
             if ((fastify as any).io) {
-                (fastify as any).io.of('/groups').to(`group_${id}`).emit('comment_edited', { groupId: id, postId, commentId });
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('comment_edited', { eventId: id, groupId: id, postId, commentId });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('comment_edited', { eventId: id, groupId: id, postId, commentId });
             }
             return { success: true, message: 'Comment updated' };
         } catch (e: any) {
@@ -337,7 +412,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const { id, postId, commentId } = request.params as any;
             await EventService.deleteEventComment(id, postId, commentId, request.user);
             if ((fastify as any).io) {
-                (fastify as any).io.of('/groups').to(`group_${id}`).emit('comment_deleted', { groupId: id, postId, commentId });
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('comment_deleted', { eventId: id, groupId: id, postId, commentId });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('comment_deleted', { eventId: id, groupId: id, postId, commentId });
             }
             return { success: true, message: 'Comment deleted' };
         } catch (e: any) {
@@ -353,7 +429,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const { vote } = request.body as any;
             const data = await EventService.voteEventPost(id, postId, request.user, vote);
             if ((fastify as any).io) {
-                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_voted', { groupId: id, postId, score: data.vote_score });
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('thread_voted', { eventId: id, groupId: id, postId, score: data.vote_score });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_voted', { eventId: id, groupId: id, postId, score: data.vote_score });
             }
             return { success: true, data };
         } catch (e: any) {
@@ -369,7 +446,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const { vote } = request.body as any;
             const data = await EventService.voteEventComment(id, commentId, request.user, vote);
             if ((fastify as any).io) {
-                (fastify as any).io.of('/groups').to(`group_${id}`).emit('comment_voted', { groupId: id, postId, commentId, score: data.vote_score });
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('comment_voted', { eventId: id, groupId: id, postId, commentId, score: data.vote_score });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('comment_voted', { eventId: id, groupId: id, postId, commentId, score: data.vote_score });
             }
             return { success: true, data };
         } catch (e: any) {
@@ -386,7 +464,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             if (!emoji) return reply.status(400).send({ success: false, message: 'emoji required' });
             const reactions = await EventService.reactEventPost(id, postId, request.user, emoji);
             if ((fastify as any).io) {
-                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_reacted', { groupId: id, postId, reactions });
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('thread_reacted', { eventId: id, groupId: id, postId, reactions });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_reacted', { eventId: id, groupId: id, postId, reactions });
             }
             return { success: true, data: { reactions } };
         } catch (e: any) {
@@ -402,7 +481,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const { solved } = request.body as any;
             await EventService.solveEventPost(id, postId, request.user, solved);
             if ((fastify as any).io) {
-                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_solved', { groupId: id, postId, solved });
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('thread_solved', { eventId: id, groupId: id, postId, solved });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_solved', { eventId: id, groupId: id, postId, solved });
             }
             return { success: true, message: solved ? 'Marked as solved' : 'Unmarked as solved' };
         } catch (e: any) {
@@ -418,7 +498,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const { archived } = request.body as any;
             await EventService.archiveEventPost(id, postId, request.user, archived);
             if ((fastify as any).io) {
-                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_archived', { groupId: id, postId, archived });
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('thread_archived', { eventId: id, groupId: id, postId, archived });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_archived', { eventId: id, groupId: id, postId, archived });
             }
             return { success: true, message: archived ? 'Thread archived' : 'Thread unarchived' };
         } catch (e: any) {
@@ -434,7 +515,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const { pinned } = request.body as any;
             await EventService.pinEventPost(id, postId, request.user, pinned);
             if ((fastify as any).io) {
-                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_pinned', { groupId: id, postId, pinned });
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('thread_pinned', { eventId: id, groupId: id, postId, pinned });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_pinned', { eventId: id, groupId: id, postId, pinned });
             }
             return { success: true, message: pinned ? 'Post pinned' : 'Post unpinned' };
         } catch (e: any) {
@@ -450,7 +532,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const { locked } = request.body as any;
             await EventService.lockEventPost(id, postId, request.user, locked);
             if ((fastify as any).io) {
-                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_locked', { groupId: id, postId, locked });
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('thread_locked', { eventId: id, groupId: id, postId, locked });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_locked', { eventId: id, groupId: id, postId, locked });
             }
             return { success: true, message: locked ? 'Post locked' : 'Post unlocked' };
         } catch (e: any) {
@@ -601,7 +684,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                     type: action === 'accept' ? 'event' : 'system',
                     text: action === 'accept' 
                         ? `Your request to join <b>${event?.title}</b> was accepted! 🎉` 
-                        : `Your request to join <b>${event?.title}</b> was declined`
+                        : `Your request to join <b>${event?.title}</b> was declined`,
+                    eventId: id
                 });
             }
 
@@ -728,26 +812,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
     const assertHostOrCoHost = async (eventId: string, userId: string) => {
         const event = await prisma.events.findUnique({ where: { id: eventId } });
         if (!event) throw new Error('Event not found');
-        
-        // Check if the user is the owner/creator of the hosting entity
-        const entityRows = await prisma.$queryRawUnsafe<{ user_id: string }[]>(
-            `SELECT user_id FROM entities WHERE id = $1::uuid LIMIT 1`,
-            event.hosted_by_entity_id
-        );
-        if (entityRows[0]?.user_id === userId) return event;
-
-        // Check if the user has an active host or cohost role assignment for the event
-        const assignment = await prisma.event_team_assignments.findFirst({
-            where: {
-                event_id: eventId,
-                user_id: userId,
-                state: 'active',
-                roles: {
-                    key: { in: ['event_host', 'event_cohost'] }
-                }
-            }
-        });
-        if (!assignment) throw new Error('Forbidden: host or co-host only');
+        const authorized = await EventService.verifyEventTicketManager(userId, eventId);
+        if (!authorized) throw new Error('Forbidden: host or co-host only');
         return event;
     };
 

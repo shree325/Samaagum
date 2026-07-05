@@ -35,50 +35,164 @@ function MyTickets({ st, go }) {
       date: dateStr,
       time: timeStr,
       venue: e.location_type === 'online' ? 'Online' : getVenueStr(e.venue),
-      status: e.status === 'cancelled' ? 'voided' : 'confirmed',
     };
   };
 
-  const upcoming = [
-    ...tickets.filter(t => t.status !== "used" && t.status !== "voided"),
-    ...joinedEvents.filter(j => j.bookingStatus === "confirmed").map(normalizeJoinedEvent)
-  ];
-  const pending = joinedEvents.filter(j => j.bookingStatus === "pending_approval");
-  const past = tickets.filter(t => t.status === "used");
+  const now = new Date();
 
-  const waitlistIds = Array.from(st.waitlisted || []);
-  const waitlistedEvents = [FEATURED, ...EVENTS].filter(e => waitlistIds.includes(e.id));
+  // Returns the best available "end" time: ends_at → starts_at → null
+  const getEndTime = (e) => {
+    if (e.ends_at) return new Date(e.ends_at);
+    if (e.starts_at) return new Date(e.starts_at);
+    return null;
+  };
 
-  const createdListRaw = st.createdEvents || [];
-  const createdList = createdListRaw.map(e => {
-    if (e.date && typeof e.venue === 'string') return e;
+  // Archived if event or booking is cancelled
+  const isArchived = (e) =>
+    e.status === 'cancelled' || e.bookingStatus === 'cancelled';
+
+  // Past if end time has passed (and not archived)
+  const isPast = (e) => {
+    const end = getEndTime(e);
+    return end !== null && end < now;
+  };
+
+  // Normalize any event-like object for card display
+  const normalizeEvent = (e) => {
     const startsAt = e.starts_at ? new Date(e.starts_at) : null;
-    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+    const dateStr = startsAt ? startsAt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : "Date TBD";
+    const timeStr = startsAt ? startsAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : "";
+    const venueObj = (typeof e.venue === 'object' && e.venue !== null) ? e.venue : {};
+    const meta = venueObj.meta || {};
+    const firstTicket = Array.isArray(e.tickets) ? e.tickets[0] : null;
+    return {
+      ...e,
+      ev: e.title || e.ev,
+      cover: e.cover || meta.cover || "",
+      cat: meta.category || e.cat || "General",
+      tier: firstTicket?.name || "General",
+      paid: (e.registration_mode === 'free' || e.registration_mode === 'free_rsvp')
+        ? 'Free'
+        : (firstTicket?.price_amount_minor != null ? `₹${(firstTicket.price_amount_minor / 100).toFixed(0)}` : '—'),
+      online: e.location_type === 'online',
+      date: dateStr,
+      time: timeStr,
+      venue: e.location_type === 'online' ? 'Online' : getVenueStr(e.venue),
+    };
+  };
+
+  // ─── Build a unified pool from all sources ────────────────────────────────
+  // Each entry gets a _source tag so we know where it came from
+  const joinedPool = (st.joinedEvents || []).map((e) => ({ ...e, _source: 'joined' }));
+
+  // 2. createdEvents (events the user hosted)
+  const createdListRaw = st.createdEvents || [];
+  const createdPool = createdListRaw.map((e) => {
+    const startsAt = e.starts_at ? new Date(e.starts_at) : null;
+    const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
     const month = startsAt ? months[startsAt.getMonth()] : "TBD";
     const day = startsAt ? startsAt.getDate().toString() : "TBD";
     const time = startsAt ? startsAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : "Time TBD";
     const dateStr = startsAt ? startsAt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : "Date TBD";
-
     const venueObj = e.venue || {};
     const meta = venueObj.meta || {};
     return {
       ...e,
+      _source: 'created',
+      _isCreated: true,
       cover: e.cover || meta.cover || "",
       cat: meta.category || e.cat || "General",
       online: e.location_type === 'online',
-      month,
-      day,
-      date: dateStr,
-      time,
+      month, day, date: dateStr, time,
       venue: e.location_type === 'online' ? 'Online' : (venueObj.name || venueObj.address || 'Venue TBD'),
     };
   });
 
+  // ─── Priority classification ──────────────────────────────────────────────
+  // Rule: every event belongs to exactly ONE category.
+  // Priority: Archived > Past > Pending > Waitlist > Upcoming > Created
+
+  // Track which event IDs have been classified to avoid duplicates
+  const classified = new Set();
+
+  // --- 1. ARCHIVED ---
+  const archivedList = [];
+  for (const e of joinedPool) {
+    if (isArchived(e)) {
+      archivedList.push(normalizeEvent(e));
+      classified.add(e.id);
+    }
+  }
+  for (const e of createdPool) {
+    if (!classified.has(e.id) && e.status === 'cancelled') {
+      archivedList.push(e);
+      classified.add(e.id);
+    }
+  }
+
+  // --- 2. PAST ---
+  const pastList = [];
+  for (const e of joinedPool) {
+    if (!classified.has(e.id) && isPast(e)) {
+      pastList.push(normalizeEvent(e));
+      classified.add(e.id);
+    }
+  }
+  for (const e of createdPool) {
+    if (!classified.has(e.id) && isPast(e)) {
+      pastList.push(e);
+      classified.add(e.id);
+    }
+  }
+  const usedTicketEvents = (st.myTickets || []).filter((t) => t.status === 'used');
+  for (const t of usedTicketEvents) {
+    const alreadyIn = pastList.some((p) => p.eventId === t.eventId || p.id === t.eventId);
+    if (!alreadyIn) pastList.push(t);
+  }
+
+  // --- 3. PENDING ---
+  const pending = [];
+  for (const e of joinedPool) {
+    if (!classified.has(e.id) && e.bookingStatus === 'pending_approval') {
+      pending.push(e);
+      classified.add(e.id);
+    }
+  }
+
+  // --- 4. WAITLIST ---
+  const waitlistIds = Array.from(st.waitlisted || []);
+  const waitlistedEvents = (typeof FEATURED !== 'undefined' && typeof EVENTS !== 'undefined')
+    ? [FEATURED, ...EVENTS].filter((e) => waitlistIds.includes(e.id))
+    : [];
+
+  // --- 5. UPCOMING ---
+  const upcoming = [];
+  for (const e of joinedPool) {
+    if (!classified.has(e.id) && e.bookingStatus === 'confirmed') {
+      upcoming.push(normalizeEvent(e));
+      classified.add(e.id);
+    }
+  }
+  for (const t of (st.myTickets || []).filter((t) => t.status !== 'used' && t.status !== 'voided')) {
+    const alreadyIn = upcoming.some((u) => u.eventId === t.eventId || u.id === t.eventId || u.id === t.id);
+    if (!alreadyIn) upcoming.push(t);
+  }
+
+  // --- 6. CREATED ---
+  const createdList = [];
+  for (const e of createdPool) {
+    if (!classified.has(e.id)) {
+      createdList.push(e);
+      classified.add(e.id);
+    }
+  }
+
   const list = tab === "upcoming" ? upcoming
     : tab === "pending" ? pending
-      : tab === "past" ? past
+      : tab === "past" ? pastList
         : tab === "waitlist" ? waitlistedEvents
-          : createdList;
+          : tab === "archived" ? archivedList
+            : createdList;
 
   return (
     <div className="scroll">
@@ -86,7 +200,7 @@ function MyTickets({ st, go }) {
         <div className="sec-bar" style={{ marginBottom: 18 }}>
           <h2 style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => go("discover", "events")}>
             My Events
-            <span style={{ fontSize: 18, color: "var(--ink-3)", fontWeight: 500 }}>{tickets.length + joinedEvents.length + waitlistedEvents.length + createdList.length}</span>
+            <span style={{ fontSize: 18, color: "var(--ink-3)", fontWeight: 500 }}>{upcoming.length + pending.length + waitlistedEvents.length + createdList.length + pastList.length + archivedList.length}</span>
           </h2>
           <div style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
             <div className="seg-tabs">
@@ -94,7 +208,8 @@ function MyTickets({ st, go }) {
               <button className={tab === "pending" ? "on" : ""} onClick={() => setTab("pending")}>Pending · {pending.length}</button>
               <button className={tab === "waitlist" ? "on" : ""} onClick={() => setTab("waitlist")}>Waitlist · {waitlistedEvents.length}</button>
               <button className={tab === "created" ? "on" : ""} onClick={() => setTab("created")}>Created · {createdList.length}</button>
-              <button className={tab === "past" ? "on" : ""} onClick={() => setTab("past")}>Past · {past.length}</button>
+              <button className={tab === "past" ? "on" : ""} onClick={() => setTab("past")}>Past · {pastList.length}</button>
+              <button className={tab === "archived" ? "on" : ""} onClick={() => setTab("archived")}>Archived · {archivedList.length}</button>
             </div>
             <button className="hbtn hbtn--primary hbtn--sm" onClick={() => go("create-event")}>
               <I.plus style={{ width: 14, height: 14 }} /> Create Event
@@ -106,6 +221,8 @@ function MyTickets({ st, go }) {
           <Empty icon={<I.groups />} title="No waitlisted events" text="You aren't on the waitlist for any events yet." action={<button className="hbtn hbtn--primary" onClick={() => go("discover", "events")}>Discover events</button>} />
         ) : tab === "created" && createdList.length === 0 ? (
           <Empty icon={<I.plus />} title="No hosted events" text="Create and share your first event to host it here." action={<button className="hbtn hbtn--primary" onClick={() => go("create-event")}>Create Event</button>} />
+        ) : tab === "archived" && archivedList.length === 0 ? (
+          <Empty icon={<I.archive />} title="No archived events" text="Cancelled or removed events will appear here for your records." action={<button className="hbtn hbtn--primary" onClick={() => go("discover", "events")}>Discover events</button>} />
         ) : list.length === 0 ? (
           <Empty icon={<I.ticket />} title="No events yet" text="When you book or RSVP to an event, your activity lives here." action={<button className="hbtn hbtn--primary" onClick={() => go("discover", "events")}>Discover events</button>} />
         ) : tab === "pending" ? (
@@ -188,6 +305,35 @@ function MyTickets({ st, go }) {
                     <span className="tkt-id">#{e.id}</span>
                     <span style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-2)", display: "flex", alignItems: "center", gap: 4 }}>
                       Manage <I.arrowR style={{ width: 14, height: 14 }} />
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : tab === "archived" ? (
+          <div className="wallet-grid">
+            {archivedList.map(e => (
+              <div key={e.id} className="tkt" style={{ opacity: 0.82, filter: "grayscale(0.3)" }} onClick={() => go("event", e)}>
+                <div className="tkt-cov" style={{ background: e.cover && (e.cover.startsWith("linear-gradient") || e.cover.startsWith("radial-gradient") || e.cover.startsWith("var(")) ? e.cover : `url(${e.cover}) center/cover no-repeat` }}>
+                  <Grain />
+                  <span className="pill" style={{ background: "rgba(0,0,0,0.32)", color: "#fff", backdropFilter: "blur(8px)" }}>{e.cat || e.tier || "Event"}</span>
+                  <span className="pill gray" style={{ background: "rgba(255,255,255,0.88)", color: "#6b7280", border: "1px solid #e5e7eb" }}>
+                    <span className="pdot" style={{ background: "#9ca3af" }} />
+                    {e._isCreated ? "Cancelled Event" : "Cancelled"}
+                  </span>
+                </div>
+                <span className="perf l" /><span className="perf r" />
+                <div className="tkt-body">
+                  <div className="tkt-ttl" style={{ color: "var(--ink-2)" }}>{e.title || e.ev}</div>
+                  <div className="tkt-meta">
+                    <span><I.cal style={{ width: 14, height: 14 }} /> {e.date} · {e.time}</span>
+                    <span>{e.online ? <I.online style={{ width: 14, height: 14 }} /> : <I.pin style={{ width: 14, height: 14 }} />} {e.venue}</span>
+                  </div>
+                  <div className="tkt-foot">
+                    <span className="tkt-id">#{e.id?.slice(0, 8)}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#9ca3af", display: "flex", alignItems: "center", gap: 3 }}>
+                      🗄️ Archived
                     </span>
                   </div>
                 </div>

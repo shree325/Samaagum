@@ -9,6 +9,8 @@ import { R_forum_tags } from '../repositories/R_forum_tags';
 import { R_forum_post_tags } from '../repositories/R_forum_post_tags';
 import { R_users } from '../repositories/R_users';
 import prisma from '../config/prisma';
+import accessControlService from './AccessControlService';
+import { sendNotificationToUser } from './messagingSocket';
 
 export class EventService {
   private static eventsRepo = new R_events(prisma);
@@ -122,7 +124,45 @@ export class EventService {
     return { event, tickets };
   }
 
-  static async verifyEventHostOrCoHost(userId: string, eventId: string): Promise<boolean> {
+  static async getAvailableEventRoles() {
+    return prisma.$queryRawUnsafe<{ role_id: string; key: string; display_name: string; description: string | null; hierarchy_level: number; capabilities: string[] }[]>(
+      `SELECT r.id as role_id, r.key, ar.display_name, ar.description, ar.hierarchy_level,
+              r.baseline_capabilities as capabilities
+       FROM roles r
+       JOIN admin_roles ar ON ar.name = r.key
+       JOIN admin_responsibilities resp ON resp.name = 'events_management'
+       WHERE ar.is_active = true
+         AND ar.tenant_id IS NULL
+         AND ar.responsibility_ids @> jsonb_build_array(resp.id::text)
+         AND (r.level = 'event' OR r.key = 'member')
+       ORDER BY ar.hierarchy_level ASC`
+    );
+  }
+
+  private static async getTopEventRoleKey(): Promise<string | null> {
+    const roles = await this.getAvailableEventRoles();
+    return roles[0]?.key ?? null;
+  }
+
+  private static async getRoleHierarchyLevels(keys: (string | undefined)[]): Promise<Record<string, number>> {
+    const uniq = Array.from(new Set(keys.filter(Boolean))) as string[];
+    if (uniq.length === 0) return {};
+    const rows = await prisma.$queryRawUnsafe<{ key: string; hierarchy_level: number }[]>(
+      `SELECT r.key, ar.hierarchy_level FROM roles r JOIN admin_roles ar ON ar.name = r.key
+       WHERE r.key = ANY($1::text[]) AND ar.tenant_id IS NULL`,
+      uniq
+    );
+    return Object.fromEntries(rows.map(r => [r.key, r.hierarchy_level]));
+  }
+
+  private static async roleHasCapability(roleKey: string, capability: string): Promise<boolean> {
+    const role = await prisma.roles.findUnique({ where: { key: roleKey }, select: { baseline_capabilities: true } });
+    const caps = Array.isArray(role?.baseline_capabilities) ? role!.baseline_capabilities as string[] : [];
+    return caps.includes(capability);
+  }
+
+  // Ownership bypass -> assigned role's baseline_capabilities -> governance-tier fallback
+  static async verifyEventCapability(userId: string, eventId: string, capability: string): Promise<boolean> {
     const event = await prisma.events.findUnique({ where: { id: eventId } });
     if (!event) return false;
     const entityRows = await prisma.$queryRawUnsafe<{ user_id: string }[]>(
@@ -132,29 +172,44 @@ export class EventService {
     if (entityRows[0]?.user_id === userId) return true;
 
     const assignment = await prisma.event_team_assignments.findFirst({
-      where: {
-        event_id: eventId,
-        user_id: userId,
-        state: 'active',
-        roles: {
-          key: { in: ['event_host', 'event_cohost'] }
-        }
-      },
+      where: { event_id: eventId, user_id: userId, state: 'active' },
       include: { roles: true }
     });
-    return !!assignment;
+    const roleKey = assignment?.roles?.key;
+    if (roleKey && await this.roleHasCapability(roleKey, capability)) return true;
+
+    return accessControlService.hasCapability(userId, capability, eventId);
+  }
+
+  static async verifyEventHostOrCoHost(userId: string, eventId: string): Promise<boolean> {
+    return this.verifyEventCapability(userId, eventId, 'event.manage');
+  }
+
+  static async verifyEventTicketManager(userId: string, eventId: string): Promise<boolean> {
+    return this.verifyEventCapability(userId, eventId, 'event.configure_tickets');
   }
 
   static async updateEvent(id: string, userId: string, body: any) {
     const event = await this.eventsRepo.getById(id);
     if (!event) throw new Error('Event not found');
 
-    const isAuthorized = await this.verifyEventHostOrCoHost(userId, id);
-    if (!isAuthorized) {
+    const isFullyAuthorized = await this.verifyEventHostOrCoHost(userId, id);
+    // Co-Hosts/managers who only hold event.configure_tickets (not event.manage) may still push
+    // venue changes — Gallery/Discussion "Advance setting" panels live under venue.meta — but
+    // cannot touch core event fields (title, dates, capacity, registration, etc.); those stay
+    // event.manage-exclusive (owner-tier). Checked separately below rather than folded into one
+    // boolean so the field set applied can differ by tier.
+    const isTicketManager = !isFullyAuthorized && await this.verifyEventTicketManager(userId, id);
+
+    if (!isFullyAuthorized && !isTicketManager) {
       throw new Error('Forbidden: You do not have permission to edit this event');
     }
 
-    const updated = await this.eventsRepo.update(id, {
+    // The client always submits the full event snapshot (saveEventSettings in event.tsx), so a
+    // ticket-manager-only editor's request still arrives with title/dates/etc. populated. Rather
+    // than reject the whole request, silently drop the restricted fields (left undefined ->
+    // eventsRepo.update's COALESCE keeps the existing DB value) and apply only `venue`.
+    const updated = await this.eventsRepo.update(id, isFullyAuthorized ? {
       title: body.title,
       description: body.description,
       status: body.status,
@@ -167,6 +222,8 @@ export class EventService {
       venue: body.venue,
       online_link: body.online_link,
       instruction: body.instruction,
+    } : {
+      venue: body.venue,
     });
 
     return updated;
@@ -260,7 +317,12 @@ export class EventService {
       whereExtra += ` AND (fp.title ILIKE $5 OR fp.body ILIKE $5)`;
     }
 
-    const posts = await this.forumPostsRepo.getEventPostsRaw(eventId, userId, lim, skip, orderBy, whereExtra, queryParams);
+
+    // Determine if the requesting user is privileged (host/admin) — they see all posts including pending
+    const isPrivileged = userId ? await this.verifyEventHostOrCoHost(userId, eventId) : false;
+
+    const posts = await this.forumPostsRepo.getEventPostsRaw(eventId, userId, lim, skip, orderBy, whereExtra, queryParams, isPrivileged);
+
 
     const postIds = posts.map((p: any) => String(p.id));
     const reactionMap: Record<string, Record<string, number>> = {};
@@ -308,9 +370,34 @@ export class EventService {
     });
   }
 
-  static async createEventPost(eventId: string, user: any, body: any) {
+  static async createEventPost(eventId: string, user: any, body: any, io?: any) {
     const event = await prisma.events.findUnique({ where: { id: eventId } });
     if (!event) throw new Error('Event not found');
+
+    // ── Approval check ──────────────────────────────────────────────────────────
+    const venue = (event.venue as any) || {};
+    const meta = venue.meta || {};
+    const discussion = meta.discussion || {};
+    const approvalRequired = discussion.approvalRequired === true;
+
+    // Check if the author is a manager / host (they bypass approval)
+    const isHostOrCoHost = await this.verifyEventHostOrCoHost(user.id, eventId);
+    const needsApproval = approvalRequired && !isHostOrCoHost;
+    const postStatus = needsApproval ? 'hidden' : 'active';
+    // ────────────────────────────────────────────────────────────────────────────
+
+    // ── Thread-creation permission (dynamic {public, roles} shape only) ─────────
+    // Legacy-shaped or unset threadRoles keep today's behavior (no server-side gate,
+    // matching how it has always worked) until an admin re-saves via the new RBAC-driven
+    // Discussion Settings UI, at which point it switches to strict enforcement.
+    const threadRoles = discussion.threadRoles;
+    if (threadRoles && Array.isArray(threadRoles.roles)) {
+      const isTicketManager = isHostOrCoHost || await this.verifyEventCapability(user.id, eventId, 'event.configure_tickets');
+      const posterRoleKey = await this.getEventUserRole(user.id, eventId);
+      const canPost = isTicketManager || threadRoles.public === true || threadRoles.roles.includes(posterRoleKey);
+      if (!canPost) throw new Error('Forbidden: You do not have permission to create a thread in this event');
+    }
+    // ────────────────────────────────────────────────────────────────────────────
 
     const post = await this.forumPostsRepo.create({
       tenant_id: user.tenantId,
@@ -319,7 +406,7 @@ export class EventService {
       author_user_id: user.id,
       title: body.title || null,
       body: body.body,
-      status: 'active'
+      status: postStatus
     });
 
     const tagColorMap: Record<string, string> = {
@@ -329,13 +416,11 @@ export class EventService {
 
     if (Array.isArray(body.tags) && body.tags.length > 0) {
       for (const tagName of body.tags) {
-        const tagRows = await prisma.$queryRawUnsafe<any[]>(
-          `INSERT INTO forum_tags(tenant_id, scope_id, scope_type, name, color)
-           VALUES ($1::uuid, $2::uuid, 'event', $3, $4)
-           ON CONFLICT (scope_id, name) DO UPDATE SET name=EXCLUDED.name
-           RETURNING id`,
-          user.tenantId, eventId, tagName, tagColorMap[tagName] || 'gray'
-        );
+        const tagRows = await prisma.$queryRaw<any[]>`
+          INSERT INTO forum_tags(tenant_id, scope_id, scope_type, name, color)
+          VALUES (${user.tenantId}::uuid, ${eventId}::uuid, 'event', ${tagName}, ${tagColorMap[tagName] || 'gray'})
+          ON CONFLICT (scope_id, name) DO UPDATE SET name=EXCLUDED.name
+          RETURNING id`;
         if (tagRows[0]) {
           await this.postTagsRepo.create({
             post_id: post.id!,
@@ -345,7 +430,143 @@ export class EventService {
       }
     }
 
-    return { ...post, tags: body.tags || [], reactions: {}, vote_score: 0, user_vote: 0, comments_count: 0 };
+    // ── Notify event owner + staff if post is pending approval ───────────────
+    if (needsApproval) {
+      try {
+        // Get author name
+        const authorUser = await prisma.users.findUnique({ where: { id: user.id } });
+        const authorName = authorUser
+          ? (`${authorUser.first_name || ''} ${authorUser.last_name || ''}`).trim() || authorUser.primary_email.split('@')[0]
+          : 'Someone';
+        const postTitle = body.title || (body.body ? body.body.slice(0, 60) : 'Untitled thread');
+
+        // Get event owner userId
+        const ownerEntity = event.hosted_by_entity_id
+          ? await prisma.entities.findUnique({ where: { id: event.hosted_by_entity_id }, select: { user_id: true } })
+          : null;
+        const ownerUserId = ownerEntity?.user_id;
+
+        // Notify anyone who can actually approve a pending thread — matches approveEventPost's
+        // authorization tier (event.configure_tickets or checkin.gate_staff), not event.manage-only,
+        // otherwise Co-Hosts/Scanners who are able to approve would never be told there's anything to approve.
+        const managerAssignments = await prisma.event_team_assignments.findMany({
+          where: { event_id: eventId, state: 'active' },
+          include: { roles: { select: { baseline_capabilities: true } } }
+        });
+        const managerIds = managerAssignments
+          .filter(a => {
+            const caps = Array.isArray(a.roles?.baseline_capabilities) ? a.roles.baseline_capabilities as string[] : [];
+            return caps.includes('event.manage') || caps.includes('event.configure_tickets') || caps.includes('checkin.gate_staff');
+          })
+          .map(a => a.user_id);
+
+        const recipientIds = new Set<string>();
+        if (ownerUserId) recipientIds.add(ownerUserId);
+        managerIds.forEach(id => recipientIds.add(id));
+        // Remove the author from recipients
+        recipientIds.delete(user.id);
+
+        const providerRef = JSON.stringify({
+          postId: String(post.id),
+          postTitle,
+          authorName,
+          eventId,
+          eventTitle: event.title || ''
+        });
+
+        if (recipientIds.size > 0) {
+          await prisma.notification_log.createMany({
+            data: Array.from(recipientIds).map(uid => ({
+              tenant_id: user.tenantId || '00000000-0000-0000-0000-000000000000',
+              user_id: uid,
+              channel: 'socket',
+              template_key: 'forum_thread_pending',
+              status: 'sent',
+              provider_ref: providerRef
+            })),
+            skipDuplicates: true
+          });
+
+          const notifText = `<b>${authorName}</b> created a thread <b>"${postTitle}"</b> in <b>${event.title || 'event'}</b> that requires your approval.`;
+          for (const uid of recipientIds) {
+            sendNotificationToUser(uid, 'group.notification', {
+              type: 'forum_thread_pending',
+              text: notifText,
+              eventId,
+              postId: String(post.id)
+            });
+          }
+        }
+
+        // Also emit real-time socket event so the discussion panel refreshes for hosts
+        if (io) {
+          io.of('/groups').to(`event_${eventId}`).emit('thread_pending_approval', {
+            eventId,
+            postId: String(post.id),
+            authorName,
+            postTitle
+          });
+        }
+      } catch (notifErr) {
+        console.error('Error sending thread approval notification:', notifErr);
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────────
+
+    return { ...post, tags: body.tags || [], reactions: {}, vote_score: 0, user_vote: 0, comments_count: 0, pendingApproval: needsApproval };
+  }
+
+  static async approveEventPost(eventId: string, postId: string, userId: string) {
+    // Approval tier matches gallery moderation (event.configure_tickets) plus check-in staff
+    // (checkin.gate_staff), since those are the roles the Discussion Settings UI already
+    // promises can approve threads — event.manage alone would wrongly exclude Co-Hosts/Scanners.
+    const isTicketManager = await this.verifyEventCapability(userId, eventId, 'event.configure_tickets');
+    const isScanner = !isTicketManager && await this.verifyEventCapability(userId, eventId, 'checkin.gate_staff');
+    if (!isTicketManager && !isScanner) throw new Error('Forbidden: Only event managers can approve threads');
+
+    const post = await this.forumPostsRepo.findOne({ id: postId, scope_type: 'event', scope_id: eventId, deleted_at: null } as any);
+    if (!post) throw new Error('Thread not found');
+    if ((post as any).status !== 'hidden') throw new Error('Thread is not pending approval');
+
+    await prisma.$executeRaw`UPDATE forum_posts SET status = 'active', updated_at = NOW() WHERE id = ${postId}::uuid`;
+
+    // Notify the thread author that their post was approved
+    try {
+      const event = await prisma.events.findUnique({ where: { id: eventId } });
+      const approverUser = await prisma.users.findUnique({ where: { id: userId } });
+      const approverName = approverUser
+        ? (`${approverUser.first_name || ''} ${approverUser.last_name || ''}`).trim() || approverUser.primary_email.split('@')[0]
+        : 'An organizer';
+
+      const tenant_id = (post as any).tenant_id || '00000000-0000-0000-0000-000000000000';
+      await prisma.notification_log.create({
+        data: {
+          tenant_id,
+          user_id: (post as any).author_user_id,
+          channel: 'socket',
+          template_key: 'forum_thread_approved',
+          status: 'sent',
+          provider_ref: JSON.stringify({
+            postId,
+            postTitle: (post as any).title || '',
+            approverName,
+            eventId,
+            eventTitle: event?.title || ''
+          })
+        }
+      });
+
+      sendNotificationToUser((post as any).author_user_id, 'group.notification', {
+        type: 'forum_thread_approved',
+        text: `<b>${approverName}</b> approved your thread in <b>${event?.title || 'event'}</b>!`,
+        eventId,
+        postId
+      });
+    } catch (e) {
+      console.error('Error sending thread approved notification:', e);
+    }
+
+    return { success: true };
   }
 
   static async editEventPost(eventId: string, postId: string, user: any, body: any) {
@@ -437,6 +658,19 @@ export class EventService {
     const post = await this.forumPostsRepo.findOne({ id: postId, scope_type: 'event', scope_id: eventId, deleted_at: null } as any);
     if (!post) throw new Error('Thread not found');
     if (post.locked) throw new Error('This thread is locked');
+
+    // ── Reply permission (dynamic {public, roles} shape only) — same rationale as
+    // createEventPost's threadRoles gate: legacy/unset replyRoles keep today's behavior.
+    const event = await prisma.events.findUnique({ where: { id: eventId } });
+    const discussion = ((event?.venue as any)?.meta?.discussion) || {};
+    const replyRoles = discussion.replyRoles;
+    if (replyRoles && Array.isArray(replyRoles.roles)) {
+      const isTicketManager = await this.verifyEventCapability(user.id, eventId, 'event.configure_tickets');
+      const replierRoleKey = await this.getEventUserRole(user.id, eventId);
+      const canReply = isTicketManager || replyRoles.public === true || replyRoles.roles.includes(replierRoleKey);
+      if (!canReply) throw new Error('Forbidden: You do not have permission to reply in this event');
+    }
+    // ────────────────────────────────────────────────────────────────────────────
 
     const data: any = { tenant_id: user.tenantId, post_id: postId, author_user_id: user.id, body: body.body, status: 'active' };
     if (body.parent_id) data.parent_id = body.parent_id;
@@ -575,6 +809,7 @@ export class EventService {
   }
 
   static async getEventMembers(eventId: string) {
+    const topRoleKey = await this.getTopEventRoleKey();
     const assignments = await prisma.event_team_assignments.findMany({
       where: { event_id: eventId },
       include: {
@@ -600,7 +835,7 @@ export class EventService {
           display_name: a.users_event_team_assignments_user_idTousers.profiles?.display_name || a.users_event_team_assignments_user_idTousers.first_name,
           picture: null,
           email: a.users_event_team_assignments_user_idTousers.primary_email,
-          role: a.roles?.key || 'event_member',
+          role: a.roles?.key || 'member',
           state: a.state
         });
       }
@@ -614,7 +849,7 @@ export class EventService {
           display_name: b.users.profiles?.display_name || b.users.first_name,
           picture: null,
           email: b.users.primary_email,
-          role: 'event_member',
+          role: 'member',
           state: b.status === 'pending_approval' ? 'pending' : 'active'
         });
       }
@@ -630,7 +865,7 @@ export class EventService {
                 display_name: entity.users.profiles?.display_name || entity.users.first_name,
                 picture: null,
                 email: entity.users.primary_email,
-                role: 'event_host',
+                role: topRoleKey || 'member',
                 state: 'active'
             });
         }
@@ -640,46 +875,34 @@ export class EventService {
   }
 
   static async updateMemberRole(eventId: string, targetUserId: string, newRoleKey: string, currentUserId: string) {
-    const callerAssignment = await prisma.event_team_assignments.findFirst({
-      where: { event_id: eventId, user_id: currentUserId },
-      include: { roles: true }
-    });
-    
     const event = await prisma.events.findUnique({ where: { id: eventId } });
     if (!event) throw new Error('Event not found');
 
-    let isOwner = false;
-    const creatorEntity = await prisma.entities.findFirst({ where: { id: event.hosted_by_entity_id, user_id: currentUserId }});
-    if (creatorEntity) isOwner = true;
+    const creatorEntity = await prisma.entities.findFirst({ where: { id: event.hosted_by_entity_id, user_id: currentUserId } });
+    const isOwner = !!creatorEntity;
 
-    const callerRole = isOwner ? 'event_host' : callerAssignment?.roles?.key;
-    if (!callerRole || callerRole === 'event_member') {
+    if (!isOwner && !(await this.verifyEventCapability(currentUserId, eventId, 'event.manage'))) {
       throw new Error('Forbidden: You do not have permission to change roles.');
     }
 
-    const hierarchy: Record<string, number> = {
-      'event_host': 4,
-      'event_cohost': 3,
-      'event_scanner': 2,
-      'event_member': 1
-    };
+    const [callerAssignment, targetAssignment] = await Promise.all([
+      prisma.event_team_assignments.findFirst({ where: { event_id: eventId, user_id: currentUserId }, include: { roles: true } }),
+      prisma.event_team_assignments.findFirst({ where: { event_id: eventId, user_id: targetUserId }, include: { roles: true } }),
+    ]);
 
-    const callerLevel = hierarchy[callerRole] || 0;
-    const targetLevel = hierarchy[newRoleKey] || 0;
+    const callerRoleKey = callerAssignment?.roles?.key;
+    const currentTargetRoleKey = targetAssignment?.roles?.key || 'member';
+    const hierarchy = await this.getRoleHierarchyLevels([callerRoleKey, newRoleKey, currentTargetRoleKey]);
+    const callerLevel = isOwner ? 0 : hierarchy[callerRoleKey!] ?? Infinity;
+    const targetLevel = hierarchy[newRoleKey];
+    if (targetLevel === undefined) throw new Error('Role not found');
+    const currentTargetLevel = hierarchy[currentTargetRoleKey] ?? Infinity;
 
-    if (callerLevel <= targetLevel && !isOwner) {
+    // lower hierarchy_level = more senior; nobody may assign/touch a role at or above their own level
+    if (!isOwner && targetLevel <= callerLevel) {
       throw new Error('Forbidden: Cannot assign a role equal to or higher than your own.');
     }
-
-    const targetAssignment = await prisma.event_team_assignments.findFirst({
-      where: { event_id: eventId, user_id: targetUserId },
-      include: { roles: true }
-    });
-
-    const currentTargetRole = targetAssignment?.roles?.key || 'event_member';
-    const currentTargetLevel = hierarchy[currentTargetRole] || 0;
-
-    if (callerLevel <= currentTargetLevel && !isOwner) {
+    if (!isOwner && currentTargetLevel <= callerLevel) {
       throw new Error('Forbidden: Cannot change the role of someone with equal or higher permissions.');
     }
 
@@ -713,22 +936,51 @@ export class EventService {
       `SELECT user_id FROM entities WHERE id = $1::uuid LIMIT 1`,
       event.hosted_by_entity_id
     );
-    if (entityRows[0]?.user_id === userId) return 'event_host';
+    if (entityRows[0]?.user_id === userId) return (await this.getTopEventRoleKey()) || 'member';
 
     const assignment = await prisma.event_team_assignments.findFirst({
       where: { event_id: eventId, user_id: userId, state: 'active' },
       include: { roles: true }
     });
     if (assignment?.roles?.key) {
-      return assignment.roles.key; // 'event_host', 'event_cohost', 'event_scanner'
+      return assignment.roles.key;
     }
 
     const booking = await prisma.bookings.findFirst({
       where: { event_id: eventId, booker_user_id: userId, status: 'confirmed' }
     });
-    if (booking) return 'event_member';
+    if (booking) return 'member';
 
     return 'none';
+  }
+
+  // Evaluates a gallery/discussion permission bucket for a given user. Supports the dynamic
+  // {public, roles: string[]} shape (checked against the user's effective RBAC role key) as well
+  // as the legacy {owner,admin,moderator,member,public} shape (checked against capability tiers,
+  // unchanged) for events whose settings JSON hasn't been re-saved via the new roles UI yet.
+  private static async checkRoleBucket(
+    bucket: any,
+    userId: string,
+    eventId: string,
+    isTicketManagerOverride?: boolean
+  ): Promise<boolean> {
+    if (!bucket) return false;
+    const isTicketManager = isTicketManagerOverride ?? await this.verifyEventCapability(userId, eventId, 'event.configure_tickets');
+    if (isTicketManager) return true;
+    if (Array.isArray(bucket.roles)) {
+      if (bucket.public === true) return true;
+      const roleKey = await this.getEventUserRole(userId, eventId);
+      return bucket.roles.includes(roleKey);
+    }
+    // Legacy shape
+    const isScanner = await this.verifyEventCapability(userId, eventId, 'checkin.gate_staff');
+    const role = await this.getEventUserRole(userId, eventId);
+    const isMember = role === 'member';
+    return !!(
+      bucket.public ||
+      (isMember && bucket.member) ||
+      (isScanner && bucket.moderator !== false)
+    );
   }
 
   static async getEventGallery(eventId: string, userId: string) {
@@ -740,14 +992,23 @@ export class EventService {
     const gallery = meta.gallery || {};
     const items = gallery.items || [];
 
-    const role = await this.getEventUserRole(userId, eventId);
-    const isHostOrCoHost = role === 'event_host' || role === 'event_cohost';
-    const isScanner = role === 'event_scanner';
+    const isHostOrCoHost = await this.verifyEventCapability(userId, eventId, 'event.configure_tickets');
+    const isScanner = !isHostOrCoHost && await this.verifyEventCapability(userId, eventId, 'checkin.gate_staff');
 
     const user = await prisma.users.findUnique({ where: { id: userId } });
     const isGlobalStaff = user?.role && (user.role.toLowerCase().includes('admin') || user.role.toLowerCase().includes('moderator'));
 
-    if (isHostOrCoHost || isScanner || isGlobalStaff) {
+    const isPrivileged = !!(isHostOrCoHost || isScanner || isGlobalStaff);
+
+    // Gate viewing itself when the settings UI has restricted the gallery to specific roles
+    // (dynamic {public, roles} shape) or a legacy bucket. Unset viewRoles keeps today's behavior
+    // (any authenticated caller can view; only approval status is filtered below).
+    if (!isPrivileged && gallery.viewRoles) {
+      const canView = await this.checkRoleBucket(gallery.viewRoles, userId, eventId, isHostOrCoHost);
+      if (!canView) throw new Error('Forbidden: You do not have permission to view this gallery');
+    }
+
+    if (isPrivileged) {
       return items;
     }
     return items.filter((item: any) => item.approved);
@@ -762,10 +1023,8 @@ export class EventService {
     const gallery = meta.gallery || {};
     const items = gallery.items || [];
 
-    const role = await this.getEventUserRole(userId, eventId);
-    const isHostOrCoHost = role === 'event_host' || role === 'event_cohost';
-    const isScanner = role === 'event_scanner';
-    const isMember = role === 'event_member';
+    const isHostOrCoHost = await this.verifyEventCapability(userId, eventId, 'event.configure_tickets');
+    const isScanner = !isHostOrCoHost && await this.verifyEventCapability(userId, eventId, 'checkin.gate_staff');
 
     const user = await prisma.users.findUnique({ where: { id: userId } });
     const uploaderName = user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.primary_email.split('@')[0] : 'Unknown';
@@ -775,10 +1034,7 @@ export class EventService {
     }
 
     const uploadRoles = gallery.uploadRoles || { owner: true, admin: true, moderator: true, public: false };
-    const canUpload = uploadRoles.public ||
-      (isMember && uploadRoles.member) ||
-      (isHostOrCoHost && (uploadRoles.owner !== false || uploadRoles.admin !== false)) ||
-      (isScanner && uploadRoles.moderator !== false);
+    const canUpload = await this.checkRoleBucket(uploadRoles, userId, eventId, isHostOrCoHost);
 
     if (!canUpload) {
       throw new Error('You do not have permission to upload to this gallery');
@@ -814,9 +1070,11 @@ export class EventService {
     const event = await prisma.events.findUnique({ where: { id: eventId } });
     if (!event) throw new Error('Event not found');
 
-    const role = await this.getEventUserRole(userId, eventId);
-    const isHostOrCoHost = role === 'event_host' || role === 'event_cohost';
-    const isScanner = role === 'event_scanner';
+    // Gallery moderation remains under event.configure_tickets (plus checkin.gate_staff) because
+    // no dedicated gallery-management capability currently exists in the seeded RBAC model, and
+    // introducing one would require modifying the seed data, which is explicitly out of scope.
+    const isHostOrCoHost = await this.verifyEventCapability(userId, eventId, 'event.configure_tickets');
+    const isScanner = !isHostOrCoHost && await this.verifyEventCapability(userId, eventId, 'checkin.gate_staff');
 
     if (!isHostOrCoHost && !isScanner) {
       throw new Error('Forbidden: Only organizers can approve media');
@@ -847,9 +1105,8 @@ export class EventService {
     const event = await prisma.events.findUnique({ where: { id: eventId } });
     if (!event) throw new Error('Event not found');
 
-    const role = await this.getEventUserRole(userId, eventId);
-    const isHostOrCoHost = role === 'event_host' || role === 'event_cohost';
-    const isScanner = role === 'event_scanner';
+    const isHostOrCoHost = await this.verifyEventCapability(userId, eventId, 'event.configure_tickets');
+    const isScanner = !isHostOrCoHost && await this.verifyEventCapability(userId, eventId, 'checkin.gate_staff');
 
     const venue = (event.venue as any) || {};
     const meta = venue.meta || {};
@@ -886,21 +1143,22 @@ export class EventService {
     );
     const isOwner = entityRows[0]?.user_id === userId;
 
-    const hostRole = await prisma.roles.findFirst({ where: { key: 'event_host' } });
-    const hostAssignment = await prisma.event_team_assignments.findFirst({
-      where: { event_id: eventId, role_id: hostRole?.id, state: 'active' }
-    });
+    const topRoleKey = await this.getTopEventRoleKey();
+    const topRole = topRoleKey ? await prisma.roles.findFirst({ where: { key: topRoleKey } }) : null;
+    const hostAssignment = topRole ? await prisma.event_team_assignments.findFirst({
+      where: { event_id: eventId, role_id: topRole.id, state: 'active' }
+    }) : null;
     const isAssignedHost = hostAssignment?.user_id === userId;
 
     if (isOwner || isAssignedHost) {
-      const otherHostsCount = await prisma.event_team_assignments.count({
+      const otherHostsCount = topRole ? await prisma.event_team_assignments.count({
         where: {
           event_id: eventId,
-          role_id: hostRole?.id,
+          role_id: topRole.id,
           state: 'active',
           NOT: { user_id: userId }
         }
-      });
+      }) : 0;
       if (otherHostsCount === 0) {
         throw new Error('Host cannot leave event without assigning another Host first.');
       }

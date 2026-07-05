@@ -691,6 +691,7 @@ function App() {
 
   const [createdEvents, setCreatedEvents] = useState(() => []);
   const [joinedEvents, setJoinedEvents] = useState([]);
+  const [eventRoles, setEventRoles] = useState([]);
 
   const fetchJoinedEvents = useCallback(() => {
     const token = localStorage.getItem('token');
@@ -706,6 +707,25 @@ function App() {
       })
       .catch(err => console.error('Error fetching joined events', err));
   }, [apiBase]);
+
+  const fetchEventRoles = useCallback(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    fetch(`${apiBase}/api/events/available-roles`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.data) {
+          setEventRoles(res.data);
+        }
+      })
+      .catch(err => console.error('Error fetching event roles', err));
+  }, [apiBase]);
+
+  useEffect(() => {
+    fetchEventRoles();
+  }, [fetchEventRoles]);
 
   const addCreatedEvent = useCallback((ev) => {
     setCreatedEvents(prev => {
@@ -738,6 +758,7 @@ function App() {
     myTickets, setMyTickets, waitlisted, toggleWaitlist, addClaimedTicket,
     createdEvents, setCreatedEvents, createdGroups, setCreatedGroups,
     joinedEvents, setJoinedEvents, fetchJoinedEvents,
+    eventRoles, fetchEventRoles,
     addCreatedEvent, addCreatedGroup,
     subscription, setSubscription,
     fetchCounts,
@@ -791,8 +812,10 @@ function App() {
                         (e.attendees && Array.isArray(e.attendees) && e.attendees.includes(ME.name)) ||
                         (typeof UPCOMING !== 'undefined' && Array.isArray(UPCOMING) && UPCOMING.some(ue => ue.id === e.id));
       
-      // Determine if Host or Co-host (via event team assignments)
-      const isEventStaff = isOwner || isAdmin || isModerator || (joinedEntry && joinedEntry.role && ['event_host', 'event_cohost'].includes(joinedEntry.role));
+      // Determine if Host or Co-host (via event team assignments) — dynamic RBAC capability check
+      const joinedRoleMeta = joinedEntry?.role ? (st.eventRoles || []).find(r => r.key === joinedEntry.role) : null;
+      const isEventStaff = isOwner || isAdmin || isModerator ||
+        !!(joinedRoleMeta && (joinedRoleMeta.capabilities?.includes('event.manage') || joinedRoleMeta.capabilities?.includes('event.configure_tickets')));
       const isReg = hasJoined || isEventStaff;
 
       // Merge bookingStatus into the event object so EventPage and JoinEventPage can use it
