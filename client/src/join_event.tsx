@@ -1,11 +1,8 @@
-// @ts-nocheck
-/* ============================================================
-   Samaagum — Join Event Page (for guests wanting to register)
-   ============================================================ */
+import React, { useState } from 'react';
+import { I, Avatar, Grain } from './home-icons';
 
-function JoinEventPage({ ev, st, go }) {
+export function JoinEventPage({ ev, st, go }) {
     let e = ev || FEATURED;
-    var { useState } = React;
 
     // Normalize if it's a database event
     if (e && (e.starts_at || typeof e.venue === 'object')) {
@@ -209,7 +206,7 @@ function JoinEventPage({ ev, st, go }) {
                                             </button>
                                         )
                                     ) : (
-                                        <button className="hbtn hbtn--primary hbtn--block" onClick={() => { register(e.id); go("events"); }}>
+                                        <button className="hbtn hbtn--primary hbtn--block" onClick={() => { register(e.id, false, null, e.inviteToken); go("events"); }}>
                                             {e.type === "Free" ? "Request to join" : `Get ${qty > 1 ? qty + " tickets" : "ticket"}`}
                                         </button>
                                     )}
@@ -246,4 +243,3 @@ function JoinEventPage({ ev, st, go }) {
     );
 }
 
-Object.assign(window, { JoinEventPage });

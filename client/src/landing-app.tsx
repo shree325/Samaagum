@@ -34,4 +34,13 @@ export function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+const container = document.getElementById("root");
+
+// Reuse existing root on HMR reloads instead of calling createRoot() twice
+let root = (container as any).__reactRoot;
+if (!root) {
+  root = ReactDOM.createRoot(container);
+  (container as any).__reactRoot = root;
+}
+root.render(<App />);
+

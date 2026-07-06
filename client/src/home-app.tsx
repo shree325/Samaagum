@@ -12,18 +12,21 @@ import { Discover, HomeFeed } from './home-feed';
 import { GroupDetail, MyGroups } from './home-group';
 import { useProfileSync } from './home-icons';
 import { InviteLanding } from './home-invite';
+import { EventInviteLanding } from './home-event-invite';
 import { Messages } from './home-messages';
 import { Notifications } from './home-notifications';
 import { Profile } from './home-profile';
 import { SettingsPage } from './home-settings';
 import { CityPicker, Sidebar, Topbar } from './home-shell';
-import { apiBase } from './home-subscription';
-import { ClaimFlow, EventDashboard, MyTickets, TicketDetail } from './home-tickets';
+import { apiBase, UpgradePage, CheckoutPage, CheckoutSuccessPage } from './home-subscription';
+import { ClaimFlow, EventDashboard, MyTickets, AllTickets, TicketDetail } from './home-tickets';
 import { Waitlist } from './home-waitlist';
 import { I, tick } from './home-icons';
 import { PublicProfile } from './public-profile';
 import { useTweaks } from './tweaks-panel';
 import { usePlanEntitlements } from './usePlanEntitlements';
+import { EventPage } from './event';
+import { JoinEventPage } from './join_event';
 
 /* ============================================================
    Samaagum Home — main app (routing, frame, theme, tweaks)
@@ -127,14 +130,19 @@ export function DashboardApp() {
 
   useEffect(() => {
     if (window.io) return;
+    // Listen for the socket.io script load
+    const onReady = () => setIoLoaded(true);
+    window.addEventListener('socket-io-ready', onReady, { once: true });
+    // Fallback: poll briefly in case script loaded before listener attached
     const interval = setInterval(() => {
-      if (window.io) {
-        setIoLoaded(true);
-        clearInterval(interval);
-      }
-    }, 200);
-    return () => clearInterval(interval);
+      if (window.io) { setIoLoaded(true); clearInterval(interval); }
+    }, 300);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('socket-io-ready', onReady);
+    };
   }, []);
+
 
   const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
 
@@ -522,6 +530,12 @@ export function DashboardApp() {
     } else if (hash.startsWith('#/groups/invite/')) {
       const token = hash.split('#/groups/invite/')[1];
       if (token) navigate(`/invite`, { state: token, replace: true });
+    } else if (path.startsWith('/events/invite/')) {
+      const token = path.split('/events/invite/')[1];
+      if (token) navigate(`/event-invite`, { state: token, replace: true });
+    } else if (hash.startsWith('#/events/invite/')) {
+      const token = hash.split('#/events/invite/')[1];
+      if (token) navigate(`/event-invite`, { state: token, replace: true });
     }
   }, [navigate]);
 
@@ -641,7 +655,7 @@ export function DashboardApp() {
     return n;
   }), []);
 
-  const register = useCallback((id, forceConfirm = false, answers = null) => {
+  const register = useCallback((id, forceConfirm = false, answers = null, inviteToken = null) => {
     const runRegistrationFlow = (evObj, answers = {}) => {
       if (forceConfirm) {
         // Direct / Bypass registration
@@ -685,7 +699,7 @@ export function DashboardApp() {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
-        body: JSON.stringify(answers)
+        body: JSON.stringify(inviteToken ? { ...answers, inviteToken } : answers)
       })
       .then(res => res.json())
       .then(res => {
@@ -763,7 +777,8 @@ export function DashboardApp() {
     };
 
     const token = localStorage.getItem('token');
-    fetch(`${apiBase}/api/events/${id}`, {
+    const url = `${apiBase}/api/events/${id}${inviteToken ? `?inviteToken=${encodeURIComponent(inviteToken)}` : ''}`;
+    fetch(url, {
       headers: token ? { 'Authorization': `Bearer ${token}` } : {}
     })
       .then(res => res.json())
@@ -783,7 +798,8 @@ export function DashboardApp() {
             joinEligibility: ev.venue?.meta?.joinEligibility || 'public',
             registration_mode: ev.registration_mode,
             venue_obj: ev.venue,
-            bookingStatus: res.data.bookingStatus
+            bookingStatus: res.data.bookingStatus,
+            inviteToken
           };
 
            const meta = ev.venue?.meta || {};
@@ -824,6 +840,21 @@ export function DashboardApp() {
   const [createdEvents, setCreatedEvents] = useState(() => []);
   const [joinedEvents, setJoinedEvents] = useState([]);
   const [eventRoles, setEventRoles] = useState([]);
+
+  const fetchEvents = useCallback(() => {
+    const token = localStorage.getItem('token');
+    fetch(`${apiBase}/api/events`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+    })
+      .then(res => res.json())
+      .then(res => {
+        if (res.data && Array.isArray(res.data)) {
+          // Update global EVENTS with real API data
+          window.EVENTS = res.data;
+        }
+      })
+      .catch(err => console.error('Error fetching events:', err));
+  }, [apiBase]);
 
   const fetchJoinedEvents = useCallback(() => {
     const token = localStorage.getItem('token');
@@ -874,10 +905,11 @@ const fetchCreatedEvents = useCallback(() => {
 }, [apiBase]);
 
 useEffect(() => {
+  fetchEvents();
   fetchEventRoles();
   fetchJoinedEvents();
   fetchCreatedEvents();
-}, [fetchEventRoles, fetchJoinedEvents, fetchCreatedEvents]);
+}, [fetchEvents, fetchEventRoles, fetchJoinedEvents, fetchCreatedEvents]);
   const addCreatedEvent = useCallback((ev) => {
     setCreatedEvents(prev => {
       if (prev.some(x => x.id === ev.id)) {
@@ -910,6 +942,7 @@ useEffect(() => {
     createdEvents, setCreatedEvents, createdGroups, setCreatedGroups, fetchCreatedEvents,
     joinedEvents, setJoinedEvents, fetchJoinedEvents,
     eventRoles, fetchEventRoles,
+    fetchEvents,
     addCreatedEvent, addCreatedGroup,
     subscription, setSubscription,
     fetchCounts,
@@ -942,6 +975,8 @@ useEffect(() => {
   const renderView = () => {
     const v = cur.view;
     if (v === "invite") return <InviteLanding token={cur.param} go={go} />;
+    if (v === "event-invite") return <EventInviteLanding token={cur.param} go={go} />;
+    if (v === "event-join") return <JoinEventPage ev={cur.param} st={st} go={go} />;
     if (v === "home") return <HomeFeed st={st} go={go} />;
     if (v === "discover") return <Discover st={st} go={go} param={cur.param} />;
     if (v === "events") return <MyTickets st={st} go={go} />;
@@ -1218,7 +1253,7 @@ useEffect(() => {
                   const answersCopy = { ...questAnswers };
                   setQuestEvent(null);
                   setQuestAnswers({});
-                  register(questEvent.id, false, answersCopy);
+                  register(questEvent.id, false, answersCopy, questEvent.inviteToken);
                 }}
               >
                 Submit & Register
@@ -1239,6 +1274,11 @@ export function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(
-  <App />
-);
+const _homeContainer = document.getElementById("root");
+let _homeRoot = (_homeContainer as any).__reactRoot;
+if (!_homeRoot) {
+  _homeRoot = ReactDOM.createRoot(_homeContainer);
+  (_homeContainer as any).__reactRoot = _homeRoot;
+}
+_homeRoot.render(<App />);
+

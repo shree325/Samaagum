@@ -1,13 +1,11 @@
-// @ts-nocheck
-/* ============================================================
-   Samaagum — Event Page (Luma-grade with tabs matching screenshot)
-   ============================================================ */
+import React, { useState, useRef, useEffect } from 'react';
+import { I, Avatar, Grain } from './home-icons';
+import DiscussionPanel from './discussion-panel';
 
 function Toggle({ on, onClick }) { return <button className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
 
-function EventPage({ ev, st, go }) {
+export function EventPage({ ev, st, go }) {
   let e = ev || FEATURED;
-  var { useState, useRef } = React;
 
   // Normalize if it's a database event
   if (e && (e.starts_at || typeof e.venue === 'object' || typeof e.venue === 'string')) {
@@ -66,8 +64,9 @@ function EventPage({ ev, st, go }) {
       going: e.going || 0,
       cap: e.capacity_total || e.cap || 9999,
       price: priceVal,
-      host: e.host || ME.name || "Organizer",
-      hostBy: e.hostBy || ME.name || "Organizer",
+      host: e.hostName || e.host || ME.name || "Organizer",
+      hostBy: e.hostName || e.hostBy || ME.name || "Organizer",
+      hostType: e.hostType || null,
       attendees: e.attendees || [],
       instructions: e.instruction || e.instructions || meta.instructions || "",
       formFields: e.formFields || meta.formFields || [],
@@ -101,6 +100,12 @@ function EventPage({ ev, st, go }) {
   const isSaved = saved.has(e.id);
 
   const [currentEvent, setCurrentEvent] = useState(e);
+  // Once fetchEventDetails() resolves with the real server record (including the resolved
+  // hostName/location_type), let it override the initial prop-derived snapshot so the header
+  // (title/host/online-in-person/price badges) reflects the latest saved state, not just
+  // whatever was passed in via navigation.
+  e = { ...e, ...currentEvent };
+  const attendees = currentEvent.attendees || [];
   const [hostStats, setHostStats] = useState(null);
   const [eventMembers, setEventMembers] = useState(null);
   const [availableRoles, setAvailableRoles] = useState(null);
@@ -200,8 +205,9 @@ function EventPage({ ev, st, go }) {
         going: e.going || 0,
         cap: e.capacity_total || e.cap || 9999,
         price: priceVal,
-        host: e.host || ME.name || "Organizer",
-        hostBy: e.hostBy || ME.name || "Organizer",
+        host: e.hostName || e.host || ME.name || "Organizer",
+        hostBy: e.hostName || e.hostBy || ME.name || "Organizer",
+        hostType: e.hostType || null,
         attendees: e.attendees || [],
         instructions: e.instruction || e.instructions || meta.instructions || "",
         formFields: e.formFields || meta.formFields || [],
@@ -254,8 +260,9 @@ function EventPage({ ev, st, go }) {
           going: ev.going || 0,
           cap: ev.capacity_total || ev.cap || 9999,
           price: priceVal,
-          host: ev.host || ME.name || "Organizer",
-          hostBy: ev.hostBy || ME.name || "Organizer",
+          host: ev.hostName || ev.host || ME.name || "Organizer",
+          hostBy: ev.hostName || ev.hostBy || ME.name || "Organizer",
+          hostType: ev.hostType || null,
           attendees: data.data.attendees || [],
           instructions: ev.instruction || ev.instructions || meta.instructions || "",
           formFields: ev.formFields || meta.formFields || [],
@@ -493,6 +500,9 @@ function EventPage({ ev, st, go }) {
   const pendingCount = (hostStats?.requests || []).length;
   const confirmedCount = (hostStats?.confirmed || attendees || []).length;
   const isPaidEvent = currentEvent.registration_mode === 'paid' || e.registration_mode === 'paid';
+  const venueRaw = (typeof currentEvent.venue_raw === 'object' && currentEvent.venue_raw !== null) ? currentEvent.venue_raw : {};
+  const eventVisibility = venueRaw.visibility || 'public';
+  const eventJoinEligibility = (venueRaw.meta || {}).joinEligibility || 'public';
 
   const tabs = e.id === "new" ? [["about", "About"]] : [
     ["about", "About"],
@@ -507,13 +517,13 @@ function EventPage({ ev, st, go }) {
 
   // Gallery items state
   const [galleryItems, setGalleryItems] = useState([]);
-  const [newInviteEmail, setNewInviteEmail] = useState("");
+  const [inviteLinks, setInviteLinks] = useState({ view: null, join: [] });
+  const [inviteLoading, setInviteLoading] = useState({ view: false, join: false });
   const [guestSearch, setGuestSearch] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
   const [memberRoleFilter, setMemberRoleFilter] = useState("all");
 
   const galleryInputRef = useRef(null);
-  const attendees = currentEvent.attendees || [];
 
   // ── Ticketing & Coupons State ──
   const [tcTab, setTcTab] = useState("tickets"); // tickets | coupons | referrals
@@ -585,11 +595,58 @@ function EventPage({ ev, st, go }) {
     }
   }, [tab, e.id]);
 
-  const handleInviteSubmit = (event) => {
-    event.preventDefault();
-    if (!newInviteEmail) return;
-    alert(`Invitation sent to ${newInviteEmail}`);
-    setNewInviteEmail("");
+  const generateInviteLink = async (purpose) => {
+    setInviteLoading(prev => ({ ...prev, [purpose]: true }));
+    try {
+      const res = await fetch(`${apiBase}/api/events/${e.id}/invites`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ purpose })
+      });
+      const data = await res.json();
+      if (data.success) {
+        // 'view' links are durable/reusable — a single link per event, generating
+        // again just returns the same one. 'join' links are single-use, each click
+        // mints a fresh one, so keep a running list.
+        if (purpose === 'view') {
+          setInviteLinks(prev => ({ ...prev, view: data.data.url }));
+        } else {
+          setInviteLinks(prev => ({ ...prev, join: [data.data.url, ...prev.join] }));
+        }
+      } else if (window.toast) {
+        window.toast(data.message || "Failed to generate link", "warning");
+      }
+    } catch (err) {
+      console.error(err);
+      if (window.toast) window.toast("Failed to generate link", "warning");
+    } finally {
+      setInviteLoading(prev => ({ ...prev, [purpose]: false }));
+    }
+  };
+
+  // Restore the durable 'view' link (if one was already generated) when the Invite tab
+  // opens, so it persists across reloads instead of requiring the host to regenerate it.
+  useEffect(() => {
+    if (tab === "invite" && isTicketManager && eventVisibility === "unlisted" && inviteLinks.view === null) {
+      fetch(`${apiBase}/api/events/${e.id}/invites/view`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.data) {
+            setInviteLinks(prev => ({ ...prev, view: data.data.url }));
+          }
+        })
+        .catch(err => console.error(err));
+    }
+  }, [tab, isTicketManager, eventVisibility, e.id]);
+
+  const copyInviteLink = (url) => {
+    if (navigator.clipboard) navigator.clipboard.writeText(url);
+    if (window.toast) window.toast("Link copied! ✓", "success");
   };
 
   const handleLeaveEvent = async () => {
@@ -778,6 +835,11 @@ function EventPage({ ev, st, go }) {
                 <span className="fchip on" style={{ pointerEvents: "none", padding: "4px 11px", fontSize: 12 }}>
                   {e.cat || "Event"}
                 </span>
+                {e.hostName && (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <I.users /> Hosted by {e.hostName}{e.hostType === 'group' ? ' (Group)' : ''}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -1814,15 +1876,54 @@ function EventPage({ ev, st, go }) {
               {tab === "invite" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Invite Guests</h3>
-                  <div className="ticket-box" style={{ padding: 20 }}>
-                    <form onSubmit={handleInviteSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      <div className="cfield">
-                        <label>Invite by Email Address</label>
-                        <input className="cinput" type="email" placeholder="friend@example.com" value={newInviteEmail} onChange={e => setNewInviteEmail(e.target.value)} style={{ background: "var(--field)", border: "1px solid var(--border)" }} />
+
+                  {eventVisibility === "unlisted" && (
+                    <div className="ticket-box" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+                      <div>
+                        <div style={{ fontWeight: 600 }}>Shareable view link</div>
+                        <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4 }}>This event is unlisted, so it won't show on Discover. This link lets anyone open the event page to view it — it can be shared and opened any number of times, but it only unlocks viewing, not joining.</div>
                       </div>
-                      <button type="submit" className="hbtn hbtn--primary">Send Invitation</button>
-                    </form>
-                  </div>
+                      {!inviteLinks.view && (
+                        <button type="button" className="hbtn hbtn--primary" disabled={inviteLoading.view} onClick={() => generateInviteLink('view')} style={{ alignSelf: "flex-start" }}>
+                          {inviteLoading.view ? "Generating..." : "+ Generate view link"}
+                        </button>
+                      )}
+                      {inviteLinks.view && (
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <input className="cinput" readOnly value={inviteLinks.view} onFocus={ev => ev.target.select()} style={{ flex: 1, background: "var(--field)", border: "1px solid var(--border)", fontSize: 12 }} />
+                          <button type="button" className="hbtn hbtn--ghost hbtn--sm" onClick={() => copyInviteLink(inviteLinks.view)}>Copy</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {eventJoinEligibility === "invite" && (
+                    <div className="ticket-box" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+                      <div>
+                        <div style={{ fontWeight: 600 }}>One-time join link</div>
+                        <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4 }}>Join eligibility is set to invite-only. Generate a link for a guest — it unlocks the join flow and can be used once.</div>
+                      </div>
+                      <button type="button" className="hbtn hbtn--primary" disabled={inviteLoading.join} onClick={() => generateInviteLink('join')} style={{ alignSelf: "flex-start" }}>
+                        {inviteLoading.join ? "Generating..." : "+ Generate join link"}
+                      </button>
+                      {inviteLinks.join.length > 0 && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          {inviteLinks.join.map((url, i) => (
+                            <div key={url + i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                              <input className="cinput" readOnly value={url} onFocus={ev => ev.target.select()} style={{ flex: 1, background: "var(--field)", border: "1px solid var(--border)", fontSize: 12 }} />
+                              <button type="button" className="hbtn hbtn--ghost hbtn--sm" onClick={() => copyInviteLink(url)}>Copy</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {eventVisibility !== "unlisted" && eventJoinEligibility !== "invite" && (
+                    <div className="ticket-box" style={{ padding: 20, fontSize: 13, color: "var(--ink-3)" }}>
+                      This event is publicly visible with open join eligibility — no invite links are needed.
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2065,7 +2166,7 @@ function EventPage({ ev, st, go }) {
                         Your Event Ticket
                       </div>
                       <div style={{ padding: 10, background: "#fff", borderRadius: "var(--r-md)", boxShadow: "0 4px 12px rgba(0,0,0,0.06)", width: 140, height: 140, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <TicketQR token={e.qrToken || e.attendeeId || e.id || "test"} size={120} />
+                        {window.TicketQR && <window.TicketQR token={e.qrToken || e.attendeeId || e.id || "test"} size={120} />}
                       </div>
                       <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 10, textAlign: "center" }}>
                         Scan QR at entry gate
@@ -2100,7 +2201,7 @@ function EventPage({ ev, st, go }) {
                 </div>
 
                 <div className="host-card" style={{ marginTop: 16 }}>
-                  <div className="hh"><Avatar name={e.hostBy || e.host} size={46} /><div><div className="n">{e.host}</div><div className="r">Organizer</div></div></div>
+                  <div className="hh"><Avatar name={e.hostBy || e.host} size={46} /><div><div className="n">{e.host}</div><div className="r">{e.hostType === 'group' ? 'Group' : 'Organizer'}</div></div></div>
                   <div className="hb">Curating the best gatherings in {e.city || city}. Follow to never miss an update.</div>
                 </div>
               </div>

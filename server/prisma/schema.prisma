@@ -575,9 +575,29 @@ model events {
   ticket_types           ticket_types[]
   waitlist_entries       waitlist_entries[]
   wishlists              wishlists[]
+  event_invitations      event_invitations[]
 
   @@index([hosted_by_entity_id], map: "idx_events_hosted_by_entity_id")
   @@index([status], map: "idx_events_status")
+}
+
+model event_invitations {
+  id                                             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id                                       String    @db.Uuid
+  purpose                                        String
+  token                                          String    @unique
+  status                                         String    @default("pending")
+  created_by                                     String?   @db.Uuid
+  used_by                                        String?   @db.Uuid
+  used_at                                        DateTime? @db.Timestamptz(6)
+  created_at                                     DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at                                     DateTime  @default(now()) @db.Timestamptz(6)
+  events                                         events    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  users_event_invitations_created_byTousers      users?    @relation("event_invitations_created_byTousers", fields: [created_by], references: [id], onDelete: SetNull)
+  users_event_invitations_used_byTousers         users?    @relation("event_invitations_used_byTousers", fields: [used_by], references: [id], onDelete: SetNull)
+
+  @@index([event_id], map: "idx_event_invitations_event")
+  @@index([token], map: "idx_event_invitations_token")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -1702,6 +1722,8 @@ model users {
   attendees_attendees_created_byTousers                                attendees[]                  @relation("attendees_created_byTousers")
   attendees_attendees_updated_byTousers                                attendees[]                  @relation("attendees_updated_byTousers")
   attendees_attendees_user_idTousers                                   attendees[]                  @relation("attendees_user_idTousers")
+  event_invitations_event_invitations_created_byTousers                event_invitations[]          @relation("event_invitations_created_byTousers")
+  event_invitations_event_invitations_used_byTousers                   event_invitations[]          @relation("event_invitations_used_byTousers")
   auth_identities                                                      auth_identities[]
   blocked_users_blocked_users_blocked_idTousers                        blocked_users[]              @relation("blocked_users_blocked_idTousers")
   blocked_users_blocked_users_blocker_idTousers                        blocked_users[]              @relation("blocked_users_blocker_idTousers")
@@ -1918,7 +1940,6 @@ model admin_subscription_plans {
   tenant_id           String?               @db.Uuid
   created_at          DateTime              @default(now()) @db.Timestamptz(6)
   updated_at          DateTime              @default(now()) @db.Timestamptz(6)
-  is_default          Boolean?              @default(false)
   admin_positions     admin_positions?      @relation(fields: [rbac_position_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   admin_roles         admin_roles?          @relation(fields: [rbac_role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenants             tenants?              @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -1991,7 +2012,6 @@ model subscription_orders {
   admin_subscription_plans admin_subscription_plans @relation(fields: [plan_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenants                  tenants?                 @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   users                    users                    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  invoices                 invoices?
 
   @@index([status], map: "idx_sub_orders_status")
   @@index([tenant_id], map: "idx_sub_orders_tenant")
@@ -2621,17 +2641,6 @@ model messaging_requests {
   @@unique([sender_id, receiver_id])
 }
 
-model invoices {
-  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  invoice_number      String              @unique
-  order_id            String              @unique @db.Uuid
-  created_at          DateTime            @default(now()) @db.Timestamptz(6)
-  updated_at          DateTime            @default(now()) @db.Timestamptz(6)
-  pdf_data            Bytes
-  subscription_orders subscription_orders @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@index([order_id], map: "idx_invoices_order")
-}
 
 enum assignment_state {
   invited

@@ -33,18 +33,38 @@ export function initLenis() {
   return lenis;
 }
 
-/* ---------- Scrub engine (continuous, rAF, imperative) ---------- */
+/* ---------- Scrub engine (scroll-gated, rAF, imperative) ---------- */
 export const scrubs = new Set<any>();
 export let rafId = null;
-export function tick() {
+let scrollDirty = true; // run at least once on mount
+
+function runScrubs() {
   const vh = window.innerHeight;
   scrubs.forEach((item) => {
     const r = item.el.getBoundingClientRect();
     const p = (vh - r.top) / (vh + r.height);
     item.fn(Math.max(0, Math.min(1, p)), r, vh, item.el);
   });
-  rafId = requestAnimationFrame(tick);
 }
+
+export function tick() {
+  if (scrollDirty) {
+    scrollDirty = false;
+    runScrubs();
+  }
+  if (scrubs.size > 0) {
+    rafId = requestAnimationFrame(tick);
+  } else {
+    rafId = null;
+  }
+}
+
+// Mark dirty only when actually scrolling
+if (typeof window !== 'undefined') {
+  window.addEventListener('scroll', () => { scrollDirty = true; }, { passive: true });
+  window.addEventListener('resize', () => { scrollDirty = true; }, { passive: true });
+}
+
 export function useScrub(fn, deps = []) {
   const ref = useRef(null);
   useEffect(() => {
@@ -52,11 +72,19 @@ export function useScrub(fn, deps = []) {
     if (!el || REDUCED) return;
     const item = { el, fn };
     scrubs.add(item);
+    scrollDirty = true;
     if (rafId == null) rafId = requestAnimationFrame(tick);
-    return () => { scrubs.delete(item); };
+    return () => {
+      scrubs.delete(item);
+      if (scrubs.size === 0 && rafId != null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+    };
   }, deps);
   return ref;
 }
+
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 // map progress sub-range to 0..1

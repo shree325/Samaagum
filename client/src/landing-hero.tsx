@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { PEOPLE, Reveal, Wordmark, gradFor, initials } from './components';
-import { I, REDUCED, clamp, useScrub } from './landing-core';
+import { PEOPLE, Wordmark, gradFor, initials } from './components';
+import { I, REDUCED, Reveal, clamp, useScrub } from './landing-core';
 import { Communities, Events } from './landing-features';
 import { Networking, Profiles } from './landing-features2';
 
@@ -8,7 +8,7 @@ import { Networking, Profiles } from './landing-features2';
    Samaagum landing — Nav, Hero, Trust marquee
    ============================================================ */
 
-export const AUTH = "pages/Samaagum Auth.html";
+export const AUTH = "/pages/Samaagum Auth.html";
 
 /* ---------------- Nav ---------------- */
 export function Nav() {
@@ -94,7 +94,7 @@ export function Hero() {
       <div className="hero-noise" />
 
       {/* floating chips */}
-      <HeroFloat pos={{ top: "21%", left: "5%" }} speed={-150} delay={0.6} children={undefined}>
+      <HeroFloat pos={{ top: "21%", left: "5%" }} speed={-150} delay={0.6}>
         <div className="glass-card" style={{ padding: 14, width: 224 }}>
           <div style={{ display: "flex", gap: 11, alignItems: "center" }}>
             <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg,#6d5efc,#2a7fff)", flexShrink: 0 }} />
@@ -110,7 +110,7 @@ export function Hero() {
         </div>
       </HeroFloat>
 
-      <HeroFloat pos={{ top: "15%", right: "7%" }} speed={140} delay={1.2} children={undefined}>
+      <HeroFloat pos={{ top: "15%", right: "7%" }} speed={140} delay={1.2}>
         <div className="glass-card" style={{ padding: "11px 16px", display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ width: 9, height: 9, borderRadius: "50%", background: "var(--accent-grad)" }} />
           <span style={{ fontSize: 13.5, fontWeight: 600 }}>Founders Club</span>
@@ -118,7 +118,7 @@ export function Hero() {
         </div>
       </HeroFloat>
 
-      <HeroFloat pos={{ top: "55%", right: "4%" }} speed={-110} delay={0.3} children={undefined}>
+      <HeroFloat pos={{ top: "55%", right: "4%" }} speed={-110} delay={0.3}>
         <div className="glass-card" style={{ padding: 14, width: 200, display: "flex", gap: 11, alignItems: "center" }}>
           <div style={{ width: 42, height: 42, borderRadius: "50%", background: gradFor("Aanya Rao"), display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 14 }}>AR</div>
           <div>
@@ -128,14 +128,14 @@ export function Hero() {
         </div>
       </HeroFloat>
 
-      <HeroFloat pos={{ bottom: "17%", left: "7%" }} speed={120} delay={0.9} children={undefined}>
+      <HeroFloat pos={{ bottom: "17%", left: "7%" }} speed={120} delay={0.9}>
         <div className="glass-card" style={{ padding: "12px 16px", display: "flex", gap: 10, alignItems: "center", maxWidth: 230 }}>
           <div style={{ width: 30, height: 30, borderRadius: "50%", background: gradFor("Dev Kapoor"), flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 11 }}>DK</div>
           <span style={{ fontSize: 13, color: "var(--ink)" }}>Count me in — see you Saturday!</span>
         </div>
       </HeroFloat>
 
-      <HeroFloat pos={{ bottom: "22%", right: "13%" }} speed={-90} delay={1.5} children={undefined}>
+      <HeroFloat pos={{ bottom: "22%", right: "13%" }} speed={-90} delay={1.5}>
         <div className="glass-card" style={{ padding: "12px 18px" }}>
           <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 22 }}>+128</div>
           <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>going this week</div>

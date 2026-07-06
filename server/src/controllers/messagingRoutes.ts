@@ -2,6 +2,9 @@ import { FastifyInstance } from 'fastify';
 import prisma from '../config/prisma';
 import { DEFAULT_CHAT_SETTINGS } from '../settings-library/settingsSeeder';
 import { conversationReadService } from '../services/ConversationReadService';
+import { GroupService } from '../services/GroupService';
+import { EventService } from '../services/EventService';
+import { EventInvitationService } from '../services/EventInvitationService';
 
 // Helper to get active chat settings
 async function getChatSettings() {
@@ -1244,7 +1247,29 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       const venueObj = (event.venue as any) || {};
       const meta = venueObj.meta || {};
       const isRestricted = meta.joinEligibility === 'restricted';
+      const isInviteOnly = meta.joinEligibility === 'invite';
       const approvalRequired = event.approval_required || isRestricted;
+
+      const isHostOrCoHost = await EventService.verifyEventHostOrCoHost(userId, eventId);
+
+      if (isRestricted && !isHostOrCoHost) {
+        const allowedGroups: string[] = meta.selectedAccess?.restricted?.groups || [];
+        const hasAccess = allowedGroups.length > 0 && await GroupService.userInGroups(userId, allowedGroups);
+        if (!hasAccess) {
+          return reply.status(403).send({ success: false, message: "You don't have access to join this event." });
+        }
+      }
+
+      const inviteToken = (request.body as any)?.inviteToken;
+      if (isInviteOnly && !isHostOrCoHost) {
+        if (!inviteToken) {
+          return reply.status(403).send({ success: false, message: 'A valid invite link is required to join this event.' });
+        }
+        const validation = await EventInvitationService.validateToken(inviteToken, 'join');
+        if (!validation.valid || validation.invite?.event_id !== eventId) {
+          return reply.status(403).send({ success: false, message: 'A valid invite link is required to join this event.' });
+        }
+      }
 
       const user = await prisma.users.findUnique({
         where: { id: userId }
@@ -1376,6 +1401,12 @@ export async function messagingRoutes(fastify: FastifyInstance) {
 
         return { booking: bk };
       });
+
+      // Invite unlocks the normal join flow above; it doesn't auto-confirm. Consume it now
+      // that the request has actually gone through, so it can't be reused.
+      if (isInviteOnly && !isHostOrCoHost && inviteToken) {
+        await EventInvitationService.consumeToken(inviteToken, userId, 'join');
+      }
 
       if (approvalRequired) {
         let ownerUserId = null;

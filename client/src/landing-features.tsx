@@ -1,8 +1,8 @@
 // @ts-nocheck
 import React, { useState } from 'react';
-import { EVENTS, PEOPLE, Reveal } from './components';
+import { PEOPLE } from './components';
 import { Discover } from './home-feed';
-import { COMMUNITIES, I, lerp, range, useScrub } from './landing-core';
+import { COMMUNITIES, EVENTS, I, Reveal, lerp, range, useScrub } from './landing-core';
 import { AUTH, AvaRow } from './landing-hero';
 
 /* ============================================================

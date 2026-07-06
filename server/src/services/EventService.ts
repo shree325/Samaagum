@@ -12,6 +12,7 @@ import prisma from '../config/prisma';
 import accessControlService from './AccessControlService';
 import { sendNotificationToUser } from './messagingSocket';
 import { PlanEntitlementService } from './PlanEntitlementService';
+import { GroupService } from './GroupService';
 
 export class EventService {
   private static eventsRepo = new R_events(prisma);
@@ -54,6 +55,70 @@ export class EventService {
     const checkinMethod = eventData.checkin_method;
     if (checkinMethod && ents.event_checkin_methods && !ents.event_checkin_methods.includes(checkinMethod)) {
       throw new Error(`The selected check-in method (${checkinMethod}) is not available on your plan.`);
+    }
+
+    // 5. Verify user has permission to host as the selected entity (RBAC)
+    await this.validateHostPermission(userId, eventData.host_entity_id);
+  }
+
+  private static async validateHostPermission(userId: string, hostEntityId: string) {
+    // User creating their own personal event (standalone)
+    if (!hostEntityId || hostEntityId === 'standalone') {
+      return; // OK
+    }
+
+    const entity = await prisma.entities.findUnique({
+      where: { id: hostEntityId },
+      select: { entity_type: true, user_id: true }
+    });
+
+    if (!entity) {
+      throw new Error('Invalid host entity');
+    }
+
+    // User can host as their own personal entity
+    if (entity.entity_type === 'user' && entity.user_id === userId) {
+      return; // OK
+    }
+
+    // User must be group owner OR have group.manage capability to host as a group
+    if (entity.entity_type === 'group') {
+      const isGroupOwner = entity.user_id === userId;
+      if (isGroupOwner) return; // OK - user owns the group
+
+      // Check if user has group.manage or group.create_events capability
+      const hasCapability = await this.hasGroupManageCapability(userId, hostEntityId);
+      if (!hasCapability) {
+        throw new Error('You do not have permission to create events for this group');
+      }
+      return; // OK
+    }
+
+    // Similar checks for community (future extension)
+    if (entity.entity_type === 'community') {
+      throw new Error('Community event hosting not yet supported');
+    }
+
+    throw new Error('Cannot host as this entity type');
+  }
+
+  private static async hasGroupManageCapability(userId: string, groupId: string): Promise<boolean> {
+    try {
+      const assignment = await prisma.role_assignments.findFirst({
+        where: {
+          scope_entity_id: groupId,
+          user_id: userId,
+          state: 'active'
+        },
+        include: { roles: true }
+      });
+
+      if (!assignment || !assignment.roles) return false;
+
+      const capabilities = assignment.roles.baseline_capabilities as string[] || [];
+      return capabilities.includes('group.manage') || capabilities.includes('group.create_events');
+    } catch (err) {
+      return false;
     }
   }
 
@@ -127,12 +192,69 @@ export class EventService {
     return { event, tickets: createdTickets };
   }
 
-  static async getPublicEvents(tenantId: string) {
+  // Resolves an entity_id (from events.hosted_by_entity_id) into a display name/type so the
+  // client can render "Hosted by <name>" instead of only having the raw UUID.
+  static async resolveHostInfo(hostedByEntityId: string | null | undefined): Promise<{ hostType: string | null; hostName: string | null }> {
+    if (!hostedByEntityId) return { hostType: null, hostName: null };
+    const rows = await prisma.$queryRawUnsafe<{ entity_type: string; group_name: string | null; user_display_name: string | null }[]>(
+      `SELECT e.entity_type, g.name as group_name, p.display_name as user_display_name
+       FROM entities e
+       LEFT JOIN groups g ON g.entity_id = e.id
+       LEFT JOIN profiles p ON p.user_id = e.user_id
+       WHERE e.id = $1::uuid
+       LIMIT 1`,
+      hostedByEntityId
+    );
+    const row = rows[0];
+    if (!row) return { hostType: null, hostName: null };
+    return {
+      hostType: row.entity_type,
+      hostName: row.entity_type === 'group' ? row.group_name : row.user_display_name,
+    };
+  }
+
+  // Visibility helpers -------------------------------------------------
+  // venue.visibility: 'public' | 'unlisted' | 'custom'
+  // venue.meta.selectedAccess.restricted.groups: string[] of group ids/names allowed for 'custom'
+  //
+  // 'unlisted' events are never listed on Discover and are only directly reachable via a
+  // one-time invite link (handled at the route layer) or by hosts/co-hosts/already-joined users.
+  // 'custom' events are restricted to selected groups (plus hosts/co-hosts/already-joined users).
+  private static async canUserAccessEvent(ev: any, userId?: string): Promise<boolean> {
+    const visibility = (ev.venue as any)?.visibility;
+    if (!visibility || visibility === 'public') return true;
+
+    if (!userId) return false;
+
+    const isHostOrCoHost = await this.verifyEventCapability(userId, ev.id, 'event.manage').catch(() => false);
+    if (isHostOrCoHost) return true;
+
+    const hasBooking = await prisma.bookings.findFirst({
+      where: { event_id: ev.id, booker_user_id: userId, status: { in: ['confirmed', 'pending_approval', 'pending_payment'] } }
+    });
+    if (hasBooking) return true;
+
+    if (visibility === 'custom') {
+      const groups: string[] = (ev.venue as any)?.meta?.selectedAccess?.restricted?.groups || [];
+      if (groups.length > 0 && await GroupService.userInGroups(userId, groups)) return true;
+    }
+
+    return false;
+  }
+
+  static async getPublicEvents(tenantId: string, userId?: string) {
     const list = await this.eventsRepo.getByStatus(tenantId, 'published');
     const enrichedList = [];
     for (const ev of list) {
+      const visibility = (ev.venue as any)?.visibility;
+      // Discover feed: unlisted events never appear here regardless of who's asking;
+      // custom events only appear for users who already pass the access check.
+      if (visibility === 'unlisted') continue;
+      if (visibility === 'custom' && !(await this.canUserAccessEvent(ev, userId))) continue;
+
       const tickets = await this.ticketTypesRepo.getByEventId(ev.id!);
-      enrichedList.push({ ...ev, tickets });
+      const hostInfo = await this.resolveHostInfo(ev.hosted_by_entity_id);
+      enrichedList.push({ ...ev, tickets, ...hostInfo });
     }
     return enrichedList;
   }
@@ -149,16 +271,26 @@ export class EventService {
     const enrichedList = [];
     for (const ev of list) {
       const tickets = await this.ticketTypesRepo.getByEventId(ev.id!);
-      enrichedList.push({ ...ev, tickets });
+      const hostInfo = await this.resolveHostInfo(ev.hosted_by_entity_id);
+      enrichedList.push({ ...ev, tickets, ...hostInfo });
     }
     return enrichedList;
   }
 
-  static async getEventById(id: string) {
+  // `viaInviteLink` is set by the route layer once it has independently validated (and
+  // consumed) a one-time 'view' invite token for this event - it bypasses the 'unlisted'
+  // gate for that single request without needing to re-check the token here.
+  static async getEventById(id: string, userId?: string, viaInviteLink = false) {
     const event = await this.eventsRepo.getById(id);
     if (!event) return null;
+
+    if (!viaInviteLink && !(await this.canUserAccessEvent(event, userId))) {
+      return { restricted: true as const };
+    }
+
     const tickets = await this.ticketTypesRepo.getByEventId(id);
-    return { event, tickets };
+    const hostInfo = await this.resolveHostInfo(event.hosted_by_entity_id);
+    return { event: { ...event, ...hostInfo }, tickets };
   }
 
   static async getAvailableEventRoles() {
@@ -245,6 +377,20 @@ export class EventService {
       throw new Error('Forbidden: You do not have permission to edit this event');
     }
 
+    // Resolve hosted_by_entity_id the same way createEvent does, so "standalone" maps to the
+    // user's own entity rather than being written as the literal string "standalone".
+    let hostedByEntityId: string | undefined = undefined;
+    if (isFullyAuthorized && body.host_entity_id) {
+      hostedByEntityId = body.host_entity_id;
+      if (hostedByEntityId === 'standalone') {
+        const entityRows = await prisma.$queryRawUnsafe<{ id: string }[]>(
+          `SELECT id FROM entities WHERE user_id = $1::uuid AND entity_type = 'user' LIMIT 1`,
+          userId
+        );
+        hostedByEntityId = entityRows[0]?.id;
+      }
+    }
+
     // The client always submits the full event snapshot (saveEventSettings in event.tsx), so a
     // ticket-manager-only editor's request still arrives with title/dates/etc. populated. Rather
     // than reject the whole request, silently drop the restricted fields (left undefined ->
@@ -262,6 +408,7 @@ export class EventService {
       venue: body.venue,
       online_link: body.online_link,
       instruction: body.instruction,
+      hosted_by_entity_id: hostedByEntityId,
     } : {
       venue: body.venue,
     });

@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Wordmark } from './components';
 import { COVERS, EVENTS, FEATURED } from './home-data';
 import { Discover } from './home-feed';
@@ -95,7 +95,7 @@ function dropSupersededLocalTickets(tickets, joinedEvents) {
   return tickets.filter(t => !t.qrToken && !realTitles.has(t.ev));
 }
 
-function MyTickets({ st, go }) {
+export function MyTickets({ st, go }) {
   const [tab, setTab] = useState("upcoming");
   const joinedEvents = st.joinedEvents || [];
   const tickets = dropSupersededLocalTickets(st.myTickets || [], joinedEvents);
@@ -485,7 +485,7 @@ function MyTickets({ st, go }) {
 /* ---------------- My Tickets (F: dedicated ticket wallet — S-085 refined) ----------------
    Distinct from MyTickets/"My Events" above: this shows every ticket the user holds as a
    ticket-shaped card — QR code, price, attendee name, date/venue — not an event browser. */
-function AllTickets({ st, go }) {
+export function AllTickets({ st, go }) {
   const joinedEvents = st.joinedEvents || [];
   const tickets = dropSupersededLocalTickets(st.myTickets || [], joinedEvents);
 
@@ -667,7 +667,7 @@ async function shareTicket(t) {
   alert(url);
 }
 
-function TicketDetail({ tkt, st, go }) {
+export function TicketDetail({ tkt, st, go }) {
   const tickets = st?.myTickets || [];
   const t = tkt || tickets[0] || {};
   const used = t.status === "used" || t.checkedIn;
@@ -985,7 +985,7 @@ function VerifyTicketPanel({ eventId, onCheckedIn }) {
   );
 }
 
-function EventDashboard({ ev, st, go }) {
+export function EventDashboard({ ev, st, go }) {
   const e = ev || st.createdEvents[0];
   const [stats, setStats] = useState({ totalAttendees: 0, checkedInCount: 0, pendingRequestsCount: 0, revenue: 0, capacity: 120, confirmed: [], requests: [] });
   const [loading, setLoading] = useState(true);

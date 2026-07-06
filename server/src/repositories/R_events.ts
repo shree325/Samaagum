@@ -75,8 +75,9 @@ export class R_events implements IR_events {
         location_type = COALESCE($10, location_type),
         venue = COALESCE($11, venue),
         online_link = COALESCE($12, online_link),
-        instruction = COALESCE($13, instruction)
-      WHERE id = $14
+        instruction = COALESCE($13, instruction),
+        hosted_by_entity_id = COALESCE($14, hosted_by_entity_id)
+      WHERE id = $15
       RETURNING *;`,
       [
         event.title, event.description, event.status,
@@ -84,7 +85,7 @@ export class R_events implements IR_events {
         event.cash_enabled, event.registration_mode, event.approval_required,
         event.location_type,
         event.venue ? JSON.stringify(event.venue) : null,
-        event.online_link, event.instruction, id,
+        event.online_link, event.instruction, event.hosted_by_entity_id, id,
       ]
     );
     return result.rows[0] || null;

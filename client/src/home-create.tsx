@@ -574,7 +574,7 @@ export function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
           </button>
         </div>
       </div>
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @keyframes pulse-ring {
           0% { transform: scale(0.3); opacity: 1; }
           80%, 100% { transform: scale(2.2); opacity: 0; }
@@ -613,7 +613,7 @@ export function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
           0% { transform: translate(-50%, -50%) scale(0.3); opacity: 1; }
           80%, 100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
         }
-      `}</style>
+      ` }} />
     </div>
   );
 }

@@ -1,4 +1,7 @@
 // @ts-nocheck
+import React from 'react';
+import { I } from './home-icons';
+
 /* ============================================================
    Samaagum Shared Discussion Panel Component
    ============================================================ */
@@ -1053,3 +1056,5 @@ function DiscussionPanel({ entityType, entityId, token, currentUserId, isOwner, 
     </div>
   );
 }
+
+export default DiscussionPanel;

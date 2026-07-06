@@ -149,7 +149,6 @@ export function Discover({ st, go }) {
   const [tab, setTab] = useState("groups");
   const [cat, setCat] = useState("All");
   const { saved, toggleSave, registered, city, addJoined, addPending } = st;
-  const evs = EVENTS.filter(e => cat==="All" || e.cat===cat);
   const [dbEvents, setDbEvents] = useState([]);
 
   const [dbGroups, setDbGroups] = useState([]);
@@ -201,46 +200,32 @@ export function Discover({ st, go }) {
     fetchCategories();
   }, [apiBase]);
 
-    const fetchEvents = async () => {
-      try {
-        const res = await fetch(`${apiBase}/api/events`);
-        const data = await res.json();
-        if (data.success) {
-          setDbEvents(data.data || []);
-        }
-      } catch (e) {
-        console.error(e);
+  const fetchEvents = React.useCallback(async () => {
+    try {
+      const res = await fetch(`${apiBase}/api/events`);
+      const data = await res.json();
+      if (data.success) {
+        setDbEvents(data.data || []);
       }
-    };
-    fetchEvents();
+    } catch (e) {
+      console.error(e);
+    }
+  }, [apiBase]);
 
-    const fetchGroups = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`${apiBase}/api/groups`, {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-        });
-        const data = await res.json();
-        if (data.success) {
-          setDbGroups(data.data || []);
-        }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchGroups();
+  React.useEffect(() => {
+    fetchEvents();
+    fetchGroups(city);
+  }, [city, fetchEvents, fetchGroups]);
 
   React.useEffect(() => {
     if (window.io) {
       const socketUrl = apiBase ? `${apiBase}/groups` : "/groups";
       const socket = window.io(socketUrl, { transports: ['websocket'] });
-      socket.on('groups_updated', () => fetchGroups());
+      socket.on('groups_updated', () => fetchGroups(city));
       socket.on('events_updated', () => fetchEvents());
       return () => socket.disconnect();
     }
-  }, [apiBase, fetchGroups]);
+  }, [apiBase, city, fetchGroups, fetchEvents]);
 
   const grps = dbGroups.filter(g => g.visibility !== "hidden" && (cat === "All" || g.category === cat || g.cat === cat));
 
@@ -272,9 +257,15 @@ export function Discover({ st, go }) {
       going: 0,
       price: priceVal,
       attendees: [],
-      status: e.status
+      status: e.status,
+      starts_at: e.starts_at
     };
-  }).filter(e => e.status === "published" && (cat === "All" || e.cat === cat));
+  }).filter(e => {
+    if (e.status !== "published") return false;
+    if (cat !== "All" && e.cat !== cat) return false;
+    if (e.starts_at && new Date(e.starts_at) < new Date()) return false;
+    return true;
+  });
 
   return (
     <div className="scroll">

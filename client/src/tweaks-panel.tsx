@@ -174,7 +174,7 @@ export const __TWEAKS_STYLE = `
 // ── useTweaks ───────────────────────────────────────────────────────────────
 // Single source of truth for tweak values. setTweak persists via the host
 // (__edit_mode_set_keys → host rewrites the EDITMODE block on disk).
-function useTweaks(defaults) {
+export function useTweaks(defaults) {
   const getInitialValues = () => {
     const stored = localStorage.getItem('samaagum_tweaks');
     if (stored) {

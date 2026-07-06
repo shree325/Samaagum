@@ -3,19 +3,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Field } from './components';
 import { COVER_SWATCHES } from './home-create';
 import { COVERS, GROUPS, ME } from './home-data';
-import { Grain } from './home-icons';
+import { Avatar, Grain } from './home-icons';
 import { Profile } from './home-profile';
 import { Empty } from './home-shell';
 import { Waitlist } from './home-waitlist';
 import { I } from './home-icons';
 import { Communities, Events } from './landing-features';
 import { EventCard } from './home-cards';
-
-
-
-// Reuse existing components and utilities from the project
-// Assuming I, Grain, EventCard, LocationSection, COVERS, GROUPS, ME, etc. are globally available via the app bundle or global namespace.
-const { COVERS, GROUPS, ME, EventCard, Grain, Avatar } = window as any;
 
 export function UpgradePlanModal({ open, onClose, feature, go, currentPlanName }) {
   if (!open) return null;
@@ -867,7 +861,7 @@ export function RuleSummaryChip({ rule, onEditClick }: any) {
     </span>
   );
 }
-export const ACCESS_TREE = [
+export let ACCESS_TREE = [
   {
     id: "comm-samaagum",
     name: "Samaagum Hub",
@@ -1189,8 +1183,6 @@ export const findNodeInTree = (id: string, tree: any[]): any => {
 export function AccessControlModal({ open, onClose, mode, selectedAccess, setSelectedAccess }: any) {
   const [search, setSearch] = useState("");
   const [expandedNodeIds, setExpandedNodeIds] = useState(new Set<string>());
-  const [ruleCommunity, setRuleCommunity] = useState("Samaagum Hub");
-  const [ruleGroups, setRuleGroups] = useState([] as string[]);
 
   if (!open) return null;
 
@@ -1246,42 +1238,6 @@ export function AccessControlModal({ open, onClose, mode, selectedAccess, setSel
         subCommunities: [],
         groups: []
       }
-    });
-  };
-
-  // Rule Builder Specifics
-  const communitiesList = ACCESS_TREE.map(c => c.name);
-  const getGroupsForCommunityName = (commName: string) => {
-    const comm = ACCESS_TREE.find(c => c.name === commName);
-    if (!comm) return [];
-    const groups: string[] = [];
-    comm.children.forEach(sub => {
-      sub.children.forEach(grp => {
-        groups.push(grp.name);
-      });
-    });
-    return groups;
-  };
-  const ruleGroupsList = getGroupsForCommunityName(ruleCommunity);
-
-  const handleAddRule = () => {
-    if (ruleGroups.length === 0) return;
-    const newRule = {
-      id: "r-" + Date.now(),
-      community: ruleCommunity,
-      groups: ruleGroups
-    };
-    setSelectedAccess({
-      ...selectedAccess,
-      selectedMembers: [...selectedAccess.selectedMembers, newRule]
-    });
-    setRuleGroups([]);
-  };
-
-  const handleRemoveRule = (id) => {
-    setSelectedAccess({
-      ...selectedAccess,
-      selectedMembers: selectedAccess.selectedMembers.filter(r => r.id !== id)
     });
   };
 
@@ -1387,27 +1343,20 @@ export function AccessControlModal({ open, onClose, mode, selectedAccess, setSel
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
-      <style>{`
-        .tree-node-row:hover {
-          background: var(--bg-2) !important;
-        }
-      `}</style>
+      <style dangerouslySetInnerHTML={{ __html: `.tree-node-row:hover { background: var(--bg-2) !important; }` }} />
       <div style={{ background: "var(--surface)", width: 500, maxHeight: "85vh", borderRadius: "var(--r-xl)", display: "flex", flexDirection: "column", boxShadow: "var(--sh-xl)", overflow: "hidden" }}>
         <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: "var(--ink)" }}>
-            {mode === "restricted" ? "Restricted Access Settings" : "Configure Allowed Members"}
+            Restricted Access Settings
           </h2>
           <button type="button" className="hbtn hbtn--ghost hbtn--sm" onClick={onClose} style={{ border: "none" }}><I.x /></button>
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
-          {mode === "restricted" ? (
             <div>
               {/* Selection Summary at Top */}
               <div style={{ marginBottom: 12, padding: "0 4px" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 6 }}>Selection Summary</div>
                 <div style={{ display: "flex", gap: 16, fontSize: 12, fontWeight: 600, color: "var(--ink-2)", marginBottom: 8 }}>
-                  <span>🏛️ {selectedAccess.restricted.communities.length} Communities</span>
-                  <span>📁 {selectedAccess.restricted.subCommunities.length} Sub-Communities</span>
                   <span>👥 {selectedAccess.restricted.groups.length} Groups</span>
                 </div>
                 {allSelectedDetails.length > 0 && (
@@ -1443,7 +1392,7 @@ export function AccessControlModal({ open, onClose, mode, selectedAccess, setSel
               <div style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "center" }}>
                 <input
                   className="cinput"
-                  placeholder="Search by community, sub-community, or group..."
+                  placeholder="Search groups..."
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   style={{ flex: 1, background: "var(--field)", border: "1px solid var(--border)", marginBottom: 0 }}
@@ -1473,52 +1422,6 @@ export function AccessControlModal({ open, onClose, mode, selectedAccess, setSel
                 {ACCESS_TREE.map(node => renderTreeNode(node, 0))}
               </div>
             </div>
-          ) : (
-            <div>
-              <div style={{ padding: 16, background: "var(--field)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", marginBottom: 18 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 12 }}>Define Access Rule</div>
-                <div className="cfield" style={{ marginBottom: 12 }}>
-                  <label>Select Community</label>
-                  <select className="cselect" value={ruleCommunity} onChange={e => {
-                    setRuleCommunity(e.target.value);
-                    const list = getGroupsForCommunityName(e.target.value);
-                    setRuleGroups([]);
-                  }} style={{ background: "var(--surface)" }}>
-                    {communitiesList.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div className="cfield" style={{ marginBottom: 16 }}>
-                  <label>Allowed Groups (Ctrl+Click to multi-select)</label>
-                  <select
-                    multiple
-                    className="cselect"
-                    value={ruleGroups}
-                    onChange={e => setRuleGroups(Array.from(e.target.selectedOptions, (option: any) => option.value))}
-                    style={{ background: "var(--surface)", height: 120 }}
-                  >
-                    {ruleGroupsList.map(g => <option key={g} value={g}>{g}</option>)}
-                  </select>
-                </div>
-                <button type="button" className="hbtn hbtn--primary hbtn--sm" onClick={handleAddRule} style={{ width: "100%" }}>
-                  ➕ Add Access Rule
-                </button>
-              </div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 8 }}>Active Rules</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 200, overflowY: "auto" }}>
-                {selectedAccess.selectedMembers.map(rule => (
-                  <div key={rule.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "var(--field)", border: "1px solid var(--border)", borderRadius: "var(--r-md)" }}>
-                    <div style={{ fontSize: 13, color: "var(--ink)" }}>
-                      <span style={{ fontWeight: 600 }}>{rule.community}</span> → {rule.groups.join(", ")}
-                    </div>
-                    <button type="button" className="hbtn hbtn--ghost hbtn--sm" onClick={() => handleRemoveRule(rule.id)} style={{ color: "#e5484d", border: "none" }}>✕</button>
-                  </div>
-                ))}
-                {selectedAccess.selectedMembers.length === 0 && (
-                  <div style={{ fontStyle: "italic", color: "var(--ink-3)", fontSize: 13 }}>No rules defined yet.</div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
         <div style={{ padding: "16px 24px", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end", background: "var(--bg-2)" }}>
           <button type="button" className="hbtn hbtn--primary" onClick={onClose}>Save &amp; Close</button>
@@ -1684,7 +1587,7 @@ export const DEFAULT_FREE_ENTITLEMENTS = {
   event_can_create_paid_tickets: false
 };
 
-function CreateEvent(props: any) {
+export function CreateEvent(props: any) {
   const { editEv } = props;
   const [eventData, setEventData] = useState(null as any);
   const [loading, setLoading] = useState(editEv?.id && editEv.id !== 'new');
@@ -2495,6 +2398,10 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
       if (st && st.addCreatedEvent) {
         st.addCreatedEvent(eventObj);
       }
+      // Refetch all events so new event appears in lists and group tabs
+      if (st && st.fetchEvents) {
+        st.fetchEvents();
+      }
       go('event', eventObj);
     } catch (err: any) {
       setSubmitError(err.message || 'Something went wrong. Please try again.');
@@ -2503,10 +2410,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
     }
   }
 
-  return (
-    <>
-    <div className={`create ${mobile ? "single" : ""}`}>
-      <style>{`
+  const CREATE_EVENT_CSS = `
         .create {
           min-height: 100vh;
           width: 100%;
@@ -2840,7 +2744,13 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
           border-color: var(--accent-2);
           background: var(--accent-soft);
         }
-      `}</style>
+      `;
+
+  return (
+    <>
+    <div className={`create ${mobile ? "single" : ""}`}>
+      <style dangerouslySetInnerHTML={{ __html: CREATE_EVENT_CSS }} />
+
       <div className="create-form" style={{ backgroundColor: "var(--bg-2)", padding: mobile ? "14px 12px 110px" : "24px 32px 110px", position: "relative" }}>
         <div className="cf-inner" style={{ maxWidth: 1080, margin: "0 auto" }}>
 
@@ -3092,8 +3002,8 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                         fontFamily: "inherit"
                       }}
                     >
-                      👥 Restrict to Community
-                      <div style={{ fontSize: 11, fontWeight: 400, color: "var(--ink-3)", marginTop: 4 }}>Only members of selected communities or groups can join.</div>
+                      👥 Restricted Access
+                      <div style={{ fontSize: 11, fontWeight: 400, color: "var(--ink-3)", marginTop: 4 }}>Only members of selected groups can join.</div>
                     </button>
                     <button
                       type="button"
@@ -3120,7 +3030,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                 {joinEligibility === "restricted" && (
                   <div style={{ marginBottom: 16, padding: 12, background: "var(--field)", borderRadius: "var(--r-md)", border: "1px solid var(--border)", marginTop: -4 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>Allowed Communities & Groups</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>Allowed Groups</span>
                       <button
                         type="button"
                         className="hbtn hbtn--ghost hbtn--sm"
@@ -3157,7 +3067,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                       })}
                       {getSelectedNodesWithDetails(ACCESS_TREE, selectedAccess.restricted).length === 0 && (
                         <div style={{ fontSize: 13, color: "var(--ink-3)", fontStyle: "italic" }}>
-                          No communities or groups selected yet. Click "Configure" to select.
+                          No groups selected yet. Click "Configure" to select.
                         </div>
                       )}
                     </div>
@@ -3293,7 +3203,6 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                   </div>
                 </div>
               </div>
-            </div>
 
             {/* Right Side: Banner Upload Container */}
             <div className="banner-section">
@@ -3392,7 +3301,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                     );
                   })()}
                   <div style={{ textAlign: "left" }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Host as</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Hosted by</div>
                     <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", marginTop: 2 }}>
                       {hostEntityId === "standalone" ? ME.name : (hostGroups.find(g => g.entity_id === hostEntityId)?.name || "Select Host")}
                     </div>
@@ -3403,7 +3312,6 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                 </div>
               </div>
             </div>
-
           </div>
         </div>
       </div>
@@ -3838,6 +3746,12 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
         setTickets={setTickets}
         setTk={setTk}
         mobile={mobile}
+        upgradeModalOpen={upgradeModalOpen}
+        setUpgradeModalOpen={setUpgradeModalOpen}
+        upgradeFeature={upgradeFeature}
+        setUpgradeFeature={setUpgradeFeature}
+        st={st}
+        go={go}
       />
 
       <QuestionnaireModal
@@ -4327,7 +4241,7 @@ function QuestionnaireModal({ open, onClose, formFields, setFormFields, enableRe
   );
 }
 
-function TicketSettingsModal({ open, onClose, type, setType, tickets, setTickets, setTk, mobile }) {
+function TicketSettingsModal({ open, onClose, type, setType, tickets, setTickets, setTk, mobile, upgradeModalOpen, setUpgradeModalOpen, upgradeFeature, setUpgradeFeature, st, go }) {
   if (!open) return null;
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>

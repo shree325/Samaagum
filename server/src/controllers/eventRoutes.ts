@@ -1,7 +1,26 @@
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { EventService } from '../services/EventService';
+import { EventInvitationService } from '../services/EventInvitationService';
 import prisma from '../config/prisma';
 import QRCode from 'qrcode';
+
+// Best-effort JWT decode for routes that are public but want to personalize the response
+// (e.g. visibility gating, booking status) when a caller happens to be logged in.
+// This app has no @fastify/jwt plugin registered - `authenticate` in index.ts just
+// base64-decodes the payload without verifying the signature, so mirror that here.
+function tryDecodeUserId(fastify: any, request: any): string | undefined {
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return undefined;
+    try {
+        const token = authHeader.substring(7);
+        const parts = token.split('.');
+        if (parts.length !== 3) return undefined;
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+        return payload?.id;
+    } catch {
+        return undefined;
+    }
+}
 
 export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
 
@@ -163,7 +182,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
     fastify.get('', async (request: any, reply) => {
         try {
             const tenantId = request.headers['x-tenant-id'] || '00000000-0000-0000-0000-000000000000';
-            const data = await EventService.getPublicEvents(tenantId as string);
+            const userId = tryDecodeUserId(fastify, request);
+            const data = await EventService.getPublicEvents(tenantId as string, userId);
             return reply.send({ success: true, data });
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });
@@ -171,35 +191,45 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
     });
 
     // GET /:id
+    // Optional ?inviteToken= query param: a valid 'view' or 'join' invite link bypasses the
+    // 'unlisted'/'custom' visibility gate for this single request. 'view' links are reusable
+    // and are never consumed here; 'join' links are only consumed on actual request-join
+    // (see messagingRoutes.ts), not merely by viewing the event.
     fastify.get('/:id', async (request: any, reply) => {
         try {
             const { id } = request.params as any;
-            const data = await EventService.getEventById(id);
+            const { inviteToken } = request.query as any;
+            const userId = tryDecodeUserId(fastify, request);
+
+            let viaInviteLink = false;
+            if (inviteToken) {
+                const validation = await EventInvitationService.validateToken(inviteToken);
+                if (validation.valid && validation.invite?.event_id === id) {
+                    viaInviteLink = true;
+                }
+            }
+
+            const data = await EventService.getEventById(id, userId, viaInviteLink);
             if (!data) {
                 return reply.status(404).send({ success: false, message: 'Event not found' });
+            }
+            if ((data as any).restricted) {
+                return reply.status(403).send({ success: false, message: 'You do not have access to this event' });
             }
 
             let bookingStatus = null;
             let bookingId = null;
-            if (request.headers.authorization) {
-                try {
-                    const token = request.headers.authorization.split(' ')[1];
-                    const decoded = (fastify as any).jwt.verify(token);
-                    if (decoded && decoded.id) {
-                        const booking = await prisma.bookings.findFirst({
-                            where: {
-                                event_id: id,
-                                booker_user_id: decoded.id
-                            },
-                            orderBy: { created_at: 'desc' }
-                        });
-                        if (booking) {
-                            bookingStatus = booking.status;
-                            bookingId = booking.id;
-                        }
-                    }
-                } catch (jwtErr) {
-                    // Ignore JWT verify errors
+            if (userId) {
+                const booking = await prisma.bookings.findFirst({
+                    where: {
+                        event_id: id,
+                        booker_user_id: userId
+                    },
+                    orderBy: { created_at: 'desc' }
+                });
+                if (booking) {
+                    bookingStatus = booking.status;
+                    bookingId = booking.id;
                 }
             }
 
@@ -1331,6 +1361,63 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
         } catch (e: any) {
             const status = e.message?.startsWith('Forbidden') ? 403 : 500;
             return reply.status(status).send({ success: false, message: e.message });
+        }
+    });
+
+    // ────────────────────────────────────────────────────────────────
+    // EVENT INVITE LINKS — one-time links for unlisted visibility ('view')
+    // and invite-only join eligibility ('join')
+    // ────────────────────────────────────────────────────────────────
+
+    // POST /:id/invites — host/co-host generates an invite link.
+    // 'view' links are durable/reusable (idempotent: repeat calls return the same link).
+    // 'join' links are single-use, a fresh token is minted on every call.
+    fastify.post('/:id/invites', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+            const { purpose } = request.body as any;
+            if (purpose !== 'view' && purpose !== 'join') {
+                return reply.status(400).send({ success: false, message: "purpose must be 'view' or 'join'" });
+            }
+            const data = await EventInvitationService.createLink(id, request.user.id, purpose);
+            return reply.send({ success: true, data });
+        } catch (e: any) {
+            const status = e.message?.includes('permission') ? 403 : 500;
+            return reply.status(status).send({ success: false, message: e.message });
+        }
+    });
+
+    // GET /:id/invites/view — host/co-host fetches the durable 'view' link if one already
+    // exists (without minting a new one), so the Invite tab can restore it after a reload.
+    fastify.get('/:id/invites/view', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+            const isHostOrCoHost = await EventService.verifyEventHostOrCoHost(request.user.id, id);
+            if (!isHostOrCoHost) return reply.status(403).send({ success: false, message: 'You do not have permission to view invite links for this event' });
+            const data = await EventInvitationService.getExistingViewLink(id);
+            return reply.send({ success: true, data });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // GET /invite/:token — public lookup (read-only, does not consume the token) used by
+    // the invite landing page to find out which event/purpose a link corresponds to.
+    fastify.get('/invite/:token', async (request: any, reply) => {
+        try {
+            const { token } = request.params as any;
+            const validation = await EventInvitationService.validateToken(token);
+            if (!validation.valid) {
+                return reply.send({ success: false, message: validation.message });
+            }
+            return reply.send({
+                success: true,
+                data: { event: validation.event, purpose: validation.invite?.purpose }
+            });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
         }
     });
 };
