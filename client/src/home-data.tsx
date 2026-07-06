@@ -1,9 +1,14 @@
+import React from 'react';
+import { Brand } from './home-icons';
+import { I } from './landing-core';
+import { Events } from './landing-features';
+
 /* ============================================================
    Samaagum Home — sample data
    Bengaluru-centric community / events seed.
    ============================================================ */
 
-const ME = {
+export const ME = {
   name: "", handle: "", role: "",
   bio: "",
   location: "",
@@ -11,7 +16,7 @@ const ME = {
   stats: { connections: 248, events: 36, groups: 7 },
 };
 
-const PLAN_CONFIG = {
+export const PLAN_CONFIG = {
   free: { maxGroups: 2, paid: false, customQuestions: false, advancedForums: false, premiumCovers: false },
   pro: { maxGroups: 999, paid: true, customQuestions: true, advancedForums: true, premiumCovers: true },
   enterprise: { maxGroups: 999, paid: true, customQuestions: true, advancedForums: true, premiumCovers: true, analytics: true }
@@ -36,12 +41,15 @@ const PLAN_CONFIG = {
   } catch (e) { /* ignore token parse errors */ }
 })();
 
-const CATS = [
+(window as any).ME = ME;
+
+
+export const CATS = [
   ["All", "grid"], ["Startups", "spark"], ["Design", "edit"], ["Music", "fire"],
   ["Tech", "online"], ["Wellness", "heart"], ["Food & Drink", "users"], ["Art", "image"],
 ];
 
-const COVERS = {
+export const COVERS = {
   coral: "linear-gradient(135deg,#ff6b4a 0%,#ff4d8d 100%)",
   violet: "linear-gradient(135deg,#6d5efc 0%,#2a7fff 100%)",
   sunset: "linear-gradient(135deg,#f59e0b 0%,#ef6f53 60%,#ff5a7a 100%)",
@@ -52,7 +60,7 @@ const COVERS = {
   ocean: "linear-gradient(135deg,#0ea5a4 0%,#3b82f6 100%)",
 };
 
-const FEATURED = {
+export const FEATURED = {
   id: "ev-feat", title: "Founders & Funders Mixer — Summer Edition",
   desc: "An intimate evening connecting early-stage founders with operators and angels across Bengaluru's tech scene. Curated tables, no pitches — just real conversations over rooftop sunsets.",
   cover: COVERS.sunset, cat: "Startups", type: "Paid",
@@ -61,7 +69,7 @@ const FEATURED = {
   hostBy: "Kabir Anand", price: "₹499", going: 142, cap: 180, live: true,
 };
 
-const EVENTS = [
+export const EVENTS = [
   {
     id: "e1", title: "Design Systems Night #12", cover: COVERS.violet, cat: "Design", type: "Free",
     month: "JUN", day: "21", date: "Sat, Jun 21", time: "5:00 PM", venue: "WeWork Galaxy", city: "Bengaluru",
@@ -94,9 +102,9 @@ const EVENTS = [
   },
 ];
 
-const UPCOMING = [EVENTS[0], EVENTS[1], EVENTS[3]]; // user is registered
+export const UPCOMING = [EVENTS[0], EVENTS[1], EVENTS[3]]; // user is registered
 
-const GROUPS = [
+export const GROUPS = [
   {
     id: "g1", name: "BLR Founders Collective", icon: "🚀", cover: COVERS.sunset, cat: "Startups",
     desc: "3,400 founders building in Bengaluru. Weekly mixers, fundraising AMAs, and a no-BS peer network.",
@@ -166,17 +174,17 @@ const GROUPS = [
   },
 ];
 
-const NEAR = [GROUPS[2], GROUPS[4], GROUPS[5]];
-const TRENDING = [GROUPS[3], GROUPS[0], GROUPS[1], GROUPS[4]];
+export const NEAR = [GROUPS[2], GROUPS[4], GROUPS[5]];
+export const TRENDING = [GROUPS[3], GROUPS[0], GROUPS[1], GROUPS[4]];
 
-const PEOPLE = [
+export const PEOPLE = [
   { name: "Mira Shah", role: "Brand Designer", cover: COVERS.violet, mutual: 8, tags: ["Design", "Type"] },
   { name: "Vivek Rao", role: "ML Engineer · Bangalore AI", cover: COVERS.dusk, mutual: 12, tags: ["Tech", "AI"] },
   { name: "Riya Thomas", role: "Music Curator", cover: COVERS.coral, mutual: 5, tags: ["Music", "Events"] },
   { name: "Karan Sethi", role: "Founder · Still Mind", cover: COVERS.emerald, mutual: 3, tags: ["Wellness", "Startups"] },
 ];
 
-const DISCUSSIONS = [
+export const DISCUSSIONS = [
   {
     id: "d1", who: "Dev Kapoor", group: "BLR Founders Collective", pinned: true, time: "2h",
     q: "What's your honest take on raising a pre-seed in this market?",
@@ -197,7 +205,7 @@ const DISCUSSIONS = [
   },
 ];
 
-const NOTIFS = [
+export const NOTIFS = [
   {
     id: "n1", type: "join", who: "BLR Founders Collective", unread: true, day: "Today", time: "12 min ago",
     text: "<b>Your request to join</b> BLR Founders Collective was <b>approved</b>. Welcome aboard!", action: "view"
@@ -228,7 +236,7 @@ const NOTIFS = [
   },
 ];
 
-const THREADS = [
+export const THREADS = [
   {
     id: "t1", name: "Mira Shah", online: true, time: "2m", unread: 2, connected: true,
     preview: "Loved your talk — can we collab on the token pipeline?",
@@ -259,42 +267,42 @@ const THREADS = [
   },
 ];
 
-const REQUESTS = [
+export const REQUESTS = [
   { name: "Vivek Rao", role: "ML Engineer · Bangalore AI", mutual: 12 },
   { name: "Sana Begum", role: "Vocalist · Indie Music BLR", mutual: 4 },
 ];
 
-const INTERESTS_ME = [
+export const INTERESTS_ME = [
   ["Design", "#6d5efc"], ["Startups", "#ff6b4a"], ["Typography", "#e5489d"],
   ["Community", "#10b981"], ["Coffee", "#f59e0b"], ["City Walks", "#0ea5a4"], ["Product", "#2a7fff"],
 ];
 
-const LINKS_ME = [
+export const LINKS_ME = [
   { t: "Portfolio", u: "aanya.design", icon: "website", c: "linear-gradient(135deg,#6d5efc,#2a7fff)" },
   { t: "Dribbble", u: "dribbble.com/aanya", icon: "dribbble", c: "linear-gradient(135deg,#ea4c89,#ff5a7a)" },
   { t: "LinkedIn", u: "in/aanyareddy", icon: "linkedin", c: "linear-gradient(135deg,#0a66c2,#2a7fff)" },
   { t: "GitHub", u: "github.com/aanya", icon: "github", c: "linear-gradient(135deg,#333,#666)" },
 ];
 
-const SOCIALS = [
+export const SOCIALS = [
   { icon: "twitter", c: "#000" }, { icon: "instagram", c: "linear-gradient(135deg,#f58529,#dd2a7b,#8134af)" },
   { icon: "linkedin", c: "#0a66c2" }, { icon: "dribbble", c: "#ea4c89" },
 ];
 
-const JOIN_REQUESTS = [
+export const JOIN_REQUESTS = [
   { id: "r1", groupId: "g2", user: { name: "Anil K", role: "UI Engineer" }, date: "Oct 24", status: "pending", answers: { "Why do you want to join?": "I'm looking to learn more about design systems.", "Portfolio link": "anil.design" } },
   { id: "r2", groupId: "g2", user: { name: "Tara N", role: "Product Manager" }, date: "Oct 23", status: "pending", answers: { "Why do you want to join?": "Hoping to collaborate with designers on my next project." } },
   { id: "r3", groupId: "g1", user: { name: "Sam K", role: "Founder" }, date: "Oct 21", status: "pending", answers: { "Startup stage?": "Pre-seed" } }
 ];
 
-const MY_TICKETS = [
+export const MY_TICKETS = [
   { id: "BL-2291", ev: "Founders & Funders Mixer — Summer Edition", cover: COVERS.sunset, tier: "VIP · Front tables", date: "Thu, Jun 18", time: "6:30 PM", venue: "Skydeck, Indiranagar", online: false, paid: "₹1,099", qty: 1, attendee: "Aanya Reddy", status: "confirmed" },
   { id: "BL-2244", ev: "Design Systems Night #12", cover: COVERS.violet, tier: "General RSVP", date: "Sat, Jun 21", time: "5:00 PM", venue: "WeWork Galaxy", online: false, paid: "Free", qty: 1, attendee: "Aanya Reddy", status: "confirmed" },
   { id: "BL-2102", ev: "AI Builders Demo Day", cover: COVERS.dusk, tier: "General RSVP", date: "Wed, Jun 25", time: "6:00 PM", venue: "Online", online: true, paid: "Free", qty: 1, attendee: "Aanya Reddy", status: "confirmed" },
   { id: "BL-1998", ev: "Typography & Lettering Workshop", cover: COVERS.plum, tier: "General RSVP", date: "Wed, Jul 2", time: "11:00 AM", venue: "Rangoli Metro Art", online: false, paid: "₹1,200", qty: 1, attendee: "Aanya Reddy", status: "used" },
 ];
 
-const WAITLIST_ME = {
+export const WAITLIST_ME = {
   ev: "Founders & Funders Mixer — Summer Edition",
   cover: COVERS.sunset,
   date: "Thu, Jun 18",
@@ -333,8 +341,4 @@ async function copyText(text) {
   }
 }
 
-Object.assign(window, {
-  ME, PLAN_CONFIG, CATS, COVERS, FEATURED, EVENTS, UPCOMING, GROUPS, NEAR, TRENDING,
-  PEOPLE, DISCUSSIONS, NOTIFS, THREADS, REQUESTS, JOIN_REQUESTS, INTERESTS_ME, LINKS_ME, SOCIALS,
-  MY_TICKETS, WAITLIST_ME, copyText,
-});
+

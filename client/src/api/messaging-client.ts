@@ -1,6 +1,9 @@
-/// <reference path="../generated/messaging-types.ts" />
+import React from 'react';
+import { apiBase } from '../home-subscription';
 
-class ApiError extends Error {
+import { paths } from '../generated/messaging-types';
+
+export class ApiError extends Error {
   constructor(
     public status: number,
     public override message: string,
@@ -11,7 +14,7 @@ class ApiError extends Error {
   }
 }
 
-class MessagingApiClient {
+export class MessagingApiClient {
   private apiBase: string;
 
   constructor() {
@@ -151,5 +154,5 @@ class MessagingApiClient {
 }
 
 // Bind to window to expose globally to other script tags compiled by Babel Standalone
-(window as any).ApiError = ApiError;
-(window as any).messagingApi = new MessagingApiClient();
+export const messagingApi = new MessagingApiClient();
+(window as any).messagingApi = messagingApi;

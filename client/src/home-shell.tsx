@@ -1,10 +1,23 @@
 // @ts-nocheck
+import React, { useEffect, useRef, useState } from 'react';
+import { LocationSelector, Wordmark } from './components';
+import { Toggle } from './create_event';
+import { ME } from './home-data';
+import { Discover } from './home-feed';
+import { Avatar } from './home-icons';
+import { Messages } from './home-messages';
+import { Notifications } from './home-notifications';
+import { Profile } from './home-profile';
+import { apiBase } from './home-subscription';
+import { I } from './home-icons';
+import { Events } from './landing-features';
+
 /* ============================================================
    Samaagum Home — app shell (sidebar, topbar, menus) + shared bits
    ============================================================ */
 
 /* ---------------- Popover (click-away) ---------------- */
-function Popover({ open, onClose, children = null, style = null }: { open: any; onClose: any; children?: any; style?: any }) {
+export function Popover({ open, onClose, children = null, style = null }: { open: any; onClose: any; children?: any; style?: any }) {
   const ref = useRef(null);
   useEffect(() => {
     if (!open) return;
@@ -18,7 +31,7 @@ function Popover({ open, onClose, children = null, style = null }: { open: any; 
 }
 
 /* ---------------- Create menu content ---------------- */
-function CreateMenu({ onPick }) {
+export function CreateMenu({ onPick }) {
   const items = [
     { k:"create-event", ic:<I.ticket/>, t:"Create event", d:"Sell tickets or take RSVPs", c:"linear-gradient(135deg,#ff6b4a,#ff4d8d)" },
     { k:"create-group", ic:<I.groups/>, t:"Create group", d:"Gather your community", c:"linear-gradient(135deg,#6d5efc,#2a7fff)" },
@@ -37,7 +50,7 @@ function CreateMenu({ onPick }) {
 }
 
 /* ---------------- Sidebar ---------------- */
-function Sidebar({ view, go, counts, collapsed, onToggleCollapse, chatSettings }) {
+export function Sidebar({ view, go, counts, collapsed, onToggleCollapse, chatSettings }) {
   const [createOpen, setCreateOpen] = useState(false);
   const showMessages = chatSettings?.allowSiteMessaging !== false;
   const main = [
@@ -114,7 +127,7 @@ function Sidebar({ view, go, counts, collapsed, onToggleCollapse, chatSettings }
 }
 
 /* ---------------- Topbar (desktop) ---------------- */
-function Topbar({ go, counts, dark, onToggleTheme, city, onCity, chatSettings }) {
+export function Topbar({ go, counts, dark, onToggleTheme, city, onCity, chatSettings }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const showMessages = chatSettings?.allowSiteMessaging !== false;
@@ -146,9 +159,7 @@ function Topbar({ go, counts, dark, onToggleTheme, city, onCity, chatSettings })
       <button className="tb-icon" onClick={()=>go("notifications")} title="Notifications">
         <I.bell/>{counts.notifs ? <span className="badge">{counts.notifs}</span> : null}
       </button>
-      <button className="tb-icon" onClick={onToggleTheme} title={dark ? "Switch to Light Mode" : "Switch to Dark Mode"}>
-        {dark ? <I.sun/> : <I.moon/>}
-      </button>
+
       <div style={{ position:"relative" }}>
         <button className="tb-icon" style={{ padding:0, border:"none" }} onClick={()=>setProfileOpen(v=>!v)}>
           <I.Avatar userId={window.ME?.id} name={ME.name} img={ME.img} size={40} className="ring" />
@@ -161,11 +172,11 @@ function Topbar({ go, counts, dark, onToggleTheme, city, onCity, chatSettings })
   );
 }
 
-function ProfileMenu({ go, dark, onToggleTheme }) {
+export function ProfileMenu({ go, dark, onToggleTheme }) {
   const isAdmin = ME.role && ME.role.toLowerCase().includes("admin");
   const items = [
     { k:"profile", ic:<I.user/>, t:"My profile" },
-    { k:"events", ic:<I.ticket/>, t:"My tickets" },
+    { k:"tickets", ic:<I.ticket/>, t:"My tickets" },
     { k:"groups", ic:<I.groups/>, t:"My groups" },
     { k:"upgrade", ic:<I.crown style={{ color: "var(--accent-1)" }}/>, t:"Upgrade Plan" },
     ...(isAdmin ? [{ k:"admin", ic:<I.compass/>, t:"Admin Console" }] : []),
@@ -207,7 +218,7 @@ function ProfileMenu({ go, dark, onToggleTheme }) {
 }
 
 /* ---------------- Shared section bits ---------------- */
-function SectionBar({ title, count, onMore, moreLabel = "See all" }) {
+export function SectionBar({ title, count, onMore, moreLabel = "See all" }) {
   return (
     <div className="sec-bar">
       <h2>{title}</h2>
@@ -217,7 +228,7 @@ function SectionBar({ title, count, onMore, moreLabel = "See all" }) {
   );
 }
 
-function FilterChip({ active, icon, children, onClick, count }) {
+export function FilterChip({ active, icon, children, onClick, count }) {
   const showBadge = count != null && count > 0;
   return (
     <button className={`fchip ${active?"on":""}`} onClick={onClick}>
@@ -248,7 +259,7 @@ function FilterChip({ active, icon, children, onClick, count }) {
   );
 }
 
-function Empty({ icon, title, text, action }) {
+export function Empty({ icon, title, text, action }) {
   return (
     <div className="empty">
       <div className="ill">{icon}</div>
@@ -259,7 +270,7 @@ function Empty({ icon, title, text, action }) {
 }
 
 /* ---------------- City picker sheet ---------------- */
-function CityPicker({ open, onClose, city, onPick }) {
+export function CityPicker({ open, onClose, city, onPick }) {
   const [selectedLocation, setSelectedLocation] = useState(
     window.ME?.locationLat && window.ME?.locationLng ? {
       location_name: city,
@@ -347,8 +358,8 @@ function CityPicker({ open, onClose, city, onPick }) {
         <p style={{ margin: "0 24px", fontSize: "13px", color: "var(--ink-2)" }}>Discovery is biased to events near you.</p>
         
         <div style={{ padding: "20px 24px 24px" }}>
-          {window.LocationSelector && (
-            <window.LocationSelector 
+          {LocationSelector && (
+            <LocationSelector 
               value={selectedLocation}
               onChange={handleSelect}
               placeholder="Search a new location..."
@@ -369,4 +380,4 @@ function CityPicker({ open, onClose, city, onPick }) {
   );
 }
 
-Object.assign(window, { Popover, Sidebar, Topbar, ProfileMenu, CreateMenu, SectionBar, FilterChip, Empty, CityPicker });
+

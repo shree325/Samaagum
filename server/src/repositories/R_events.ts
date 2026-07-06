@@ -11,9 +11,9 @@ export class R_events implements IR_events {
         title, description, status, starts_at, ends_at, venue_timezone,
         location_type, venue, online_link, capacity_total,
         registration_mode, approval_required, registration_form_id,
-        cash_enabled, financial_locked_at
+        cash_enabled, financial_locked_at, instruction
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
       RETURNING *;
     `;
     const values = [
@@ -25,7 +25,7 @@ export class R_events implements IR_events {
       event.online_link, event.capacity_total,
       event.registration_mode ?? 'paid', event.approval_required ?? false,
       event.registration_form_id, event.cash_enabled ?? false,
-      event.financial_locked_at,
+      event.financial_locked_at, event.instruction,
     ];
     const result = await this.db.query(query, values);
     return result.rows[0];
@@ -74,8 +74,10 @@ export class R_events implements IR_events {
         approval_required = COALESCE($9, approval_required),
         location_type = COALESCE($10, location_type),
         venue = COALESCE($11, venue),
-        online_link = COALESCE($12, online_link)
-      WHERE id = $13
+        online_link = COALESCE($12, online_link),
+        instruction = COALESCE($13, instruction),
+        hosted_by_entity_id = COALESCE($14, hosted_by_entity_id)
+      WHERE id = $15
       RETURNING *;`,
       [
         event.title, event.description, event.status,
@@ -83,7 +85,7 @@ export class R_events implements IR_events {
         event.cash_enabled, event.registration_mode, event.approval_required,
         event.location_type,
         event.venue ? JSON.stringify(event.venue) : null,
-        event.online_link, id,
+        event.online_link, event.instruction, event.hosted_by_entity_id, id,
       ]
     );
     return result.rows[0] || null;

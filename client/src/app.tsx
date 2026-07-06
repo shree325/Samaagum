@@ -1,9 +1,16 @@
 // @ts-nocheck
+import React, { Fragment, useEffect, useState } from 'react';
+import ReactDOM from 'react-dom/client';
+import { SCENES, useAuth } from './auth-flow';
+import { Ic, LeftPanel, MeshBg, Reveal, Wordmark } from './components';
+import { Discover } from './home-feed';
+import { useTweaks } from './tweaks-panel';
+
 /* ============================================================
    Samaagum — showcase app (desktop + mobile + tweaks)
    ============================================================ */
 
-var { useState, useEffect } = React;
+
 
 // ── Handle Google OAuth redirect ─────────────────────────────────────────────
 // After Google login, the backend redirects back here with ?token=...&auth=google
@@ -29,10 +36,10 @@ var { useState, useEffect } = React;
   }
 })();
 
-const Lock = (p) => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" {...p}><rect x="4.5" y="10.5" width="15" height="10" rx="2.5" stroke="currentColor" strokeWidth="1.8"/><path d="M7.5 10.5V8a4.5 4.5 0 019 0v2.5" stroke="currentColor" strokeWidth="1.8"/></svg>;
+export const Lock = (p) => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" {...p}><rect x="4.5" y="10.5" width="15" height="10" rx="2.5" stroke="currentColor" strokeWidth="1.8"/><path d="M7.5 10.5V8a4.5 4.5 0 019 0v2.5" stroke="currentColor" strokeWidth="1.8"/></svg>;
 
 /* ---------------- Scene wrapper ---------------- */
-function Scene({ m }) {
+export function Scene({ m }) {
   const Cmp = SCENES[m.step];
   const wide = m.step === "interests" || m.step === "location";
   return (
@@ -51,7 +58,7 @@ function Scene({ m }) {
 }
 
 /* ---------------- Desktop split-screen ---------------- */
-function DesktopAuth({ gradient }) {
+export function DesktopAuth({ gradient }) {
   const m = useAuth();
   const showBack = m.idx > 0 && m.step !== "done";
   return (
@@ -71,7 +78,7 @@ function DesktopAuth({ gradient }) {
 }
 
 /* ---------------- Mobile (iOS) ---------------- */
-function MobileAuth({ gradient }) {
+export function MobileAuth({ gradient }) {
   const m = useAuth();
   const showBack = m.idx > 0 && m.step !== "done";
   const tall = m.step === "method";
@@ -108,22 +115,22 @@ function MobileAuth({ gradient }) {
   );
 }
 /* mobile uses same screens; CTA naturally sits at bottom of the sheet */
-function SceneMobileInner({ m }) {
+export function SceneMobileInner({ m }) {
   const Cmp = SCENES[m.step];
   return <div style={{ display: "flex", flexDirection: "column", flex: 1 }}><Cmp m={m} /></div>;
 }
 
 /* ---------------- Tweaks ---------------- */
-const ACCENTS = [
+export const ACCENTS = [
   ["sunset", "linear-gradient(120deg,#ff6b4a,#6d5efc)"],
   ["violet", "linear-gradient(120deg,#8b7bff,#6d5efc)"],
   ["blue", "linear-gradient(120deg,#5eafff,#2a7fff)"],
   ["emerald", "linear-gradient(120deg,#6ee7c7,#10b981)"],
   ["coral", "linear-gradient(120deg,#ff9a6b,#ff5a7a)"],
 ];
-const GRADS = [["sunset", "Sunset"], ["aurora", "Aurora"], ["dusk", "Dusk"], ["plum", "Plum"]];
+export const GRADS = [["sunset", "Sunset"], ["aurora", "Aurora"], ["dusk", "Dusk"], ["plum", "Plum"]];
 
-const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+export const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "accent": "sunset",
   "gradient": "sunset",
   "dark": false,
@@ -131,7 +138,7 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "glass": 22
 }/*EDITMODE-END*/;
 
-function App() {
+export function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
 
   useEffect(() => {
@@ -162,6 +169,11 @@ function App() {
     : <DesktopAuth gradient={t.gradient} />;
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(
-  <App />
-);
+const _appContainer = document.getElementById("root");
+let _appRoot = (_appContainer as any).__reactRoot;
+if (!_appRoot) {
+  _appRoot = ReactDOM.createRoot(_appContainer);
+  (_appContainer as any).__reactRoot = _appRoot;
+}
+_appRoot.render(<App />);
+

@@ -19,6 +19,7 @@ export interface IEvent {
   registration_form_id?: string | null;
   cash_enabled?: boolean;
   financial_locked_at?: Date | null;
+  instruction?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }

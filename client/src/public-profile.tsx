@@ -1,10 +1,17 @@
 // @ts-nocheck
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { VirtualCard } from './VirtualCard';
+import { authHeaders } from './home-notifications';
+import { Profile } from './home-profile';
+import { apiBase } from './home-subscription';
+import { I } from './home-icons';
+
 /**
  * public-profile.tsx
  * Industry-level public profile view with connection-first messaging.
  */
 
-function PublicProfile({ profile, go, socket }) {
+export function PublicProfile({ profile, go, socket }) {
   const User      = (p) => <svg viewBox="0 0 24 24" fill="none" width="24" height="24" {...p}><circle cx="12" cy="8" r="5" stroke="currentColor" strokeWidth="2" /><path d="M20 21a8 8 0 10-16 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>;
   const Mail      = (p) => <svg viewBox="0 0 24 24" fill="none" width="20" height="20" {...p}><rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M2 8l10 7 10-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
   const Share2    = (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><circle cx="18" cy="5" r="3" stroke="currentColor" strokeWidth="2" /><circle cx="6" cy="12" r="3" stroke="currentColor" strokeWidth="2" /><circle cx="18" cy="19" r="3" stroke="currentColor" strokeWidth="2" /><path d="M8.59 13.51l6.83 3.98M15.41 6.51L8.59 10.49" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
@@ -17,7 +24,22 @@ function PublicProfile({ profile, go, socket }) {
   const ClockIcon = (p) => <svg viewBox="0 0 24 24" fill="none" width="18" height="18" {...p}><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/><polyline points="12 6 12 12 16 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>;
 
   const [loadedProfile, setLoadedProfile] = React.useState(null);
-  const [theme, setTheme] = React.useState("light");
+  const [theme, setTheme] = React.useState(() => {
+    return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  });
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    document.documentElement.setAttribute('data-theme', nextTheme);
+    try {
+      const stored = localStorage.getItem('samaagum_tweaks') || '{}';
+      const tweaks = JSON.parse(stored);
+      tweaks.dark = (nextTheme === 'dark');
+      localStorage.setItem('samaagum_tweaks', JSON.stringify(tweaks));
+      window.dispatchEvent(new CustomEvent('tweakchange', { detail: { dark: tweaks.dark } }));
+    } catch (e) {}
+  };
 
   const initialProfile = profile || {
     displayName: "Aanya Sharma",
@@ -473,7 +495,7 @@ function PublicProfile({ profile, go, socket }) {
             <button onClick={() => go("home")} style={{ width: 44, height: 44, borderRadius: "50%", background: colors.navBg, backdropFilter: "blur(4px)", color: colors.textMain, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(0,0,0,0.05)", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
               <ChevronLeft style={{ width: 20, height: 20 }} />
             </button>
-            <button onClick={() => setTheme(isDark ? "light" : "dark")} style={{ width: 44, height: 44, borderRadius: "50%", background: colors.navBg, backdropFilter: "blur(4px)", color: colors.textMain, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(0,0,0,0.05)", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+            <button onClick={toggleTheme} style={{ width: 44, height: 44, borderRadius: "50%", background: colors.navBg, backdropFilter: "blur(4px)", color: colors.textMain, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(0,0,0,0.05)", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
               {isDark ? <svg viewBox="0 0 24 24" fill="none" width="20" height="20" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg> : <svg viewBox="0 0 24 24" fill="none" width="20" height="20" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>}
             </button>
           </div>
@@ -1076,4 +1098,4 @@ function PublicProfile({ profile, go, socket }) {
   );
 }
 
-Object.assign(window, { PublicProfile });
+

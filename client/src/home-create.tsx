@@ -1,9 +1,20 @@
 // @ts-nocheck
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { GroupCard } from './home-cards';
+import { COVERS, ME } from './home-data';
+import { Discover } from './home-feed';
+import { Grain } from './home-icons';
+import { apiBase } from './home-subscription';
+import { Waitlist } from './home-waitlist';
+import { Footer } from './landing-activity';
+import { I } from './home-icons';
+import { Communities } from './landing-features';
+
 /* ============================================================
    Samaagum Home — Create event + Create group (Luma-grade, live preview)
    ============================================================ */
 
-const COVER_SWATCHES = Object.entries(COVERS).map(([k, v]) => ({ k, v }));
+export const COVER_SWATCHES = Object.entries(COVERS).map(([k, v]) => ({ k, v }));
 
 const Q_TYPE_LABELS = {
   short: "Short Answer",
@@ -71,11 +82,11 @@ function CoverPicker({ value, onPick }) {
   );
 }
 
-function Toggle({ on, onClick }) { return <button className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
+export function Toggle({ on, onClick }) { return <button className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
 
 
 
-function UpgradePlanModal({ open, onClose, feature, go, currentPlanName }) {
+export function UpgradePlanModal({ open, onClose, feature, go, currentPlanName }) {
   if (!open) return null;
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 12000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)" }}>
@@ -112,7 +123,7 @@ function UpgradePlanModal({ open, onClose, feature, go, currentPlanName }) {
   );
 }
 
-function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
+export function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
   const [tempCity, setTempCity] = useState(selectedCity || "");
   const [customLocationName, setCustomLocationName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -614,7 +625,7 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
           </button>
         </div>
       </div>
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @keyframes pulse-ring {
           0% { transform: scale(0.3); opacity: 1; }
           80%, 100% { transform: scale(2.2); opacity: 0; }
@@ -653,13 +664,13 @@ function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
           0% { transform: translate(-50%, -50%) scale(0.3); opacity: 1; }
           80%, 100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
         }
-      `}</style>
+      ` }} />
     </div>
   );
 }
 
 /* ---------------- Questionnaire Builder Modal ---------------- */
-function QuestionnaireBuilderModal({ open, onClose, questions, setQuestions }) {
+export function QuestionnaireBuilderModal({ open, onClose, questions, setQuestions }) {
   const [activeTab, setActiveTab] = useState("selected");
   const [customQ, setCustomQ] = useState("");
   const [customType, setCustomType] = useState("short");
@@ -812,7 +823,7 @@ function QuestionnaireBuilderModal({ open, onClose, questions, setQuestions }) {
 }
 
 
-function CapacitySettingsModal({ open, onClose, limitCap, setLimitCap, maxCap, setMaxCap, waitlist, setWaitlist, entitlementMaxCap = -1, triggerUpgrade }) {
+export function CapacitySettingsModal({ open, onClose, limitCap, setLimitCap, maxCap, setMaxCap, waitlist, setWaitlist, entitlementMaxCap = -1, triggerUpgrade }) {
   const [tempLimitCap, setTempLimitCap] = React.useState(limitCap);
   const [tempMaxCap, setTempMaxCap] = React.useState(maxCap);
   const [tempWaitlist, setTempWaitlist] = React.useState(waitlist);
@@ -933,7 +944,7 @@ function CapacitySettingsModal({ open, onClose, limitCap, setLimitCap, maxCap, s
   );
 }
 
-function getDynamicHierarchy(apiData = null) {
+export function getDynamicHierarchy(apiData = null) {
   // If real data from API is available, build from it
   if (apiData && apiData.communities && apiData.communities.length > 0) {
     const tree = [];
@@ -948,14 +959,14 @@ function getDynamicHierarchy(apiData = null) {
   return [];
 };
 
-const getHierarchyContext = (id, tree) => {
+export const getHierarchyContext = (id, tree) => {
   const item = tree.find(x => x.id === id);
   if (!item) return "";
   if (!item.parentId) return item.name;
   return `${getHierarchyContext(item.parentId, tree)} > ${item.name}`;
 };
 
-const getAllDescendants = (id, tree) => {
+export const getAllDescendants = (id, tree) => {
   let descendants = [];
   const children = tree.filter(x => x.parentId === id);
   for (const child of children) {
@@ -965,7 +976,7 @@ const getAllDescendants = (id, tree) => {
   return descendants;
 };
 
-const CATEGORY_ICONS = {
+export const CATEGORY_ICONS = {
   'Startups': '🚀', 'Design': '🎨', 'Music': '🎵', 'Tech': '💻',
   'Wellness': '💚', 'Food & Drink': '🍽️', 'Art': '🖼️', 'General': '📌',
   'Academic': '📚', 'Sports': '⚽', 'Cultural': '🎭', 'Professional': '💼',
@@ -973,7 +984,7 @@ const CATEGORY_ICONS = {
   'Health': '🏥', 'Finance': '💰', 'Education': '🎓', 'Environment': '🌿',
 };
 
-function AccessControlModal({ open, onClose, mode, selectedAccess, setSelectedAccess, hierarchyData, myManagedGroups }) {
+export function AccessControlModal({ open, onClose, mode, selectedAccess, setSelectedAccess, hierarchyData, myManagedGroups }) {
   const isRuleMode = mode === "selected_members";
 
   const [activeTab, setActiveTab] = React.useState("communities");
@@ -1836,7 +1847,7 @@ function AccessControlModal({ open, onClose, mode, selectedAccess, setSelectedAc
 }
 
 /* ---------------- Category Selection Summary Chip ---------------- */
-function CategorySummaryChip({ type, items, onEditClick }) {
+export function CategorySummaryChip({ type, items, onEditClick }) {
   const [open, setOpen] = React.useState(false);
   const containerRef = React.useRef(null);
   const [coords, setCoords] = React.useState({ top: 0, left: 0 });
@@ -2050,7 +2061,7 @@ function CategorySummaryChip({ type, items, onEditClick }) {
 
 
 /* ---------------- Rule Selection Summary Chip ---------------- */
-function RuleSummaryChip({ rule, onEditClick }) {
+export function RuleSummaryChip({ rule, onEditClick }) {
   const [open, setOpen] = React.useState(false);
   const containerRef = React.useRef(null);
   const [coords, setCoords] = React.useState({ top: 0, left: 0 });
@@ -2255,7 +2266,7 @@ function RuleSummaryChip({ rule, onEditClick }) {
 }
 
 /* ---------------- Rule Community Summary Chip ---------------- */
-function RuleCommunitySummaryChip({ rule, onEditClick }) {
+export function RuleCommunitySummaryChip({ rule, onEditClick }) {
   const [open, setOpen] = React.useState(false);
   const containerRef = React.useRef(null);
   const [coords, setCoords] = React.useState({ top: 0, left: 0 });
@@ -2454,7 +2465,7 @@ function RuleCommunitySummaryChip({ rule, onEditClick }) {
 }
 
 /* ---------------- Rule Group Summary Chip ---------------- */
-function RuleGroupSummaryChip({ rule, onEditClick }) {
+export function RuleGroupSummaryChip({ rule, onEditClick }) {
   const [open, setOpen] = React.useState(false);
   const containerRef = React.useRef(null);
   const [coords, setCoords] = React.useState({ top: 0, left: 0 });
@@ -2650,7 +2661,7 @@ function RuleGroupSummaryChip({ rule, onEditClick }) {
   );
 }
 
-const DEFAULT_FREE_ENTITLEMENTS = {
+export const DEFAULT_FREE_ENTITLEMENTS = {
   group_max_groups: -1,
   group_allowed_visibility: ['unlisted'],
   group_allowed_join_modes: ['open', 'invite_only'],
@@ -2664,7 +2675,7 @@ const DEFAULT_FREE_ENTITLEMENTS = {
 };
 
 /* ---------------- Create Group ---------------- */
-function CreateGroup({ mode, editGroup, go, mobile, st }) {
+export function CreateGroup({ mode, editGroup, go, mobile, st }) {
   const entitlements = st?.entitlements || DEFAULT_FREE_ENTITLEMENTS;
   const allowedVisibilities = entitlements.group_allowed_visibility || ['unlisted'];
   const allowedJoinModes = entitlements.group_allowed_join_modes || ['open', 'invite_only'];
@@ -3947,4 +3958,4 @@ function CreateGroup({ mode, editGroup, go, mobile, st }) {
   );
 }
 
-Object.assign(window, { CreateGroup });
+

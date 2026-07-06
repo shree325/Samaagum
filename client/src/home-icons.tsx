@@ -1,11 +1,14 @@
+import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Icons } from './admin-app';
+
 /* ============================================================
    Samaagum Home — icons, logo, avatar helpers
    Exports to window for use across view files.
    ============================================================ */
-var { useState, useRef, useEffect, useCallback, useMemo, Fragment } = React;
+
 
 /* ---------------- Icons (stroke 1.8, 24 grid) ---------------- */
-const I = {
+export const I = {
   home:    (p) => <svg viewBox="0 0 24 24" fill="none" width="20" height="20" {...p}><path d="M4 11l8-7 8 7M6 9.5V20h12V9.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   compass: (p) => <svg viewBox="0 0 24 24" fill="none" width="20" height="20" {...p}><circle cx="12" cy="12" r="8.3" stroke="currentColor" strokeWidth="1.8"/><path d="M15.5 8.5l-2.2 4.8L8.5 15.5l2.2-4.8z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/></svg>,
   ticket:  (p) => <svg viewBox="0 0 24 24" fill="none" width="20" height="20" {...p}><path d="M4 8a2 2 0 012-2h12a2 2 0 012 2 2 2 0 000 4 2 2 0 000 4 2 2 0 01-2 2H6a2 2 0 01-2-2 2 2 0 000-4 2 2 0 000-4z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/><path d="M14 6.5v11" stroke="currentColor" strokeWidth="1.6" strokeDasharray="1.6 2.4" strokeLinecap="round"/></svg>,
@@ -64,10 +67,12 @@ const I = {
   google:  (p) => <svg viewBox="0 0 24 24" width="18" height="18" {...p}><path fill="#EA4335" d="M12 10.2v3.9h5.5c-.24 1.4-1.7 4.1-5.5 4.1-3.3 0-6-2.7-6-6.1s2.7-6.1 6-6.1c1.9 0 3.1.8 3.9 1.5l2.6-2.6C17.1 2.6 14.8 1.6 12 1.6 6.7 1.6 2.4 5.9 2.4 12s4.3 10.4 9.6 10.4c5.5 0 9.2-3.9 9.2-9.4 0-.6-.1-1.1-.2-1.6H12z"/></svg>,
   lock:    (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><rect x="5" y="11" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.8"/><path d="M8 11V7a4 4 0 118 0v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   eyeOff:  (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24M1 1l22 22" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  warning: (p) => <svg viewBox="0 0 24 24" fill="none" width="16" height="16" {...p}><path d="M12 9v4M12 17h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/></svg>,
+  archive: (p) => <svg viewBox="0 0 24 24" fill="none" width="20" height="20" {...p}><rect x="3" y="4" width="18" height="4" rx="1.5" stroke="currentColor" strokeWidth="1.8"/><path d="M5 8v9a2 2 0 002 2h10a2 2 0 002-2V8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/><path d="M10 13h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>,
 };
 
 /* brand icons (filled tiles) */
-const Brand = {
+export const Brand = {
   instagram: <svg viewBox="0 0 24 24" width="20" height="20" fill="none"><rect x="3.5" y="3.5" width="17" height="17" rx="5" stroke="#fff" strokeWidth="1.8"/><circle cx="12" cy="12" r="4" stroke="#fff" strokeWidth="1.8"/><circle cx="17" cy="7" r="1.2" fill="#fff"/></svg>,
   twitter:   <svg viewBox="0 0 24 24" width="18" height="18" fill="#fff"><path d="M18.2 3h3.3l-7.2 8.3L22.8 21h-6.6l-5.2-6.8L5.1 21H1.8l7.7-8.8L1.5 3h6.8l4.7 6.2L18.2 3zm-1.2 16h1.8L7.1 4.8H5.2L17 19z"/></svg>,
   linkedin:  <svg viewBox="0 0 24 24" width="19" height="19" fill="#fff"><path d="M4.5 3.5a2 2 0 100 4 2 2 0 000-4zM3 9h3v11H3zM9 9h2.9v1.5h.04c.4-.76 1.4-1.56 2.86-1.56 3.06 0 3.62 2 3.62 4.6V20H18.5v-4.9c0-1.17-.02-2.67-1.63-2.67-1.63 0-1.88 1.27-1.88 2.58V20H12V9z"/></svg>,
@@ -77,7 +82,7 @@ const Brand = {
 };
 
 /* ---------------- Logo mark ---------------- */
-function Mark({ size = 28 }) {
+export function Mark({ size = 28 }) {
   const id = "mk" + Math.round(size * 10);
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" fill="none" aria-hidden="true">
@@ -90,7 +95,7 @@ function Mark({ size = 28 }) {
     </svg>
   );
 }
-function Wordmark({ size = 20, color }) {
+export function Wordmark({ size = 20, color }) {
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
       <Mark size={size * 1.3} />
@@ -100,17 +105,17 @@ function Wordmark({ size = 20, color }) {
 }
 
 /* ---------------- Avatar ---------------- */
-function gradFor(seed) {
+export function gradFor(seed) {
   const seedStr = typeof seed === 'string' ? seed : (seed ? String(seed) : "");
   let h = 0; for (let i = 0; i < seedStr.length; i++) h = seedStr.charCodeAt(i) + ((h << 5) - h);
   const a = Math.abs(h) % 360, b = (a + 38) % 360;
   return `linear-gradient(135deg, hsl(${a} 68% 60%), hsl(${b} 70% 50%))`;
 }
-function initials(name) {
+export function initials(name) {
   const nameStr = typeof name === 'string' ? name : (name ? String(name) : "");
   return nameStr.split(" ").map(w => w ? w[0] : "").join("").slice(0, 2).toUpperCase();
 }
-const useProfileSync = (userId, initialData) => {
+export const useProfileSync = (userId, initialData) => {
   const [data, setData] = React.useState(initialData);
 
   // Sync if parent updates props
@@ -142,7 +147,7 @@ const useProfileSync = (userId, initialData) => {
 // Export hook and Avatar so it can be used globally from Icons/I
 Object.assign(I, { useProfileSync, Avatar });
 
-function Avatar({ userId, name, size = 40, img, className = "", style = {} }) {
+export function Avatar({ userId, name, size = 40, img, className = "", style = {} }) {
   const p = useProfileSync(userId, { name, img });
   
   return (
@@ -154,10 +159,10 @@ function Avatar({ userId, name, size = 40, img, className = "", style = {} }) {
 }
 
 /* grain layer helper */
-function Grain() { return <span className="cv-grain" />; }
+export function Grain() { return <span className="cv-grain" />; }
 
 /* QR placeholder (deterministic) */
-function QRCode({ seed = "samaagum", size = 76 }) {
+export function QRCode({ seed = "samaagum", size = 76 }) {
   const cells = useMemo(() => {
     let h = 0; for (let i = 0; i < seed.length; i++) h = (seed.charCodeAt(i) * 31 + h * 17) >>> 0;
     const n = 11, out = [];
@@ -182,4 +187,4 @@ function QRCode({ seed = "samaagum", size = 76 }) {
   );
 }
 
-Object.assign(window, { I, Brand, Mark, Wordmark, Avatar, Grain, QRCode, gradFor, initials });
+

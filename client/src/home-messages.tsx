@@ -1,14 +1,24 @@
 // @ts-nocheck
+import React, { useEffect, useRef, useState } from 'react';
+import { EVENTS, Mark } from './components';
+import { GROUPS, THREADS } from './home-data';
+import { Avatar, useProfileSync } from './home-icons';
+import { Profile } from './home-profile';
+import { apiBase } from './home-subscription';
+import { I } from './home-icons';
+import { Events } from './landing-features';
+import { messagingApi } from './api/messaging-client';
+
 /* ============================================================
    Samaagum Home — Messages, connections (DMs, upward, requests)
    ============================================================ */
 
-function ProfileName({ userId, name }) {
+export function ProfileName({ userId, name }) {
   const p = I.useProfileSync ? I.useProfileSync(userId, { name }) : { name };
   return <>{p.name || "null"}</>;
 }
 
-function Messages({ st, go, mobile, socket }) {
+export function Messages({ st, go, mobile, socket }) {
   const [seg, setSeg] = useState("messages");
   const [threads, setThreads] = useState([]);
   const [activeId, setActiveId] = useState(null);
@@ -26,6 +36,21 @@ function Messages({ st, go, mobile, socket }) {
   const scrollRef = useRef(null);
   const prevActiveIdRef = useRef(null);
   const prevMsgLengthRef = useRef(0);
+
+  const getActiveUserId = () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return null;
+      const parts = token.split('.');
+      if (parts.length < 2) return null;
+      const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+      return payload.id || null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const currentUserId = getActiveUserId();
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -87,9 +112,9 @@ function Messages({ st, go, mobile, socket }) {
 
   // Sync the currently active conversation ID to window so the shell's socket handler can check it
   useEffect(() => {
-    window.activeConversationId = activeId;
+    
     return () => {
-      window.activeConversationId = null;
+      
     };
   }, [activeId]);
 
@@ -272,20 +297,7 @@ function Messages({ st, go, mobile, socket }) {
 
   const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
 
-  const getActiveUserId = () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return null;
-      const parts = token.split('.');
-      if (parts.length < 2) return null;
-      const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-      return payload.id || null;
-    } catch (e) {
-      return null;
-    }
-  };
 
-  const currentUserId = getActiveUserId();
 
   const [requests, setRequests] = useState([]);
 
@@ -324,7 +336,7 @@ function Messages({ st, go, mobile, socket }) {
       .catch(err => console.error("Error declining request:", err));
   };
 
-  const fetchConversations = () => {
+  function fetchConversations() {
     messagingApi.getConversations()
       .then(res => {
         if (res.success && res.data) {
@@ -1263,4 +1275,4 @@ function Messages({ st, go, mobile, socket }) {
   );
 }
 
-Object.assign(window, { Messages });
+

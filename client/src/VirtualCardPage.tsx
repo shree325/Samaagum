@@ -1,7 +1,14 @@
 // @ts-nocheck
-var { useState, useEffect } = React;
+import React, { useEffect, useState } from 'react';
+import { VirtualCard } from './VirtualCard';
+import { ME } from './home-data';
+import { Profile } from './home-profile';
+import { apiBase } from './home-subscription';
+import { I } from './landing-core';
 
-function VirtualCardPage() {
+
+
+export function VirtualCardPage() {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -259,4 +266,12 @@ function VirtualCardPage() {
   );
 }
 
-Object.assign(window, { VirtualCardPage });
+import ReactDOM from 'react-dom/client';
+
+const rootElement = document.getElementById('root');
+if (rootElement) {
+  const root = ReactDOM.createRoot(rootElement);
+  root.render(<VirtualCardPage />);
+}
+
+

@@ -1,16 +1,24 @@
 // @ts-nocheck
+import React, { useEffect, useState } from 'react';
+import { CITIES, Wordmark, gradFor, initials } from './components';
+import { Messages } from './home-messages';
+import { ACTIVITY, CountUp, I, Reveal, range, useScrub } from './landing-core';
+import { Communities, Events } from './landing-features';
+import { Networking, Profiles } from './landing-features2';
+import { AUTH } from './landing-hero';
+
 /* ============================================================
    Samaagum landing — Discussions, Activity, CTA, Footer
    ============================================================ */
 
 /* ---------------- Discussions ---------------- */
-const THREAD = [
+export const THREAD = [
   { who: "Mira Shah", txt: "Anyone going to Design Systems Night on Saturday? Looking for a +1 👀", me: false, reacts: ["Same!", "I'm in"] },
   { who: "You", txt: "Yes! RSVP'd this morning — let's go together.", me: true },
   { who: "Dev Kapoor", txt: "Dropping the deck from last week's critique here for everyone.", me: false, reacts: ["Helpful · 9"] },
   { who: "You", txt: "This is gold. Pinning it to the community.", me: true },
 ];
-function Discussions() {
+export function Discussions() {
   return (
     <section className="section" id="discussions">
       <div className="wrap center">
@@ -37,7 +45,7 @@ function Discussions() {
 }
 
 /* ---------------- Platform Activity ---------------- */
-function ActivityItem({ a }) {
+export function ActivityItem({ a }) {
   return (
     <div className="activity-item">
       <div className="ava" style={{ background: gradFor(a.who) }}>{initials(a.who)}</div>
@@ -46,7 +54,7 @@ function ActivityItem({ a }) {
     </div>
   );
 }
-function PlatformActivity() {
+export function PlatformActivity() {
   const [dynamicCities, setDynamicCities] = React.useState(window.CITIES || []);
   React.useEffect(() => {
     if (window.getActiveCities) {
@@ -102,8 +110,8 @@ function PlatformActivity() {
             <div className="glass-card map-card">
               <div className="map-dots" />
               <div className="sec-glow" style={{ width: 300, height: 300, background: "var(--accent-1)", top: "20%", left: "30%", opacity: 0.18 }} />
-              {dynamicCities.map((c) => (
-                <div key={c.n} className="map-pin2" style={{ left: c.x + "%", top: c.y + "%" }}>
+              {dynamicCities.map((c, idx) => (
+                <div key={`${c.n}-${idx}`} className="map-pin2" style={{ left: c.x + "%", top: c.y + "%" }}>
                   <span className="ring" /><span className="core" />
                   {["Bengaluru", "London", "New York", c.n].includes(c.n) && <span className="lbl">{c.n}</span>}
                 </div>
@@ -121,7 +129,7 @@ function PlatformActivity() {
 }
 
 /* ---------------- Final CTA ---------------- */
-function FinalCTA() {
+export function FinalCTA() {
   const ringRef = useScrub((p, r, vh, el) => {
     el.style.transform = `translate(-50%,-50%) scale(${(0.9 + p * 0.3).toFixed(3)})`;
     el.style.opacity = `${(0.4 + range(p, 0.2, 0.7) * 0.6).toFixed(2)}`;
@@ -151,7 +159,7 @@ function FinalCTA() {
 }
 
 /* ---------------- Footer ---------------- */
-function Footer() {
+export function Footer() {
   const cols = [
     ["Product", ["Communities", "Events", "Networking", "Profiles", "Discussions"]],
     ["Company", ["About", "Careers", "Blog", "Press"]],
@@ -186,4 +194,4 @@ function Footer() {
   );
 }
 
-Object.assign(window, { Discussions, PlatformActivity, FinalCTA, Footer, ActivityItem });
+

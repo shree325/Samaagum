@@ -1,7 +1,9 @@
 // @ts-nocheck
-const { useState, useEffect, useCallback } = React;
+import React, { useCallback, useEffect, useState } from 'react';
 
-const DEFAULT_FREE_ENTITLEMENTS = {
+
+
+export const DEFAULT_FREE_ENTITLEMENTS = {
   group_max_groups: -1,
   group_allowed_visibility: ['unlisted'],
   group_allowed_join_modes: ['open', 'invite_only'],
@@ -14,9 +16,9 @@ const DEFAULT_FREE_ENTITLEMENTS = {
   event_can_create_paid_tickets: false
 };
 
-const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+export const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
 
-function usePlanEntitlements() {
+export function usePlanEntitlements() {
   const [entitlements, setEntitlements] = useState(DEFAULT_FREE_ENTITLEMENTS);
   const [plan, setPlan] = useState('free');
   const [planDisplayName, setPlanDisplayName] = useState('Free Plan');
@@ -80,4 +82,4 @@ function usePlanEntitlements() {
 }
 
 // Assign to window for global access in non-module files
-Object.assign(window, { usePlanEntitlements, DEFAULT_FREE_ENTITLEMENTS });
+

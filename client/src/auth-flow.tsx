@@ -1,20 +1,27 @@
 // @ts-nocheck
+import React, { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Confetti, Field, INTERESTS, Ic, LocationSelector, OTPInput, ROLES, SBtn, gradFor, initials, useCountdown } from './components';
+import { ME } from './home-data';
+import { Profile } from './home-profile';
+import { apiBase } from './home-subscription';
+import { I } from './home-icons';
+
 // @ts-nocheck
 /* ============================================================
    Samaagum — auth flow (state machine + screens)
    Depends on components.jsx (globals)
    ============================================================ */
 
-var { useState, useEffect, useRef } = React;
+
 
 /* ---------------- State machine ---------------- */
-const ORDER = {
+export const ORDER = {
   signup: ["method", "otp", "profile", "interests", "location", "done"],
   login: ["method", "otp", "done"],
 };
-const STEP_LABELS = { method: "Sign in", otp: "Verify", profile: "Profile", interests: "Interests", location: "Location" };
+export const STEP_LABELS = { method: "Sign in", otp: "Verify", profile: "Profile", interests: "Interests", location: "Location" };
 
-function getModeFromUrl() {
+export function getModeFromUrl() {
   if (typeof window === 'undefined') return "signup";
   if (window.location.hash === '#login') return 'login';
   if (window.location.hash === '#signup') return 'signup';
@@ -22,7 +29,7 @@ function getModeFromUrl() {
   return params.get('mode') === 'login' ? 'login' : 'signup';
 }
 
-function useAuth() {
+export function useAuth() {
   const [mode, setMode] = useState(getModeFromUrl);
   const [idx, setIdx] = useState(0);
   const [dir, setDir] = useState("f");
@@ -62,7 +69,7 @@ function useAuth() {
 }
 
 /* ---------------- Screens ---------------- */
-function useOAuthProviders(mode) {
+export function useOAuthProviders(mode) {
   const [providers, setProviders] = useState([]);
   const [loadingProviders, setLoadingProviders] = useState(true);
   const [loadingKeys, setLoadingKeys] = useState({});
@@ -102,7 +109,7 @@ function useOAuthProviders(mode) {
   return { providers, loadingProviders, loadingKeys, handleProviderLogin };
 }
 
-function ScreenSignup({ m }) {
+export function ScreenSignup({ m }) {
   const [formData, setFormData] = useState({
     firstName: m.data.name?.split(' ')[0] || '',
     lastName: m.data.name?.split(' ').slice(1).join(' ') || '',
@@ -258,7 +265,7 @@ function ScreenSignup({ m }) {
   );
 }
 
-function ScreenLogin({ m }) {
+export function ScreenLogin({ m }) {
   const [email, setEmail] = useState(m.data.email || "");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -340,11 +347,11 @@ function ScreenLogin({ m }) {
   );
 }
 
-function ScreenMethod({ m }) {
+export function ScreenMethod({ m }) {
   return m.mode === "signup" ? <ScreenSignup m={m} /> : <ScreenLogin m={m} />;
 }
 
-function ScreenOtp({ m }) {
+export function ScreenOtp({ m }) {
   const [code, setCode] = useState(m.data.otp);
   const [status, setStatus] = useState("");
   const [secs, reset] = useCountdown(30, m.step);
@@ -486,7 +493,7 @@ function ScreenOtp({ m }) {
   );
 }
 
-function ScreenProfile({ m }) {
+export function ScreenProfile({ m }) {
   const [name, setName] = useState(m.data.name);
   const [role, setRole] = useState(m.data.role);
   const [profilePhoto, setProfilePhoto] = useState(m.data.profilePhoto || '');
@@ -587,7 +594,7 @@ function ScreenProfile({ m }) {
   );
 }
 
-function ScreenInterests({ m }) {
+export function ScreenInterests({ m }) {
   const [sel, setSel] = useState(m.data.interests);
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
@@ -634,7 +641,7 @@ function ScreenInterests({ m }) {
   );
 }
 
-function ScreenLocation({ m }) {
+export function ScreenLocation({ m }) {
   const [city, setCity] = useState(m.data.city); // expected: { location_name, address, latitude, longitude }
   const [loading, setLoading] = useState(false);
   const { location } = window.useLocation ? window.useLocation() : { location: null };
@@ -738,8 +745,8 @@ function ScreenLocation({ m }) {
       )}
 
       <div style={{ marginTop: "16px" }}>
-        {window.LocationSelector && (
-          <window.LocationSelector
+        {LocationSelector && (
+          <LocationSelector
             value={city}
             onChange={(val) => setCity(val)}
             placeholder="Search your city..."
@@ -756,7 +763,7 @@ function ScreenLocation({ m }) {
   );
 }
 
-function ScreenDone({ m }) {
+export function ScreenDone({ m }) {
   const d = m.data;
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
@@ -820,6 +827,6 @@ function ScreenDone({ m }) {
   );
 }
 
-const SCENES = { method: ScreenMethod, otp: ScreenOtp, profile: ScreenProfile, interests: ScreenInterests, location: ScreenLocation, done: ScreenDone };
+export const SCENES = { method: ScreenMethod, otp: ScreenOtp, profile: ScreenProfile, interests: ScreenInterests, location: ScreenLocation, done: ScreenDone };
 
-Object.assign(window, { useAuth, SCENES, ORDER, STEP_LABELS, ScreenMethod, ScreenOtp, ScreenProfile, ScreenInterests, ScreenLocation, ScreenDone });
+

@@ -1,11 +1,19 @@
 // @ts-nocheck
+import React, { useCallback, useEffect, useState } from 'react';
+import { Mark } from './components';
+import { FEATURED, NOTIFS } from './home-data';
+import { Avatar } from './home-icons';
+import { Profile } from './home-profile';
+import { Empty, FilterChip } from './home-shell';
+import { I } from './home-icons';
+
 /* ============================================================
    Samaagum Home — Notification center
    ============================================================ */
 
-const { useState, useEffect, useCallback } = React;
 
-const NTYPE = {
+
+export const NTYPE = {
   join:        { ico:<I.groups style={{width:14,height:14}}/>, c:"linear-gradient(135deg,#6d5efc,#2a7fff)" },
   connect:     { ico:<I.user style={{width:14,height:14}}/>,   c:"linear-gradient(135deg,#10b981,#22d3ee)" },
   event:       { ico:<I.cal style={{width:13,height:13}}/>,    c:"linear-gradient(135deg,#ff6b4a,#ff4d8d)" },
@@ -21,14 +29,14 @@ const NTYPE = {
   group_user_joined: { ico:<I.user style={{width:14,height:14}}/>, c:"linear-gradient(135deg,#10b981,#22d3ee)" },
 };
 
-const API_BASE = window.location.port === "8080" ? "http://localhost:3000" : "";
+export const API_BASE = window.location.port === "8080" ? "http://localhost:3000" : "";
 
-function authHeaders() {
+export function authHeaders() {
   const token = localStorage.getItem('token');
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-function NotifRow({ n, st, go, onRead }) {
+export function NotifRow({ n, st, go, onRead }) {
   const meta = NTYPE[n.type] || NTYPE.system;
   const avatarTypes = ["connect","message","forum","group_user_joined"];
   const [acted, setActed] = useState(null);
@@ -62,6 +70,39 @@ function NotifRow({ n, st, go, onRead }) {
       }
     } catch (err) {
       if (window.toast) window.toast("Network error. Please try again.");
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleEventRequest = async (action) => {
+    setLoading(action);
+    try {
+      const res = await fetch(`${API_BASE}/api/messaging/events/requests/${n.id}/action`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders()
+        },
+        body: JSON.stringify({ action })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setActed(action === 'accept' ? 'accepted' : 'declined');
+        onRead();
+        if (window.toast) {
+          const msg = action === 'accept' ? "Request approved! 🎉" : "Request declined.";
+          window.toast(msg, action === 'accept' ? "success" : "warning");
+        }
+        if (action === 'accept') {
+          if (st.fetchJoinedEvents) st.fetchJoinedEvents();
+        }
+        if (st.fetchCounts) st.fetchCounts();
+      } else {
+        if (window.toast) window.toast(data.message || "Something went wrong.", "warning");
+      }
+    } catch (err) {
+      if (window.toast) window.toast("Network error. Please try again.", "warning");
     } finally {
       setLoading(null);
     }
@@ -106,6 +147,57 @@ function NotifRow({ n, st, go, onRead }) {
           </div>
         )}
 
+        {/* Event Join Request Actions (from notification feed) */}
+        {n.action === "event_request" && (
+          <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+            {n.answers && Object.keys(n.answers).length > 0 && (
+              <div style={{
+                padding: "12px 14px",
+                background: "var(--bg-2)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--r-md)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                width: "100%",
+                maxWidth: "600px"
+              }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Questionnaire Answers
+                </div>
+                {Object.entries(n.answers).map(([key, val]) => (
+                  <div key={key} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <div style={{ fontSize: 12, color: "var(--ink-2)", fontWeight: 500 }}>Q: {key}</div>
+                    <div style={{ fontSize: 12, color: "var(--ink)", fontWeight: 600 }}>A: {String(val)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {!acted && (
+              <div className="nacts" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  className="hbtn hbtn--primary hbtn--sm"
+                  disabled={!!loading}
+                  onClick={(e) => { e.stopPropagation(); handleEventRequest("accept"); }}
+                  style={{ opacity: loading === "accept" ? 0.7 : 1 }}
+                >
+                  <I.check/>
+                  {loading === "accept" ? "Accepting…" : "Accept"}
+                </button>
+                <button
+                  className="hbtn hbtn--ghost hbtn--sm"
+                  disabled={!!loading}
+                  onClick={(e) => { e.stopPropagation(); handleEventRequest("decline"); }}
+                  style={{ opacity: loading === "decline" ? 0.7 : 1 }}
+                >
+                  {loading === "decline" ? "Declining…" : "Decline"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Post-action badges */}
         {n.action === "connect" && acted && (
           <div style={{ marginTop: 8 }}>
@@ -122,7 +214,35 @@ function NotifRow({ n, st, go, onRead }) {
           </div>
         )}
 
+        {n.action === "event_request" && acted && (
+          <div style={{ marginTop: 8 }}>
+            {acted === "accepted" && (
+              <span style={{ display:"inline-flex", alignItems:"center", gap:6, background:"rgba(34,197,94,0.1)", color:"rgb(34,197,94)", padding:"4px 10px", borderRadius:"var(--r-pill)", fontSize:"12px", fontWeight:600 }}>
+                <I.check style={{width:12,height:12}}/> Accepted
+              </span>
+            )}
+            {acted === "declined" && (
+              <span style={{ display:"inline-flex", alignItems:"center", gap:6, background:"rgba(0,0,0,0.05)", color:"var(--ink-3)", padding:"4px 10px", borderRadius:"var(--r-pill)", fontSize:"12px", fontWeight:600 }}>
+                Request declined
+              </span>
+            )}
+          </div>
+        )}
+
         {n.action==="ticket" && <div className="nacts"><button className="hbtn hbtn--soft hbtn--sm" onClick={(e)=>{e.stopPropagation(); go("event", FEATURED);}}><I.ticket/>View ticket</button></div>}
+        {n.action==="view_event" && <div className="nacts"><button className="hbtn hbtn--soft hbtn--sm" onClick={(e)=>{
+          e.stopPropagation();
+          onRead();
+          const evObj = [FEATURED, ...EVENTS].find(ev => ev.id === n.eventId);
+          if (evObj) {
+            go("event", evObj);
+          } else if (n.eventId) {
+            // Dynamically query or navigate to event by ID directly
+            go("event", { id: n.eventId, title: n.who || "Event" });
+          } else {
+            go("events");
+          }
+        }}><I.ticket/>View Event</button></div>}
         {n.action==="reply"  && <div className="nacts"><button className="hbtn hbtn--soft hbtn--sm" onClick={(e)=>{e.stopPropagation(); go("messages");}}><I.msg/>Reply</button></div>}
         {n.action==="view"   && <div className="nacts"><button className="hbtn hbtn--ghost hbtn--sm" onClick={(e)=>{
           e.stopPropagation();
@@ -148,7 +268,7 @@ function NotifRow({ n, st, go, onRead }) {
 }
 
 /* ── Incoming connection requests card ── */
-function ConnRequestCard({ req, onActed }) {
+export function ConnRequestCard({ req, onActed }) {
   const [acted, setActed] = useState(null);
   const [loading, setLoading] = useState(null);
   const name = req.requester?.display_name || req.requester?.email || "Unknown";
@@ -232,7 +352,7 @@ function ConnRequestCard({ req, onActed }) {
   );
 }
 
-function Notifications({ st, go, socket }) {
+export function Notifications({ st, go, socket }) {
   const [tab, setTab] = useState("all");
   const [items, setItems] = useState(NOTIFS);
   const [connRequests, setConnRequests] = useState([]);
@@ -286,12 +406,14 @@ function Notifications({ st, go, socket }) {
       setItems(prev => [{
         id: payload.id || Math.random().toString(),
         type: payload.type,
-        who: payload.type === 'group_created' ? 'Groups' : (payload.type === 'group_gallery' ? 'Gallery' : 'Forums'),
+        who: payload.type === 'registration' ? (payload.text?.split(' ')[0] || 'Attendee') : (payload.type === 'group_created' ? 'Groups' : (payload.type === 'group_gallery' ? 'Gallery' : 'Forums')),
         unread: true,
         day: "Today",
         time: "Just now",
         text: payload.text,
-        action: "view",
+        action: payload.type === 'registration' ? 'event_request' : (payload.type === 'event' ? 'view_event' : 'view'),
+        eventId: payload.eventId,
+        answers: payload.answers || {},
         groupId: payload.groupId,
         postId: payload.postId,
         itemId: payload.itemId
@@ -389,4 +511,4 @@ function Notifications({ st, go, socket }) {
   );
 }
 
-Object.assign(window, { Notifications });
+
