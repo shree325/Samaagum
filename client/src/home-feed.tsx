@@ -148,7 +148,6 @@ export function HomeFeed({ st, go }) {
 export function Discover({ st, go }) {
   const [tab, setTab] = useState("groups");
   const [cat, setCat] = useState("All");
-  const [membershipFilter, setMembershipFilter] = useState("all");
   const { saved, toggleSave, registered, city, addJoined, addPending } = st;
   const [dbEvents, setDbEvents] = useState([]);
 
@@ -228,15 +227,7 @@ export function Discover({ st, go }) {
     }
   }, [apiBase, city, fetchGroups, fetchEvents]);
 
-  const grps = dbGroups.filter(g => {
-    if (g.visibility === "hidden") return false;
-    if (cat !== "All" && g.category !== cat && g.cat !== cat) return false;
-    
-    const isJoined = g.isJoined || st.joined?.has(g.id);
-    if (membershipFilter === "joined" && !isJoined) return false;
-    if (membershipFilter === "unjoined" && isJoined) return false;
-    
-
+  const grps = dbGroups.filter(g => g.visibility !== "hidden" && (cat === "All" || g.category === cat || g.cat === cat));
 
   const evs = dbEvents.map(e => {
     const venueObj = e.venue || {};
@@ -285,18 +276,9 @@ export function Discover({ st, go }) {
             Explore everything happening
           </h1>
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
-          <div className="msg-seg" style={{ maxWidth:280, margin: 0 }}>
-            <button className={tab==="events"?"on":""} onClick={()=>setTab("events")}>Events</button>
-            <button className={tab==="groups"?"on":""} onClick={()=>setTab("groups")}>Groups</button>
-          </div>
-          {tab === "groups" && (
-            <select className="h-input" style={{ width: "auto", padding: "6px 12px", height: "32px", fontSize: 13, background: "var(--surface)", color: "var(--ink)", border: "1px solid var(--border)", borderRadius: 8 }} value={membershipFilter} onChange={e => setMembershipFilter(e.target.value)}>
-              <option value="all" style={{ background: "var(--surface)", color: "var(--ink)" }}>All Groups</option>
-              <option value="joined" style={{ background: "var(--surface)", color: "var(--ink)" }}>Joined</option>
-              <option value="unjoined" style={{ background: "var(--surface)", color: "var(--ink)" }}>Not Joined</option>
-            </select>
-          )}
+        <div className="msg-seg" style={{ maxWidth: 280, marginBottom: 20 }}>
+          <button className={tab === "events" ? "on" : ""} onClick={() => setTab("events")}>Events</button>
+          <button className={tab === "groups" ? "on" : ""} onClick={() => setTab("groups")}>Groups</button>
         </div>
         <div className="filterbar" style={{ marginBottom: 24 }}>
           <FilterChip active={cat === "All"} onClick={() => setCat("All")}>All</FilterChip>

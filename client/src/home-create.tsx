@@ -16,58 +16,7 @@ import { Communities } from './landing-features';
 
 export const COVER_SWATCHES = Object.entries(COVERS).map(([k, v]) => ({ k, v }));
 
-const Q_TYPE_LABELS = {
-  short: "Short Answer",
-  long: "Long Answer",
-  yesno: "Yes / No",
-  multiplechoice: "Single Choice",
-  checkboxes: "Multiple Choice",
-  phone: "Phone Number",
-  email: "Email",
-  date: "Date",
-  time: "Time",
-};
-
-// International phone number, e.g. +91 9876543210 — optional leading +, 7-15 digits total.
-function isValidPhoneAnswer(v) {
-  const cleaned = String(v || "").replace(/[\s-]/g, "");
-  return /^\+?[1-9]\d{6,14}$/.test(cleaned);
-}
-
-// Only accepts a gmail.com address.
-function isValidEmailAnswer(v) {
-  return /^[^\s@]+@gmail\.com$/i.test(String(v || "").trim());
-}
-
-// <input type="date"> already guarantees a well-formed calendar date (YYYY-MM-DD); just make sure it parses.
-function isValidDateAnswer(v) {
-  if (!v) return false;
-  const d = new Date(v + "T00:00:00");
-  return !isNaN(d.getTime());
-}
-
-// <input type="time"> gives HH:MM; sanity-check the shape.
-function isValidTimeAnswer(v) {
-  return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(v || ""));
-}
-
-function isQuestionAnswered(q, val) {
-  if (q.type === "checkboxes") return Array.isArray(val) && val.length > 0;
-  return typeof val === "string" ? val.trim().length > 0 : !!val;
-}
-
-// Returns an error message string, or null if the answer is valid (only checked once answered).
-function questionAnswerError(q, val) {
-  switch (q.type) {
-    case "phone": return isValidPhoneAnswer(val) ? null : "Enter a valid phone number with country code (e.g. +91 9876543210).";
-    case "email": return isValidEmailAnswer(val) ? null : "Enter a valid Gmail address (name@gmail.com).";
-    case "date": return isValidDateAnswer(val) ? null : "Enter a valid date.";
-    case "time": return isValidTimeAnswer(val) ? null : "Enter a valid time.";
-    default: return null;
-  }
-}
-
-function CoverPicker({ value, onPick }) {
+export function CoverPicker({ value, onPick }) {
   return (
     <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
       {COVER_SWATCHES.map(s => (
@@ -100,8 +49,8 @@ export function UpgradePlanModal({ open, onClose, feature, go, currentPlanName }
           The feature <strong>{feature}</strong> is locked under your current plan ({currentPlanName || "Free Plan"}). Please upgrade your plan to unlock premium options, unlimited capacity, and advanced host features!
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <button
-            className="hbtn hbtn--primary"
+          <button 
+            className="hbtn hbtn--primary" 
             style={{ width: "100%", justifyContent: "center", padding: "12px", fontSize: 15, fontWeight: 600 }}
             onClick={() => {
               onClose();
@@ -110,8 +59,8 @@ export function UpgradePlanModal({ open, onClose, feature, go, currentPlanName }
           >
             Upgrade Plan
           </button>
-          <button
-            className="hbtn hbtn--ghost"
+          <button 
+            className="hbtn hbtn--ghost" 
             style={{ width: "100%", justifyContent: "center", padding: "12px", fontSize: 14 }}
             onClick={onClose}
           >
@@ -341,12 +290,12 @@ export function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
           const locationName = (item.name || item.display_name.split(',')[0]).toLowerCase().trim();
           return dynamicCities.some(dc => {
             const dcName = (dc.name || "").toLowerCase();
-            return locationName === dcName ||
-              locationName === dcName + " city" ||
-              dcName === locationName + " city";
+            return locationName === dcName || 
+                   locationName === dcName + " city" || 
+                   dcName === locationName + " city";
           });
         });
-
+        
         setSearchResults(filteredData.map((item: any) => ({
           name: item.display_name.split(',')[0],
           fullName: item.display_name,
@@ -689,7 +638,7 @@ export function QuestionnaireBuilderModal({ open, onClose, questions, setQuestio
   const rmQ = (idx) => setQuestions(qs => qs.filter((_, i) => i !== idx));
   const addCustomQ = () => {
     if (!customQ.trim()) return;
-    const opts = (customType === "multiplechoice" || customType === "checkboxes") ? customOptions.map(o => o.trim()).filter(Boolean) : undefined;
+    const opts = customType === "multiplechoice" ? customOptions.map(o => o.trim()).filter(Boolean) : undefined;
     addQ({ type: customType, q: customQ.trim(), req: customReq, options: opts });
     setCustomQ("");
     setCustomReq(false);
@@ -718,7 +667,7 @@ export function QuestionnaireBuilderModal({ open, onClose, questions, setQuestio
                 <div key={q.id} style={{ padding: 12, border: "1px solid var(--border)", borderRadius: "var(--r-md)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
                     <div style={{ fontWeight: 500 }}>{q.q}</div>
-                    <div style={{ fontSize: 12, color: "var(--ink-2)" }}>{Q_TYPE_LABELS[q.type] || q.type} • {q.req ? "Required" : "Optional"}</div>
+                    <div style={{ fontSize: 12, color: "var(--ink-2)" }}>{q.type} • {q.req ? "Required" : "Optional"}</div>
                   </div>
                   <button onClick={() => rmQ(i)} className="hbtn hbtn--ghost hbtn--sm"><I.x /></button>
                 </div>
@@ -731,7 +680,7 @@ export function QuestionnaireBuilderModal({ open, onClose, questions, setQuestio
                 <div key={q.id} style={{ padding: 12, border: "1px solid var(--border)", borderRadius: "var(--r-md)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
                     <div style={{ fontWeight: 500 }}>{q.q}</div>
-                    <div style={{ fontSize: 12, color: "var(--ink-2)" }}>{Q_TYPE_LABELS[q.type] || q.type}</div>
+                    <div style={{ fontSize: 12, color: "var(--ink-2)" }}>{q.type}</div>
                   </div>
                   <button onClick={() => addQ(q)} className="hbtn hbtn--soft hbtn--sm"><I.plus /> Add</button>
                 </div>
@@ -761,12 +710,7 @@ export function QuestionnaireBuilderModal({ open, onClose, questions, setQuestio
                     <option value="short">Short Answer</option>
                     <option value="long">Long Answer</option>
                     <option value="yesno">Yes / No</option>
-                    <option value="multiplechoice">Single Choice</option>
-                    <option value="checkboxes">Multiple Choice</option>
-                    <option value="phone">Phone Number</option>
-                    <option value="email">Email</option>
-                    <option value="date">Date</option>
-                    <option value="time">Time</option>
+                    <option value="multiplechoice">Multiple Choice</option>
                   </select>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, paddingTop: 20 }}>
@@ -774,7 +718,7 @@ export function QuestionnaireBuilderModal({ open, onClose, questions, setQuestio
                   <Toggle on={customReq} onClick={() => setCustomReq(!customReq)} />
                 </div>
               </div>
-              {(customType === "multiplechoice" || customType === "checkboxes") && (
+              {customType === "multiplechoice" && (
                 <div className="cfield" style={{ margin: 0 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-2)", display: "block", marginBottom: 6 }}>Options</label>
                   {customOptions.map((opt, idx) => (
@@ -875,15 +819,15 @@ export function CapacitySettingsModal({ open, onClose, limitCap, setLimitCap, ma
             <div className="ti">
               <div className="t" style={{ fontSize: "13.5px", fontWeight: 600 }}>Enable Capacity Limit</div>
             </div>
-            <Toggle
-              on={tempLimitCap}
+            <Toggle 
+              on={tempLimitCap} 
               onClick={() => {
                 if (tempLimitCap && entitlementMaxCap !== -1) {
                   triggerUpgrade("Unlimited Group Capacity");
                   return;
                 }
                 setTempLimitCap(!tempLimitCap);
-              }}
+              }} 
             />
           </div>
 
@@ -1023,13 +967,13 @@ export function AccessControlModal({ open, onClose, mode, selectedAccess, setSel
     hierarchyData && hierarchyData.communities && hierarchyData.communities.length > 0
       ? hierarchyData.communities.map(c => c.name)
       : [],
-    [hierarchyData]);
+  [hierarchyData]);
 
   const dynamicGroups = React.useMemo(() =>
     hierarchyData && hierarchyData.communities && hierarchyData.communities.length > 0
       ? hierarchyData.communities.flatMap(c => (c.groups || []).map(g => g.name))
       : [],
-    [hierarchyData]);
+  [hierarchyData]);
 
   React.useEffect(() => {
     if (open) {
@@ -2703,7 +2647,7 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
   const [banner, setBanner] = useState(isEdit ? (editGroup.banner || "") : (savedDraft.banner || ""));
   const [cat, setCat] = useState(isEdit ? (editGroup.category || "Design") : (savedDraft.cat || "Design"));
   const [desc, setDesc] = useState(isEdit ? (editGroup.description || "") : (savedDraft.desc || ""));
-
+  
   const [categoriesList, setCategoriesList] = useState([]);
   React.useEffect(() => {
     const fetchCategories = async () => {
@@ -2821,7 +2765,7 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
   const [limitCap, setLimitCap] = useState(isEdit ? (editGroup.settings?.capacity?.limit || false) : (savedDraft.limitCap || false));
   const [maxCap, setMaxCap] = useState(isEdit ? (editGroup.settings?.capacity?.max?.toString() || "") : (savedDraft.maxCap || ""));
   const [waitlist, setWaitlist] = useState(isEdit ? (editGroup.settings?.capacity?.waitlist || false) : (savedDraft.waitlist || false));
-
+  
   const [approval, setApproval] = useState(isEdit ? (editGroup.joinMode === 'approval') : (savedDraft.approval || false));
 
   // Advanced Settings Toggles
@@ -2861,12 +2805,12 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
     fetch(`${apiBase}/api/public/groups-hierarchy`)
       .then(r => r.json())
       .then(d => { if (d.success) setHierarchy(d.data); })
-      .catch(() => { });
+      .catch(() => {});
     if (token) {
       fetch(`${apiBase}/api/groups/my-managed`, { headers: { 'Authorization': `Bearer ${token}` } })
         .then(r => r.json())
         .then(d => { if (d.success) setMyManagedGroups(d.data); })
-        .catch(() => { });
+        .catch(() => {});
     }
   }, []);
 
@@ -2920,7 +2864,7 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
       };
 
       const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
-
+      
       const endpoint = isEdit ? `${apiBase}/api/groups/${editGroup.id}` : `${apiBase}/api/groups`;
       const method = isEdit ? 'PUT' : 'POST';
 
@@ -2933,14 +2877,14 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
         body: JSON.stringify(payload)
       });
       const data = await res.json();
-
+      
       if (data.success) {
         if (!isEdit) localStorage.removeItem(draftKey);
 
         // Handle invitations for invite-only groups
         if (joinElig === "invite") {
           let senderEmail = "";
-          try { senderEmail = JSON.parse(atob(token.split('.')[1])).email || ""; } catch (e) { }
+          try { senderEmail = JSON.parse(atob(token.split('.')[1])).email || ""; } catch(e) {}
           const groupId = data.data.id;
           const groupName = name;
 
@@ -2986,8 +2930,8 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
         const navDest = isDraftSubmit
           ? { view: "groups", param: { tab: "created", createdSub: "drafts" } }
           : isEdit
-            ? { view: "group-dashboard", param: { id: editGroup.id, name } }
-            : { view: "group", param: { ...previewG, id: data.data.id, posts: 0, members: 1, threadPerm, replyPerm } };
+          ? { view: "group-dashboard", param: { id: editGroup.id, name } }
+          : { view: "group", param: { ...previewG, id: data.data.id, posts: 0, members: 1, threadPerm, replyPerm } };
 
         // Generate shareable link for unlisted groups — show modal and defer navigation
         if (visibility === "private" && !isDraftSubmit) {
@@ -3123,7 +3067,7 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
   return (
     <div className={`create ${mobile ? "single" : ""}`}>
       {/* Modals placed outside layout structure */}
-
+      
       <LocationModal open={locationModalOpen} onClose={() => setLocationModalOpen(false)} selectedCity={city} onSelectCity={(selected, obj) => {
         setCity(selected);
         if (obj) {
@@ -3193,7 +3137,7 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
                 <I.x style={{ width: 16 }} />
               </button>
             </div>
-
+            
             <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 24 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <label style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Who can create threads?</label>
@@ -3210,7 +3154,7 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <label style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Who can reply?</label>
                 <div style={{ position: "relative" }}>
-                  <select className="cinput" style={{ width: "100%", cursor: "pointer", background: "var(--field)", border: "1px solid var(--border)", color: "var(--ink)", fontWeight: 500, padding: "12px 16px", borderRadius: "var(--r-md)", fontSize: 15, transition: "border-color 0.2s" }} value={replyPerm} onChange={e => setReplyPerm(e.target.value)}>
+                  <select className="cinput" style={{ width: "100%", cursor: "pointer", background: "var(--field)", border: "1px solid var(--border)", color: "var(--ink)", fontWeight: 500, padding: "12px 16px", borderRadius: "var(--r-md)", fontSize: 15, transition: "border-color 0.2s" }} value={replyPerm} onChange={e => setReplyPerm(e.target.value)}>  
                     <option value="everyone">Everyone (All Members)</option>
                     <option value="admins">Admins & Moderators Only</option>
                     <option value="selected">Selected Members Only</option>
@@ -3218,7 +3162,7 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
                 </div>
                 <p style={{ margin: "4px 0 0 0", fontSize: 12.5, color: "var(--ink-3)" }}>Determines who can comment on existing threads.</p>
               </div>
-
+              
               <div style={{ paddingTop: 8 }}>
                 <button className="hbtn hbtn--primary" style={{ width: "100%", justifyContent: "center", padding: "12px", fontSize: 15, fontWeight: 600, borderRadius: "var(--r-md)", background: "var(--accent-1)", boxShadow: "0 4px 12px rgba(var(--accent-1-rgb), 0.25)" }} onClick={() => setForumModal(false)}>Save Settings</button>
               </div>
@@ -3451,8 +3395,8 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-2)", display: "block", marginBottom: 6 }}>Category</label>
-                  <select
-                    className="cselect"
+                  <select 
+                    className="cselect" 
                     style={{ width: "100%", padding: "8px 12px", fontSize: 13, height: 36, border: "1.5px solid var(--border)", background: "var(--field)", borderRadius: "var(--r-sm)" }}
                     value={cat}
                     onChange={e => setCat(e.target.value)}
@@ -3503,9 +3447,9 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
               <div className="cfield">
                 <label>Visibility</label>
                 <div className="vis-pills">
-                  <button
-                    type="button"
-                    className={`vis-pill ${visibility === "public" ? "on" : ""}`}
+                  <button 
+                    type="button" 
+                    className={`vis-pill ${visibility === "public" ? "on" : ""}`} 
                     onClick={() => {
                       if (!canPublic) {
                         triggerUpgrade("Public Group Visibility");
@@ -3516,16 +3460,16 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
                   >
                     {!canPublic && "🔒 "}Public
                   </button>
-                  <button
-                    type="button"
-                    className={`vis-pill ${visibility === "private" ? "on" : ""}`}
+                  <button 
+                    type="button" 
+                    className={`vis-pill ${visibility === "private" ? "on" : ""}`} 
                     onClick={() => setVisibility("private")}
                   >
                     Unlisted
                   </button>
-                  <button
-                    type="button"
-                    className={`vis-pill ${visibility === "hidden" ? "on" : ""}`}
+                  <button 
+                    type="button" 
+                    className={`vis-pill ${visibility === "hidden" ? "on" : ""}`} 
                     onClick={() => {
                       if (!canRestricted) {
                         triggerUpgrade("Restricted-Access Group Visibility");
@@ -3653,100 +3597,100 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
               )}
 
               {joinElig === "invite" && (
-                <>
-                  <div
-                    className="type-pill sm on"
-                    style={{
-                      padding: "12px 14px",
-                      flexDirection: "column",
-                      alignItems: "flex-start",
-                      gap: 2,
-                      height: "auto",
-                      textAlign: "left",
-                      cursor: "default",
-                    }}
-                  >
-                    <span className="tpt">Invite Only</span>
-                    <span className="tpd">Access by invitation only</span>
-                  </div>
+  <>
+    <div
+      className="type-pill sm on"
+      style={{
+        padding: "12px 14px",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        gap: 2,
+        height: "auto",
+        textAlign: "left",
+        cursor: "default",
+      }}
+    >
+      <span className="tpt">Invite Only</span>
+      <span className="tpd">Access by invitation only</span>
+    </div>
 
-                  <div>
-                    <span
-                      style={{
-                        fontSize: 13,
-                        color: "var(--ink-3)",
-                        marginTop: 4,
-                        display: "block",
-                      }}
-                    >
-                      A shareable invite link will be automatically generated. Users can only
-                      join using this link.
-                    </span>
+    <div>
+      <span
+        style={{
+          fontSize: 13,
+          color: "var(--ink-3)",
+          marginTop: 4,
+          display: "block",
+        }}
+      >
+        A shareable invite link will be automatically generated. Users can only
+        join using this link.
+      </span>
 
-                    <div style={{ marginTop: 12 }}>
-                      <label style={{ fontSize: 12, fontWeight: 600 }}>Invite by Email</label>
-                      {!isEdit && pendingInviteEmails.length > 0 && (
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4, marginBottom: 6 }}>
-                          {pendingInviteEmails.map((em, i) => (
-                            <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "var(--surface-2)", borderRadius: 20, padding: "2px 10px", fontSize: 12, border: "1px solid var(--border)" }}>
-                              {em}
-                              <button type="button" style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-3)", fontSize: 16, padding: 0, lineHeight: 1 }} onClick={() => setPendingInviteEmails(pendingInviteEmails.filter((_, j) => j !== i))}>×</button>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                        <input
-                          className="cinput"
-                          placeholder="email@example.com"
-                          value={inviteEmail}
-                          onChange={(e) => setInviteEmail(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (inviteEmail && !isEdit) { setPendingInviteEmails([...pendingInviteEmails, inviteEmail]); setInviteEmail(""); } } }}
-                        />
-                        <button
-                          type="button"
-                          className="hbtn hbtn--primary"
-                          onClick={async () => {
-                            if (!inviteEmail) return;
-                            if (!isEdit) {
-                              setPendingInviteEmails([...pendingInviteEmails, inviteEmail]);
-                              setInviteEmail("");
-                              return;
-                            }
-                            try {
-                              const tok = localStorage.getItem("token");
-                              let senderEmail = "";
-                              try { senderEmail = JSON.parse(atob(tok.split('.')[1])).email || ""; } catch (e) { }
-                              const res = await fetch(`${apiBase}/api/groups/${editGroup.id}/invites`, {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}` },
-                                body: JSON.stringify({ targets: [{ email: inviteEmail }] }),
-                              });
-                              const data = await res.json();
-                              if (data.success && data.data[0]?.success) {
-                                alert("Invitation email sent successfully!");
-                                setInviteEmail("");
-                              } else {
-                                alert("Failed to generate invite: " + (data.data?.[0]?.message || data.message || "Unknown error"));
-                              }
-                            } catch (err) {
-                              console.error(err);
-                              alert("Error sending invite");
-                            }
-                          }}
-                        >
-                          {isEdit ? "Send Invite" : "Add Email"}
-                        </button>
-                      </div>
-                      {!isEdit && (
-                        <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4 }}>
-                          Invites will be sent from your own email after the group is created.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
+      <div style={{ marginTop: 12 }}>
+        <label style={{ fontSize: 12, fontWeight: 600 }}>Invite by Email</label>
+        {!isEdit && pendingInviteEmails.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4, marginBottom: 6 }}>
+            {pendingInviteEmails.map((em, i) => (
+              <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "var(--surface-2)", borderRadius: 20, padding: "2px 10px", fontSize: 12, border: "1px solid var(--border)" }}>
+                {em}
+                <button type="button" style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-3)", fontSize: 16, padding: 0, lineHeight: 1 }} onClick={() => setPendingInviteEmails(pendingInviteEmails.filter((_, j) => j !== i))}>×</button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+          <input
+            className="cinput"
+            placeholder="email@example.com"
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (inviteEmail && !isEdit) { setPendingInviteEmails([...pendingInviteEmails, inviteEmail]); setInviteEmail(""); } } }}
+          />
+          <button
+            type="button"
+            className="hbtn hbtn--primary"
+            onClick={async () => {
+              if (!inviteEmail) return;
+              if (!isEdit) {
+                setPendingInviteEmails([...pendingInviteEmails, inviteEmail]);
+                setInviteEmail("");
+                return;
+              }
+              try {
+                const tok = localStorage.getItem("token");
+                let senderEmail = "";
+                try { senderEmail = JSON.parse(atob(tok.split('.')[1])).email || ""; } catch(e) {}
+                const res = await fetch(`${apiBase}/api/groups/${editGroup.id}/invites`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}` },
+                  body: JSON.stringify({ targets: [{ email: inviteEmail }] }),
+                });
+                const data = await res.json();
+                if (data.success && data.data[0]?.success) {
+                  alert("Invitation email sent successfully!");
+                  setInviteEmail("");
+                } else {
+                  alert("Failed to generate invite: " + (data.data?.[0]?.message || data.message || "Unknown error"));
+                }
+              } catch (err) {
+                console.error(err);
+                alert("Error sending invite");
+              }
+            }}
+          >
+            {isEdit ? "Send Invite" : "Add Email"}
+          </button>
+        </div>
+        {!isEdit && (
+          <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4 }}>
+            Invites will be sent from your own email after the group is created.
+          </div>
+        )}
+      </div>
+    </div>
+  </>
+)}
             </div>
 
             <div className="cfield" style={{ marginTop: 16 }}>
@@ -3913,7 +3857,7 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
           <div className="modal-content" style={{ width: 440, padding: 28, borderRadius: 14, display: "flex", flexDirection: "column", gap: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Group Created!</h2>
-              <button className="tool" onClick={() => { setShowShareModal(false); if (pendingNav) { go(pendingNav.view, pendingNav.param); setPendingNav(null); } }}><I.x style={{ width: 20, height: 20 }} /></button>
+              <button className="tool" onClick={() => { setShowShareModal(false); if (pendingNav) { go(pendingNav.view, pendingNav.param); setPendingNav(null); } }}><I.x style={{ width: 20, height: 20 }}/></button>
             </div>
             <p style={{ margin: 0, fontSize: 14, color: "var(--ink-2)", lineHeight: 1.5 }}>
               Your group is <strong>unlisted</strong> — it won't appear in Discover. Share the link below with the people you want to invite:
@@ -3946,11 +3890,11 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
         </div>
       )}
       {upgradeModalOpen && (
-        <UpgradePlanModal
-          open={upgradeModalOpen}
-          onClose={() => setUpgradeModalOpen(false)}
-          feature={upgradeFeature}
-          go={go}
+        <UpgradePlanModal 
+          open={upgradeModalOpen} 
+          onClose={() => setUpgradeModalOpen(false)} 
+          feature={upgradeFeature} 
+          go={go} 
           currentPlanName={st?.planDisplayName}
         />
       )}

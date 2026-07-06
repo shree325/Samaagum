@@ -1826,20 +1826,6 @@ export class GroupService {
             return { hasForm: false };
         }
 
-        // Legacy questionnaire types (set in the group creation builder) use different labels
-        // than the structured form_field_type enum. Map them so the response viewer renders correctly.
-        const LEGACY_TYPE_MAP: Record<string, string> = {
-            short: 'short_text',
-            long: 'long_text',
-            yesno: 'checkbox',
-            multiplechoice: 'dropdown',
-            checkboxes: 'multiple_choice',
-            phone: 'short_text',
-            email: 'short_text',
-            date: 'date',
-            time: 'short_text',
-        };
-
         let questions: any[] = [];
         if (group.join_form_id) {
             questions = await this.formFieldsRepo.findByFormId(group.join_form_id);
@@ -1848,7 +1834,7 @@ export class GroupService {
                 field_id: q.id || String(idx),
                 position: idx + 1,
                 label: q.q || `Question ${idx + 1}`,
-                field_type: LEGACY_TYPE_MAP[q.type] || 'long_text',
+                field_type: q.type || 'long_text',
                 required: q.required !== false
             }));
         }
