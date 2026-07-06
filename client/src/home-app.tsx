@@ -565,6 +565,57 @@ export function DashboardApp() {
   }, [go]);
 
   useEffect(() => {
+    let abortController = null;
+    
+    const handleHash = () => {
+      const hash = window.location.hash;
+      const match = hash.match(/^#group=(.+)$/);
+      if (match) {
+        const groupId = match[1];
+        
+        // Prevent duplicate fetches if already on the same group page
+        if (curRef.current?.view === "group" && curRef.current?.param?.id === groupId) {
+          window.history.replaceState(null, "", window.location.pathname + window.location.search);
+          return;
+        }
+        // Cancel simultaneous requests
+        if (abortController) abortController.abort();
+        abortController = new AbortController();
+        
+        const token = localStorage.getItem('token');
+        fetch(`${apiBase}/api/groups/${groupId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          signal: abortController.signal
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.data) {
+            go("group", data.data);
+          } else {
+            if (window.toast) window.toast("Group not found or access denied.", "warning");
+            go("discover");
+          }
+        })
+        .catch(err => {
+          if (err.name !== 'AbortError') {
+            if (window.toast) window.toast("Failed to load group.", "error");
+            go("discover");
+          }
+        });
+        // Erase the hash from the URL dynamically
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
+    };
+    // Bind listener to window
+    window.addEventListener("hashchange", handleHash);
+    handleHash();
+    return () => {
+      window.removeEventListener("hashchange", handleHash);
+      if (abortController) abortController.abort();
+    };
+  }, [go, apiBase]);
+
+  useEffect(() => {
     window.initiateChatWithName = (name) => {
       const token = localStorage.getItem('token');
       if (!token) return;
