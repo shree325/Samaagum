@@ -148,6 +148,8 @@ export function HomeFeed({ st, go }) {
 export function Discover({ st, go }) {
   const [tab, setTab] = useState("groups");
   const [cat, setCat] = useState("All");
+  const [groupFilter, setGroupFilter] = useState("all");
+  const [eventFilter, setEventFilter] = useState("all");
   const { saved, toggleSave, registered, city, addJoined, addPending } = st;
   const [dbEvents, setDbEvents] = useState([]);
 
@@ -227,7 +229,16 @@ export function Discover({ st, go }) {
     }
   }, [apiBase, city, fetchGroups, fetchEvents]);
 
-  const grps = dbGroups.filter(g => g.visibility !== "hidden" && (cat === "All" || g.category === cat || g.cat === cat));
+  const grps = dbGroups.filter(g => {
+    if (g.visibility === "hidden") return false;
+    if (cat !== "All" && g.category !== cat && g.cat !== cat) return false;
+    
+    const isJoined = g.isJoined || st.joined?.has(g.id);
+    if (groupFilter === "joined" && !isJoined) return false;
+    if (groupFilter === "unjoined" && isJoined) return false;
+    
+    return true;
+  });
 
   const evs = dbEvents.map(e => {
     const venueObj = e.venue || {};
@@ -264,6 +275,13 @@ export function Discover({ st, go }) {
     if (e.status !== "published") return false;
     if (cat !== "All" && e.cat !== cat) return false;
     if (e.starts_at && new Date(e.starts_at) < new Date()) return false;
+    
+    const isRegistered = registered?.has(e.id);
+    if (eventFilter === "joined" && !isRegistered) return false;
+    if (eventFilter === "unjoined" && isRegistered) return false;
+    if (eventFilter === "paid" && e.type !== "Paid") return false;
+    if (eventFilter === "free" && e.type !== "Free") return false;
+
     return true;
   });
 
@@ -276,9 +294,27 @@ export function Discover({ st, go }) {
             Explore everything happening
           </h1>
         </div>
-        <div className="msg-seg" style={{ maxWidth: 280, marginBottom: 20 }}>
-          <button className={tab === "events" ? "on" : ""} onClick={() => setTab("events")}>Events</button>
-          <button className={tab === "groups" ? "on" : ""} onClick={() => setTab("groups")}>Groups</button>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+          <div className="msg-seg" style={{ maxWidth: 280, margin: 0 }}>
+            <button className={tab === "events" ? "on" : ""} onClick={() => setTab("events")}>Events</button>
+            <button className={tab === "groups" ? "on" : ""} onClick={() => setTab("groups")}>Groups</button>
+          </div>
+          {tab === "groups" && (
+            <select className="h-input" style={{ width: "auto", padding: "6px 12px", height: "32px", fontSize: 13, background: "var(--surface)", color: "var(--ink)", border: "1px solid var(--border)", borderRadius: 8 }} value={groupFilter} onChange={e => setGroupFilter(e.target.value)}>
+              <option value="all" style={{ background: "var(--surface)", color: "var(--ink)" }}>All Groups</option>
+              <option value="joined" style={{ background: "var(--surface)", color: "var(--ink)" }}>Joined</option>
+              <option value="unjoined" style={{ background: "var(--surface)", color: "var(--ink)" }}>Not Joined</option>
+            </select>
+          )}
+          {tab === "events" && (
+            <select className="h-input" style={{ width: "auto", padding: "6px 12px", height: "32px", fontSize: 13, background: "var(--surface)", color: "var(--ink)", border: "1px solid var(--border)", borderRadius: 8 }} value={eventFilter} onChange={e => setEventFilter(e.target.value)}>
+              <option value="all" style={{ background: "var(--surface)", color: "var(--ink)" }}>All Events</option>
+              <option value="joined" style={{ background: "var(--surface)", color: "var(--ink)" }}>Registered</option>
+              <option value="unjoined" style={{ background: "var(--surface)", color: "var(--ink)" }}>Not Registered</option>
+              <option value="free" style={{ background: "var(--surface)", color: "var(--ink)" }}>Free</option>
+              <option value="paid" style={{ background: "var(--surface)", color: "var(--ink)" }}>Paid</option>
+            </select>
+          )}
         </div>
         <div className="filterbar" style={{ marginBottom: 24 }}>
           <FilterChip active={cat === "All"} onClick={() => setCat("All")}>All</FilterChip>

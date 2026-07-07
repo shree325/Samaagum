@@ -3727,6 +3727,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
         setCapacity={setCapacity}
         waitlist={waitlist}
         setWaitlist={setWaitlist}
+        eventMaxParticipants={eventMaxParticipants}
       />
 
       <AccessControlModal
@@ -3783,7 +3784,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
   );
 }
 
-function CapacitySettingsModal({ open, onClose, capacityEnabled, setCapacityEnabled, capacity, setCapacity, waitlist, setWaitlist }: any) {
+function CapacitySettingsModal({ open, onClose, capacityEnabled, setCapacityEnabled, capacity, setCapacity, waitlist, setWaitlist, eventMaxParticipants }: any) {
   const [tempEnabled, setTempEnabled] = useState(capacityEnabled);
   const [tempCapacity, setTempCapacity] = useState(capacity);
   const [tempWaitlist, setTempWaitlist] = useState(waitlist);

@@ -147,7 +147,7 @@ export const useProfileSync = (userId, initialData) => {
 // Export hook and Avatar so it can be used globally from Icons/I
 Object.assign(I, { useProfileSync, Avatar });
 
-export function Avatar({ userId, name, size = 40, img, className = "", style = {} }) {
+export function Avatar({ userId, name, size = 40, img, className = "", style = {} }: any) {
   const p = useProfileSync(userId, { name, img });
   
   return (

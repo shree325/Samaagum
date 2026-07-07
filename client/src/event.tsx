@@ -4,6 +4,12 @@ import DiscussionPanel from './discussion-panel';
 
 function Toggle({ on, onClick }) { return <button className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
 
+// Demo/placeholder events (e.g. FEATURED, id "ev-feat") aren't real DB rows —
+// their id isn't a UUID, so backend calls with it 500. Treat any non-UUID id
+// like the "new" preview mode instead of hitting the API.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isRealEventId(id) { return typeof id === "string" && UUID_RE.test(id); }
+
 export function EventPage({ ev, st, go }) {
   let e = ev || FEATURED;
 
@@ -177,7 +183,7 @@ export function EventPage({ ev, st, go }) {
   };
 
   const fetchEventDetails = async () => {
-    if (e.id === "new") {
+    if (e.id === "new" || !isRealEventId(e.id)) {
       // Mock/Preview mode: populate state directly from the preview object
       const venueObj = e.venue || {};
       const meta = venueObj.meta || {};
@@ -285,7 +291,7 @@ export function EventPage({ ev, st, go }) {
   };
 
   const fetchHostStats = async () => {
-    if (e.id === "new") return;
+    if (e.id === "new" || !isRealEventId(e.id)) return;
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${apiBase}/api/events/${e.id}/dashboard-stats`, {
@@ -301,7 +307,7 @@ export function EventPage({ ev, st, go }) {
   };
 
   const fetchEventMembers = async () => {
-    if (e.id === "new") return;
+    if (e.id === "new" || !isRealEventId(e.id)) return;
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${apiBase}/api/events/${e.id}/members`, {
@@ -317,7 +323,7 @@ export function EventPage({ ev, st, go }) {
   };
 
   const handleHostRequestAction = async (bookingId, action) => {
-    if (e.id === "new") return;
+    if (e.id === "new" || !isRealEventId(e.id)) return;
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${apiBase}/api/events/${e.id}/requests/${bookingId}/action`, {
@@ -343,7 +349,7 @@ export function EventPage({ ev, st, go }) {
   };
 
   const fetchEventGallery = async () => {
-    if (e.id === "new") return;
+    if (e.id === "new" || !isRealEventId(e.id)) return;
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${apiBase}/api/events/${e.id}/gallery`, {

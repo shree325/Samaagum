@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Lock } from './app';
 import { Mark } from './components';
-import { EVENTS, GROUPS, ME } from './home-data';
+import { EVENTS, GROUPS, ME, copyText } from './home-data';
 import { Discover } from './home-feed';
 import { Avatar, Grain } from './home-icons';
 import { Empty } from './home-shell';
@@ -764,10 +764,29 @@ export function GroupDetail({ group, st, go }) {
       });
       const data = await res.json();
       if (data.success) {
-        setInvites(data.data);
+        let list = data.data;
+        // Unlisted groups always need a shareable link — auto-create one if it doesn't exist yet
+        // instead of requiring a manual "Generate" click.
+        const hasShareLink = list.some(inv => !inv.email && !inv.username && inv.status !== 'revoked');
+        if (g.visibility === 'private' && !hasShareLink) {
+          const linkRes = await fetch(`${apiBase}/api/groups/${g.id}/invites/link`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+            body: JSON.stringify({ maxUses: null })
+          });
+          const linkData = await linkRes.json();
+          if (linkData.success) {
+            const res2 = await fetch(`${apiBase}/api/groups/${g.id}/invites`, {
+              headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
+            const data2 = await res2.json();
+            if (data2.success) list = data2.data;
+          }
+        }
+        setInvites(list);
       }
     } catch (e) { console.error(e); }
-  }, [g.id, isOwner]);
+  }, [g.id, isOwner, g.visibility]);
 
   const fetchJoinRequests = React.useCallback(async () => {
     if (!g.id || g.id === "newg" || !isOwner) return;
@@ -1538,7 +1557,7 @@ export function GroupDetail({ group, st, go }) {
                     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                       <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Invitations</h3>
                       <div className="form-card" style={{ padding: 20 }}>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: g.visibility === "private" ? "1fr 1fr" : "1fr", gap: 16 }}>
                           <div>
                             <h4 style={{ margin: "0 0 8px 0", fontSize: 14 }}>Send Invite via Email</h4>
                             <div style={{ display: "flex", gap: 8 }}>
@@ -1565,30 +1584,22 @@ export function GroupDetail({ group, st, go }) {
                               }}>Send</button>
                             </div>
                           </div>
-                          <div>
-                            <h4 style={{ margin: "0 0 8px 0", fontSize: 14 }}>Generate Shareable Link</h4>
-                            {inviteLink ? (
-                              <div style={{ display: "flex", gap: 8 }}>
-                                <input className="cinput" readOnly value={inviteLink} />
-                                <button className="hbtn hbtn--soft" onClick={async () => { await copyText(inviteLink); alert("Copied!"); }}>Copy</button>
-                              </div>
-                            ) : (
-                              <button className="hbtn hbtn--soft" onClick={async () => {
-                                const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
-                                const token = localStorage.getItem('token');
-                                const res = await fetch(`${apiBase}/api/groups/${g.id}/invites/link`, {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
-                                  body: JSON.stringify({ maxUses: null })
-                                });
-                                const data = await res.json();
-                                if (data.success && data.data.token) {
-                                  setInviteLink(`${window.location.origin}${window.location.pathname}#/groups/invite/${data.data.token}`);
-                                  fetchInvites();
-                                } else alert(data.message);
-                              }}>Generate Link</button>
-                            )}
-                          </div>
+                          {g.visibility === "private" && (
+                            <div>
+                              <h4 style={{ margin: "0 0 8px 0", fontSize: 14 }}>Unlisted Group Link</h4>
+                              {(() => {
+                                const shareInvite = invites.find(inv => !inv.email && !inv.username && inv.status !== 'revoked');
+                                const link = shareInvite ? `${window.location.origin}${window.location.pathname}#/groups/invite/${shareInvite.token}` : inviteLink;
+                                if (!link) return <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>Generating link…</div>;
+                                return (
+                                  <div style={{ display: "flex", gap: 8 }}>
+                                    <input className="cinput" readOnly value={link} />
+                                    <button className="hbtn hbtn--soft" onClick={async () => { await copyText(link); alert("Copied!"); }}>Copy</button>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1881,6 +1892,55 @@ export function GroupDetail({ group, st, go }) {
                         </label>
                       ))}
                     </div>
+                  ) : q.type === 'multiselect' && q.options && q.options.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                      {q.options.map((opt, optIdx) => (
+                        <label key={optIdx} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            value={opt}
+                            checked={(answers[i] || []).includes(opt)}
+                            onChange={(e) => {
+                              const cur = answers[i] || [];
+                              const next = e.target.checked ? [...cur, opt] : cur.filter(x => x !== opt);
+                              setAnswers({ ...answers, [i]: next });
+                            }}
+                            style={{ margin: 0, cursor: 'pointer' }}
+                          />
+                          {opt}
+                        </label>
+                      ))}
+                    </div>
+                  ) : q.type === 'email' ? (
+                    <input
+                      type="email"
+                      placeholder="you@example.com"
+                      value={answers[i] || ""}
+                      onChange={(e) => setAnswers({ ...answers, [i]: e.target.value })}
+                      style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 14, outline: 'none', fontFamily: 'inherit' }}
+                    />
+                  ) : q.type === 'phone' ? (
+                    <input
+                      type="tel"
+                      placeholder="+91 98765 43210"
+                      value={answers[i] || ""}
+                      onChange={(e) => setAnswers({ ...answers, [i]: e.target.value })}
+                      style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 14, outline: 'none', fontFamily: 'inherit' }}
+                    />
+                  ) : q.type === 'date' ? (
+                    <input
+                      type="date"
+                      value={answers[i] || ""}
+                      onChange={(e) => setAnswers({ ...answers, [i]: e.target.value })}
+                      style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 14, outline: 'none', fontFamily: 'inherit' }}
+                    />
+                  ) : q.type === 'time' ? (
+                    <input
+                      type="time"
+                      value={answers[i] || ""}
+                      onChange={(e) => setAnswers({ ...answers, [i]: e.target.value })}
+                      style={{ padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 14, outline: 'none', fontFamily: 'inherit' }}
+                    />
                   ) : (
                     <input
                       type="text"
@@ -1898,7 +1958,8 @@ export function GroupDetail({ group, st, go }) {
               className="hbtn hbtn--primary"
               style={{ marginTop: 16 }}
               onClick={() => {
-                const requiredMissing = g.settings.questionnaires.some((q, i) => q.req && !answers[i]?.trim());
+                const isAnswered = (val) => Array.isArray(val) ? val.length > 0 : !!(val && String(val).trim());
+                const requiredMissing = g.settings.questionnaires.some((q, i) => q.req && !isAnswered(answers[i]));
                 if (requiredMissing) {
                   return alert("Please answer all required questions.");
                 }
@@ -2463,7 +2524,7 @@ export function MemberManagementPanel({ group, st, go }) {
                       <div style={{ marginTop: 6, fontSize: 14, color: 'var(--ink)' }}>
                         {!q.answered ? (
                           <span style={{ fontStyle: 'italic', color: 'var(--ink-3)' }}>(No response submitted)</span>
-                        ) : q.type === 'multiple_choice' ? (
+                        ) : (q.type === 'multiple_choice' || q.type === 'multiselect') ? (
                           <ul style={{ margin: 0, paddingLeft: 20 }}>
                             {q.answer.map((a, i) => <li key={i}>{a}</li>)}
                           </ul>

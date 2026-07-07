@@ -325,7 +325,7 @@ export function TweakSection({ label, children }) {
   );
 }
 
-export function TweakRow({ label, value, children, inline = false }) {
+export function TweakRow({ label, value, children, inline = false }: any) {
   return (
     <div className={inline ? 'twk-row twk-row-h' : 'twk-row'}>
       <div className="twk-lbl">

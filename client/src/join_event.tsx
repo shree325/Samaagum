@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { I, Avatar, Grain } from './home-icons';
+import { FEATURED, ME } from './home-data';
 
 export function JoinEventPage({ ev, st, go }) {
     let e = ev || FEATURED;
@@ -225,8 +226,8 @@ export function JoinEventPage({ ev, st, go }) {
                                         <button
                                             className="hbtn hbtn--ghost hbtn--sm hbtn--block"
                                             onClick={() => {
-                                                if (window.initiateChatWithName) {
-                                                    window.initiateChatWithName(e.hostBy || e.host);
+                                                if ((window as any).initiateChatWithName) {
+                                                    (window as any).initiateChatWithName(e.hostBy || e.host);
                                                 }
                                             }}
                                         >

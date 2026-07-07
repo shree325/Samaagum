@@ -89,7 +89,8 @@ export function InviteLanding({ token, go }) {
 
     const handleQSubmit = () => {
         const questionnaires = inviteData?.group?.settings?.questionnaires || [];
-        const requiredMissing = questionnaires.some((q, i) => q.req && !qAnswers[i]?.trim());
+        const isAnswered = (val) => Array.isArray(val) ? val.length > 0 : !!(val && String(val).trim());
+        const requiredMissing = questionnaires.some((q, i) => q.req && !isAnswered(qAnswers[i]));
         if (requiredMissing) {
             alert("Please answer all required questions.");
             return;
@@ -203,6 +204,55 @@ export function InviteLanding({ token, go }) {
                                             </label>
                                         ))}
                                     </div>
+                                ) : q.type === 'multiselect' && q.options && q.options.length > 0 ? (
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                        {q.options.map((opt, oi) => (
+                                            <label key={oi} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, cursor: "pointer" }}>
+                                                <input
+                                                    type="checkbox"
+                                                    value={opt}
+                                                    checked={(qAnswers[i] || []).includes(opt)}
+                                                    onChange={e => {
+                                                        const cur = qAnswers[i] || [];
+                                                        const next = e.target.checked ? [...cur, opt] : cur.filter(x => x !== opt);
+                                                        setQAnswers({...qAnswers, [i]: next});
+                                                    }}
+                                                    style={{ margin: 0 }}
+                                                />
+                                                {opt}
+                                            </label>
+                                        ))}
+                                    </div>
+                                ) : q.type === 'email' ? (
+                                    <input
+                                        type="email"
+                                        placeholder="you@example.com"
+                                        value={qAnswers[i] || ""}
+                                        onChange={e => setQAnswers({...qAnswers, [i]: e.target.value})}
+                                        style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 14, fontFamily: "inherit" }}
+                                    />
+                                ) : q.type === 'phone' ? (
+                                    <input
+                                        type="tel"
+                                        placeholder="+91 98765 43210"
+                                        value={qAnswers[i] || ""}
+                                        onChange={e => setQAnswers({...qAnswers, [i]: e.target.value})}
+                                        style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 14, fontFamily: "inherit" }}
+                                    />
+                                ) : q.type === 'date' ? (
+                                    <input
+                                        type="date"
+                                        value={qAnswers[i] || ""}
+                                        onChange={e => setQAnswers({...qAnswers, [i]: e.target.value})}
+                                        style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 14, fontFamily: "inherit" }}
+                                    />
+                                ) : q.type === 'time' ? (
+                                    <input
+                                        type="time"
+                                        value={qAnswers[i] || ""}
+                                        onChange={e => setQAnswers({...qAnswers, [i]: e.target.value})}
+                                        style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 14, fontFamily: "inherit" }}
+                                    />
                                 ) : (
                                     <input
                                         type="text"
