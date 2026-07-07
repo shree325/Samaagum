@@ -16,4 +16,11 @@ export interface IR_roleAssignments extends IBaseRepository<IRoleAssignment> {
     getUserRoles(userId: string): Promise<IRoleAssignment[]>;
     getEntityRoles(scopeEntityId: string): Promise<IRoleAssignment[]>;
     hasRole(userId: string, roleId: string, scopeEntityId: string): Promise<boolean>;
+    getActiveRoleAssignment(userId: string): Promise<string | null>;
+    getPlatformRoleKeysForUser(userId: string): Promise<string[]>;
+    getDirectAssignments(userId: string, targetEntityId: string): Promise<any[]>;
+    deletePlatformRoleAssignments(userId: string): Promise<void>;
+    assignPlatformRole(tenantId: string, userId: string, roleId: string): Promise<void>;
 }
+
+

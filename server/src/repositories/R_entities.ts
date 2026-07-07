@@ -66,4 +66,29 @@ export class R_entities implements IR_entities {
     const result = await this.db.query('DELETE FROM entities WHERE id = $1', [id]);
     return (result.rowCount ?? 0) > 0;
   }
+
+  async getOwnerUserId(entityId: string): Promise<string | null> {
+    const result = await this.db.query('SELECT user_id FROM entities WHERE id = $1::uuid LIMIT 1', [entityId]);
+    return result.rows[0]?.user_id || null;
+  }
+
+  async getParentEntityId(entityId: string): Promise<string | null> {
+    const result = await this.db.query('SELECT parent_entity_id FROM entities WHERE id = $1::uuid LIMIT 1', [entityId]);
+    return result.rows[0]?.parent_entity_id || null;
+  }
+
+  async getVisibility(entityId: string): Promise<string | null> {
+    const result = await this.db.query('SELECT visibility FROM entities WHERE id = $1::uuid LIMIT 1', [entityId]);
+    return result.rows[0]?.visibility || null;
+  }
+
+  async getUserEntity(userId: string): Promise<IEntity | null> {
+    const result = await this.db.query(
+      `SELECT * FROM entities WHERE user_id = $1::uuid AND entity_type = 'user' LIMIT 1`,
+      [userId]
+    );
+    return result.rows[0] || null;
+  }
 }
+
+

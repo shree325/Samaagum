@@ -105,4 +105,13 @@ export class R_group_memberships extends PostgresBaseRepository<IGroupMembership
       );
     });
   }
+
+  async isActiveMember(userId: string, groupId: string): Promise<boolean> {
+    const member = await prisma.group_memberships.findFirst({
+      where: { user_id: userId, group_id: groupId, state: 'active' },
+      select: { id: true }
+    });
+    return !!member;
+  }
 }
+

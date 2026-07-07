@@ -29,4 +29,6 @@ export interface IR_users {
   findByUsernamePrefixWithProfile(usernamePrefix: string): Promise<any | null>;
   findAll(filter?: any): Promise<any[]>;
   findOne(filter?: any): Promise<any | null>;
+  getUserState(userId: string): Promise<string | null>;
 }
+

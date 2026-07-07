@@ -93,4 +93,9 @@ export class R_events implements IR_events {
     const result = await this.db.query('DELETE FROM events WHERE id = $1', [id]);
     return (result.rowCount ?? 0) > 0;
   }
+
+  async getHostedByEntityId(eventId: string): Promise<string | null> {
+    const result = await this.db.query('SELECT hosted_by_entity_id FROM events WHERE id = $1::uuid LIMIT 1', [eventId]);
+    return result.rows[0]?.hosted_by_entity_id || null;
+  }
 }

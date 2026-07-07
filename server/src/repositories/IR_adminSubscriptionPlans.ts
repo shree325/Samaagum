@@ -29,4 +29,7 @@ export interface IR_adminSubscriptionPlans extends IBaseRepository<IAdminSubscri
     findActive(tenantId?: string | null): Promise<IAdminSubscriptionPlan[]>;
     findPublic(): Promise<IAdminSubscriptionPlan[]>;
     countActiveSubscribers(planId: string): Promise<number>;
+    getIdsByNames(names: string[]): Promise<string[]>;
+    getDefaultOrByName(name: string): Promise<any | null>;
 }
+

@@ -166,3 +166,6 @@ export * from './IR_forum_tags';
 export * from './R_forum_tags';
 export * from './IR_forum_post_tags';
 export * from './R_forum_post_tags';
+export * from './IR_subscriptionOrders';
+export * from './R_subscriptionOrders';
+

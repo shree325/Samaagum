@@ -13,4 +13,17 @@ export class R_roles extends PostgresBaseRepository<IRole> implements IR_roles {
         const { rows } = await prisma.query(query, [key]);
         return rows[0] || null;
     }
+
+    async getRoleKey(roleId: string): Promise<string | null> {
+        const query = `SELECT key FROM roles WHERE id = $1::uuid LIMIT 1`;
+        const { rows } = await prisma.query(query, [roleId]);
+        return rows[0]?.key || null;
+    }
+
+    async getBaselineCapabilitiesByKey(key: string): Promise<any | null> {
+        const query = `SELECT baseline_capabilities FROM roles WHERE key = $1 LIMIT 1`;
+        const { rows } = await prisma.query(query, [key]);
+        return rows[0]?.baseline_capabilities || null;
+    }
 }
+

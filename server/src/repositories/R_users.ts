@@ -106,4 +106,13 @@ export class R_users implements IR_users {
       where: filter
     });
   }
+
+  async getUserState(userId: string): Promise<string | null> {
+    const row = await this.db.users.findUnique({
+      where: { id: userId },
+      select: { state: true }
+    });
+    return row?.state || null;
+  }
 }
+

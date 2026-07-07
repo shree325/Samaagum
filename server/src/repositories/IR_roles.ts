@@ -14,4 +14,7 @@ export interface IRole {
 
 export interface IR_roles extends IBaseRepository<IRole> {
     findByKey(key: string): Promise<IRole | null>;
+    getRoleKey(roleId: string): Promise<string | null>;
+    getBaselineCapabilitiesByKey(key: string): Promise<any | null>;
 }
+

@@ -41,4 +41,21 @@ export class R_adminSubscriptionPlans
         );
         return parseInt(rows[0]?.count || '0', 10);
     }
+
+    async getIdsByNames(names: string[]): Promise<string[]> {
+        const adminPlans = await prisma.admin_subscription_plans.findMany({
+            where: { name: { in: names } },
+            select: { id: true }
+        });
+        return adminPlans.map(ap => ap.id);
+    }
+
+    async getDefaultOrByName(name: string): Promise<any | null> {
+        return await prisma.admin_subscription_plans.findFirst({
+            where: { is_default: true, is_active: true }
+        }) || await prisma.admin_subscription_plans.findFirst({
+            where: { name, is_active: true }
+        });
+    }
 }
+

@@ -24,4 +24,48 @@ export class R_subscriptions extends PostgresBaseRepository<ISubscription> imple
     const { rows } = await prisma.query(query, [state]);
     return rows;
   }
+
+  async getExpiredActiveSubscriptions(ownerEntityId: string): Promise<any[]> {
+    return await prisma.subscriptions.findMany({
+      where: {
+        owner_entity_id: ownerEntityId,
+        state: 'active',
+        valid_to: { lte: new Date() }
+      },
+      include: {
+        plans: true
+      }
+    });
+  }
+
+  async updateState(subscriptionIds: string[], state: string): Promise<void> {
+    await prisma.subscriptions.updateMany({
+      where: {
+        id: { in: subscriptionIds }
+      },
+      data: {
+        state: state as any,
+        updated_at: new Date()
+      }
+    });
+
+  }
+
+  async getActiveSubscription(ownerEntityId: string): Promise<any | null> {
+    return await prisma.subscriptions.findFirst({
+      where: {
+        owner_entity_id: ownerEntityId,
+        state: 'active',
+        valid_from: { lte: new Date() },
+        OR: [
+          { valid_to: null },
+          { valid_to: { gte: new Date() } }
+        ]
+      },
+      include: {
+        plans: true
+      }
+    });
+  }
 }
+

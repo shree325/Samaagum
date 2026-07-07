@@ -19,4 +19,8 @@ export interface IR_subscriptions extends IBaseRepository<ISubscription> {
   findByOwnerEntityId(ownerEntityId: string): Promise<ISubscription[]>;
   findByPlanId(planId: string): Promise<ISubscription[]>;
   findByState(state: string): Promise<ISubscription[]>;
+  getExpiredActiveSubscriptions(ownerEntityId: string): Promise<any[]>;
+  updateState(subscriptionIds: string[], state: string): Promise<void>;
+  getActiveSubscription(ownerEntityId: string): Promise<any | null>;
 }
+

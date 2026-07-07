@@ -22,4 +22,6 @@ export interface IR_adminRoles extends IBaseRepository<IAdminRole> {
     findDefault(tenantId?: string | null): Promise<IAdminRole | null>;
     countUsersWithRole(roleId: string): Promise<number>;
     clearDefaultForTenant(excludeRoleId: string, tenantId: string | null): Promise<void>;
+    findByName(name: string): Promise<any | null>;
 }
+

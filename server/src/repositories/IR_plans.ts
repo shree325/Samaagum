@@ -19,4 +19,6 @@ export interface IPlan {
 export interface IR_plans extends IBaseRepository<IPlan> {
   findByPlanType(planType: string): Promise<IPlan[]>;
   findByStatus(status: string): Promise<IPlan[]>;
+  getPlanKeys(planIds: string[]): Promise<string[]>;
 }
+

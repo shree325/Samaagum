@@ -2,11 +2,23 @@ import prisma from '../config/prisma';
 import { R_adminResponsibilities } from '../repositories/R_adminResponsibilities';
 import { R_adminPositions } from '../repositories/R_adminPositions';
 import { R_adminRoles } from '../repositories/R_adminRoles';
+import { R_roleAssignments } from '../repositories/R_roleAssignments';
+import { R_roles } from '../repositories/R_roles';
+import { R_users } from '../repositories/R_users';
+import { R_entities } from '../repositories/R_entities';
+import { R_events } from '../repositories/R_events';
+import { R_group_memberships } from '../repositories/R_group_memberships';
 import { IAdminResponsibility, IAdminPosition, IAdminRole } from '../repositories';
 
 const respRepo = new R_adminResponsibilities();
 const posRepo = new R_adminPositions();
-const roleRepo = new R_adminRoles();
+const adminRolesRepo = new R_adminRoles();
+const roleAssignmentsRepo = new R_roleAssignments();
+const rolesRepo = new R_roles();
+const usersRepo = new R_users(prisma);
+const entitiesRepo = new R_entities(prisma);
+const eventsRepo = new R_events(prisma);
+const groupMembershipsRepo = new R_group_memberships();
 
 export const blockedInheritanceEntities = new Set<string>();
 
@@ -53,20 +65,13 @@ function roleGrantsCapability(role: any, restrictions: any, capability: string):
 export class AccessControlService {
     async getUserAccessProfile(userId: string, tenantId?: string): Promise<IUserAccessProfile | null> {
         // Find user's role assignment
-        const rows = await prisma.$queryRawUnsafe<{ role_id: string }[]>(
-            `SELECT role_id FROM role_assignments WHERE user_id = $1::uuid AND (expires_at IS NULL OR expires_at > now()) LIMIT 1`,
-            userId
-        );
-        if (rows.length === 0) return null;
+        const roleId = await roleAssignmentsRepo.getActiveRoleAssignment(userId);
+        if (!roleId) return null;
 
         // Fetch from roles table
-        const rolesRow = await prisma.$queryRawUnsafe<{ key: string }[]>(
-            `SELECT key FROM roles WHERE id = $1::uuid LIMIT 1`,
-            rows[0].role_id
-        );
-        if (rolesRow.length === 0) return null;
+        const roleKey = await rolesRepo.getRoleKey(roleId);
+        if (!roleKey) return null;
 
-        const roleKey = rolesRow[0].key;
         let adminRoleName = 'admin';
         if (roleKey === 'super_admin') {
             adminRoleName = 'super_admin';
@@ -82,12 +87,8 @@ export class AccessControlService {
             adminRoleName = 'enterprise_host';
         }
 
-        const adminRoles = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT * FROM admin_roles WHERE name = $1 LIMIT 1`,
-            adminRoleName
-        );
-        if (adminRoles.length === 0) return null;
-        const role = adminRoles[0];
+        const role = await adminRolesRepo.findByName(adminRoleName);
+        if (!role) return null;
 
         const responsibilityIds: string[] = Array.isArray(role.responsibility_ids) ? role.responsibility_ids : [];
         const responsibilities = responsibilityIds.length > 0
@@ -128,57 +129,36 @@ export class AccessControlService {
 
     async hasCapability(userId: string, capability: string, targetEntityId?: string | null): Promise<boolean> {
         // Step 1: Suspension
-        const userRows = await prisma.$queryRawUnsafe<{ state: string }[]>(
-            `SELECT state FROM users WHERE id = $1::uuid LIMIT 1`,
-            userId
-        );
-        if (userRows.length === 0) {
+        const userState = await usersRepo.getUserState(userId);
+        if (!userState) {
             console.warn(`[RBAC DENY] User ${userId} not found.`);
             return false;
         }
-        if (userRows[0].state === 'suspended' || userRows[0].state === 'deleted') {
+        if (userState === 'suspended' || userState === 'deleted') {
             console.warn(`[RBAC DENY] User ${userId} is suspended or deleted.`);
             return false;
         }
 
         // Step 2: Platform Admin Bypass
         // Fetch all active platform-level role assignments
-        const platformAssignments = await prisma.$queryRawUnsafe<{ key: string }[]>(
-            `SELECT r.key FROM role_assignments ra
-             JOIN roles r ON r.id = ra.role_id
-             WHERE ra.user_id = $1::uuid
-               AND r.level = 'platform'
-               AND (ra.expires_at IS NULL OR ra.expires_at > now())`,
-            userId
-        );
-        if (platformAssignments.length > 0) {
+        const platformRoleKeys = await roleAssignmentsRepo.getPlatformRoleKeysForUser(userId);
+        if (platformRoleKeys.length > 0) {
             return true;
         }
 
         // Step 3: Ownership Carve-out
         if (targetEntityId) {
-            const entityRows = await prisma.$queryRawUnsafe<{ user_id: string }[]>(
-                `SELECT user_id FROM entities WHERE id = $1::uuid LIMIT 1`,
-                targetEntityId
-            );
-            if (entityRows.length > 0) {
-                const entity = entityRows[0];
-                if (entity.user_id === userId) {
+            const entityOwnerUserId = await entitiesRepo.getOwnerUserId(targetEntityId);
+            if (entityOwnerUserId) {
+                if (entityOwnerUserId === userId) {
                     return true;
                 }
             } else {
                 // If not an entity, check if it's an event
-                const eventRows = await prisma.$queryRawUnsafe<{ hosted_by_entity_id: string }[]>(
-                    `SELECT hosted_by_entity_id FROM events WHERE id = $1::uuid LIMIT 1`,
-                    targetEntityId
-                );
-                if (eventRows.length > 0) {
-                    const hostEntityId = eventRows[0].hosted_by_entity_id;
-                    const hostRows = await prisma.$queryRawUnsafe<{ user_id: string }[]>(
-                        `SELECT user_id FROM entities WHERE id = $1::uuid LIMIT 1`,
-                        hostEntityId
-                    );
-                    if (hostRows.length > 0 && hostRows[0].user_id === userId) {
+                const hostEntityId = await eventsRepo.getHostedByEntityId(targetEntityId);
+                if (hostEntityId) {
+                    const hostOwnerUserId = await entitiesRepo.getOwnerUserId(hostEntityId);
+                    if (hostOwnerUserId === userId) {
                         return true;
                     }
                 }
@@ -187,14 +167,7 @@ export class AccessControlService {
 
         // Step 4: Direct Assignment
         if (targetEntityId) {
-            const directAssignments = await prisma.$queryRawUnsafe<{ baseline_capabilities: any; restrictions: any }[]>(
-                `SELECT r.baseline_capabilities, ra.restrictions FROM role_assignments ra
-                 JOIN roles r ON r.id = ra.role_id
-                 WHERE ra.user_id = $1::uuid
-                   AND ra.scope_entity_id = $2::uuid
-                   AND (ra.expires_at IS NULL OR ra.expires_at > now())`,
-                userId, targetEntityId
-            );
+            const directAssignments = await roleAssignmentsRepo.getDirectAssignments(userId, targetEntityId);
             for (const da of directAssignments) {
                 if (roleGrantsCapability(da, da.restrictions, capability)) {
                     return true;
@@ -210,13 +183,7 @@ export class AccessControlService {
                     break; // Block inheritance traversal
                 }
 
-                const parentEntityRows: any[] = await prisma.$queryRawUnsafe(
-                    `SELECT parent_entity_id FROM entities WHERE id = $1::uuid LIMIT 1`,
-                    currentEntityId
-                );
-                if (parentEntityRows.length === 0) break;
-
-                const parentId = parentEntityRows[0].parent_entity_id;
+                const parentId = await entitiesRepo.getParentEntityId(currentEntityId);
                 if (!parentId) break;
 
                 if (blockedInheritanceEntities.has(parentId)) {
@@ -225,14 +192,7 @@ export class AccessControlService {
 
                 currentEntityId = parentId;
 
-                const parentAssignments = await prisma.$queryRawUnsafe<{ baseline_capabilities: any; restrictions: any }[]>(
-                    `SELECT r.baseline_capabilities, ra.restrictions FROM role_assignments ra
-                     JOIN roles r ON r.id = ra.role_id
-                     WHERE ra.user_id = $1::uuid
-                       AND ra.scope_entity_id = $2::uuid
-                       AND (ra.expires_at IS NULL OR ra.expires_at > now())`,
-                    userId, currentEntityId
-                );
+                const parentAssignments = await roleAssignmentsRepo.getDirectAssignments(userId, currentEntityId);
                 for (const pa of parentAssignments) {
                     if (roleGrantsCapability(pa, pa.restrictions, capability)) {
                         return true;
@@ -242,32 +202,20 @@ export class AccessControlService {
         }
 
         // Step 6: Participation Baselines
-        const memberRoleRows = await prisma.$queryRawUnsafe<{ baseline_capabilities: any }[]>(
-            `SELECT baseline_capabilities FROM roles WHERE key = 'member' LIMIT 1`
-        );
-        if (memberRoleRows.length > 0) {
-            const memberRole = memberRoleRows[0];
+        const baselineCapabilities = await rolesRepo.getBaselineCapabilitiesByKey('member');
+        if (baselineCapabilities) {
+            const memberRole = { baseline_capabilities: baselineCapabilities };
             if (roleGrantsCapability(memberRole, null, capability)) {
                 if (targetEntityId) {
                     // Check if entity is public/community
-                    const entityRows = await prisma.$queryRawUnsafe<{ visibility: string }[]>(
-                        `SELECT visibility FROM entities WHERE id = $1::uuid LIMIT 1`,
-                        targetEntityId
-                    );
-                    if (entityRows.length > 0 && (entityRows[0].visibility === 'public' || entityRows[0].visibility === 'community')) {
+                    const entityVisibility = await entitiesRepo.getVisibility(targetEntityId);
+                    if (entityVisibility === 'public' || entityVisibility === 'community') {
                         return true;
                     }
 
                     // Check if user is an active member
-                    const memberRows = await prisma.$queryRawUnsafe<{ id: string }[]>(
-                        `SELECT id FROM group_memberships
-                         WHERE user_id = $1::uuid
-                           AND group_id = $2::uuid
-                           AND state = 'active'
-                         LIMIT 1`,
-                        userId, targetEntityId
-                    );
-                    if (memberRows.length > 0) {
+                    const isMember = await groupMembershipsRepo.isActiveMember(userId, targetEntityId);
+                    if (isMember) {
                         return true;
                     }
                 }

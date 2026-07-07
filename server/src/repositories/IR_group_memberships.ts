@@ -23,4 +23,6 @@ export interface IR_group_memberships extends IBaseRepository<IGroupMembership> 
   getMembershipCountsAll(): Promise<any[]>;
   deleteMembership(groupId: string, userId: string): Promise<boolean>;
   leaveGroupTx(groupId: string, userId: string): Promise<void>;
+  isActiveMember(userId: string, groupId: string): Promise<boolean>;
 }
+

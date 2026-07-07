@@ -31,4 +31,5 @@ export interface IR_events {
   getAll(tenantId: string): Promise<IEvent[]>;
   update(id: string, event: Partial<IEvent>): Promise<IEvent | null>;
   delete(id: string): Promise<boolean>;
+  getHostedByEntityId(eventId: string): Promise<string | null>;
 }

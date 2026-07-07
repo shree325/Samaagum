@@ -18,4 +18,13 @@ export class R_plans extends PostgresBaseRepository<IPlan> implements IR_plans {
     const { rows } = await prisma.query(query, [status]);
     return rows;
   }
+
+  async getPlanKeys(planIds: string[]): Promise<string[]> {
+    const plans = await prisma.plans.findMany({
+      where: { id: { in: planIds } },
+      select: { key: true }
+    });
+    return plans.map(p => p.key);
+  }
 }
+

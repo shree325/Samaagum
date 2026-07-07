@@ -57,4 +57,13 @@ export class R_adminRoles
             );
         }
     }
+
+    async findByName(name: string): Promise<any | null> {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT * FROM admin_roles WHERE name = $1 LIMIT 1`,
+            name
+        );
+        return rows[0] || null;
+    }
 }
+

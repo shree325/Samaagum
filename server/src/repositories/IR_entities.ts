@@ -18,4 +18,10 @@ export interface IR_entities {
   getByType(tenantId: string, entityType: string): Promise<IEntity[]>;
   update(id: string, entity: Partial<IEntity>): Promise<IEntity | null>;
   delete(id: string): Promise<boolean>;
+  getOwnerUserId(entityId: string): Promise<string | null>;
+  getParentEntityId(entityId: string): Promise<string | null>;
+  getVisibility(entityId: string): Promise<string | null>;
+  getUserEntity(userId: string): Promise<IEntity | null>;
 }
+
+
