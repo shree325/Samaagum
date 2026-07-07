@@ -1869,7 +1869,7 @@ export class GroupService {
             
             if (q.field_type === 'checkbox') {
                 answer = answered ? Boolean(rawAnswer) : false;
-            } else if (q.field_type === 'multiple_choice') {
+            } else if (q.field_type === 'multiple_choice' || q.field_type === 'multiselect') {
                 answer = answered ? (Array.isArray(rawAnswer) ? rawAnswer : [rawAnswer]) : [];
             }
 

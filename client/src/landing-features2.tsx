@@ -1,8 +1,8 @@
 // @ts-nocheck
 import React from 'react';
-import { Field, Reveal, gradFor, initials } from './components';
+import { Field, gradFor, initials } from './components';
 import { Discover } from './home-feed';
-import { I, REDUCED, clamp, lerp, range, useScrub, useTilt } from './landing-core';
+import { I, REDUCED, Reveal, clamp, lerp, range, useScrub, useTilt } from './landing-core';
 import { Communities, Events, easeOutCubic } from './landing-features';
 import { AUTH } from './landing-hero';
 

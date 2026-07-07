@@ -318,7 +318,7 @@ export const WAITLIST_ME = {
 // Robust clipboard copy: navigator.clipboard throws NotAllowedError when the
 // document isn't focused (e.g. right after an alert/devtools), so fall back to
 // the legacy execCommand path which works without focus.
-async function copyText(text) {
+export async function copyText(text) {
   try {
     if (navigator.clipboard && window.isSecureContext && document.hasFocus()) {
       await navigator.clipboard.writeText(text);

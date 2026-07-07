@@ -3,18 +3,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Field } from './components';
 import { COVER_SWATCHES } from './home-create';
 import { COVERS, GROUPS, ME } from './home-data';
-import { Grain } from './home-icons';
+import { Avatar, Grain } from './home-icons';
 import { Profile } from './home-profile';
 import { Empty } from './home-shell';
 import { Waitlist } from './home-waitlist';
 import { I } from './home-icons';
 import { Communities, Events } from './landing-features';
 import { EventCard } from './home-cards';
-
-
-
-// Reuse existing components and utilities from the project
-// Assuming I, Grain, EventCard, LocationSection, COVERS, GROUPS, ME, etc. are globally available via the app bundle or global namespace.
 
 export function UpgradePlanModal({ open, onClose, feature, go, currentPlanName }) {
   if (!open) return null;
@@ -373,9 +368,18 @@ export function TimePicker({ label = undefined, value, onChange, mobile, compact
   };
 
   return (
-    <div ref={containerRef} style={{ position: "relative", width: compact ? "100%" : "100%", maxWidth: compact ? "none" : (mobile ? "140px" : "130px") }}>
+    <div ref={containerRef} style={{
+      position: "relative",
+      zIndex: open ? 50 : 1,
+      width: compact ? "100%" : "100%",
+      maxWidth: compact ? "none" : (mobile ? "140px" : "130px"),
+      height: compact ? "100%" : "auto",
+      borderLeft: compact ? "1px solid var(--border)" : "none",
+      display: compact ? "flex" : "block",
+      alignItems: "center"
+    }}>
       {label && <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--ink)", marginBottom: 8 }}>{label}</label>}
-      <div style={{ position: "relative", height: compact ? "100%" : "auto" }}>
+      <div style={{ position: "relative", height: compact ? "100%" : "auto", width: compact ? "100%" : "auto" }}>
         <input
           className={compact ? "" : "cinput"}
           type="text"
@@ -507,8 +511,198 @@ export function TimePicker({ label = undefined, value, onChange, mobile, compact
     </div>
   );
 }
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+function formatDateDisplay(dateStr) {
+  if (!dateStr) return "";
+  const [y, m, d] = dateStr.split("-").map(Number);
+  if (!y || !m || !d) return "";
+  return `${MONTH_NAMES[m - 1].slice(0, 3)} ${d}, ${y}`;
+}
+
+function DatePicker({ label = undefined, value, onChange, mobile, compact }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+  const [viewYear, setViewYear] = useState(null);
+  const [viewMonth, setViewMonth] = useState(null);
+
+  useEffect(() => {
+    if (open) {
+      const [y, m] = value ? value.split("-").map(Number) : [null, null];
+      const now = new Date();
+      setViewYear(y || now.getFullYear());
+      setViewMonth(y ? m - 1 : now.getMonth());
+    }
+  }, [open, value]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const goMonth = (delta) => {
+    let m = viewMonth + delta;
+    let y = viewYear;
+    if (m < 0) { m = 11; y -= 1; }
+    if (m > 11) { m = 0; y += 1; }
+    setViewMonth(m);
+    setViewYear(y);
+  };
+
+  const selectDay = (day) => {
+    const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    onChange(dateStr);
+    setOpen(false);
+  };
+
+  const renderCalendarGrid = () => {
+    const firstWeekday = new Date(viewYear, viewMonth, 1).getDay();
+    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const selected = value ? value.split("-").map(Number) : null;
+    const cells = [];
+    for (let i = 0; i < firstWeekday; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px", width: "100%" }}>
+        {WEEKDAY_LABELS.map(w => (
+          <div key={w} style={{ textAlign: "center", fontSize: "11px", fontWeight: 700, color: "var(--ink-3)", padding: "4px 0" }}>{w}</div>
+        ))}
+        {cells.map((day, i) => {
+          if (day === null) return <div key={"e" + i} />;
+          const isSelected = selected && selected[0] === viewYear && selected[1] === viewMonth + 1 && selected[2] === day;
+          
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const cellDate = new Date(viewYear, viewMonth, day);
+          const isPast = cellDate < today;
+
+          return (
+            <button
+              key={day}
+              type="button"
+              disabled={isPast}
+              onClick={() => selectDay(day)}
+              style={{
+                width: "100%",
+                aspectRatio: "1",
+                border: "none",
+                borderRadius: "50%",
+                cursor: isPast ? "not-allowed" : "pointer",
+                fontSize: "13px",
+                fontWeight: isSelected ? 700 : 500,
+                background: isSelected ? "var(--accent-2)" : "transparent",
+                color: isPast ? "var(--ink-3)" : (isSelected ? "#fff" : "var(--ink)"),
+                opacity: isPast ? 0.35 : 1,
+                fontFamily: "inherit"
+              }}
+            >
+              {day}
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
+
+  return (
+    <div ref={containerRef} style={{
+      position: "relative",
+      zIndex: open ? 50 : 1,
+      width: compact ? "100%" : "100%",
+      maxWidth: compact ? "none" : (mobile ? "160px" : "150px"),
+      height: compact ? "100%" : "auto",
+      borderLeft: compact ? "1px solid var(--border)" : "none",
+      display: compact ? "flex" : "block",
+      alignItems: "center"
+    }}>
+      {label && <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--ink)", marginBottom: 8 }}>{label}</label>}
+      <div style={{ position: "relative", height: compact ? "100%" : "auto", width: compact ? "100%" : "auto" }}>
+        <input
+          className={compact ? "" : "cinput"}
+          type="text"
+          readOnly
+          value={formatDateDisplay(value)}
+          onClick={() => setOpen(true)}
+          placeholder="Select date"
+          style={compact ? {
+            width: "100%",
+            height: "100%",
+            cursor: "pointer",
+            border: "none",
+            background: "transparent",
+            padding: "16px",
+            fontSize: "14px",
+            fontFamily: "inherit",
+            outline: "none"
+          } : {
+            width: "100%",
+            cursor: "pointer",
+            paddingRight: "30px",
+            background: "var(--field)",
+            border: "1px solid var(--border)"
+          }}
+        />
+        {!compact && (
+          <span style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--ink-3)", fontSize: "12px" }}>
+            📅
+          </span>
+        )}
+      </div>
+
+      {open && viewYear !== null && (
+        <div style={{
+          position: "absolute",
+          top: "100%",
+          left: 0,
+          marginTop: "8px",
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--r-lg)",
+          boxShadow: "var(--sh-xl)",
+          padding: "16px",
+          zIndex: 1000,
+          width: "260px",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          animation: "popUp 0.15s cubic-bezier(0.34, 1.56, 0.64, 1)"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", marginBottom: "8px" }}>
+            <button
+              type="button"
+              onClick={() => goMonth(-1)}
+              style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: "16px", color: "var(--ink-2)", padding: "4px 8px" }}
+            >
+              ‹
+            </button>
+            <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
+              {MONTH_NAMES[viewMonth]} {viewYear}
+            </span>
+            <button
+              type="button"
+              onClick={() => goMonth(1)}
+              style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: "16px", color: "var(--ink-2)", padding: "4px 8px" }}
+            >
+              ›
+            </button>
+          </div>
+
+          {renderCalendarGrid()}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export const TIMEZONES = [
+
   { value: "UTC +05:30 India", label: "GMT+05:30", city: "Asia/Kolkata" },
   { value: "UTC +00:00 London", label: "GMT+00:00", city: "Europe/London" },
   { value: "UTC -05:00 New York", label: "GMT-05:00", city: "America/New_York" },
@@ -667,7 +861,7 @@ export function RuleSummaryChip({ rule, onEditClick }: any) {
     </span>
   );
 }
-export const ACCESS_TREE = [
+export let ACCESS_TREE = [
   {
     id: "comm-samaagum",
     name: "Samaagum Hub",
@@ -989,8 +1183,6 @@ export const findNodeInTree = (id: string, tree: any[]): any => {
 export function AccessControlModal({ open, onClose, mode, selectedAccess, setSelectedAccess }: any) {
   const [search, setSearch] = useState("");
   const [expandedNodeIds, setExpandedNodeIds] = useState(new Set<string>());
-  const [ruleCommunity, setRuleCommunity] = useState("Samaagum Hub");
-  const [ruleGroups, setRuleGroups] = useState([] as string[]);
 
   if (!open) return null;
 
@@ -1046,42 +1238,6 @@ export function AccessControlModal({ open, onClose, mode, selectedAccess, setSel
         subCommunities: [],
         groups: []
       }
-    });
-  };
-
-  // Rule Builder Specifics
-  const communitiesList = ACCESS_TREE.map(c => c.name);
-  const getGroupsForCommunityName = (commName: string) => {
-    const comm = ACCESS_TREE.find(c => c.name === commName);
-    if (!comm) return [];
-    const groups: string[] = [];
-    comm.children.forEach(sub => {
-      sub.children.forEach(grp => {
-        groups.push(grp.name);
-      });
-    });
-    return groups;
-  };
-  const ruleGroupsList = getGroupsForCommunityName(ruleCommunity);
-
-  const handleAddRule = () => {
-    if (ruleGroups.length === 0) return;
-    const newRule = {
-      id: "r-" + Date.now(),
-      community: ruleCommunity,
-      groups: ruleGroups
-    };
-    setSelectedAccess({
-      ...selectedAccess,
-      selectedMembers: [...selectedAccess.selectedMembers, newRule]
-    });
-    setRuleGroups([]);
-  };
-
-  const handleRemoveRule = (id) => {
-    setSelectedAccess({
-      ...selectedAccess,
-      selectedMembers: selectedAccess.selectedMembers.filter(r => r.id !== id)
     });
   };
 
@@ -1187,27 +1343,20 @@ export function AccessControlModal({ open, onClose, mode, selectedAccess, setSel
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
-      <style>{`
-        .tree-node-row:hover {
-          background: var(--bg-2) !important;
-        }
-      `}</style>
+      <style dangerouslySetInnerHTML={{ __html: `.tree-node-row:hover { background: var(--bg-2) !important; }` }} />
       <div style={{ background: "var(--surface)", width: 500, maxHeight: "85vh", borderRadius: "var(--r-xl)", display: "flex", flexDirection: "column", boxShadow: "var(--sh-xl)", overflow: "hidden" }}>
         <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: "var(--ink)" }}>
-            {mode === "restricted" ? "Restricted Access Settings" : "Configure Allowed Members"}
+            Restricted Access Settings
           </h2>
           <button type="button" className="hbtn hbtn--ghost hbtn--sm" onClick={onClose} style={{ border: "none" }}><I.x /></button>
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
-          {mode === "restricted" ? (
             <div>
               {/* Selection Summary at Top */}
               <div style={{ marginBottom: 12, padding: "0 4px" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 6 }}>Selection Summary</div>
                 <div style={{ display: "flex", gap: 16, fontSize: 12, fontWeight: 600, color: "var(--ink-2)", marginBottom: 8 }}>
-                  <span>🏛️ {selectedAccess.restricted.communities.length} Communities</span>
-                  <span>📁 {selectedAccess.restricted.subCommunities.length} Sub-Communities</span>
                   <span>👥 {selectedAccess.restricted.groups.length} Groups</span>
                 </div>
                 {allSelectedDetails.length > 0 && (
@@ -1243,7 +1392,7 @@ export function AccessControlModal({ open, onClose, mode, selectedAccess, setSel
               <div style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "center" }}>
                 <input
                   className="cinput"
-                  placeholder="Search by community, sub-community, or group..."
+                  placeholder="Search groups..."
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   style={{ flex: 1, background: "var(--field)", border: "1px solid var(--border)", marginBottom: 0 }}
@@ -1273,52 +1422,6 @@ export function AccessControlModal({ open, onClose, mode, selectedAccess, setSel
                 {ACCESS_TREE.map(node => renderTreeNode(node, 0))}
               </div>
             </div>
-          ) : (
-            <div>
-              <div style={{ padding: 16, background: "var(--field)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", marginBottom: 18 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 12 }}>Define Access Rule</div>
-                <div className="cfield" style={{ marginBottom: 12 }}>
-                  <label>Select Community</label>
-                  <select className="cselect" value={ruleCommunity} onChange={e => {
-                    setRuleCommunity(e.target.value);
-                    const list = getGroupsForCommunityName(e.target.value);
-                    setRuleGroups([]);
-                  }} style={{ background: "var(--surface)" }}>
-                    {communitiesList.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div className="cfield" style={{ marginBottom: 16 }}>
-                  <label>Allowed Groups (Ctrl+Click to multi-select)</label>
-                  <select
-                    multiple
-                    className="cselect"
-                    value={ruleGroups}
-                    onChange={e => setRuleGroups(Array.from(e.target.selectedOptions, (option: any) => option.value))}
-                    style={{ background: "var(--surface)", height: 120 }}
-                  >
-                    {ruleGroupsList.map(g => <option key={g} value={g}>{g}</option>)}
-                  </select>
-                </div>
-                <button type="button" className="hbtn hbtn--primary hbtn--sm" onClick={handleAddRule} style={{ width: "100%" }}>
-                  ➕ Add Access Rule
-                </button>
-              </div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 8 }}>Active Rules</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 200, overflowY: "auto" }}>
-                {selectedAccess.selectedMembers.map(rule => (
-                  <div key={rule.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "var(--field)", border: "1px solid var(--border)", borderRadius: "var(--r-md)" }}>
-                    <div style={{ fontSize: 13, color: "var(--ink)" }}>
-                      <span style={{ fontWeight: 600 }}>{rule.community}</span> → {rule.groups.join(", ")}
-                    </div>
-                    <button type="button" className="hbtn hbtn--ghost hbtn--sm" onClick={() => handleRemoveRule(rule.id)} style={{ color: "#e5484d", border: "none" }}>✕</button>
-                  </div>
-                ))}
-                {selectedAccess.selectedMembers.length === 0 && (
-                  <div style={{ fontStyle: "italic", color: "var(--ink-3)", fontSize: 13 }}>No rules defined yet.</div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
         <div style={{ padding: "16px 24px", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end", background: "var(--bg-2)" }}>
           <button type="button" className="hbtn hbtn--primary" onClick={onClose}>Save &amp; Close</button>
@@ -1470,6 +1573,7 @@ export function LocationSection({ venue, setVenue, locType, setLocType }) {
 }
 
 /* ---------------- Create Event ---------------- */
+/* ---------------- Create Event ---------------- */
 export const DEFAULT_FREE_ENTITLEMENTS = {
   group_max_groups: -1,
   group_allowed_visibility: ['unlisted'],
@@ -1483,7 +1587,57 @@ export const DEFAULT_FREE_ENTITLEMENTS = {
   event_can_create_paid_tickets: false
 };
 
-export function CreateEvent({ go, mobile, st }) {
+export function CreateEvent(props: any) {
+  const { editEv } = props;
+  const [eventData, setEventData] = useState(null as any);
+  const [loading, setLoading] = useState(editEv?.id && editEv.id !== 'new');
+
+  useEffect(() => {
+    if (editEv?.id && editEv.id !== 'new') {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {} as any;
+      const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+      fetch(`${apiBase}/api/events/${editEv.id}`, { headers })
+        .then(r => r.json())
+        .then(d => {
+          if (d.success && d.data?.event) {
+            setEventData(d.data.event);
+          }
+          setLoading(false);
+        })
+        .catch(err => {
+          console.error(err);
+          setLoading(false);
+        });
+    } else {
+      setLoading(false);
+    }
+  }, [editEv?.id]);
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, justifyContent: "center", alignItems: "center", minHeight: "100vh", background: "var(--bg-2)", color: "var(--ink-2)" }}>
+        <div style={{ fontSize: 14, fontWeight: 500 }}>Loading event details...</div>
+      </div>
+    );
+  }
+
+  return <CreateEventForm {...props} editEv={eventData || editEv} />;
+}
+
+function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }: any) {
+  const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+  const draftKey = "sg_draft_event";
+  const savedDraft = JSON.parse(localStorage.getItem(draftKey) || "{}");
+  // Resuming an in-progress draft (e.g. Preview -> Back) restores every field below via `draft`.
+  const draft = (editEv && editEv.__draft) || null;
+  const isNewEvent = !editEv?.id || editEv.id === 'new';
+
+  // Plan entitlements gate what a *new* event can default to / offer; an event already saved
+  // keeps its existing values regardless of the current plan (handled per-field below).
   const entitlements = st?.entitlements || DEFAULT_FREE_ENTITLEMENTS;
   const allowedVisibilities = entitlements.event_allowed_visibility || ['unlisted', 'invite_only'];
   const eventMaxParticipants = entitlements.event_max_participants ?? 100;
@@ -1491,49 +1645,270 @@ export function CreateEvent({ go, mobile, st }) {
 
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [upgradeFeature, setUpgradeFeature] = useState("");
-  const triggerUpgrade = (feat) => {
+  const triggerUpgrade = (feat: string) => {
     setUpgradeFeature(feat);
     setUpgradeModalOpen(true);
   };
 
-  const [title, setTitle] = useState("");
-  const [slug, setSlug] = useState("");
-  const [cover, setCover] = useState("");
-  const [visibility, setVisibility] = useState(allowedVisibilities.includes("public") ? "public" : "unlisted");
-  const [calendar, setCalendar] = useState("Main Calendar");
-  const [startDate, setStartDate] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [endTime, setEndTime] = useState("");
-  const [timezone, setTimezone] = useState("UTC +05:30 India");
-  const [locType, setLocType] = useState("physical");
-  const [venue, setVenue] = useState("");
-  const [desc, setDesc] = useState("");
+  const [hostEntityId, setHostEntityId] = useState(draft?.hostEntityId || savedDraft.hostEntityId || hostGroupId || "standalone");
+  const [hostGroups, setHostGroups] = useState([] as any[]);
+  const [dbGroups, setDbGroups] = useState([] as any[]);
+  const [accessTreeUpdated, setAccessTreeUpdated] = useState(0);
+
+  useEffect(() => {
+    const fetchGroups = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {} as any;
+
+        // Fetch groups user can host events under
+        fetch(`${apiBase}/api/groups/mine/as-host`, { headers })
+          .then(r => r.json())
+          .then(d => {
+            if (d.success) {
+              setHostGroups(d.data);
+              if (editEv?.hosted_by_entity_id) {
+                const isGroupHost = d.data.some((g: any) => g.entity_id === editEv.hosted_by_entity_id);
+                if (isGroupHost) {
+                  setHostEntityId(editEv.hosted_by_entity_id);
+                } else {
+                  setHostEntityId("standalone");
+                }
+              }
+            }
+          })
+          .catch(console.error);
+
+        const res = await fetch(`${apiBase}/api/groups`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
+        const data = await res.json();
+        if (data.success && data.data) {
+          setDbGroups(data.data);
+          ACCESS_TREE = data.data.map((g: any) => ({
+            id: g.id,
+            name: g.name,
+            type: "group"
+          }));
+          setAccessTreeUpdated(prev => prev + 1);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchGroups();
+  }, []);
+
+  const [title, setTitle] = useState(draft?.title ?? editEv?.title ?? "");
+  const [slug, setSlug] = useState(draft?.slug ?? editEv?.venue_raw?.meta?.slug ?? editEv?.venue?.meta?.slug ?? "");
+  const [cover, setCover] = useState(draft?.cover ?? editEv?.cover ?? editEv?.venue_raw?.meta?.cover ?? editEv?.venue?.meta?.cover ?? "");
+  const [visibility, setVisibility] = useState(
+    draft?.visibility
+    ?? editEv?.venue_raw?.visibility
+    ?? editEv?.venue?.visibility
+    ?? (allowedVisibilities.includes("public") ? "public" : (allowedVisibilities[0] || "unlisted"))
+  );
+  const [calendar, setCalendar] = useState(draft?.calendar ?? "Main Calendar");
+  const initDT = useMemo(() => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const currentDate = `${yyyy}-${mm}-${dd}`;
+
+    let currentHour = now.getHours();
+    let currentMinute = Math.round(now.getMinutes() / 5) * 5;
+    if (currentMinute === 60) {
+      currentMinute = 0;
+      currentHour = (currentHour + 1) % 24;
+    }
+    const currentTime = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
+
+    let endHour = (currentHour + 1) % 24;
+    const currentEndTime = `${String(endHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
+
+    let endDateStr = currentDate;
+    if (currentHour === 23) {
+      const endNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      const eyyyy = endNow.getFullYear();
+      const emm = String(endNow.getMonth() + 1).padStart(2, '0');
+      const edd = String(endNow.getDate()).padStart(2, '0');
+      endDateStr = `${eyyyy}-${emm}-${edd}`;
+    }
+
+    return { currentDate, currentTime, endDateStr, currentEndTime };
+  }, []);
+
+  const startsAt = editEv?.starts_at ? new Date(editEv.starts_at) : null;
+  const endsAt = editEv?.ends_at ? new Date(editEv.ends_at) : null;
+
+  // Extract local date and time to avoid UTC shifts
+  const editStartDate = startsAt ? `${startsAt.getFullYear()}-${String(startsAt.getMonth() + 1).padStart(2, '0')}-${String(startsAt.getDate()).padStart(2, '0')}` : "";
+  const editStartTime = startsAt ? `${String(startsAt.getHours()).padStart(2, '0')}:${String(startsAt.getMinutes()).padStart(2, '0')}` : "";
+  const editEndDate = endsAt ? `${endsAt.getFullYear()}-${String(endsAt.getMonth() + 1).padStart(2, '0')}-${String(endsAt.getDate()).padStart(2, '0')}` : "";
+  const editEndTime = endsAt ? `${String(endsAt.getHours()).padStart(2, '0')}:${String(endsAt.getMinutes()).padStart(2, '0')}` : "";
+
+  const [startDate, setStartDate] = useState(draft?.startDate ?? (editEv ? editStartDate : savedDraft.startDate) ?? initDT.currentDate);
+  const [startTime, setStartTime] = useState(draft?.startTime ?? (editEv ? editStartTime : savedDraft.startTime) ?? initDT.currentTime);
+  const [endDate, setEndDate] = useState(draft?.endDate ?? (editEv ? editEndDate : savedDraft.endDate) ?? initDT.endDateStr);
+  const [endTime, setEndTime] = useState(draft?.endTime ?? (editEv ? editEndTime : savedDraft.endTime) ?? initDT.currentEndTime);
+
+  // Enforce dates/times are not in the past (only for new events, not when editing)
+  useEffect(() => {
+    if (editEv?.id && editEv.id !== 'new') return; // Skip past enforcement when editing existing events
+
+    const now = new Date();
+
+    // Format YYYY-MM-DD
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+
+    // Check start date
+    if (startDate && startDate < todayStr) {
+      setStartDate(todayStr);
+    }
+
+    // Check end date
+    if (endDate && endDate < todayStr) {
+      setEndDate(todayStr);
+    }
+
+    // If startDate is today, check startTime
+    if (startDate === todayStr && startTime) {
+      const [sh, sm] = startTime.split(":").map(Number);
+      const nowH = now.getHours();
+      const nowM = now.getMinutes();
+      if (sh < nowH || (sh === nowH && sm < nowM)) {
+        // Reset to now
+        let currentHour = now.getHours();
+        let currentMinute = Math.round(now.getMinutes() / 5) * 5;
+        if (currentMinute === 60) {
+          currentMinute = 0;
+          currentHour = (currentHour + 1) % 24;
+        }
+        setStartTime(`${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`);
+      }
+    }
+
+    // If endDate is today, check endTime
+    if (endDate === todayStr && endTime) {
+      const [eh, em] = endTime.split(":").map(Number);
+      const nowH = now.getHours();
+      const nowM = now.getMinutes();
+      if (eh < nowH || (eh === nowH && em < nowM)) {
+        // Reset to now + 1 hour or similar
+        let currentHour = now.getHours();
+        let currentMinute = Math.round(now.getMinutes() / 5) * 5;
+        if (currentMinute === 60) {
+          currentMinute = 0;
+          currentHour = (currentHour + 1) % 24;
+        }
+        let endHour = (currentHour + 1) % 24;
+        setEndTime(`${String(endHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`);
+      }
+    }
+
+    // Enforce end date/time is after start date/time
+    if (startDate && endDate) {
+      if (endDate < startDate) {
+        setEndDate(startDate);
+      } else if (startDate === endDate && startTime && endTime) {
+        if (endTime < startTime) {
+          setEndTime(addOneHour(startTime));
+        }
+      }
+    }
+  }, [startDate, startTime, endDate, endTime, editEv]);
+
+  const [timezone, setTimezone] = useState(draft?.timezone ?? editEv?.venue_timezone ?? "UTC +05:30 India");
+  const [locType, setLocType] = useState(draft?.locType ?? (editEv?.location_type === 'online' ? 'online' : 'physical'));
+  const [venue, setVenue] = useState(draft?.venue ?? (editEv?.location_type === 'online' ? editEv?.online_link : (editEv?.venue_raw?.name ?? editEv?.venue_raw?.address ?? editEv?.venue?.name ?? editEv?.venue?.address ?? "")));
+  const [desc, setDesc] = useState(draft?.desc ?? editEv?.description ?? editEv?.desc ?? "");
   const [tzModalOpen, setTzModalOpen] = useState(false);
   const [tzSearchQuery, setTzSearchQuery] = useState("");
 
-  const [type, setType] = useState(canCreatePaidTickets ? "paid" : "free");
-  const [approval, setApproval] = useState(false);
-  const [capacityEnabled, setCapacityEnabled] = useState(entitlements.event_max_participants !== -1);
-  const [capacity, setCapacity] = useState(entitlements.event_max_participants !== -1 ? String(entitlements.event_max_participants) : "");
-  const [waitlist, setWaitlist] = useState(false);
-  const [tickets, setTickets] = useState([{ n: "Early Bird", cap: "50", price: "499" }]);
+  const [type, setType] = useState(
+    draft?.type
+    ?? (editEv?.registration_mode
+        ? ((editEv.registration_mode === 'free_rsvp' || editEv.registration_mode === 'free') ? 'free' : 'paid')
+        : (canCreatePaidTickets ? 'paid' : 'free'))
+  );
+  const [approval, setApproval] = useState(draft?.approval ?? editEv?.approval_required ?? false);
+  const [capacityEnabled, setCapacityEnabled] = useState(
+    draft?.capacityEnabled ?? (isNewEvent ? entitlements.event_max_participants !== -1 : !!editEv?.capacity_total)
+  );
+  const [capacity, setCapacity] = useState(
+    draft?.capacity
+    ?? (isNewEvent
+        ? (entitlements.event_max_participants !== -1 ? String(entitlements.event_max_participants) : "")
+        : (editEv?.capacity_total ?? ""))
+  );
+  const [waitlist, setWaitlist] = useState(draft?.waitlist ?? editEv?.waitlist ?? false);
 
-  const [tags, setTags] = useState(["Startup", "Technology"]);
+  const initialTickets = editEv?.tickets
+    ? editEv.tickets.map((t: any) => ({ n: t.name, cap: String(t.capacity || ""), price: String((t.price_minor || 0) / 100) }))
+    : [{ n: "Early Bird", cap: "50", price: "499" }];
+  const [tickets, setTickets] = useState(draft?.tickets ?? initialTickets);
+
+  const [tags, setTags] = useState(draft?.tags ?? editEv?.venue_raw?.meta?.tags ?? editEv?.venue?.meta?.tags ?? ["Startup", "Technology"]);
   const [tagInput, setTagInput] = useState("");
 
-  const [cat, setCat] = useState("Startups");
+  const [cat, setCat] = useState(draft?.cat ?? editEv?.venue_raw?.meta?.category ?? editEv?.venue?.meta?.category ?? "");
+  const [categoriesList, setCategoriesList] = useState([] as any[]);
   const [seoExpanded, setSeoExpanded] = useState(false);
   const [calModalOpen, setCalModalOpen] = useState(false);
   const [descModalOpen, setDescModalOpen] = useState(false);
-  const [instructions, setInstructions] = useState("");
+  const [instructions, setInstructions] = useState(draft?.instructions ?? editEv?.venue_raw?.meta?.instructions ?? editEv?.venue?.meta?.instructions ?? editEv?.instructions ?? editEv?.instructions ?? "");
   const [instModalOpen, setInstModalOpen] = useState(false);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const res = await fetch(`${apiBase}/api/public/categories`);
+        const data = await res.json();
+        if (data.success && data.data) {
+          const active = data.data.filter((c: any) => c.status === 'active' && !c.is_deleted);
+          setCategoriesList(active);
+          // Set default only when no value is chosen yet
+          setCat(prev => prev || (active[0]?.name ?? ""));
+        }
+      } catch (e) {
+        console.error("Failed to fetch categories", e);
+      }
+    };
+
+    // Initial load
+    fetchCategories();
+
+    // Refetch whenever the user switches back to this tab (covers admin changes in another tab/window)
+    const handleFocus = () => fetchCategories();
+    const handleVisibility = () => { if (document.visibilityState === "visible") fetchCategories(); };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    // Poll every 60 s while the form is open (covers same-device same-tab admin edits)
+    const pollInterval = setInterval(fetchCategories, 60_000);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      clearInterval(pollInterval);
+    };
+  }, []);
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [aiInstModalOpen, setAiInstModalOpen] = useState(false);
   const [capacityModalOpen, setCapacityModalOpen] = useState(false);
-  const [joinEligibility, setJoinEligibility] = useState("public");
+  const [questModalOpen, setQuestModalOpen] = useState(false);
+  const [ticketModalOpen, setTicketModalOpen] = useState(false);
+  const [joinEligibility, setJoinEligibility] = useState(draft?.joinEligibility ?? editEv?.venue_raw?.meta?.joinEligibility ?? editEv?.venue?.meta?.joinEligibility ?? "public");
   const [accessModalOpen, setAccessModalOpen] = useState(false);
-  const [selectedAccess, setSelectedAccess] = useState({
+  const [hostModalOpen, setHostModalOpen] = useState(false);
+  const [hostSearchQuery, setHostSearchQuery] = useState("");
+  const [hostFilterType, setHostFilterType] = useState("all");
+  const [selectedAccess, setSelectedAccess] = useState(draft?.selectedAccess ?? editEv?.venue_raw?.meta?.selectedAccess ?? editEv?.venue?.meta?.selectedAccess ?? {
     restricted: {
       communities: [],
       subCommunities: [],
@@ -1542,9 +1917,10 @@ export function CreateEvent({ go, mobile, st }) {
     selectedMembers: []
   });
 
+
   // --- REGISTRATION FORM BUILDER STATES (Phase 3 Schema) ---
-  const [enableRegForm, setEnableRegForm] = useState(false);
-  const [formFields, setFormFields] = useState([
+  const [enableRegForm, setEnableRegForm] = useState(draft?.enableRegForm ?? editEv?.venue_raw?.meta?.enableRegForm ?? editEv?.venue?.meta?.enableRegForm ?? false);
+  const [formFields, setFormFields] = useState(draft?.formFields ?? editEv?.venue_raw?.meta?.formFields ?? editEv?.venue?.meta?.formFields ?? [
     { id: "f-1", type: "text", question: "What is your main area of interest?", required: true, responseType: "short" },
     { id: "f-2", type: "social", question: "LinkedIn Profile URL", required: true, platform: "linkedin" }
   ] as any[]);
@@ -1560,14 +1936,14 @@ export function CreateEvent({ go, mobile, st }) {
       { id: "e-same", name: "Samaagum Developers", type: "Entity (Same-level)" }
     ];
   }, []);
-  const [customEntities, setCustomEntities] = useState(["BLR Founders Collective"]);
+  const [customEntities, setCustomEntities] = useState(draft?.customEntities ?? ["BLR Founders Collective"]);
 
   // --- SPONSORS STATES (Phase 4 Search / Debounce / Pagination) ---
-  const [enableSponsors, setEnableSponsors] = useState(false);
-  const [selectedSponsorIds, setSelectedSponsorIds] = useState(["sp-1", "sp-3"]);
+  const [enableSponsors, setEnableSponsors] = useState(draft?.enableSponsors ?? editEv?.venue_raw?.meta?.enableSponsors ?? editEv?.venue?.meta?.enableSponsors ?? false);
+  const [selectedSponsorIds, setSelectedSponsorIds] = useState(draft?.selectedSponsorIds ?? editEv?.venue_raw?.meta?.selectedSponsorIds ?? editEv?.venue?.meta?.selectedSponsorIds ?? ["sp-1", "sp-3"]);
   const [sponsorSearchQuery, setSponsorSearchQuery] = useState("");
   const [debouncedSponsorQuery, setDebouncedSponsorQuery] = useState("");
-  const [sponsorVisibility, setSponsorVisibility] = useState("public");
+  const [sponsorVisibility, setSponsorVisibility] = useState(draft?.sponsorVisibility ?? editEv?.venue_raw?.meta?.sponsorVisibility ?? editEv?.venue?.meta?.sponsorVisibility ?? "public");
   const [sponsorPage, setSponsorPage] = useState(1);
   const SPONSORS_PER_PAGE = 3;
 
@@ -1588,12 +1964,26 @@ export function CreateEvent({ go, mobile, st }) {
     return () => clearTimeout(handler);
   }, [sponsorSearchQuery]);
 
+  // Host Modal escape listener & focus effect
+  useEffect(() => {
+    if (!hostModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setHostModalOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 50);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [hostModalOpen]);
+
   // --- BANNER UPLOAD STATES & MOCK VALIDATIONS (Phase 2) ---
   const [isDraggingBanner, setIsDraggingBanner] = useState(false);
   const [bannerError, setBannerError] = useState("");
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [showBannerMenu, setShowBannerMenu] = useState(false);
   const fileInputRef = useRef(null);
+  const searchInputRef = useRef(null as any);
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
@@ -1721,6 +2111,14 @@ export function CreateEvent({ go, mobile, st }) {
     date: startDate || "Date TBD", time: startTime ? format24to12(startTime) : "Time TBD",
     venue: locType === "online" ? "Online" : (venue || "Venue TBD"),
     going: 0, price: type === "paid" ? `₹${tickets[0]?.price || "—"}` : "Free", attendees: [],
+  };
+
+  // Full snapshot of every editable field, restored via `editEv.__draft` when returning from Preview.
+  const draftSnapshot = {
+    title, slug, cover, visibility, calendar, startDate, startTime, endDate, endTime,
+    timezone, locType, venue, desc, type, approval, capacityEnabled, capacity, waitlist,
+    tickets, tags, cat, instructions, joinEligibility, selectedAccess, enableRegForm, formFields,
+    enableSponsors, hostEntityId, customEntities, selectedSponsorIds, sponsorVisibility,
   };
 
   const cardStyle = {
@@ -1913,9 +2311,106 @@ export function CreateEvent({ go, mobile, st }) {
     );
   };
 
-  return (
-    <div className={`create ${mobile ? "single" : ""}`}>
-      <style>{`
+  async function handlePublish(isDraft = false) {
+    if (!title.trim()) { setSubmitError("Event name is required."); return; }
+    if (!startDate) { setSubmitError("Start date is required."); return; }
+    setSubmitError("");
+    setLoading(true);
+
+    const token = localStorage.getItem('token');
+    // Upload banner if it's a local data URL / blob
+    let finalCover = cover;
+    if (cover && (cover.startsWith("data:") || cover.startsWith("blob:"))) {
+      try {
+        const blob = await (await fetch(cover)).blob();
+        const form = new FormData();
+        form.append('file', blob, 'event-banner.jpg');
+        const up = await fetch(`${apiBase}/api/upload-group-media`, {
+          method: 'POST',
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+          body: form
+        });
+        const upData = await up.json();
+        if (upData.success && upData.imageUrl) finalCover = upData.imageUrl;
+      } catch (err) {
+        console.error("Banner upload failed", err);
+      }
+    }
+
+    const starts_at = startDate && startTime
+      ? new Date(`${startDate}T${startTime}`).toISOString()
+      : startDate ? new Date(`${startDate}T00:00`).toISOString() : null;
+    const ends_at = endDate && endTime
+      ? new Date(`${endDate}T${endTime}`).toISOString()
+      : endDate ? new Date(`${endDate}T23:59`).toISOString() : null;
+
+    const payload = {
+      host_entity_id: hostEntityId,
+      title: title.trim(),
+      description: desc,
+      cover: finalCover,
+      status: isDraft ? 'draft' : 'published',
+      starts_at,
+      ends_at,
+      venue_timezone: timezone,
+      location_type: locType === 'online' ? 'online' : 'venue',
+      venue: {
+        name: venue,
+        address: venue,
+        visibility,
+        meta: {
+          cover: finalCover,
+          slug, tags, category: cat, instructions,
+          joinEligibility, selectedAccess,
+          enableRegForm, formFields,
+          enableSponsors, selectedSponsorIds
+        }
+      },
+      online_link: locType === 'online' ? venue : null,
+      registration_mode: type === 'free' ? 'free_rsvp' : 'paid',
+      approval_required: approval,
+      capacity_total: capacityEnabled && capacity ? parseInt(capacity) : null,
+      waitlist,
+      tickets: type === 'paid'
+        ? tickets.map((t, i) => ({ name: t.n, capacity: parseInt(t.cap) || null, price_minor: parseInt(t.price) * 100, sort_order: i }))
+        : [{ name: 'Free Admission', price_minor: 0, capacity: capacityEnabled && capacity ? parseInt(capacity) : null, sort_order: 0 }]
+    };
+
+    try {
+      const isEditing = editEv?.id && editEv.id !== 'new';
+      const url = isEditing ? `${apiBase}/api/events/${editEv.id}` : `${apiBase}/api/events`;
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || 'Failed to publish event');
+      
+      const eventObj = isEditing ? data.data : data.data.event;
+      
+      localStorage.removeItem(draftKey);
+      if (st && st.addCreatedEvent) {
+        st.addCreatedEvent(eventObj);
+      }
+      // Refetch all events so new event appears in lists and group tabs
+      if (st && st.fetchEvents) {
+        st.fetchEvents();
+      }
+      go('event', eventObj);
+    } catch (err: any) {
+      setSubmitError(err.message || 'Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const CREATE_EVENT_CSS = `
         .create {
           min-height: 100vh;
           width: 100%;
@@ -2043,7 +2538,7 @@ export function CreateEvent({ go, mobile, st }) {
           background: var(--field);
           border: 1px solid var(--border);
           border-radius: 14px;
-          overflow: hidden;
+          overflow: visible;
         }
 
         .schedule-label {
@@ -2249,7 +2744,13 @@ export function CreateEvent({ go, mobile, st }) {
           border-color: var(--accent-2);
           background: var(--accent-soft);
         }
-      `}</style>
+      `;
+
+  return (
+    <>
+    <div className={`create ${mobile ? "single" : ""}`}>
+      <style dangerouslySetInnerHTML={{ __html: CREATE_EVENT_CSS }} />
+
       <div className="create-form" style={{ backgroundColor: "var(--bg-2)", padding: mobile ? "14px 12px 110px" : "24px 32px 110px", position: "relative" }}>
         <div className="cf-inner" style={{ maxWidth: 1080, margin: "0 auto" }}>
 
@@ -2303,11 +2804,12 @@ export function CreateEvent({ go, mobile, st }) {
                       onChange={(e) => setCat(e.target.value)}
                       style={{ background: "var(--field)", border: "1px solid var(--border)", height: 42 }}
                     >
-                      <option value="Startups">Startups</option>
-                      <option value="Technology">Technology</option>
-                      <option value="Design">Design</option>
-                      <option value="Social">Social</option>
-                      <option value="Workshops">Workshops</option>
+                      <option value="">Select category...</option>
+                      {categoriesList.map((c: any) => (
+                        <option key={c.id} value={c.name}>
+                          {c.icon_value ? `${c.icon_value} ` : ""}{c.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -2379,17 +2881,16 @@ export function CreateEvent({ go, mobile, st }) {
                       <div className={`schedule-label ${startDate || startTime ? "active" : ""}`} style={{ padding: "0 12px", display: "flex", alignItems: "center" }}>
                         ● Start
                       </div>
-                      <input
-                        type="date"
+                      <DatePicker
                         value={startDate}
-                        onChange={(e) => {
-                          const val = e.target.value;
+                        onChange={(val) => {
                           setStartDate(val);
                           if (!endDate || endDate < val) {
                             setEndDate(val);
                           }
                         }}
-                        style={{ height: "100%", padding: "0 12px", borderLeft: "1px solid var(--border)", borderRight: "1px solid var(--border)" }}
+                        mobile={mobile}
+                        compact={true}
                       />
                       <TimePicker
                         value={startTime}
@@ -2408,11 +2909,11 @@ export function CreateEvent({ go, mobile, st }) {
                       <div className="schedule-label" style={{ padding: "0 12px", display: "flex", alignItems: "center" }}>
                         ○ End
                       </div>
-                      <input
-                        type="date"
+                      <DatePicker
                         value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        style={{ height: "100%", padding: "0 12px", borderLeft: "1px solid var(--border)", borderRight: "1px solid var(--border)" }}
+                        onChange={setEndDate}
+                        mobile={mobile}
+                        compact={true}
                       />
                       <TimePicker
                         value={endTime}
@@ -2501,8 +3002,8 @@ export function CreateEvent({ go, mobile, st }) {
                         fontFamily: "inherit"
                       }}
                     >
-                      👥 Restrict to Community
-                      <div style={{ fontSize: 11, fontWeight: 400, color: "var(--ink-3)", marginTop: 4 }}>Only members of selected communities or groups can join.</div>
+                      👥 Restricted Access
+                      <div style={{ fontSize: 11, fontWeight: 400, color: "var(--ink-3)", marginTop: 4 }}>Only members of selected groups can join.</div>
                     </button>
                     <button
                       type="button"
@@ -2529,7 +3030,7 @@ export function CreateEvent({ go, mobile, st }) {
                 {joinEligibility === "restricted" && (
                   <div style={{ marginBottom: 16, padding: 12, background: "var(--field)", borderRadius: "var(--r-md)", border: "1px solid var(--border)", marginTop: -4 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>Allowed Communities & Groups</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>Allowed Groups</span>
                       <button
                         type="button"
                         className="hbtn hbtn--ghost hbtn--sm"
@@ -2566,7 +3067,7 @@ export function CreateEvent({ go, mobile, st }) {
                       })}
                       {getSelectedNodesWithDetails(ACCESS_TREE, selectedAccess.restricted).length === 0 && (
                         <div style={{ fontSize: 13, color: "var(--ink-3)", fontStyle: "italic" }}>
-                          No communities or groups selected yet. Click "Configure" to select.
+                          No groups selected yet. Click "Configure" to select.
                         </div>
                       )}
                     </div>
@@ -2574,24 +3075,34 @@ export function CreateEvent({ go, mobile, st }) {
                 )}
 
                 <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr 1fr", gap: "16px", marginBottom: 20 }}>
-                  <div style={{ padding: 12, background: "var(--field)", borderRadius: "var(--r-md)", border: "1px solid var(--border)" }}>
+                  <div
+                    style={{ padding: 12, background: "var(--field)", borderRadius: "var(--r-md)", border: "1px solid var(--border)", cursor: "pointer" }}
+                    onClick={() => setTicketModalOpen(true)}
+                  >
                     <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Ticket Price</div>
-                    <select 
-                      className="cselect" 
-                      value={type} 
-                      onChange={e => {
-                        const val = e.target.value;
-                        if (val === "paid" && !canCreatePaidTickets) {
-                          triggerUpgrade("Paid Events / Tickets");
-                          return;
-                        }
-                        setType(val);
-                      }} 
-                      style={{ background: "var(--surface)", height: 36, padding: "6px" }}
-                    >
-                      <option value="free">Free</option>
-                      <option value="paid">{!canCreatePaidTickets && "🔒 "}Paid</option>
-                    </select>
+<div style={{ display: "flex", flexDirection: "column", gap: 4, justifyContent: "center", minHeight: 36 }}>
+                      <select
+                        className="cselect"
+                        value={type}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val === "paid" && !canCreatePaidTickets) {
+                            triggerUpgrade("Paid Events / Tickets");
+                            return;
+                          }
+                          setType(val);
+                        }}
+                        style={{ background: "var(--surface)", height: 36, padding: "6px" }}
+                      >
+                        <option value="free">Free</option>
+                        <option value="paid">{!canCreatePaidTickets && "🔒 "}Paid</option>
+                      </select>
+                      {type === "paid" && (
+                        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                          Click to customize tiers &amp; pricing
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div style={{ padding: 12, background: "var(--field)", borderRadius: "var(--r-md)", border: "1px solid var(--border)" }}>
                     <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Require Approval</div>
@@ -2601,21 +3112,11 @@ export function CreateEvent({ go, mobile, st }) {
                     </div>
                   </div>
                   <div
-                    style={{
-                      padding: 12,
-                      background: "var(--field)",
-                      borderRadius: "var(--r-md)",
-                      border: "1px solid var(--border)",
-                      cursor: capacityEnabled ? "pointer" : "default"
-                    }}
-                    onClick={() => {
-                      if (capacityEnabled) {
-                        setCapacityModalOpen(true);
-                      }
-                    }}
+                    style={{ padding: 12, background: "var(--field)", borderRadius: "var(--r-md)", border: "1px solid var(--border)", cursor: "pointer" }}
+                    onClick={() => setCapacityModalOpen(true)}
                   >
                     <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Capacity Limit</div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, height: 36 }}>
+<div style={{ display: "flex", alignItems: "center", gap: 12, height: 36 }}>
                       <Toggle
                         on={capacityEnabled}
                         onClick={(e) => {
@@ -2631,514 +3132,77 @@ export function CreateEvent({ go, mobile, st }) {
                           }
                         }}
                       />
-                      <span style={{ fontSize: 13, color: "var(--ink-2)" }}>{capacityEnabled ? "Limited" : "Unlimited"}</span>
-                    </div>
-                    {capacityEnabled && (
-                      <div style={{ marginTop: 8, fontSize: 12, color: "var(--ink-2)" }}>
-                        <span style={{ fontWeight: 600, color: "var(--ink)" }}>{capacity || "—"} Attendees</span> | {waitlist ? "Waitlist On" : "Waitlist Off"}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4, justifyContent: "center" }}>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
+                          {capacityEnabled ? `${capacity || "—"} Limit` : "Unlimited"}
+                        </span>
+                        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                          {waitlist ? "Waitlist Enabled" : "Waitlist Disabled"}
+                        </span>
                       </div>
-                    )}
+                    </div>
+                    </div>
                   </div>
                 </div>
 
-                {type === "paid" && (
-                  <div className="cfield" style={{ marginBottom: 16 }}>
-                    <label>Ticket Tiers</label>
-                    <div style={{ display: "flex", gap: 8, marginBottom: 6, paddingLeft: 2 }}>
-                      <div style={{ flex: 2, fontSize: 11, fontWeight: 600, color: "var(--ink-2)" }}>Ticket Type</div>
-                      <div style={{ flex: 1, fontSize: 11, fontWeight: 600, color: "var(--ink-2)" }}>Quantity</div>
-                      <div style={{ flex: 1, fontSize: 11, fontWeight: 600, color: "var(--ink-2)" }}>Price</div>
-                      {tickets.length > 1 && <div style={{ width: 36 }} />}
-                    </div>
-                    {tickets.map((t, i) => (
-                      <div key={i} className="ticket-row" style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-                        <input className="cinput" placeholder="Tier name" value={t.n} onChange={e => setTk(i, "n", e.target.value)} style={{ flex: 2 }} />
-                        <input className="cinput" placeholder="Qty" value={t.cap} onChange={e => setTk(i, "cap", e.target.value)} style={{ flex: 1 }} />
-                        <input className="cinput" placeholder="₹ Price" value={t.price} onChange={e => setTk(i, "price", e.target.value)} style={{ flex: 1 }} />
-                        {tickets.length > 1 && <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => setTickets(ts => ts.filter((_, j) => j !== i))} style={{ padding: "0 10px", height: 42 }}><I.x /></button>}
+                <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: "16px", marginBottom: 16 }}>
+                  {/* Sponsors section */}
+                  <div style={{ border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: 16, background: "var(--field)", display: "flex", flexDirection: "column", justifyContent: "center", minHeight: 80 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>Enable Sponsors</div>
+                        <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Promote organizations and display logos.</div>
                       </div>
-                    ))}
-                    <button className="add-row" onClick={() => setTickets(ts => [...ts, { n: "", cap: "", price: "" }])} style={{ marginTop: 8 }}><I.plus />Add ticket type</button>
-                  </div>
-                )}
-
-                {/* Registration Form Builder Toggle & Embed */}
-                <div style={{ border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: 16, background: "var(--field)", marginBottom: 16 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>Enable Registration Form</div>
-                      <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Ask custom questions and collect attendee details.</div>
+                      <Toggle on={enableSponsors} onClick={() => setEnableSponsors(v => !v)} />
                     </div>
-                    <Toggle on={enableRegForm} onClick={() => setEnableRegForm(v => !v)} />
                   </div>
 
-                  {enableRegForm && (
-                    <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border-2)", animation: "slideDown 0.3s ease-out" }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                        <span style={{ fontSize: 12, fontWeight: 700 }}>Custom Questions</span>
-                        <div style={{ position: "relative" }}>
-                          <button
-                            type="button"
-                            className="hbtn hbtn--primary hbtn--sm"
-                            onClick={() => setShowAddFieldMenu(prev => !prev)}
-                            style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 8px", fontSize: 11 }}
-                          >
-                            <I.plus /> Add Field
-                          </button>
-                          {showAddFieldMenu && (
-                            <div
-                              style={{
-                                position: "absolute",
-                                top: "100%",
-                                right: 0,
-                                zIndex: 10,
-                                width: "180px",
-                                background: "var(--surface)",
-                                border: "1px solid var(--border)",
-                                borderRadius: "var(--r-md)",
-                                boxShadow: "var(--sh-lg)",
-                                padding: "4px",
-                                marginTop: "6px",
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: "2px"
-                              }}
-                            >
-                              {[
-                                { type: "text", label: "📝 Text Question" },
-                                { type: "options", label: "🔘 Choice Options" },
-                                { type: "social", label: "🌐 Social Profile" },
-                                { type: "company", label: "🏢 Company Info" },
-                                { type: "checkbox", label: "☑️ Single Checkbox" },
-                                { type: "terms", label: "📜 Terms & Conditions" },
-                                { type: "phone", label: "📞 Phone Number" },
-                                { type: "website", label: "🔗 Website URL" },
-                              ].map(item => (
-                                <button
-                                  key={item.type}
-                                  className="hbtn hbtn--ghost hbtn--sm"
-                                  style={{ width: "100%", textAlign: "left", justifyContent: "flex-start", padding: "6px 10px", fontSize: 11, border: "none" }}
-                                  onClick={() => {
-                                    addField(item.type);
-                                    setShowAddFieldMenu(false);
-                                  }}
-                                >
-                                  {item.label}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                  {/* Registration Form Builder Toggle & Embed */}
+                  <div 
+                    style={{ border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: 16, background: "var(--field)", display: "flex", flexDirection: "column", justifyContent: "center", minHeight: 80, cursor: "pointer" }}
+                    onClick={() => setQuestModalOpen(true)}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>Registration Questionnaire</div>
+                        <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Customize form questions and fields.</div>
                       </div>
-
-                      {/* Render fields */}
-                      {formFields.length === 0 ? (
-                        <div style={{ textAlign: "center", padding: "16px", border: "1.5px dashed var(--border)", borderRadius: "var(--r-md)", color: "var(--ink-3)", fontSize: 12 }}>
-                          Default fields (Name, Email) will be collected.
-                        </div>
-                      ) : (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                          {formFields.map((field, index) => {
-                            const isActive = activeFieldId === field.id;
-                            return (
-                              <div
-                                key={field.id}
-                                style={{
-                                  border: "1px solid var(--border)",
-                                  borderRadius: "var(--r-md)",
-                                  background: isActive ? "var(--bg-2)" : "var(--surface)",
-                                  padding: "12px",
-                                  transition: "all 0.2s ease"
-                                }}
-                              >
-                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isActive ? 12 : 0 }}>
-                                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--accent-2)" }}>
-                                    Question #{index + 1}: {field.type.toUpperCase()}
-                                  </span>
-                                  <div style={{ display: "flex", gap: 6 }}>
-                                    <button
-                                      disabled={index === 0}
-                                      className="hbtn hbtn--ghost hbtn--sm"
-                                      style={{ padding: "4px 8px", minWidth: 0, opacity: index === 0 ? 0.4 : 1, border: "none" }}
-                                      onClick={() => moveField(index, -1)}
-                                    >
-                                      ▲
-                                    </button>
-                                    <button
-                                      disabled={index === formFields.length - 1}
-                                      className="hbtn hbtn--ghost hbtn--sm"
-                                      style={{ padding: "4px 8px", minWidth: 0, opacity: index === formFields.length - 1 ? 0.4 : 1, border: "none" }}
-                                      onClick={() => moveField(index, 1)}
-                                    >
-                                      ▼
-                                    </button>
-                                    <button
-                                      className="hbtn hbtn--ghost hbtn--sm"
-                                      style={{ padding: "4px 8px", minWidth: 0, border: "none" }}
-                                      onClick={() => setActiveFieldId(isActive ? null : field.id)}
-                                    >
-                                      {isActive ? "Collapse" : "✏️ Edit"}
-                                    </button>
-                                    <button
-                                      className="hbtn hbtn--ghost hbtn--sm"
-                                      style={{ padding: "4px 8px", minWidth: 0, color: "#e5484d", border: "none" }}
-                                      onClick={() => deleteField(field.id)}
-                                    >
-                                      ❌ Remove
-                                    </button>
-                                  </div>
-                                </div>
-
-                                {!isActive && (
-                                  <div style={{ fontSize: 13, color: "var(--ink)", marginTop: 6 }}>
-                                    <div style={{ fontWeight: 600 }}>{field.question || "(Empty question text)"}</div>
-                                    <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 4 }}>
-                                      {field.required ? "Required" : "Optional"}
-                                      {field.type === "options" && ` • ${(field.options || []).length} options`}
-                                    </div>
-                                  </div>
-                                )}
-
-                                {isActive && (
-                                  <div style={{ display: "flex", flexDirection: "column", gap: 12, borderTop: "1px solid var(--border-2)", paddingTop: 12 }}>
-                                    <div className="cfield" style={{ marginBottom: 0 }}>
-                                      <label>{field.type === "terms" ? "Terms Title" : "Question / Label"}</label>
-                                      <input
-                                        className="cinput"
-                                        value={field.question}
-                                        onChange={e => editField(field.id, { question: e.target.value })}
-                                        placeholder="e.g. Enter details..."
-                                      />
-                                    </div>
-
-                                    <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "6px 0" }}>
-                                      <input
-                                        type="checkbox"
-                                        id={`req-${field.id}`}
-                                        checked={field.required}
-                                        onChange={e => editField(field.id, { required: e.target.checked })}
-                                        style={{ cursor: "pointer" }}
-                                      />
-                                      <label htmlFor={`req-${field.id}`} style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", cursor: "pointer" }}>
-                                        Required Question
-                                      </label>
-                                    </div>
-
-                                    {field.type === "text" && (
-                                      <div className="cfield" style={{ marginBottom: 0 }}>
-                                        <label>Response Type</label>
-                                        <select
-                                          className="cselect"
-                                          value={field.responseType}
-                                          onChange={e => editField(field.id, { responseType: e.target.value })}
-                                        >
-                                          <option value="short">Short text field</option>
-                                          <option value="paragraph">Paragraph text area</option>
-                                        </select>
-                                      </div>
-                                    )}
-
-                                    {field.type === "options" && (
-                                      <>
-                                        <div className="cfield" style={{ marginBottom: 0 }}>
-                                          <label>Choices Options (one option per line)</label>
-                                          <textarea
-                                            className="ctext"
-                                            style={{ minHeight: 70 }}
-                                            value={(field.options || []).join("\n")}
-                                            onChange={e => editField(field.id, { options: e.target.value.split("\n").filter(Boolean) })}
-                                            placeholder="Option A&#10;Option B"
-                                          />
-                                        </div>
-                                        <div className="cfield" style={{ marginBottom: 0 }}>
-                                          <label>Selection Type</label>
-                                          <select
-                                            className="cselect"
-                                            value={field.selectionType}
-                                            onChange={e => editField(field.id, { selectionType: e.target.value })}
-                                          >
-                                            <option value="single">Single Select (Radio Buttons)</option>
-                                            <option value="multiple">Multi Select (Checkboxes)</option>
-                                          </select>
-                                        </div>
-                                      </>
-                                    )}
-
-                                    {field.type === "social" && (
-                                      <div className="cfield" style={{ marginBottom: 0 }}>
-                                        <label>Social Platform Profile</label>
-                                        <select
-                                          className="cselect"
-                                          value={field.platform}
-                                          onChange={e => editField(field.id, { platform: e.target.value })}
-                                        >
-                                          <option value="linkedin">LinkedIn</option>
-                                          <option value="twitter">Twitter / X</option>
-                                          <option value="github">GitHub</option>
-                                          <option value="any">Any Profile URL</option>
-                                        </select>
-                                      </div>
-                                    )}
-
-                                    {field.type === "company" && (
-                                      <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "6px 0" }}>
-                                        <input
-                                          type="checkbox"
-                                          id={`company-job-${field.id}`}
-                                          checked={field.collectJobTitle}
-                                          onChange={e => editField(field.id, { collectJobTitle: e.target.checked })}
-                                          style={{ cursor: "pointer" }}
-                                        />
-                                        <label htmlFor={`company-job-${field.id}`} style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", cursor: "pointer" }}>
-                                          Collect Job Title
-                                        </label>
-                                      </div>
-                                    )}
-
-                                    {field.type === "terms" && (
-                                      <>
-                                        <div className="cfield" style={{ marginBottom: 0 }}>
-                                          <label>Terms Body Text</label>
-                                          <textarea
-                                            className="ctext"
-                                            style={{ minHeight: 70 }}
-                                            value={field.termsText || ""}
-                                            onChange={e => editField(field.id, { termsText: e.target.value })}
-                                            placeholder="Enter terms guidelines..."
-                                          />
-                                        </div>
-                                        <div className="cfield" style={{ marginBottom: 0 }}>
-                                          <label>External Document Links (Optional)</label>
-                                          <input
-                                            className="cinput"
-                                            value={field.termsLinks || ""}
-                                            onChange={e => editField(field.id, { termsLinks: e.target.value })}
-                                            placeholder="https://yoursite.com/privacy"
-                                          />
-                                        </div>
-                                        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
-                                          <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, cursor: "pointer" }}>
-                                            <input
-                                              type="checkbox"
-                                              checked={field.showTextBeforeAccept}
-                                              onChange={e => editField(field.id, { showTextBeforeAccept: e.target.checked })}
-                                            />
-                                            <span>Show Text Before Accept</span>
-                                          </label>
-                                          <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, cursor: "pointer" }}>
-                                            <input
-                                              type="checkbox"
-                                              checked={field.collectSignature}
-                                              onChange={e => editField(field.id, { collectSignature: e.target.checked })}
-                                            />
-                                            <span>Collect Digital Signature</span>
-                                          </label>
-                                        </div>
-                                      </>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                      <Toggle
+                        on={enableRegForm}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const next = !enableRegForm;
+                          setEnableRegForm(next);
+                          if (next) {
+                            setQuestModalOpen(true);
+                          }
+                        }}
+                      />
                     </div>
-                  )}
-                </div>
-
-                {/* Sponsors section */}
-                <div style={{ border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: 16, background: "var(--field)", marginBottom: 16 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>Enable Sponsors</div>
-                      <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Promote organizations and display logos.</div>
-                    </div>
-                    <Toggle on={enableSponsors} onClick={() => setEnableSponsors(v => !v)} />
                   </div>
-
-                  {enableSponsors && (
-                    <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border-2)", animation: "slideDown 0.3s ease-out" }}>
-                      <div style={{ borderBottom: "1px solid var(--border-2)", paddingBottom: 16, marginBottom: 18 }}>
-                        <div className="cfield" style={{ marginTop: 0, marginBottom: 0 }}>
-                          <label>Sponsor Visibility Mode</label>
-                          <select
-                            className="cselect"
-                            value={sponsorVisibility}
-                            onChange={e => setSponsorVisibility(e.target.value)}
-                            style={{ background: "var(--surface)" }}
-                          >
-                            <option value="public">Public (Visible to all potential sponsors)</option>
-                            <option value="private">Private (Visible only to selected sponsors)</option>
-                            <option value="invited">Invited Only (Visible only to direct invites)</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1.1fr 1fr", gap: 16 }}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>Available Sponsors Network</div>
-                          <input
-                            className="cinput"
-                            placeholder="Search sponsors..."
-                            value={sponsorSearchQuery}
-                            onChange={e => setSponsorSearchQuery(e.target.value)}
-                            style={{ padding: "8px 12px", background: "var(--bg-2)" }}
-                          />
-
-                          <div style={{
-                            border: "1px solid var(--border)",
-                            borderRadius: "var(--r-md)",
-                            background: "var(--surface)",
-                            maxHeight: "180px",
-                            overflowY: "auto",
-                            padding: "6px"
-                          }}>
-                            {(() => {
-                              const filtered = ALL_SPONSORS.filter(sp => {
-                                if (selectedSponsorIds.includes(sp.id)) return false;
-                                if (!debouncedSponsorQuery) return true;
-                                const q = debouncedSponsorQuery.toLowerCase();
-                                return (
-                                  sp.name.toLowerCase().includes(q) ||
-                                  sp.org.toLowerCase().includes(q) ||
-                                  sp.email.toLowerCase().includes(q)
-                                );
-                              });
-
-                              const totalPages = Math.ceil(filtered.length / SPONSORS_PER_PAGE);
-                              const paginated = filtered.slice(
-                                (sponsorPage - 1) * SPONSORS_PER_PAGE,
-                                sponsorPage * SPONSORS_PER_PAGE
-                              );
-
-                              return (
-                                <>
-                                  {paginated.map(sp => (
-                                    <div
-                                      key={sp.id}
-                                      style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "space-between",
-                                        padding: "6px 8px",
-                                        borderRadius: 6,
-                                        borderBottom: "1px solid var(--bg-2)"
-                                      }}
-                                    >
-                                      <div>
-                                        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)" }}>{sp.name}</div>
-                                        <div style={{ fontSize: 10, color: "var(--ink-3)" }}>{sp.org}</div>
-                                      </div>
-                                      <button
-                                        className="hbtn hbtn--ghost hbtn--sm"
-                                        style={{ border: "1px solid var(--border)", padding: "2px 6px", fontSize: 11 }}
-                                        onClick={() => setSelectedSponsorIds([...selectedSponsorIds, sp.id])}
-                                      >
-                                        ➕ Add
-                                      </button>
-                                    </div>
-                                  ))}
-                                  {filtered.length === 0 && (
-                                    <div style={{ padding: 12, textAlign: "center", color: "var(--ink-3)", fontSize: 11 }}>
-                                      No matching sponsors.
-                                    </div>
-                                  )}
-                                  {totalPages > 1 && (
-                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px", borderTop: "1px solid var(--border-2)", marginTop: 6 }}>
-                                      <button
-                                        className="hbtn hbtn--ghost hbtn--sm"
-                                        disabled={sponsorPage === 1}
-                                        onClick={() => setSponsorPage(p => Math.max(1, p - 1))}
-                                        style={{ border: "1px solid var(--border)", padding: "2px 6px", fontSize: 10 }}
-                                      >
-                                        Prev
-                                      </button>
-                                      <span style={{ fontSize: 10, color: "var(--ink-2)" }}>{sponsorPage}/{totalPages}</span>
-                                      <button
-                                        className="hbtn hbtn--ghost hbtn--sm"
-                                        disabled={sponsorPage === totalPages}
-                                        onClick={() => setSponsorPage(p => Math.min(totalPages, p + 1))}
-                                        style={{ border: "1px solid var(--border)", padding: "2px 6px", fontSize: 10 }}
-                                      >
-                                        Next
-                                      </button>
-                                    </div>
-                                  )}
-                                </>
-                              );
-                            })()}
-                          </div>
-                        </div>
-
-                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>Selected Sponsors ({selectedSponsorIds.length})</div>
-                          <div style={{
-                            border: "1px solid var(--border)",
-                            borderRadius: "var(--r-md)",
-                            background: "var(--field)",
-                            minHeight: "180px",
-                            maxHeight: "180px",
-                            overflowY: "auto",
-                            padding: "6px",
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 4
-                          }}>
-                            {selectedSponsorIds.map(id => {
-                              const sp = ALL_SPONSORS.find(s => s.id === id);
-                              if (!sp) return null;
-                              return (
-                                <div
-                                  key={sp.id}
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "space-between",
-                                    padding: "6px 8px",
-                                    borderRadius: "var(--r-sm)",
-                                    background: "var(--surface)",
-                                    border: "1px solid var(--border)"
-                                  }}
-                                >
-                                  <div>
-                                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)" }}>{sp.name}</div>
-                                    <div style={{ fontSize: 10, color: "var(--ink-3)" }}>{sp.org}</div>
-                                  </div>
-                                  <button
-                                    className="hbtn hbtn--ghost hbtn--sm"
-                                    style={{ color: "#e5484d", padding: "2px 6px", fontSize: 10, border: "none" }}
-                                    onClick={() => setSelectedSponsorIds(selectedSponsorIds.filter(sId => sId !== id))}
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
-                              );
-                            })}
-                            {selectedSponsorIds.length === 0 && (
-                              <div style={{ margin: "auto", textAlign: "center", color: "var(--ink-3)", fontSize: 12, fontStyle: "italic" }}>
-                                No sponsors selected.
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* Instructions field */}
                 <div className="cfield" style={{ marginBottom: 0 }}>
                   <label>Event Instructions (Optional)</label>
                   <div
-                    style={{ minHeight: 48, background: "var(--field)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "12px 16px", color: instructions ? "var(--ink)" : "var(--ink-3)", cursor: "pointer", fontSize: 14 }}
+                    style={{
+                      minHeight: 48,
+                      background: "var(--field)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "var(--r-md)",
+                      padding: "12px 16px",
+                      color: instructions ? "var(--ink)" : "var(--ink-3)",
+                      cursor: "pointer",
+                      fontSize: 14,
+                      lineHeight: "1.4"
+                    }}
                     onClick={() => setInstModalOpen(true)}
                   >
-                    {instructions ? instructions : "Click to add attendee instructions (e.g. what to bring, arrival guidelines)."}
+                    {instructions ? (instructions.length > 140 ? instructions.substring(0, 140) + " . . ." : instructions) : "Click to add attendee instructions (e.g. what to bring, arrival guidelines)."}
                   </div>
                 </div>
               </div>
-            </div>
 
             {/* Right Side: Banner Upload Container */}
             <div className="banner-section">
@@ -3194,13 +3258,64 @@ export function CreateEvent({ go, mobile, st }) {
               <div id="cover-picker-label" style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 12 }}>
                 Square ratio (JPG, PNG, WEBP)
               </div>
-            </div>
 
+              {/* Host as Card Trigger */}
+              <div 
+                onClick={() => setHostModalOpen(true)}
+                style={{
+                  marginTop: 20,
+                  padding: "16px 18px",
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "var(--r-lg)",
+                  boxShadow: "var(--sh-sm)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  transition: "border-color 0.2s, background 0.2s"
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = "var(--accent-2)";
+                  e.currentTarget.style.background = "var(--bg-2)";
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = "var(--border)";
+                  e.currentTarget.style.background = "var(--surface)";
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  {hostEntityId === "standalone" ? (
+                    <Avatar name={ME.name} size={32} />
+                  ) : (() => {
+                    const grp = hostGroups.find(g => g.entity_id === hostEntityId);
+                    return (
+                      <div style={{
+                        width: 32, height: 32, borderRadius: 8, overflow: "hidden",
+                        background: grp?.cover || "var(--accent-2)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 14, color: "#fff", fontWeight: "bold"
+                      }}>
+                        {grp?.icon || grp?.name?.[0]?.toUpperCase() || "👥"}
+                      </div>
+                    );
+                  })()}
+                  <div style={{ textAlign: "left" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Hosted by</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", marginTop: 2 }}>
+                      {hostEntityId === "standalone" ? ME.name : (hostGroups.find(g => g.entity_id === hostEntityId)?.name || "Select Host")}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ color: "var(--ink-3)", display: "flex", alignItems: "center" }}>
+                  <I.chevD style={{ width: 16, height: 16 }} />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Full Modals */}
       {tzModalOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
           <div style={{ background: "var(--surface)", width: 400, borderRadius: "var(--r-xl)", padding: 32, boxShadow: "var(--sh-xl)" }}>
@@ -3248,6 +3363,215 @@ export function CreateEvent({ go, mobile, st }) {
           </div>
         </div>
       )}
+
+      {/* Host Selection Modal */}
+      {hostModalOpen && (() => {
+        const modalWidth = mobile ? "100%" : "520px";
+        const modalHeight = mobile ? "80%" : "auto";
+        const modalAlignSelf = mobile ? "flex-end" : "center";
+        const modalBorderRadius = mobile ? "20px 20px 0 0" : "var(--r-xl)";
+
+        const isCommunity = (g: any) => {
+          const name = (g.name || "").toLowerCase();
+          return name.includes("community") || 
+                 name.includes("hub") || 
+                 name.includes("collective") || 
+                 name.includes("network") || 
+                 name.includes("association") || 
+                 name.includes("tech") || 
+                 name.includes("india") || 
+                 name.includes("society");
+        };
+
+        const filteredPersonal = (hostSearchQuery.trim() === "" || ME.name.toLowerCase().includes(hostSearchQuery.toLowerCase())) && (hostFilterType === "all");
+        
+        const filteredGroups = hostGroups.filter(g => {
+          const matchesSearch = g.name.toLowerCase().includes(hostSearchQuery.toLowerCase());
+          const matchesFilter = hostFilterType === "all" || hostFilterType === "group";
+          return matchesSearch && matchesFilter && !isCommunity(g);
+        });
+
+        const filteredCommunities = hostGroups.filter(g => {
+          const matchesSearch = g.name.toLowerCase().includes(hostSearchQuery.toLowerCase());
+          const matchesFilter = hostFilterType === "all" || hostFilterType === "community";
+          return matchesSearch && matchesFilter && isCommunity(g);
+        });
+
+        const handleOverlayClick = (e: any) => {
+          if (e.target === e.currentTarget) {
+            setHostModalOpen(false);
+          }
+        };
+
+        return (
+          <div 
+            onClick={handleOverlayClick}
+            style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: modalAlignSelf, justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+          >
+            <div style={{ background: "var(--surface)", width: modalWidth, maxHeight: mobile ? "90%" : "650px", height: modalHeight, borderRadius: modalBorderRadius, display: "flex", flexDirection: "column", boxShadow: "var(--sh-xl)", overflow: "hidden" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: "1px solid var(--border)" }}>
+                <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: "var(--ink)" }}>Host As</h2>
+                <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => setHostModalOpen(false)} style={{ border: "none" }}><I.x /></button>
+              </div>
+              
+              {/* Search and Filter Row */}
+              <div style={{ padding: "16px 24px 8px 24px", display: "flex", gap: 10 }}>
+                <input
+                  ref={searchInputRef}
+                  className="cinput"
+                  placeholder="Search..."
+                  value={hostSearchQuery}
+                  onChange={e => setHostSearchQuery(e.target.value)}
+                  style={{ flex: 1, height: 40, background: "var(--field)", border: "1px solid var(--border)" }}
+                />
+                <select
+                  className="cselect"
+                  value={hostFilterType}
+                  onChange={e => setHostFilterType(e.target.value as any)}
+                  style={{ width: 140, height: 40, background: "var(--field)", border: "1px solid var(--border)" }}
+                >
+                  <option value="all">All Types</option>
+                  <option value="group">Groups</option>
+                  <option value="community">Communities</option>
+                </select>
+              </div>
+
+              {/* List options */}
+              <div style={{ flex: 1, overflowY: "auto", padding: "12px 24px" }}>
+                {/* Personal Section */}
+                {filteredPersonal && (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 8, letterSpacing: "0.05em" }}>Personal</div>
+                    <button
+                      type="button"
+                      onClick={() => setHostEntityId("standalone")}
+                      style={{
+                        width: "100%", display: "flex", alignItems: "center", justifyItems: "flex-start", gap: 12,
+                        padding: "10px 14px", borderRadius: "var(--r-md)",
+                        border: hostEntityId === "standalone" ? "2px solid var(--accent-2)" : "1px solid var(--border)",
+                        background: hostEntityId === "standalone" ? "var(--accent-soft)" : "var(--surface)",
+                        cursor: "pointer", transition: "all 0.15s", textAlign: "left"
+                      }}
+                    >
+                      <input type="radio" checked={hostEntityId === "standalone"} readOnly style={{ accentColor: "var(--accent-2)" }} />
+                      <Avatar name={ME.name} size={28} />
+                      <div>
+                        <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: 13 }}>{ME.name}</div>
+                        <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 1 }}>Personal profile</div>
+                      </div>
+                    </button>
+                  </div>
+                )}
+
+                {/* Groups Section */}
+                {filteredGroups.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 8, letterSpacing: "0.05em" }}>Groups</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {filteredGroups.map(grp => (
+                        <button
+                          key={grp.entity_id}
+                          type="button"
+                          onClick={() => setHostEntityId(grp.entity_id)}
+                          style={{
+                            width: "100%", display: "flex", alignItems: "center", justifyItems: "flex-start", gap: 12,
+                            padding: "10px 14px", borderRadius: "var(--r-md)",
+                            border: hostEntityId === grp.entity_id ? "2px solid var(--accent-2)" : "1px solid var(--border)",
+                            background: hostEntityId === grp.entity_id ? "var(--accent-soft)" : "var(--surface)",
+                            cursor: "pointer", transition: "all 0.15s", textAlign: "left"
+                          }}
+                        >
+                          <input type="radio" checked={hostEntityId === grp.entity_id} readOnly style={{ accentColor: "var(--accent-2)" }} />
+                          <div style={{
+                            width: 28, height: 28, borderRadius: 6, overflow: "hidden",
+                            background: grp.cover || "var(--accent-2)",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: 12, color: "#fff", fontWeight: "bold", flexShrink: 0
+                          }}>
+                            {grp.icon || grp.name?.[0]?.toUpperCase()}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: 13 }}>{grp.name}</div>
+                            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 1 }}>
+                              {grp.role === 'owner' ? 'Owner' : 'Admin'} · Group
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Communities Section */}
+                {filteredCommunities.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 8, letterSpacing: "0.05em" }}>Communities</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {filteredCommunities.map(grp => (
+                        <button
+                          key={grp.entity_id}
+                          type="button"
+                          onClick={() => setHostEntityId(grp.entity_id)}
+                          style={{
+                            width: "100%", display: "flex", alignItems: "center", justifyItems: "flex-start", gap: 12,
+                            padding: "10px 14px", borderRadius: "var(--r-md)",
+                            border: hostEntityId === grp.entity_id ? "2px solid var(--accent-2)" : "1px solid var(--border)",
+                            background: hostEntityId === grp.entity_id ? "var(--accent-soft)" : "var(--surface)",
+                            cursor: "pointer", transition: "all 0.15s", textAlign: "left"
+                          }}
+                        >
+                          <input type="radio" checked={hostEntityId === grp.entity_id} readOnly style={{ accentColor: "var(--accent-2)" }} />
+                          <div style={{
+                            width: 28, height: 28, borderRadius: 6, overflow: "hidden",
+                            background: grp.cover || "var(--accent-2)",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: 12, color: "#fff", fontWeight: "bold", flexShrink: 0
+                          }}>
+                            {grp.icon || grp.name?.[0]?.toUpperCase()}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: 13 }}>{grp.name}</div>
+                            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 1 }}>
+                              {grp.role === 'owner' ? 'Owner' : 'Admin'} · Community
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* No results empty state */}
+                {!filteredPersonal && filteredGroups.length === 0 && filteredCommunities.length === 0 && (
+                  <div style={{ textAlign: "center", padding: "32px 16px", color: "var(--ink-3)", fontSize: 14 }}>
+                    No host profiles match your search criteria.
+                  </div>
+                )}
+              </div>
+
+              {/* Footer buttons */}
+              <div style={{ display: "flex", gap: 12, padding: "16px 24px", borderTop: "1px solid var(--border)", background: "var(--bg-2)" }}>
+                <button 
+                  type="button" 
+                  className="hbtn hbtn--ghost" 
+                  style={{ flex: 1 }} 
+                  onClick={() => setHostModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="button" 
+                  className="hbtn hbtn--primary" 
+                  style={{ flex: 1 }} 
+                  onClick={() => setHostModalOpen(false)}
+                >
+                  Select
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {calModalOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
@@ -3394,72 +3718,17 @@ export function CreateEvent({ go, mobile, st }) {
         </div>
       )}
 
-      {capacityModalOpen && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
-          <div style={{ background: "var(--surface)", width: 400, borderRadius: "var(--r-xl)", padding: 32, boxShadow: "var(--sh-xl)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>Capacity Settings</h2>
-              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => setCapacityModalOpen(false)} style={{ border: "none" }}><I.x /></button>
-            </div>
-
-            <div className="cfield">
-              <label>Maximum Capacity</label>
-              {eventMaxParticipants !== -1 && (
-                <div style={{ padding: "8px 10px", background: "var(--field-2, var(--field))", borderRadius: "var(--r-sm)", border: "1px dashed var(--accent)", fontSize: "11px", color: "var(--ink-2)", marginBottom: 12 }}>
-                  🔒 Under your current plan, event capacity is capped at a maximum of <strong>{eventMaxParticipants}</strong> participants. Upgrade to Standard for unlimited capacity.
-                </div>
-              )}
-              <input
-                className="cinput"
-                placeholder="e.g. 100"
-                value={capacity}
-                onChange={(e) => setCapacity(e.target.value)}
-                style={{ width: "100%", background: "var(--field)", border: "1px solid var(--border)" }}
-              />
-            </div>
-
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                marginTop: 20,
-                cursor: "pointer",
-                userSelect: "none",
-                fontSize: 13,
-                fontWeight: 600,
-                color: "var(--ink-2)"
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={waitlist}
-                onChange={(e) => setWaitlist(e.target.checked)}
-                style={{ cursor: "pointer" }}
-              />
-              Enable Waitlist
-            </label>
-
-            <div style={{ display: "flex", gap: 12, marginTop: 32 }}>
-              <button className="hbtn hbtn--ghost" style={{ flex: 1 }} onClick={() => setCapacityModalOpen(false)}>Cancel</button>
-              <button 
-                className="hbtn hbtn--primary" 
-                style={{ flex: 1 }} 
-                onClick={() => {
-                  if (eventMaxParticipants !== -1 && (!capacity || parseInt(capacity) > eventMaxParticipants || parseInt(capacity) < 1)) {
-                    alert(`Event capacity must be between 1 and ${eventMaxParticipants} participants under your current plan.`);
-                    triggerUpgrade(`Event Capacity > ${eventMaxParticipants}`);
-                    return;
-                  }
-                  setCapacityModalOpen(false);
-                }}
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CapacitySettingsModal
+        open={capacityModalOpen}
+        onClose={() => setCapacityModalOpen(false)}
+        capacityEnabled={capacityEnabled}
+        setCapacityEnabled={setCapacityEnabled}
+        capacity={capacity}
+        setCapacity={setCapacity}
+        waitlist={waitlist}
+        setWaitlist={setWaitlist}
+        eventMaxParticipants={eventMaxParticipants}
+      />
 
       <AccessControlModal
         open={accessModalOpen}
@@ -3469,12 +3738,617 @@ export function CreateEvent({ go, mobile, st }) {
         setSelectedAccess={setSelectedAccess}
       />
 
-      <div className="create-foot" style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100, borderTop: "1px solid var(--border)", background: "rgba(255, 255, 255, 0.8)", backdropFilter: "blur(12px)", padding: mobile ? "10px 12px" : "10px 24px", display: "flex", gap: "10px" }}>
-        <button className="hbtn hbtn--ghost" onClick={() => go("home")}>Cancel</button>
+      <TicketSettingsModal
+        open={ticketModalOpen}
+        onClose={() => setTicketModalOpen(false)}
+        type={type}
+        setType={setType}
+        tickets={tickets}
+        setTickets={setTickets}
+        setTk={setTk}
+        mobile={mobile}
+        upgradeModalOpen={upgradeModalOpen}
+        setUpgradeModalOpen={setUpgradeModalOpen}
+        upgradeFeature={upgradeFeature}
+        setUpgradeFeature={setUpgradeFeature}
+        st={st}
+        go={go}
+      />
+
+      <QuestionnaireModal
+        open={questModalOpen}
+        onClose={() => setQuestModalOpen(false)}
+        formFields={formFields}
+        setFormFields={setFormFields}
+        enableRegForm={enableRegForm}
+        setEnableRegForm={setEnableRegForm}
+        moveField={moveField}
+      />
+
+      <div className="create-foot" style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100, borderTop: "1px solid var(--border)", background: "rgba(255, 255, 255, 0.8)", backdropFilter: "blur(12px)", padding: mobile ? "10px 12px" : "10px 24px", display: "flex", gap: "10px", alignItems: "center" }}>
+        <button className="hbtn hbtn--ghost" onClick={() => { localStorage.removeItem(draftKey); go("home"); }} disabled={loading}>Cancel</button>
+        {submitError && <span style={{ color: "red", fontSize: "12px" }}>{submitError}</span>}
         <div className="sp" style={{ flex: 1 }} />
-        <button className="hbtn hbtn--ghost">Save draft</button>
-        <button className="hbtn hbtn--ghost" style={{ display: "flex", alignItems: "center", gap: 8 }} onClick={() => go("event", { ...previewEv, id: "new", host: ME.name, hostBy: ME.name, city: "Bengaluru", cap: capacity || 180, desc })}><I.external /> Preview</button>
-        <button className="hbtn hbtn--primary" onClick={() => go("event", { ...previewEv, id: "new", host: ME.name, hostBy: ME.name, city: "Bengaluru", cap: capacity || 180, desc })}><I.check />Publish Event</button>
+        <button className="hbtn hbtn--ghost" onClick={() => handlePublish(true)} disabled={loading}>
+          {loading ? "Saving..." : "Save draft"}
+        </button>
+        <button className="hbtn hbtn--ghost" style={{ display: "flex", alignItems: "center", gap: 8 }} onClick={() => go("event", { ...previewEv, id: "new", host: ME.name, hostBy: ME.name, city: "Bengaluru", cap: capacity || 180, desc, formFields, __draft: draftSnapshot })} disabled={loading}>
+          <I.external /> Preview
+        </button>
+        <button className="hbtn hbtn--primary" onClick={() => handlePublish(false)} disabled={loading}>
+          <I.check /> {loading ? "Publishing..." : "Publish Event"}
+        </button>
+      </div>
+    </div>
+    </>
+  );
+}
+
+function CapacitySettingsModal({ open, onClose, capacityEnabled, setCapacityEnabled, capacity, setCapacity, waitlist, setWaitlist, eventMaxParticipants }: any) {
+  const [tempEnabled, setTempEnabled] = useState(capacityEnabled);
+  const [tempCapacity, setTempCapacity] = useState(capacity);
+  const [tempWaitlist, setTempWaitlist] = useState(waitlist);
+
+  useEffect(() => {
+    if (open) {
+      setTempEnabled(capacityEnabled);
+      setTempCapacity(capacity);
+      setTempWaitlist(waitlist);
+    }
+  }, [open, capacityEnabled, capacity, waitlist]);
+
+  if (!open) return null;
+
+  const handleSave = () => {
+    if (tempEnabled && (!tempCapacity || parseInt(tempCapacity) < 1)) {
+      alert("Please enter a valid capacity (at least 1).");
+      return;
+    }
+    setCapacityEnabled(tempEnabled);
+    setCapacity(tempEnabled ? tempCapacity : "");
+    setWaitlist(tempWaitlist);
+    onClose();
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
+      <div style={{ background: "var(--surface)", width: 400, borderRadius: "var(--r-xl)", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "var(--sh-xl)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "24px 24px 12px" }}>
+          <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>Capacity Settings</h2>
+          <button className="hbtn hbtn--ghost hbtn--sm" onClick={onClose} style={{ border: "none" }}><I.x /></button>
+        </div>
+
+        <div style={{ padding: "0 24px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Toggle: Enable Capacity Limit */}
+          <div className="switch-container" style={{ alignItems: "flex-start" }}>
+            <div className="switch-label-wrapper">
+              <span className="switch-title" style={{ fontSize: 15 }}>Enable Capacity Limit</span>
+            </div>
+            <label className="switch">
+              <input
+                type="checkbox"
+                checked={tempEnabled}
+                onChange={(e) => setTempEnabled(e.target.checked)}
+              />
+              <span className="slider"></span>
+            </label>
+          </div>
+
+{/* Input: Max Capacity */}
+          {tempEnabled && (
+            <div className="cfield" style={{ marginBottom: 0, animation: "fadeIn 0.2s" }}>
+              <label style={{ fontSize: 13, color: "var(--ink-3)", fontWeight: 600, marginBottom: 8, display: "block" }}>Max Capacity</label>
+              {eventMaxParticipants !== -1 && (
+                <div style={{ padding: "8px 10px", background: "var(--field-2, var(--field))", borderRadius: "var(--r-sm)", border: "1px dashed var(--accent)", fontSize: "11px", color: "var(--ink-2)", marginBottom: 12 }}>
+                  🔒 Under your current plan, event capacity is capped at a maximum of <strong>{eventMaxParticipants}</strong> participants. Upgrade to Standard for unlimited capacity.
+                </div>
+              )}
+              <input
+                type="number"
+                className="cinput"
+                placeholder="50"
+                value={tempCapacity}
+                onChange={(e) => setTempCapacity(e.target.value)}
+                style={{ width: "100%", background: "var(--field)", border: "1px solid var(--border)", height: 44, borderRadius: "10px", padding: "0 14px", fontSize: 14 }}
+              />
+            </div>
+          )}
+
+          {/* Toggle: Enable Waitlist */}
+          <div className="switch-container" style={{ alignItems: "flex-start" }}>
+            <div className="switch-label-wrapper">
+              <span className="switch-title" style={{ fontSize: 15 }}>Enable Waitlist</span>
+              <span className="switch-desc" style={{ fontSize: 12 }}>Registrations above capacity are added to the waitlist.</span>
+            </div>
+            <label className="switch">
+              <input
+                type="checkbox"
+                checked={tempWaitlist}
+                onChange={(e) => setTempWaitlist(e.target.checked)}
+              />
+              <span className="slider"></span>
+            </label>
+          </div>
+        </div>
+{/* Footer */}
+        <div style={{ padding: "16px 24px", background: "var(--bg-2)", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+          <button
+            className="hbtn hbtn--ghost"
+            onClick={onClose}
+            style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: "999px", padding: "10px 20px", fontWeight: 600, fontSize: 13 }}
+          >
+            Cancel
+          </button>
+          <button
+            className="hbtn hbtn--primary"
+            onClick={handleSave}
+            style={{ background: "linear-gradient(135deg, #ff4e50, #f9d423)", border: "none", color: "#fff", borderRadius: "999px", padding: "10px 24px", fontWeight: 600, fontSize: 13, boxShadow: "0 4px 12px rgba(255, 78, 80, 0.2)" }}
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CapacityModal({ open, onClose, capacity, setCapacity, waitlist, setWaitlist, eventMaxParticipants, triggerUpgrade }: any) {
+  if (!open) return null;
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
+      <div style={{ background: "var(--surface)", width: 420, borderRadius: "20px", padding: 24, boxShadow: "var(--sh-xl)" }}>
+        {/* NOTE: Max Capacity input + plan-limit notice (merged earlier) render here */}
+
+        <div style={{ display: "flex", gap: 12, marginTop: 32 }}>
+          <button className="hbtn hbtn--ghost" style={{ flex: 1 }} onClick={() => onClose()}>Cancel</button>
+          <button
+            className="hbtn hbtn--primary"
+            style={{ flex: 1 }}
+            onClick={() => {
+              if (eventMaxParticipants !== -1 && (!capacity || parseInt(capacity) > eventMaxParticipants || parseInt(capacity) < 1)) {
+                alert(`Event capacity must be between 1 and ${eventMaxParticipants} participants under your current plan.`);
+                triggerUpgrade(`Event Capacity > ${eventMaxParticipants}`);
+                return;
+              }
+              onClose();
+            }}
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QuestionnaireModal({ open, onClose, formFields, setFormFields, enableRegForm, setEnableRegForm, moveField }: any) {
+  const [activeTab, setActiveTab] = useState("selected");
+  // Custom question form states
+  const [customText, setCustomText] = useState("");
+  const [customType, setCustomType] = useState("text"); // "text" | "paragraph" | "options" | "social" | "company"
+  const [customRequired, setCustomRequired] = useState(false);
+  const [customOptions, setCustomOptions] = useState(["Option 1", "Option 2"]);
+  const [editingId, setEditingId] = useState(null as string | null);
+  if (!open) return null;
+  const libraryQuestions = [
+    { type: "text", question: "What motivates you to join?", required: false },
+    { type: "social", question: "LinkedIn Profile URL", required: true, platform: "linkedin" },
+    { type: "text", question: "What is your main area of interest?", required: true },
+    { type: "company", question: "Company / Organization Name", required: false },
+    { type: "text", question: "Dietary restrictions or allergies?", required: false },
+    { type: "text", question: "Phone Number", required: false }
+  ];
+  const handleAddFromLibrary = (q: any) => {
+    const newField = {
+      id: "f-" + Date.now() + Math.random(),
+      type: q.type,
+      question: q.question,
+      required: q.required,
+      ...(q.platform ? { platform: q.platform } : {})
+    };
+    setFormFields([...formFields, newField]);
+  };
+  const handleAddCustom = () => {
+    if (!customText.trim()) return;
+    const fieldData = {
+      type: customType,
+      question: customText.trim(),
+      required: customRequired,
+      ...(customType === "options" ? { options: customOptions.filter(o => o.trim() !== "") } : {})
+    };
+    if (editingId) {
+      setFormFields(formFields.map((f: any) => f.id === editingId ? { ...f, ...fieldData } : f));
+      setEditingId(null);
+    } else {
+      setFormFields([...formFields, { id: "f-" + Date.now(), ...fieldData }]);
+    }
+    setCustomText("");
+    setCustomRequired(false);
+    setCustomOptions(["Option 1", "Option 2"]);
+    setActiveTab("selected"); // go to selected tab to see it
+  };
+  const handleEditField = (field: any) => {
+    setEditingId(field.id);
+    setCustomText(field.question || "");
+    setCustomType(field.type || "text");
+    setCustomRequired(!!field.required);
+    setCustomOptions(field.options && field.options.length > 0 ? field.options : ["Option 1", "Option 2"]);
+    setActiveTab("custom");
+  };
+  const handleRemove = (id: string) => {
+    if (editingId === id) setEditingId(null);
+    setFormFields(formFields.filter(f => f.id !== id));
+  };
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
+      <div style={{ background: "var(--surface)", width: 460, height: 520, borderRadius: "20px", display: "flex", flexDirection: "column", boxShadow: "var(--sh-xl)", overflow: "hidden" }}>
+        {/* Header */}
+        <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: "var(--ink)" }}>Join Questionnaire</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ border: "none", background: "var(--border-2)", borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--ink-2)" }}
+          >
+            <I.x style={{ width: 14, height: 14 }} />
+          </button>
+        </div>
+        {/* Toggle inside modal */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 24px", background: "var(--bg-2)", borderBottom: "1px solid var(--border)" }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)" }}>Enable Registration Form</div>
+            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Require custom questions for attendees</div>
+          </div>
+          <Toggle on={enableRegForm} onClick={() => setEnableRegForm(!enableRegForm)} />
+        </div>
+        {enableRegForm ? (
+          <>
+            {/* Tab Headers */}
+            <div style={{ display: "flex", borderBottom: "1px solid var(--border)", background: "var(--bg-2)" }}>
+              {["selected", "library", "custom"].map(tab => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => {
+                    if (tab !== "custom" && editingId) {
+                      setEditingId(null);
+                      setCustomText("");
+                      setCustomRequired(false);
+                      setCustomOptions(["Option 1", "Option 2"]);
+                    }
+                    setActiveTab(tab);
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: "14px 0",
+                    background: "transparent",
+                    border: "none",
+                    borderBottom: activeTab === tab ? "2px solid #6366f1" : "2px solid transparent",
+                    color: activeTab === tab ? "#6366f1" : "var(--ink-3)",
+                    fontWeight: 600,
+                    fontSize: 13,
+                    cursor: "pointer",
+                    textTransform: "capitalize",
+                    fontFamily: "inherit"
+                  }}
+                >
+                  {tab === "selected" ? "Selected" : tab === "library" ? "Library" : "Custom"}
+                </button>
+              ))}
+            </div>
+            {/* Body Content */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
+              {/* TAB 1: SELECTED */}
+              {activeTab === "selected" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {formFields.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--ink-3)", fontSize: 13 }}>
+                      No questions added yet. Choose from the Library or add a Custom question.
+                    </div>
+                  ) : (
+                    formFields.map((field: any, idx: number) => (
+                      <div key={field.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px", background: "var(--bg-2)", borderRadius: "10px", border: "1px solid var(--border)" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: "var(--accent-2)" }}>Q#{idx + 1}: {field.type}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{field.question}</span>
+                          <span style={{ fontSize: 11, color: "var(--ink-3)" }}>{field.required ? "Required" : "Optional"}</span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                          <button
+                            type="button"
+                            onClick={() => moveField(idx, -1)}
+                            disabled={idx === 0}
+                            style={{ border: "none", background: "transparent", color: idx === 0 ? "var(--border-2)" : "var(--ink-3)", cursor: idx === 0 ? "default" : "pointer", padding: 6, display: "flex" }}
+                          >
+                            <I.chevD style={{ width: 14, height: 14, transform: "rotate(180deg)" }} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveField(idx, 1)}
+                            disabled={idx === formFields.length - 1}
+                            style={{ border: "none", background: "transparent", color: idx === formFields.length - 1 ? "var(--border-2)" : "var(--ink-3)", cursor: idx === formFields.length - 1 ? "default" : "pointer", padding: 6, display: "flex" }}
+                          >
+                            <I.chevD style={{ width: 14, height: 14 }} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEditField(field)}
+                            style={{ border: "none", background: "transparent", color: "var(--ink-3)", cursor: "pointer", padding: 6, display: "flex" }}
+                          >
+                            <I.edit style={{ width: 16, height: 16 }} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemove(field.id)}
+                            style={{ border: "none", background: "transparent", color: "#e5484d", cursor: "pointer", padding: 6, display: "flex" }}
+                          >
+                            <I.x style={{ width: 16, height: 16 }} />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+              {/* TAB 2: LIBRARY */}
+              {activeTab === "library" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {libraryQuestions.map((q, idx) => {
+                    const alreadyAdded = formFields.some(f => f.question === q.question);
+                    return (
+                      <div key={idx} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px", background: "var(--surface)", borderRadius: "10px", border: "1px solid var(--border)" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{q.question}</span>
+                          <span style={{ fontSize: 11, color: "var(--ink-3)" }}>Type: {q.type} • {q.required ? "Required" : "Optional"}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleAddFromLibrary(q)}
+                          disabled={alreadyAdded}
+                          style={{
+                            border: "none",
+                            background: alreadyAdded ? "var(--border-2)" : "var(--accent-soft)",
+                            color: alreadyAdded ? "var(--accent-2)" : "var(--ink-3)",
+                            borderRadius: "14px",
+                            padding: "6px 12px",
+                            fontWeight: 600,
+                            fontSize: 12,
+                            cursor: alreadyAdded ? "default" : "pointer",
+                            fontFamily: "inherit"
+                          }}
+                        >
+                          {alreadyAdded ? "Added" : "+ Add"}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {/* TAB 3: CUSTOM */}
+              {activeTab === "custom" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <div className="cfield" style={{ marginBottom: 0 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)", marginBottom: 8, display: "block" }}>Question Text</label>
+                    <input
+                      className="cinput"
+                      placeholder="e.g. What motivates you to join?"
+                      value={customText}
+                      onChange={e => setCustomText(e.target.value)}
+                      style={{ width: "100%", background: "var(--field)", border: "1px solid var(--border)", height: 44, borderRadius: "10px", padding: "0 14px" }}
+                    />
+                  </div>
+                  <div style={{ display: "flex", gap: 16 }}>
+                    <div className="cfield" style={{ marginBottom: 0, flex: 1 }}>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)", marginBottom: 8, display: "block" }}>Type</label>
+                      <select
+                        className="cselect"
+                        value={customType}
+                        onChange={e => setCustomType(e.target.value)}
+                        style={{ background: "var(--field)", border: "1px solid var(--border)", height: 44, borderRadius: "10px" }}
+                      >
+                        <option value="text">Short Answer</option>
+                        <option value="paragraph">Paragraph</option>
+                        <option value="options">Multiple Choice</option>
+                        <option value="social">Social Link</option>
+                        <option value="company">Company Info</option>
+                      </select>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-2)", marginBottom: 4 }}>Required</span>
+                      <Toggle on={customRequired} onClick={() => setCustomRequired(!customRequired)} />
+                    </div>
+                  </div>
+                  {customType === "options" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8, padding: 12, background: "var(--bg-2)", borderRadius: "10px", border: "1px solid var(--border)" }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>Multiple Choice Options</span>
+                      {customOptions.map((opt, oIdx) => (
+                        <div key={oIdx} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <input
+                            className="cinput"
+                            placeholder={`Option ${oIdx + 1}`}
+                            value={opt}
+                            onChange={e => {
+                              const next = [...customOptions];
+                              next[oIdx] = e.target.value;
+                              setCustomOptions(next);
+                            }}
+                            style={{ flex: 1, background: "var(--field)", border: "1px solid var(--border)", height: 36, borderRadius: "8px", padding: "0 10px", fontSize: 13 }}
+                          />
+                          {customOptions.length > 2 && (
+                            <button
+                              type="button"
+                              onClick={() => setCustomOptions(customOptions.filter((_, idx) => idx !== oIdx))}
+                              style={{ border: "none", background: "transparent", color: "#e5484d", cursor: "pointer", padding: "4px 8px" }}
+                            >
+                              <I.x style={{ width: 14, height: 14 }} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setCustomOptions([...customOptions, ""])}
+                        style={{ alignSelf: "flex-start", background: "transparent", border: "none", color: "var(--accent-2)", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "4px 0", display: "flex", alignItems: "center", gap: 4 }}
+                      >
+                        + Add Option
+                      </button>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleAddCustom}
+                    style={{
+                      background: "linear-gradient(135deg, #ff8a00, #da1b60)",
+                      border: "none",
+                      color: "#fff",
+                      borderRadius: "999px",
+                      padding: "12px 24px",
+                      fontWeight: 600,
+                      fontSize: 14,
+                      cursor: "pointer",
+                      marginTop: 12,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
+                      fontFamily: "inherit"
+                    }}
+                  >
+                    {editingId ? "Save Changes" : "+ Add Question"}
+                  </button>
+                </div>
+              )}            </div>
+          </>
+        ) : (
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "var(--ink-3)", padding: 40, textAlign: "center" }}>
+            <span style={{ fontSize: 40, marginBottom: 12 }}>📋</span>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-2)" }}>Registration Form is Disabled</div>
+            <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4, maxWidth: 280 }}>Toggle it on at the top to ask custom questions.</div>
+          </div>
+        )}
+        {/* Footer */}
+        <div style={{ padding: "16px 24px", background: "var(--bg-2)", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            className="hbtn hbtn--primary"
+            onClick={onClose}
+            style={{ background: "linear-gradient(135deg, #ff4e50, #f9d423)", border: "none", color: "#fff", borderRadius: "999px", padding: "10px 24px", fontWeight: 600, fontSize: 13, boxShadow: "0 4px 12px rgba(255, 78, 80, 0.2)" }}
+          >
+            Done ({enableRegForm ? formFields.length : 0} questions)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TicketSettingsModal({ open, onClose, type, setType, tickets, setTickets, setTk, mobile, upgradeModalOpen, setUpgradeModalOpen, upgradeFeature, setUpgradeFeature, st, go }) {
+  if (!open) return null;
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
+      <div style={{ background: "var(--surface)", width: 480, maxHeight: "85vh", borderRadius: "20px", display: "flex", flexDirection: "column", boxShadow: "var(--sh-xl)", overflow: "hidden" }}>
+        {/* Header */}
+        <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: "var(--ink)" }}>Ticket Settings</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ border: "none", background: "var(--border-2)", borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--ink-2)" }}
+          >
+            <I.x style={{ width: 14, height: 14 }} />
+          </button>
+        </div>
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+          <div className="cfield" style={{ marginBottom: 0 }}>
+            <label style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)", marginBottom: 8, display: "block" }}>Registration Mode</label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <button
+                type="button"
+                onClick={() => setType("free")}
+                style={{
+                  padding: "14px",
+                  borderRadius: "12px",
+                  border: type === "free" ? "1.5px solid var(--accent-2)" : "1px solid var(--border)",
+                  background: type === "free" ? "var(--accent-soft)" : "var(--field)",
+                  color: type === "free" ? "var(--accent-2)" : "var(--ink-2)",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  textAlign: "center",
+                  outline: "none",
+                  fontFamily: "inherit"
+                }}
+              >
+                🎟️ Free RSVP
+              </button>
+              <button
+                type="button"
+                onClick={() => setType("paid")}
+                style={{
+                  padding: "14px",
+                  borderRadius: "12px",
+                  border: type === "paid" ? "1.5px solid var(--accent-2)" : "1px solid var(--border)",
+                  background: type === "paid" ? "var(--accent-soft)" : "var(--field)",
+                  color: type === "paid" ? "var(--accent-2)" : "var(--ink-2)",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  textAlign: "center",
+                  outline: "none",
+                  fontFamily: "inherit"
+                }}
+              >
+                💳 Paid Tickets
+              </button>
+            </div>
+          </div>
+          {type === "paid" && (
+            <div className="cfield" style={{ marginBottom: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+              <label style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)", display: "block" }}>Ticket Tiers</label>
+              <div style={{ display: "flex", gap: 8, paddingLeft: 2 }}>
+                <div style={{ flex: 2, fontSize: 11, fontWeight: 600, color: "var(--ink-3)" }}>Tier Name</div>
+                <div style={{ flex: 1, fontSize: 11, fontWeight: 600, color: "var(--ink-3)" }}>Capacity</div>
+                <div style={{ flex: 1, fontSize: 11, fontWeight: 600, color: "var(--ink-3)" }}>Price (₹)</div>
+                {tickets.length > 1 && <div style={{ width: 36 }} />}
+              </div>
+              {tickets.map((t, i) => (
+                <div key={i} className="ticket-row" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input className="cinput" placeholder="e.g. General Admission" value={t.n} onChange={e => setTk(i, "n", e.target.value)} style={{ flex: 2, background: "var(--field)", border: "1px solid var(--border)" }} />
+                  <input className="cinput" placeholder="Qty" value={t.cap} onChange={e => setTk(i, "cap", e.target.value)} style={{ flex: 1, background: "var(--field)", border: "1px solid var(--border)" }} />
+                  <input className="cinput" placeholder="Price" value={t.price} onChange={e => setTk(i, "price", e.target.value)} style={{ flex: 1, background: "var(--field)", border: "1px solid var(--border)" }} />
+                  {tickets.length > 1 && (
+                    <button
+                      type="button"
+                      className="hbtn hbtn--ghost hbtn--sm"
+                      onClick={() => setTickets(ts => ts.filter((_, j) => j !== i))}
+                      style={{ padding: "0 10px", height: 42, border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center" }}
+                    >
+                      <I.x style={{ width: 14, height: 14 }} />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                type="button"
+                className="add-row"
+                onClick={() => setTickets(ts => [...ts, { n: "", cap: "", price: "" }])}
+                style={{ marginTop: 4, display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", border: "none", color: "var(--accent-2)", fontWeight: 600, cursor: "pointer" }}
+              >
+                ➕ Add ticket type
+              </button>
+            </div>
+          )}
+        </div>
+        {/* Footer */}
+        <div style={{ padding: "16px 24px", background: "var(--bg-2)", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            className="hbtn hbtn--primary"
+            onClick={onClose}
+            style={{ borderRadius: "999px", padding: "10px 24px", fontWeight: 600, fontSize: 13 }}
+          >
+            Save &amp; Close
+          </button>
+        </div>
       </div>
       {upgradeModalOpen && (
         <UpgradePlanModal 

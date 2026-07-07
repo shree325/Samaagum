@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { GroupCard } from './home-cards';
-import { COVERS, ME } from './home-data';
+import { COVERS, ME, copyText } from './home-data';
 import { Discover } from './home-feed';
 import { Grain } from './home-icons';
 import { apiBase } from './home-subscription';
@@ -574,7 +574,7 @@ export function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
           </button>
         </div>
       </div>
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @keyframes pulse-ring {
           0% { transform: scale(0.3); opacity: 1; }
           80%, 100% { transform: scale(2.2); opacity: 0; }
@@ -613,7 +613,7 @@ export function LocationModal({ open, onClose, selectedCity, onSelectCity }) {
           0% { transform: translate(-50%, -50%) scale(0.3); opacity: 1; }
           80%, 100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
         }
-      `}</style>
+      ` }} />
     </div>
   );
 }
@@ -632,13 +632,19 @@ export function QuestionnaireBuilderModal({ open, onClose, questions, setQuestio
     { id: "pq2", type: "short", q: "What experience do you have?", req: false },
     { id: "pq3", type: "short", q: "Which city are you from?", req: false },
     { id: "pq4", type: "yesno", q: "Are you available for volunteering?", req: false },
+    { id: "pq5", type: "email", q: "Email Address", req: true },
+    { id: "pq6", type: "date", q: "Date of Birth (DOB)", req: true },
+    { id: "pq7", type: "time", q: "Preferred Time", req: false },
+    { id: "pq8", type: "multiselect", q: "Multiple correct options", req: false, options: ["Option 1", "Option 2", "Option 3"] },
+    { id: "pq9", type: "phone", q: "Phone Number", req: true },
   ];
 
   const addQ = (qObj) => setQuestions(qs => [...qs, { ...qObj, id: "q" + Date.now() }]);
   const rmQ = (idx) => setQuestions(qs => qs.filter((_, i) => i !== idx));
   const addCustomQ = () => {
     if (!customQ.trim()) return;
-    const opts = customType === "multiplechoice" ? customOptions.map(o => o.trim()).filter(Boolean) : undefined;
+    const opts = (customType === "multiplechoice" || customType === "multiselect")
+      ? customOptions.map(o => o.trim()).filter(Boolean) : undefined;
     addQ({ type: customType, q: customQ.trim(), req: customReq, options: opts });
     setCustomQ("");
     setCustomReq(false);
@@ -711,6 +717,11 @@ export function QuestionnaireBuilderModal({ open, onClose, questions, setQuestio
                     <option value="long">Long Answer</option>
                     <option value="yesno">Yes / No</option>
                     <option value="multiplechoice">Multiple Choice</option>
+                    <option value="multiselect">Multiple Select (checkboxes)</option>
+                    <option value="email">Email</option>
+                    <option value="phone">Phone Number</option>
+                    <option value="date">Date</option>
+                    <option value="time">Time</option>
                   </select>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, paddingTop: 20 }}>
@@ -718,7 +729,7 @@ export function QuestionnaireBuilderModal({ open, onClose, questions, setQuestio
                   <Toggle on={customReq} onClick={() => setCustomReq(!customReq)} />
                 </div>
               </div>
-              {customType === "multiplechoice" && (
+              {(customType === "multiplechoice" || customType === "multiselect") && (
                 <div className="cfield" style={{ margin: 0 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-2)", display: "block", marginBottom: 6 }}>Options</label>
                   {customOptions.map((opt, idx) => (

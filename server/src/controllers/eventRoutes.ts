@@ -1,0 +1,1423 @@
+import { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import { EventService } from '../services/EventService';
+import { EventInvitationService } from '../services/EventInvitationService';
+import prisma from '../config/prisma';
+import QRCode from 'qrcode';
+
+// Best-effort JWT decode for routes that are public but want to personalize the response
+// (e.g. visibility gating, booking status) when a caller happens to be logged in.
+// This app has no @fastify/jwt plugin registered - `authenticate` in index.ts just
+// base64-decodes the payload without verifying the signature, so mirror that here.
+function tryDecodeUserId(fastify: any, request: any): string | undefined {
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return undefined;
+    try {
+        const token = authHeader.substring(7);
+        const parts = token.split('.');
+        if (parts.length !== 3) return undefined;
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+        return payload?.id;
+    } catch {
+        return undefined;
+    }
+}
+
+export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
+
+    // GET /available-roles
+    fastify.get('/available-roles', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            const roles = await EventService.getAvailableEventRoles();
+            return reply.send({ success: true, data: roles });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // GET /qr/:token - real scannable QR code image for a ticket's qr_token.
+    // No auth required: an <img> tag can't send an Authorization header, and the
+    // token itself is an opaque random UUID that only the ticket holder / event
+    // admins already have access to, so rendering it as an image leaks nothing new.
+    fastify.get('/qr/:token', async (request: any, reply) => {
+        try {
+            const { token } = request.params;
+            if (!token) return reply.status(400).send({ success: false, message: 'token is required' });
+            const buffer = await QRCode.toBuffer(String(token), {
+                type: 'png',
+                width: 320,
+                margin: 1,
+                errorCorrectionLevel: 'M'
+            });
+            reply.header('Content-Type', 'image/png');
+            reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+            return reply.send(buffer);
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+
+    // POST /
+    fastify.post('', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            if (!request.body.title) {
+                return reply.status(400).send({ success: false, message: 'Title is required' });
+            }
+            const data = await EventService.createEvent(request.user.id, request.user.tenantId, request.body);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').emit('events_updated', { action: 'create' });
+            }
+            return reply.status(201).send({ success: true, data, message: 'Event created successfully' });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // GET /my
+    fastify.get('/my', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const data = await EventService.getUserEvents(request.user.id);
+            return reply.send({ success: true, data });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // GET /joined - events the user has joined or requested to join
+    fastify.get('/joined', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const userId = request.user.id;
+
+            // Fetch bookings with their related events in a single query
+            // Include 'cancelled' so the client can show them under the Archived tab
+            const bookings = await prisma.bookings.findMany({
+                where: {
+                    booker_user_id: userId,
+                    status: { in: ['confirmed', 'pending_approval', 'cancelled'] }
+                },
+                include: {
+                    events: true
+                },
+                orderBy: { created_at: 'desc' }
+            });
+
+            // Fetch assignments where user is a team member
+            const assignments = await prisma.event_team_assignments.findMany({
+                where: { user_id: userId, state: 'active' },
+                include: { events: true },
+                orderBy: { created_at: 'desc' }
+            });
+
+            // Deduplicate by event_id (keep latest booking per event)
+            const seen = new Set<string>();
+            const results: any[] = [];
+
+            const processEvent = async (eventId: string, event: any, bookingStatus: string, bookingId: string | null) => {
+                if (seen.has(eventId)) return;
+                seen.add(eventId);
+
+                if (!event) return;
+                // Allow cancelled events through — the client classifies them as Archived
+
+                // Fetch ticket types for this event
+                const ticketsRaw = await prisma.ticket_types.findMany({
+                    where: { event_id: eventId }
+                });
+
+                const tickets = ticketsRaw.map((t: any) => ({
+                    ...t,
+                    price_amount_minor: t.price_amount_minor !== null && t.price_amount_minor !== undefined ? Number(t.price_amount_minor) : null,
+                    early_bird_price_amount_minor: t.early_bird_price_amount_minor !== null && t.early_bird_price_amount_minor !== undefined ? Number(t.early_bird_price_amount_minor) : null
+                }));
+
+                // Fetch this user's own attendee row (real ticket + verification token) for this booking
+                let attendeeId: string | null = null;
+                let ticketId: string | null = null;
+                let qrToken: string | null = null;
+                let checkinStatus: string | null = null;
+                if (bookingId) {
+                    const myAttendee = await prisma.attendees.findFirst({
+                        where: { booking_id: bookingId, user_id: userId },
+                        include: { tickets: true }
+                    });
+                    if (myAttendee) {
+                        attendeeId = myAttendee.id;
+                        ticketId = myAttendee.ticket_id;
+                        qrToken = myAttendee.tickets?.qr_token || null;
+                        checkinStatus = myAttendee.checkin_status;
+                    }
+                }
+
+                results.push({
+                    ...event,
+                    tickets,
+                    bookingStatus,
+                    bookingId,
+                    attendeeId,
+                    ticketId,
+                    qrToken,
+                    checkinStatus
+                });
+            };
+
+            for (const booking of bookings) {
+                await processEvent(booking.event_id, booking.events, booking.status, booking.id);
+            }
+
+            for (const assignment of assignments) {
+                await processEvent(assignment.event_id, assignment.events, 'confirmed', null);
+            }
+
+            return reply.send({ success: true, data: results });
+        } catch (e: any) {
+            fastify.log.error(e, 'GET /events/joined failed');
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // GET /
+    fastify.get('', async (request: any, reply) => {
+        try {
+            const tenantId = request.headers['x-tenant-id'] || '00000000-0000-0000-0000-000000000000';
+            const userId = tryDecodeUserId(fastify, request);
+            const data = await EventService.getPublicEvents(tenantId as string, userId);
+            return reply.send({ success: true, data });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // GET /:id
+    // Optional ?inviteToken= query param: a valid 'view' or 'join' invite link bypasses the
+    // 'unlisted'/'custom' visibility gate for this single request. 'view' links are reusable
+    // and are never consumed here; 'join' links are only consumed on actual request-join
+    // (see messagingRoutes.ts), not merely by viewing the event.
+    fastify.get('/:id', async (request: any, reply) => {
+        try {
+            const { id } = request.params as any;
+            const { inviteToken } = request.query as any;
+            const userId = tryDecodeUserId(fastify, request);
+
+            let viaInviteLink = false;
+            if (inviteToken) {
+                const validation = await EventInvitationService.validateToken(inviteToken);
+                if (validation.valid && validation.invite?.event_id === id) {
+                    viaInviteLink = true;
+                }
+            }
+
+            const data = await EventService.getEventById(id, userId, viaInviteLink);
+            if (!data) {
+                return reply.status(404).send({ success: false, message: 'Event not found' });
+            }
+            if ((data as any).restricted) {
+                return reply.status(403).send({ success: false, message: 'You do not have access to this event' });
+            }
+
+            let bookingStatus = null;
+            let bookingId = null;
+            if (userId) {
+                const booking = await prisma.bookings.findFirst({
+                    where: {
+                        event_id: id,
+                        booker_user_id: userId
+                    },
+                    orderBy: { created_at: 'desc' }
+                });
+                if (booking) {
+                    bookingStatus = booking.status;
+                    bookingId = booking.id;
+                }
+            }
+
+            const confirmedAttendees = await prisma.attendees.findMany({
+                where: { bookings: { event_id: id, status: 'confirmed' } }
+            });
+            const attendeeNames = confirmedAttendees.map(a => a.name);
+
+            // Resolve the entity owner to expose created_by on the event
+            let ownerUserId: string | null = null;
+            if (data.event?.hosted_by_entity_id) {
+                const entityRows = await prisma.$queryRawUnsafe<{ user_id: string }[]>(
+                    `SELECT user_id FROM entities WHERE id = $1::uuid LIMIT 1`,
+                    data.event.hosted_by_entity_id
+                );
+                ownerUserId = entityRows[0]?.user_id || null;
+            }
+
+            return reply.send({
+                success: true,
+                data: {
+                    ...data,
+                    event: {
+                        ...data.event,
+                        created_by: ownerUserId
+                    },
+                    bookingStatus,
+                    bookingId,
+                    attendees: attendeeNames
+                }
+            });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // PUT /:id
+    fastify.put('/:id', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+            const data = await EventService.updateEvent(id, request.user.id, request.body);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').emit('events_updated', { action: 'update', eventId: id });
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('dashboard_updated', { action: 'settings_update', eventId: id });
+            }
+            return reply.send({ success: true, data, message: 'Event updated' });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // DELETE /:id
+    fastify.delete('/:id', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+            await EventService.deleteEvent(id, request.user.id);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').emit('events_updated', { action: 'delete', eventId: id });
+            }
+            return reply.send({ success: true, message: 'Event cancelled/deleted' });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // PATCH /:id/publish
+    fastify.patch('/:id/publish', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+            const data = await EventService.publishDraft(id, request.user.id);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').emit('events_updated', { action: 'publish', eventId: id });
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('dashboard_updated', { action: 'publish', eventId: id });
+            }
+            return reply.send({ success: true, data });
+        } catch (e: any) {
+            return reply.status(e.message === 'Forbidden' ? 403 : 500).send({ success: false, message: e.message });
+        }
+    });
+
+    // PATCH /:id/archive — set event status to 'cancelled' (archive)
+    fastify.patch('/:id/archive', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+            const updated = await EventService.updateEvent(id, request.user.id, { status: 'cancelled' });
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').emit('events_updated', { action: 'archive', eventId: id });
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('event_archived', { eventId: id });
+            }
+            return reply.send({ success: true, data: updated, message: 'Event archived successfully' });
+        } catch (e: any) {
+            return reply.status(e.message?.includes('Forbidden') ? 403 : 500).send({ success: false, message: e.message });
+        }
+    });
+
+
+    fastify.get('/:id/members', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            const members = await EventService.getEventMembers((request.params as any).id);
+            return reply.send({ success: true, data: members });
+        } catch (e: any) {
+            fastify.log.error(e, 'GET /events/:id/members failed');
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // PATCH /:id/memberships/:userId/role
+    fastify.patch('/:id/memberships/:userId/role', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { role } = request.body as any;
+            const { id, userId } = request.params as any;
+            await EventService.updateMemberRole(id, userId, role, request.user.id);
+            return reply.send({ success: true, message: 'Role updated successfully' });
+        } catch (e: any) {
+            fastify.log.error(e, 'PATCH /events/:id/memberships/:userId/role failed');
+            const code = e.message.startsWith('Forbidden') ? 403 : 500;
+            return reply.status(code).send({ success: false, message: e.message });
+        }
+    });
+
+    // GET /:id/posts
+    fastify.get('/:id/posts', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            const { id } = request.params as any;
+            const data = await EventService.getEventPosts(id, request.query, request.user);
+            return { success: true, data };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // POST /:id/posts
+    fastify.post('/:id/posts', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+            const io = (fastify as any).io || null;
+            const data = await EventService.createEventPost(id, request.user, request.body, io);
+            // Only broadcast new_thread to all if the post is NOT pending approval
+            if (!(data as any).pendingApproval && (fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('new_thread', { eventId: id, groupId: id, postId: (data as any).id });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('new_thread', { eventId: id, groupId: id, postId: (data as any).id });
+            }
+            return reply.status(201).send({ success: true, data, message: (data as any).pendingApproval ? 'Thread submitted for approval' : 'Post created' });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // PATCH /:id/posts/:postId
+    fastify.patch('/:id/posts/:postId', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, postId } = request.params as any;
+            await EventService.editEventPost(id, postId, request.user, request.body);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('thread_edited', { eventId: id, groupId: id, postId });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_edited', { eventId: id, groupId: id, postId });
+            }
+            return { success: true, message: 'Post updated' };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // DELETE /:id/posts/:postId
+    fastify.delete('/:id/posts/:postId', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, postId } = request.params as any;
+            await EventService.deleteEventPost(id, postId, request.user);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('thread_deleted', { eventId: id, groupId: id, postId });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_deleted', { eventId: id, groupId: id, postId });
+            }
+            return { success: true, message: 'Post deleted' };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // PATCH /:id/posts/:postId/approve  — owner/host approves a pending thread
+    fastify.patch('/:id/posts/:postId/approve', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, postId } = request.params as any;
+            await EventService.approveEventPost(id, postId, request.user.id);
+            if ((fastify as any).io) {
+                // Broadcast new_thread so all clients refresh their feed and see the newly approved thread
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('new_thread', { eventId: id, groupId: id, postId });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('new_thread', { eventId: id, groupId: id, postId });
+                // Also emit post_approved so the discussion panel can remove it from the pending list
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('post_approved', { eventId: id, postId });
+            }
+            return { success: true, message: 'Thread approved' };
+        } catch (e: any) {
+            const code = e.message?.startsWith('Forbidden') ? 403 : e.message?.startsWith('Thread') ? 404 : 500;
+            return reply.status(code).send({ success: false, message: e.message });
+        }
+    });
+
+    // GET /:id/posts/:postId
+    fastify.get('/:id/posts/:postId', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            const { id, postId } = request.params as any;
+            const data = await EventService.getEventPost(id, postId, request.user);
+            if (!data) return reply.status(404).send({ success: false, message: 'Thread not found' });
+            return { success: true, data };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // POST /:id/posts/:postId/comments
+    fastify.post('/:id/posts/:postId/comments', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, postId } = request.params as any;
+            if (!request.body.body?.trim()) return reply.status(400).send({ success: false, message: 'Reply cannot be empty' });
+            const data = await EventService.createEventComment(id, postId, request.user, request.body);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('new_comment', { eventId: id, groupId: id, postId, commentId: (data as any).id });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('new_comment', { eventId: id, groupId: id, postId, commentId: (data as any).id });
+            }
+            return reply.status(201).send({ success: true, data, message: 'Reply added' });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // PATCH /:id/posts/:postId/comments/:commentId
+    fastify.patch('/:id/posts/:postId/comments/:commentId', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, postId, commentId } = request.params as any;
+            await EventService.editEventComment(id, postId, commentId, request.user, request.body);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('comment_edited', { eventId: id, groupId: id, postId, commentId });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('comment_edited', { eventId: id, groupId: id, postId, commentId });
+            }
+            return { success: true, message: 'Comment updated' };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // DELETE /:id/posts/:postId/comments/:commentId
+    fastify.delete('/:id/posts/:postId/comments/:commentId', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, postId, commentId } = request.params as any;
+            await EventService.deleteEventComment(id, postId, commentId, request.user);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('comment_deleted', { eventId: id, groupId: id, postId, commentId });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('comment_deleted', { eventId: id, groupId: id, postId, commentId });
+            }
+            return { success: true, message: 'Comment deleted' };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // POST /:id/posts/:postId/vote
+    fastify.post('/:id/posts/:postId/vote', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, postId } = request.params as any;
+            const { vote } = request.body as any;
+            const data = await EventService.voteEventPost(id, postId, request.user, vote);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('thread_voted', { eventId: id, groupId: id, postId, score: data.vote_score });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_voted', { eventId: id, groupId: id, postId, score: data.vote_score });
+            }
+            return { success: true, data };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // POST /:id/posts/:postId/comments/:commentId/vote
+    fastify.post('/:id/posts/:postId/comments/:commentId/vote', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, postId, commentId } = request.params as any;
+            const { vote } = request.body as any;
+            const data = await EventService.voteEventComment(id, commentId, request.user, vote);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('comment_voted', { eventId: id, groupId: id, postId, commentId, score: data.vote_score });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('comment_voted', { eventId: id, groupId: id, postId, commentId, score: data.vote_score });
+            }
+            return { success: true, data };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // POST /:id/posts/:postId/react
+    fastify.post('/:id/posts/:postId/react', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, postId } = request.params as any;
+            const { emoji } = request.body as any;
+            if (!emoji) return reply.status(400).send({ success: false, message: 'emoji required' });
+            const reactions = await EventService.reactEventPost(id, postId, request.user, emoji);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('thread_reacted', { eventId: id, groupId: id, postId, reactions });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_reacted', { eventId: id, groupId: id, postId, reactions });
+            }
+            return { success: true, data: { reactions } };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // PATCH /:id/posts/:postId/solve
+    fastify.patch('/:id/posts/:postId/solve', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, postId } = request.params as any;
+            const { solved } = request.body as any;
+            await EventService.solveEventPost(id, postId, request.user, solved);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('thread_solved', { eventId: id, groupId: id, postId, solved });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_solved', { eventId: id, groupId: id, postId, solved });
+            }
+            return { success: true, message: solved ? 'Marked as solved' : 'Unmarked as solved' };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // PATCH /:id/posts/:postId/archive
+    fastify.patch('/:id/posts/:postId/archive', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, postId } = request.params as any;
+            const { archived } = request.body as any;
+            await EventService.archiveEventPost(id, postId, request.user, archived);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('thread_archived', { eventId: id, groupId: id, postId, archived });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_archived', { eventId: id, groupId: id, postId, archived });
+            }
+            return { success: true, message: archived ? 'Thread archived' : 'Thread unarchived' };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // PATCH /:id/posts/:postId/pin
+    fastify.patch('/:id/posts/:postId/pin', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, postId } = request.params as any;
+            const { pinned } = request.body as any;
+            await EventService.pinEventPost(id, postId, request.user, pinned);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('thread_pinned', { eventId: id, groupId: id, postId, pinned });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_pinned', { eventId: id, groupId: id, postId, pinned });
+            }
+            return { success: true, message: pinned ? 'Post pinned' : 'Post unpinned' };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // PATCH /:id/posts/:postId/lock
+    fastify.patch('/:id/posts/:postId/lock', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, postId } = request.params as any;
+            const { locked } = request.body as any;
+            await EventService.lockEventPost(id, postId, request.user, locked);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('thread_locked', { eventId: id, groupId: id, postId, locked });
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_locked', { eventId: id, groupId: id, postId, locked });
+            }
+            return { success: true, message: locked ? 'Post locked' : 'Post unlocked' };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // GET /:id/dashboard-stats
+    fastify.get('/:id/dashboard-stats', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+
+            // Verify admin/host permissions
+            const isAdmin = await EventService.verifyEventAdmin(request.user.id, id);
+            if (!isAdmin) {
+                return reply.status(403).send({ success: false, message: 'Forbidden' });
+            }
+
+            const event = await prisma.events.findUnique({ where: { id } });
+            if (!event) {
+                return reply.status(404).send({ success: false, message: 'Event not found' });
+            }
+
+            // Fetch bookings
+            const bookings = await prisma.bookings.findMany({
+                where: { event_id: id }
+            });
+
+            // Confirmed attendees
+            const confirmedAttendees = await prisma.attendees.findMany({
+                where: { bookings: { event_id: id, status: 'confirmed' } },
+                include: { tickets: true }
+            });
+
+            // Pending join requests
+            const pendingRequests = await prisma.attendees.findMany({
+                where: { bookings: { event_id: id, status: 'pending_approval' } }
+            });
+
+            const totalRevenueMinor = bookings
+                .filter(b => b.status === 'confirmed')
+                .reduce((sum, b) => sum + Number(b.total_amount_minor || 0), 0);
+
+            const checkedInCount = confirmedAttendees.filter(a => a.checkin_status === 'checked_in').length;
+
+            return {
+                success: true,
+                data: {
+                    totalAttendees: confirmedAttendees.length,
+                    checkedInCount,
+                    pendingRequestsCount: pendingRequests.length,
+                    revenue: totalRevenueMinor / 100,
+                    capacity: event.capacity_total || 120,
+                    confirmed: confirmedAttendees.map(a => {
+                        let parsedAnswers = {};
+                        try {
+                            parsedAnswers = JSON.parse(a.notes || '{}');
+                        } catch (e) {}
+                        return {
+                            id: a.id,
+                            userId: a.user_id,
+                            bookingId: a.booking_id,
+                            name: a.name,
+                            email: a.email,
+                            checkinStatus: a.checkin_status,
+                            ticketId: a.ticket_id,
+                            qrToken: (a as any).tickets?.qr_token || null,
+                            answers: parsedAnswers
+                        };
+                    }),
+                    requests: pendingRequests.map(r => {
+                        let parsedAnswers = {};
+                        try {
+                            parsedAnswers = JSON.parse(r.notes || '{}');
+                        } catch (e) {}
+                        return {
+                            id: r.id,
+                            userId: r.user_id,
+                            bookingId: r.booking_id,
+                            name: r.name,
+                            email: r.email,
+                            answers: parsedAnswers
+                        };
+                    })
+                }
+            };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // POST /:id/requests/:bookingId/action
+    fastify.post('/:id/requests/:bookingId/action', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, bookingId } = request.params as any;
+            const { action } = request.body || {};
+
+            const isAdmin = await EventService.verifyEventAdmin(request.user.id, id);
+            if (!isAdmin) {
+                return reply.status(403).send({ success: false, message: 'Forbidden' });
+            }
+
+            const booking = await prisma.bookings.findFirst({
+                where: { id: bookingId, event_id: id }
+            });
+            if (!booking) {
+                return reply.status(404).send({ success: false, message: 'Booking not found' });
+            }
+
+            const nextStatus = action === 'accept' ? 'confirmed' : 'cancelled';
+            const nextTicketStatus = action === 'accept' ? 'confirmed' : 'cancelled';
+
+            await prisma.$transaction(async (tx) => {
+                await tx.bookings.update({
+                    where: { id: bookingId },
+                    data: { status: nextStatus }
+                });
+                const lineItems = await tx.booking_line_items.findMany({
+                    where: { booking_id: bookingId }
+                });
+                const liIds = lineItems.map(li => li.id);
+                await tx.tickets.updateMany({
+                    where: { line_item_id: { in: liIds } },
+                    data: { status: nextTicketStatus }
+                });
+            });
+
+            const guestId = booking.booker_user_id;
+            const event = await prisma.events.findUnique({ where: { id } });
+            const templateKey = action === 'accept' ? 'event_request_accepted' : 'event_request_declined';
+
+            await prisma.notification_log.create({
+                data: {
+                    tenant_id: booking.tenant_id,
+                    user_id: guestId,
+                    channel: 'app',
+                    template_key: templateKey,
+                    status: 'queued',
+                    provider_ref: JSON.stringify({
+                        eventId: id,
+                        eventTitle: event?.title || ''
+                    })
+                }
+            });
+
+            const chatNamespace = (fastify as any).io?.of('/chat');
+            if (chatNamespace) {
+                chatNamespace.to(`user:${guestId}`).emit('group.notification', {
+                    type: action === 'accept' ? 'event' : 'system',
+                    text: action === 'accept' 
+                        ? `Your request to join <b>${event?.title}</b> was accepted! 🎉` 
+                        : `Your request to join <b>${event?.title}</b> was declined`,
+                    eventId: id
+                });
+            }
+
+            const groupsNamespace = (fastify as any).io?.of('/groups');
+            if (groupsNamespace) {
+                groupsNamespace.to(`event_${id}`).emit('dashboard_updated', { action, eventId: id });
+            }
+
+            return { success: true, message: `Request ${action}ed successfully.` };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // POST /:id/attendees/:attendeeId/checkin
+    fastify.post('/:id/attendees/:attendeeId/checkin', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, attendeeId } = request.params as any;
+
+            const isAdmin = await EventService.verifyEventAdmin(request.user.id, id);
+            if (!isAdmin) {
+                return reply.status(403).send({ success: false, message: 'Forbidden' });
+            }
+
+            const attendee = await prisma.attendees.findFirst({
+                where: { id: attendeeId, bookings: { event_id: id } }
+            });
+            if (!attendee) {
+                return reply.status(404).send({ success: false, message: 'Attendee not found' });
+            }
+
+            const updated = await prisma.attendees.update({
+                where: { id: attendeeId },
+                data: { checkin_status: 'checked_in' }
+            });
+
+            if (attendee.ticket_id) {
+                await prisma.tickets.update({
+                    where: { id: attendee.ticket_id },
+                    data: { status: 'checked_in' }
+                }).catch(() => {});
+                await prisma.checkins.create({
+                    data: {
+                        tenant_id: attendee.tenant_id,
+                        ticket_id: attendee.ticket_id,
+                        method: 'attendee_search',
+                        staff_user_id: request.user.id
+                    }
+                }).catch(() => {});
+            }
+
+            const groupsNamespace = (fastify as any).io?.of('/groups');
+            if (groupsNamespace) {
+                groupsNamespace.to(`event_${id}`).emit('dashboard_updated', { action: 'checkin', eventId: id });
+            }
+
+            return reply.send({ success: true, data: updated, message: 'Attendee checked in successfully.' });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // GET /:id/verify/:qrToken - host looks up a ticket by its QR token (manual entry or scanned)
+    fastify.get('/:id/verify/:qrToken', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, qrToken } = request.params as any;
+
+            const isAdmin = await EventService.verifyEventAdmin(request.user.id, id);
+            if (!isAdmin) {
+                return reply.status(403).send({ success: false, message: 'Forbidden' });
+            }
+
+            const ticket = await prisma.tickets.findFirst({
+                where: { qr_token: qrToken },
+                include: {
+                    booking_line_items: { include: { bookings: true } },
+                    attendees: true
+                }
+            });
+
+            if (!ticket || ticket.booking_line_items?.bookings?.event_id !== id) {
+                return reply.send({ success: true, data: { valid: false, reason: 'not_found' } });
+            }
+
+            const attendee = ticket.attendees?.[0] || null;
+            const alreadyCheckedIn = ticket.status === 'checked_in' || attendee?.checkin_status === 'checked_in';
+
+            return reply.send({
+                success: true,
+                data: {
+                    valid: true,
+                    alreadyCheckedIn,
+                    ticketId: ticket.id,
+                    qrToken: ticket.qr_token,
+                    attendeeId: attendee?.id || null,
+                    name: attendee?.name || ticket.attendee_name || 'Guest',
+                    email: attendee?.email || ticket.attendee_email || null,
+                    status: ticket.status
+                }
+            });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // POST /:id/verify/:qrToken/checkin - confirm check-in for a scanned/entered token
+    fastify.post('/:id/verify/:qrToken/checkin', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, qrToken } = request.params as any;
+
+            const isAdmin = await EventService.verifyEventAdmin(request.user.id, id);
+            if (!isAdmin) {
+                return reply.status(403).send({ success: false, message: 'Forbidden' });
+            }
+
+            const ticket = await prisma.tickets.findFirst({
+                where: { qr_token: qrToken },
+                include: {
+                    booking_line_items: { include: { bookings: true } },
+                    attendees: true
+                }
+            });
+
+            if (!ticket || ticket.booking_line_items?.bookings?.event_id !== id) {
+                return reply.status(404).send({ success: false, message: 'Ticket not found for this event.' });
+            }
+
+            const attendee = ticket.attendees?.[0] || null;
+            if (ticket.status === 'checked_in' || attendee?.checkin_status === 'checked_in') {
+                return reply.status(409).send({ success: false, message: 'This ticket has already been checked in.' });
+            }
+
+            await prisma.$transaction(async (tx) => {
+                await tx.tickets.update({
+                    where: { id: ticket.id },
+                    data: { status: 'checked_in' }
+                });
+                if (attendee) {
+                    await tx.attendees.update({
+                        where: { id: attendee.id },
+                        data: { checkin_status: 'checked_in' }
+                    });
+                }
+                await tx.checkins.create({
+                    data: {
+                        tenant_id: ticket.tenant_id,
+                        ticket_id: ticket.id,
+                        method: 'qr',
+                        staff_user_id: request.user.id
+                    }
+                });
+            });
+
+            const groupsNamespace = (fastify as any).io?.of('/groups');
+            if (groupsNamespace) {
+                groupsNamespace.to(`event_${id}`).emit('dashboard_updated', { action: 'checkin', eventId: id });
+            }
+
+            return reply.send({ success: true, message: `${attendee?.name || 'Attendee'} checked in successfully.` });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // GET /:id/gallery
+    fastify.get('/:id/gallery', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+            const data = await EventService.getEventGallery(id, request.user.id);
+            return reply.send({ success: true, data });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // POST /:id/gallery
+    fastify.post('/:id/gallery', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+            const data = await EventService.uploadToEventGallery(id, request.user.id, request.body);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('gallery_updated', { eventId: id, action: 'upload', itemId: data.id });
+            }
+            return reply.send({ success: true, data });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // PATCH /:id/gallery/:itemId/approve
+    fastify.patch('/:id/gallery/:itemId/approve', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, itemId } = request.params as any;
+            await EventService.approveEventGalleryItem(id, Number(itemId), request.user.id);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('gallery_updated', { eventId: id, action: 'approve', itemId });
+            }
+            return reply.send({ success: true });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // DELETE /:id/gallery/:itemId
+    fastify.delete('/:id/gallery/:itemId', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, itemId } = request.params as any;
+            await EventService.deleteEventGalleryItem(id, Number(itemId), request.user.id);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('gallery_updated', { eventId: id, action: 'remove', itemId });
+            }
+            return reply.send({ success: true });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // POST /:id/leave
+    fastify.post('/:id/leave', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+            await EventService.leaveEvent(id, request.user.id);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('dashboard_updated', { action: 'leave_member', userId: request.user.id });
+            }
+            return { success: true, message: 'Left event successfully' };
+        } catch (e: any) {
+            return reply.status(400).send({ success: false, message: e.message });
+        }
+    });
+
+    // ────────────────────────────────────────────────────────────────
+    // TICKETING & COUPONS — Authorization helper
+    // ────────────────────────────────────────────────────────────────
+    const assertHostOrCoHost = async (eventId: string, userId: string) => {
+        const event = await prisma.events.findUnique({ where: { id: eventId } });
+        if (!event) throw new Error('Event not found');
+        const authorized = await EventService.verifyEventTicketManager(userId, eventId);
+        if (!authorized) throw new Error('Forbidden: host or co-host only');
+        return event;
+    };
+
+    // ────────────────────────────────────────────────────────────────
+    // AFFILIATES — List for referral link dropdown
+    // ────────────────────────────────────────────────────────────────
+
+    // GET /affiliates
+    fastify.get('/affiliates', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const affiliates = await prisma.affiliates.findMany({
+                where: { tenant_id: request.user.tenantId, status: 'active' },
+                include: { users: { select: { id: true, first_name: true, last_name: true, primary_email: true } } },
+                orderBy: { created_at: 'desc' }
+            });
+            const data = affiliates.map((a: any) => ({
+                id: a.id,
+                userId: a.user_id,
+                name: [a.users?.first_name, a.users?.last_name].filter(Boolean).join(' ') || a.users?.primary_email || 'Unknown',
+                email: a.users?.primary_email,
+                status: a.status
+            }));
+            return reply.send({ success: true, data });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // ────────────────────────────────────────────────────────────────
+    // TICKET TYPES CRUD
+    // ────────────────────────────────────────────────────────────────
+
+    // GET /:id/ticket-types
+    fastify.get('/:id/ticket-types', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+            await assertHostOrCoHost(id, request.user.id);
+            const rows = await prisma.ticket_types.findMany({
+                where: { event_id: id },
+                orderBy: { created_at: 'desc' }
+            });
+            const data = rows.map((r: any) => ({
+                ...r,
+                price_amount_minor: r.price_amount_minor !== null ? Number(r.price_amount_minor) : null,
+                early_bird_price_amount_minor: r.early_bird_price_amount_minor !== null ? Number(r.early_bird_price_amount_minor) : null
+            }));
+            return reply.send({ success: true, data });
+        } catch (e: any) {
+            const status = e.message?.startsWith('Forbidden') ? 403 : e.message?.startsWith('Event') ? 404 : 500;
+            return reply.status(status).send({ success: false, message: e.message });
+        }
+    });
+
+    // POST /:id/ticket-types
+    fastify.post('/:id/ticket-types', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+            await assertHostOrCoHost(id, request.user.id);
+            const b = request.body as any;
+            if (!b.name) return reply.status(400).send({ success: false, message: 'Ticket name is required' });
+            const created = await prisma.ticket_types.create({
+                data: {
+                    event_id: id,
+                    tenant_id: request.user.tenantId,
+                    name: b.name,
+                    description: b.description || null,
+                    price_amount_minor: b.price != null ? BigInt(Math.round(Number(b.price) * 100)) : null,
+                    price_currency: b.currency || 'INR',
+                    capacity: b.capacity ? Number(b.capacity) : null,
+                    max_per_booking: b.max_per_booking ? Number(b.max_per_booking) : null,
+                    sale_start: b.sale_start ? new Date(b.sale_start) : null,
+                    sale_end: b.sale_end ? new Date(b.sale_end) : null,
+                    early_bird_price_amount_minor: b.early_bird_price != null ? BigInt(Math.round(Number(b.early_bird_price) * 100)) : null,
+                    early_bird_price_currency: b.early_bird_currency || null,
+                    early_bird_ends_at: b.early_bird_ends_at ? new Date(b.early_bird_ends_at) : null,
+                    visibility: b.visibility || 'public',
+                    eligibility: {}
+                }
+            });
+            return reply.status(201).send({ success: true, data: { ...created, price_amount_minor: created.price_amount_minor !== null ? Number(created.price_amount_minor) : null, early_bird_price_amount_minor: created.early_bird_price_amount_minor !== null ? Number(created.early_bird_price_amount_minor) : null } });
+        } catch (e: any) {
+            const status = e.message?.startsWith('Forbidden') ? 403 : 500;
+            return reply.status(status).send({ success: false, message: e.message });
+        }
+    });
+
+    // PUT /:id/ticket-types/:ttId
+    fastify.put('/:id/ticket-types/:ttId', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, ttId } = request.params as any;
+            await assertHostOrCoHost(id, request.user.id);
+            const b = request.body as any;
+            const updated = await prisma.ticket_types.update({
+                where: { id: ttId },
+                data: {
+                    ...(b.name !== undefined && { name: b.name }),
+                    ...(b.description !== undefined && { description: b.description }),
+                    ...(b.price !== undefined && { price_amount_minor: b.price != null ? BigInt(Math.round(Number(b.price) * 100)) : null }),
+                    ...(b.currency !== undefined && { price_currency: b.currency }),
+                    ...(b.capacity !== undefined && { capacity: b.capacity ? Number(b.capacity) : null }),
+                    ...(b.max_per_booking !== undefined && { max_per_booking: b.max_per_booking ? Number(b.max_per_booking) : null }),
+                    ...(b.sale_start !== undefined && { sale_start: b.sale_start ? new Date(b.sale_start) : null }),
+                    ...(b.sale_end !== undefined && { sale_end: b.sale_end ? new Date(b.sale_end) : null }),
+                    ...(b.early_bird_price !== undefined && { early_bird_price_amount_minor: b.early_bird_price != null ? BigInt(Math.round(Number(b.early_bird_price) * 100)) : null }),
+                    ...(b.early_bird_currency !== undefined && { early_bird_price_currency: b.early_bird_currency }),
+                    ...(b.early_bird_ends_at !== undefined && { early_bird_ends_at: b.early_bird_ends_at ? new Date(b.early_bird_ends_at) : null }),
+                    ...(b.visibility !== undefined && { visibility: b.visibility }),
+                    updated_at: new Date()
+                }
+            });
+            return reply.send({ success: true, data: { ...updated, price_amount_minor: updated.price_amount_minor !== null ? Number(updated.price_amount_minor) : null, early_bird_price_amount_minor: updated.early_bird_price_amount_minor !== null ? Number(updated.early_bird_price_amount_minor) : null } });
+        } catch (e: any) {
+            const status = e.message?.startsWith('Forbidden') ? 403 : 500;
+            return reply.status(status).send({ success: false, message: e.message });
+        }
+    });
+
+    // DELETE /:id/ticket-types/:ttId
+    fastify.delete('/:id/ticket-types/:ttId', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, ttId } = request.params as any;
+            await assertHostOrCoHost(id, request.user.id);
+            await prisma.ticket_types.delete({ where: { id: ttId } });
+            return reply.send({ success: true });
+        } catch (e: any) {
+            const status = e.message?.startsWith('Forbidden') ? 403 : 500;
+            return reply.status(status).send({ success: false, message: e.message });
+        }
+    });
+
+    // ────────────────────────────────────────────────────────────────
+    // COUPONS CRUD
+    // ────────────────────────────────────────────────────────────────
+
+    // GET /:id/coupons
+    fastify.get('/:id/coupons', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+            await assertHostOrCoHost(id, request.user.id);
+            const rows = await prisma.coupons.findMany({
+                where: { event_id: id },
+                orderBy: { created_at: 'desc' }
+            });
+            const data = rows.map((r: any) => ({
+                ...r,
+                discount_amount_minor: r.discount_amount_minor !== null ? Number(r.discount_amount_minor) : null,
+                discount_percent: r.discount_percent !== null ? Number(r.discount_percent) : null
+            }));
+            return reply.send({ success: true, data });
+        } catch (e: any) {
+            const status = e.message?.startsWith('Forbidden') ? 403 : 500;
+            return reply.status(status).send({ success: false, message: e.message });
+        }
+    });
+
+    // POST /:id/coupons
+    fastify.post('/:id/coupons', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+            await assertHostOrCoHost(id, request.user.id);
+            const b = request.body as any;
+            if (!b.code) return reply.status(400).send({ success: false, message: 'Coupon code is required' });
+            if (!b.discount_type) return reply.status(400).send({ success: false, message: 'Discount type is required' });
+            const created = await prisma.coupons.create({
+                data: {
+                    event_id: id,
+                    tenant_id: request.user.tenantId,
+                    code: b.code.toUpperCase(),
+                    discount_type: b.discount_type, // 'percent' | 'flat'
+                    discount_amount_minor: b.discount_type === 'flat' && b.discount_value != null ? BigInt(Math.round(Number(b.discount_value) * 100)) : null,
+                    discount_currency: b.discount_type === 'flat' ? (b.currency || 'INR') : null,
+                    discount_percent: b.discount_type === 'percent' && b.discount_value != null ? Number(b.discount_value) : null,
+                    valid_from: b.valid_from ? new Date(b.valid_from) : null,
+                    valid_to: b.valid_to ? new Date(b.valid_to) : null,
+                    max_total: b.max_total ? Number(b.max_total) : null,
+                    max_per_user: b.max_per_user ? Number(b.max_per_user) : null,
+                    status: b.status || 'active'
+                }
+            });
+            return reply.status(201).send({ success: true, data: { ...created, discount_amount_minor: created.discount_amount_minor !== null ? Number(created.discount_amount_minor) : null, discount_percent: created.discount_percent !== null ? Number(created.discount_percent) : null } });
+        } catch (e: any) {
+            if (e.code === 'P2002') return reply.status(409).send({ success: false, message: 'Coupon code already exists for this event' });
+            const status = e.message?.startsWith('Forbidden') ? 403 : 500;
+            return reply.status(status).send({ success: false, message: e.message });
+        }
+    });
+
+    // PUT /:id/coupons/:cId
+    fastify.put('/:id/coupons/:cId', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, cId } = request.params as any;
+            await assertHostOrCoHost(id, request.user.id);
+            const b = request.body as any;
+            const updated = await prisma.coupons.update({
+                where: { id: cId },
+                data: {
+                    ...(b.code !== undefined && { code: b.code.toUpperCase() }),
+                    ...(b.discount_type !== undefined && { discount_type: b.discount_type }),
+                    ...(b.discount_value !== undefined && b.discount_type === 'flat' && { discount_amount_minor: b.discount_value != null ? BigInt(Math.round(Number(b.discount_value) * 100)) : null }),
+                    ...(b.discount_value !== undefined && b.discount_type === 'percent' && { discount_percent: b.discount_value != null ? Number(b.discount_value) : null }),
+                    ...(b.currency !== undefined && { discount_currency: b.currency }),
+                    ...(b.valid_from !== undefined && { valid_from: b.valid_from ? new Date(b.valid_from) : null }),
+                    ...(b.valid_to !== undefined && { valid_to: b.valid_to ? new Date(b.valid_to) : null }),
+                    ...(b.max_total !== undefined && { max_total: b.max_total ? Number(b.max_total) : null }),
+                    ...(b.max_per_user !== undefined && { max_per_user: b.max_per_user ? Number(b.max_per_user) : null }),
+                    ...(b.status !== undefined && { status: b.status }),
+                    updated_at: new Date()
+                }
+            });
+            return reply.send({ success: true, data: { ...updated, discount_amount_minor: updated.discount_amount_minor !== null ? Number(updated.discount_amount_minor) : null, discount_percent: updated.discount_percent !== null ? Number(updated.discount_percent) : null } });
+        } catch (e: any) {
+            const status = e.message?.startsWith('Forbidden') ? 403 : 500;
+            return reply.status(status).send({ success: false, message: e.message });
+        }
+    });
+
+    // DELETE /:id/coupons/:cId
+    fastify.delete('/:id/coupons/:cId', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, cId } = request.params as any;
+            await assertHostOrCoHost(id, request.user.id);
+            await prisma.coupons.delete({ where: { id: cId } });
+            return reply.send({ success: true });
+        } catch (e: any) {
+            const status = e.message?.startsWith('Forbidden') ? 403 : 500;
+            return reply.status(status).send({ success: false, message: e.message });
+        }
+    });
+
+    // ────────────────────────────────────────────────────────────────
+    // REFERRAL LINKS CRUD
+    // ────────────────────────────────────────────────────────────────
+
+    // GET /:id/referrals
+    fastify.get('/:id/referrals', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+            await assertHostOrCoHost(id, request.user.id);
+            const rows = await prisma.referral_links.findMany({
+                where: { event_id: id },
+                include: { affiliates: { include: { users: { select: { first_name: true, last_name: true, primary_email: true } } } } },
+                orderBy: { created_at: 'desc' }
+            });
+            const data = rows.map((r: any) => ({
+                id: r.id,
+                code: r.code,
+                affiliate_id: r.affiliate_id,
+                affiliate_name: [r.affiliates?.users?.first_name, r.affiliates?.users?.last_name].filter(Boolean).join(' ') || r.affiliates?.users?.primary_email || 'Unknown',
+                commission_rule: r.commission_rule,
+                created_at: r.created_at,
+                updated_at: r.updated_at
+            }));
+            return reply.send({ success: true, data });
+        } catch (e: any) {
+            const status = e.message?.startsWith('Forbidden') ? 403 : 500;
+            return reply.status(status).send({ success: false, message: e.message });
+        }
+    });
+
+    // POST /:id/referrals
+    fastify.post('/:id/referrals', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+            await assertHostOrCoHost(id, request.user.id);
+            const b = request.body as any;
+            if (!b.code) return reply.status(400).send({ success: false, message: 'Referral code is required' });
+            if (!b.affiliate_id) return reply.status(400).send({ success: false, message: 'Affiliate is required' });
+            let commissionRule: any = null;
+            if (b.commission_rule) {
+                try { commissionRule = typeof b.commission_rule === 'string' ? JSON.parse(b.commission_rule) : b.commission_rule; }
+                catch { commissionRule = { description: b.commission_rule }; }
+            }
+            const created = await prisma.referral_links.create({
+                data: {
+                    tenant_id: request.user.tenantId,
+                    event_id: id,
+                    affiliate_id: b.affiliate_id,
+                    code: b.code.toUpperCase(),
+                    commission_rule: commissionRule
+                },
+                include: { affiliates: { include: { users: { select: { first_name: true, last_name: true, primary_email: true } } } } }
+            });
+            return reply.status(201).send({ success: true, data: {
+                id: created.id, code: created.code, affiliate_id: created.affiliate_id,
+                affiliate_name: [created.affiliates?.users?.first_name, created.affiliates?.users?.last_name].filter(Boolean).join(' ') || created.affiliates?.users?.primary_email || 'Unknown',
+                commission_rule: created.commission_rule, created_at: created.created_at
+            }});
+        } catch (e: any) {
+            if (e.code === 'P2002') return reply.status(409).send({ success: false, message: 'Referral code already exists' });
+            const status = e.message?.startsWith('Forbidden') ? 403 : 500;
+            return reply.status(status).send({ success: false, message: e.message });
+        }
+    });
+
+    // PUT /:id/referrals/:rId
+    fastify.put('/:id/referrals/:rId', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, rId } = request.params as any;
+            await assertHostOrCoHost(id, request.user.id);
+            const b = request.body as any;
+            let commissionRule: any = undefined;
+            if (b.commission_rule !== undefined) {
+                try { commissionRule = typeof b.commission_rule === 'string' ? JSON.parse(b.commission_rule) : b.commission_rule; }
+                catch { commissionRule = { description: b.commission_rule }; }
+            }
+            const updated = await prisma.referral_links.update({
+                where: { id: rId },
+                data: {
+                    ...(b.code !== undefined && { code: b.code.toUpperCase() }),
+                    ...(b.affiliate_id !== undefined && { affiliate_id: b.affiliate_id }),
+                    ...(commissionRule !== undefined && { commission_rule: commissionRule }),
+                    updated_at: new Date()
+                },
+                include: { affiliates: { include: { users: { select: { first_name: true, last_name: true, primary_email: true } } } } }
+            });
+            return reply.send({ success: true, data: {
+                id: updated.id, code: updated.code, affiliate_id: updated.affiliate_id,
+                affiliate_name: [updated.affiliates?.users?.first_name, updated.affiliates?.users?.last_name].filter(Boolean).join(' ') || updated.affiliates?.users?.primary_email || 'Unknown',
+                commission_rule: updated.commission_rule, created_at: updated.created_at, updated_at: updated.updated_at
+            }});
+        } catch (e: any) {
+            const status = e.message?.startsWith('Forbidden') ? 403 : 500;
+            return reply.status(status).send({ success: false, message: e.message });
+        }
+    });
+
+    // DELETE /:id/referrals/:rId
+    fastify.delete('/:id/referrals/:rId', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, rId } = request.params as any;
+            await assertHostOrCoHost(id, request.user.id);
+            await prisma.referral_links.delete({ where: { id: rId } });
+            return reply.send({ success: true });
+        } catch (e: any) {
+            const status = e.message?.startsWith('Forbidden') ? 403 : 500;
+            return reply.status(status).send({ success: false, message: e.message });
+        }
+    });
+
+    // ────────────────────────────────────────────────────────────────
+    // EVENT INVITE LINKS — one-time links for unlisted visibility ('view')
+    // and invite-only join eligibility ('join')
+    // ────────────────────────────────────────────────────────────────
+
+    // POST /:id/invites — host/co-host generates an invite link.
+    // 'view' links are durable/reusable (idempotent: repeat calls return the same link).
+    // 'join' links are single-use, a fresh token is minted on every call.
+    fastify.post('/:id/invites', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+            const { purpose } = request.body as any;
+            if (purpose !== 'view' && purpose !== 'join') {
+                return reply.status(400).send({ success: false, message: "purpose must be 'view' or 'join'" });
+            }
+            const data = await EventInvitationService.createLink(id, request.user.id, purpose);
+            return reply.send({ success: true, data });
+        } catch (e: any) {
+            const status = e.message?.includes('permission') ? 403 : 500;
+            return reply.status(status).send({ success: false, message: e.message });
+        }
+    });
+
+    // GET /:id/invites/view — host/co-host fetches the durable 'view' link if one already
+    // exists (without minting a new one), so the Invite tab can restore it after a reload.
+    fastify.get('/:id/invites/view', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+            const isHostOrCoHost = await EventService.verifyEventHostOrCoHost(request.user.id, id);
+            if (!isHostOrCoHost) return reply.status(403).send({ success: false, message: 'You do not have permission to view invite links for this event' });
+            const data = await EventInvitationService.getExistingViewLink(id);
+            return reply.send({ success: true, data });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // GET /invite/:token — public lookup (read-only, does not consume the token) used by
+    // the invite landing page to find out which event/purpose a link corresponds to.
+    fastify.get('/invite/:token', async (request: any, reply) => {
+        try {
+            const { token } = request.params as any;
+            const validation = await EventInvitationService.validateToken(token);
+            if (!validation.valid) {
+                return reply.send({ success: false, message: validation.message });
+            }
+            return reply.send({
+                success: true,
+                data: { event: validation.event, purpose: validation.invite?.purpose }
+            });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+};

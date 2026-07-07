@@ -1,8 +1,8 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react';
-import { CITIES, Reveal, Wordmark, gradFor, initials } from './components';
+import { CITIES, Wordmark, gradFor, initials } from './components';
 import { Messages } from './home-messages';
-import { ACTIVITY, CountUp, I, range, useScrub } from './landing-core';
+import { ACTIVITY, CountUp, I, Reveal, range, useScrub } from './landing-core';
 import { Communities, Events } from './landing-features';
 import { Networking, Profiles } from './landing-features2';
 import { AUTH } from './landing-hero';
@@ -110,8 +110,8 @@ export function PlatformActivity() {
             <div className="glass-card map-card">
               <div className="map-dots" />
               <div className="sec-glow" style={{ width: 300, height: 300, background: "var(--accent-1)", top: "20%", left: "30%", opacity: 0.18 }} />
-              {dynamicCities.map((c) => (
-                <div key={c.n} className="map-pin2" style={{ left: c.x + "%", top: c.y + "%" }}>
+              {dynamicCities.map((c, idx) => (
+                <div key={`${c.n}-${idx}`} className="map-pin2" style={{ left: c.x + "%", top: c.y + "%" }}>
                   <span className="ring" /><span className="core" />
                   {["Bengaluru", "London", "New York", c.n].includes(c.n) && <span className="lbl">{c.n}</span>}
                 </div>

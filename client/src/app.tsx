@@ -169,6 +169,11 @@ export function App() {
     : <DesktopAuth gradient={t.gradient} />;
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(
-  <App />
-);
+const _appContainer = document.getElementById("root");
+let _appRoot = (_appContainer as any).__reactRoot;
+if (!_appRoot) {
+  _appRoot = ReactDOM.createRoot(_appContainer);
+  (_appContainer as any).__reactRoot = _appRoot;
+}
+_appRoot.render(<App />);
+

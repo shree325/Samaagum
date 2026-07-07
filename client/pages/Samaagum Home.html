@@ -11,29 +11,28 @@
   <link rel="stylesheet" href="../css/flows.css" />
   <link rel="stylesheet" href="../css/tailwind-output.css" />
   <style>
-    html,
-    body {
-      background: var(--bg-2);
-    }
+    html, body { background: var(--bg-2); }
   </style>
 </head>
 
 <body>
   <div id="root"></div>
 
-  <script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"></script>
-  <script>window.QRCodeLib = window.QRCode;</script>
+  <!-- Load Socket.IO from backend (async, non-blocking) -->
   <script>
-    // Load Socket.io client library directly from backend server synchronously
     (function() {
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const apiBase = isLocalhost ? "http://localhost:3000" : window.location.origin;
-      document.write('<script src="' + apiBase + '/socket.io/socket.io.js"><\/script>');
+      var isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      var apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+      var s = document.createElement('script');
+      s.src = apiBase + '/socket.io/socket.io.js';
+      s.async = true;
+      s.onload = function() { window.dispatchEvent(new Event('socket-io-ready')); };
+      document.head.appendChild(s);
     })();
   </script>
+
+  <!-- Vite-bundled entry (handles all TSX imports via module graph) -->
   <script type="module" src="/src/home-app.tsx"></script>
 </body>
-
-</html>
 
 </html>
