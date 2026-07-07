@@ -6,6 +6,15 @@ import { GroupService } from '../services/GroupService';
 import { EventService } from '../services/EventService';
 import { EventInvitationService } from '../services/EventInvitationService';
 
+// Must exactly match the client-side formula in normalizeJoinedEvent
+// (client/src/home-tickets.tsx) that computes the "friendly" ticket id shown to users,
+// so a scanner manually typing that on-screen id resolves against this persisted value.
+function computeTicketCode(eventTitle: string | null | undefined, ticketId: string): string {
+  const eventNameClean = (eventTitle || 'TICKET').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().substring(0, 8);
+  const shortNo = ticketId.split('-')[0].toUpperCase();
+  return `${eventNameClean}_${shortNo}`;
+}
+
 // Helper to get active chat settings
 async function getChatSettings() {
   const row = await prisma.platform_settings.findFirst({
@@ -1374,7 +1383,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           }
         });
 
-        const tk = await tx.tickets.create({
+        let tk = await tx.tickets.create({
           data: {
             tenant_id: event.tenant_id,
             line_item_id: li.id,
@@ -1384,6 +1393,15 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             status: initialTicketStatus,
             claimed_by_user_id: userId
           }
+        });
+
+        // ticket_code is derived from the ticket's own id (only known after insert) using the
+        // exact same formula the client uses to display a "friendly" ticket id in the UI
+        // (see normalizeJoinedEvent in client/src/home-tickets.tsx). Keeping these in sync is
+        // what lets a scanner manually type the on-screen ticket id and have it resolve.
+        tk = await tx.tickets.update({
+          where: { id: tk.id },
+          data: { ticket_code: computeTicketCode(event.title, tk.id) }
         });
 
         await tx.attendees.create({

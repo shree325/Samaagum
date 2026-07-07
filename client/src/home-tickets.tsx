@@ -17,6 +17,29 @@ import { Events } from './landing-features';
 // Shared helpers — used by both the My Events wallet (MyTickets) and the My Tickets
 // page (AllTickets) so a "joined event" booking is normalized into ticket-shaped data
 // exactly the same way in both places.
+// Ticket-scanner check-in window: how long before an event's start (and after its end,
+// or after a default duration when no end time is set) a scanner may check attendees in.
+const CHECKIN_WINDOW_BEFORE_MS = 2 * 60 * 60 * 1000; // 2h grace before starts_at
+const CHECKIN_WINDOW_AFTER_MS = 0; // 2h grace after ends_at
+const DEFAULT_EVENT_DURATION_MS = 24 * 60 * 60 * 1000; // assumed length when ends_at is missing
+
+function checkinWindow(ev) {
+  const startsAt = ev?.starts_at ? new Date(ev.starts_at) : null;
+  if (!startsAt) return null;
+  const endsAt = ev.ends_at ? new Date(ev.ends_at) : new Date(startsAt.getTime() + DEFAULT_EVENT_DURATION_MS);
+  return {
+    opensAt: new Date(startsAt.getTime() - CHECKIN_WINDOW_BEFORE_MS),
+    closesAt: new Date(endsAt.getTime() + CHECKIN_WINDOW_AFTER_MS)
+  };
+}
+
+function isCheckinWindowOpen(ev) {
+  const win = checkinWindow(ev);
+  if (!win) return false;
+  const now = Date.now();
+  return now >= win.opensAt.getTime() && now <= win.closesAt.getTime();
+}
+
 function getVenueStr(v) {
   if (typeof v === 'object' && v !== null) {
     return v.name || v.address || 'Venue TBD';
@@ -31,6 +54,12 @@ function normalizeJoinedEvent(e) {
   const venueObj = (typeof e.venue === 'object' && e.venue !== null) ? e.venue : {};
   const meta = venueObj.meta || {};
   const firstTicket = Array.isArray(e.tickets) ? e.tickets[0] : null;
+
+  const eventNameClean = (e.title || e.ev || "TICKET").replace(/[^a-zA-Z0-9]/g, '').toUpperCase().substring(0, 8);
+  const idSource = e.ticketId || e.attendeeId || e.id || "00000000";
+  const shortNo = idSource.split('-')[0].toUpperCase();
+  const friendlyTicketId = `${eventNameClean}_${shortNo}`;
+
   return {
     ...e,
     ev: e.title || e.ev,
@@ -50,7 +79,7 @@ function normalizeJoinedEvent(e) {
     // event's own id is kept as `t.id` for display/keys, but the QR/verification content
     // must use qrToken (falls back to attendeeId, then event id, if a token isn't set yet).
     qrToken: e.qrToken || e.attendeeId || null,
-    ticketId: e.ticketId || null,
+    ticketId: friendlyTicketId,
     attendeeId: e.attendeeId || null,
     checkedIn: e.checkinStatus === 'checked_in',
   };
@@ -709,6 +738,7 @@ export function TicketDetail({ tkt, st, go }) {
             )}
 
             <div className="qt-rows">
+              {t.ticketId && <div className="qt-row"><span className="k">Ticket ID</span><span className="v" style={{ fontFamily: "monospace", fontSize: 12 }}>{t.ticketId}</span></div>}
               <div className="qt-row"><span className="k">Attendee</span><span className="v">{t.attendee}</span></div>
               <div className="qt-row"><span className="k">Date</span><span className="v">{t.date} · {t.time}</span></div>
               <div className="qt-row"><span className="k">{t.online ? "Location" : "Venue"}</span><span className="v">{t.venue}</span></div>
@@ -832,7 +862,8 @@ export function ClaimFlow({ st, go }) {
 /* ---------------- Verify Ticket panel (manual token entry + camera QR scan) ----------------
    Used inside EventDashboard so hosts/staff can check attendees in by scanning or typing
    the unique token embedded in their ticket's QR code. Hits GET/POST /:id/verify/:qrToken. */
-function VerifyTicketPanel({ eventId, onCheckedIn }) {
+export function VerifyTicketPanel({ eventId, onCheckedIn }) {
+  const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
   const [tokenInput, setTokenInput] = useState("");
   const [result, setResult] = useState(null); // { valid, alreadyCheckedIn, name, ... } | { valid: false }
   const [busy, setBusy] = useState(false);
@@ -1136,7 +1167,7 @@ export function EventDashboard({ ev, st, go }) {
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12, marginBottom: 24 }}>
             <div style={{ background: "var(--field)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
-              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Total Attendees</div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Registered</div>
               <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>{stats.totalAttendees} <span style={{ fontSize: 13, fontWeight: 400, color: "var(--ink-3)" }}>/ {stats.capacity}</span></div>
             </div>
             <div style={{ background: "var(--field)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
@@ -1148,7 +1179,7 @@ export function EventDashboard({ ev, st, go }) {
               <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: stats.pendingRequestsCount > 0 ? "var(--accent-2)" : "var(--ink)" }}>{stats.pendingRequestsCount}</div>
             </div>
             <div style={{ background: "var(--field)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
-              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Checked In</div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Attendees (Checked In)</div>
               <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: "var(--accent-2)" }}>{stats.checkedInCount} <span style={{ fontSize: 13, fontWeight: 400, color: "var(--ink-3)" }}>/ {stats.totalAttendees}</span></div>
             </div>
           </div>
@@ -1185,7 +1216,7 @@ export function EventDashboard({ ev, st, go }) {
           )}
 
           <div>
-            <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Confirmed Attendees ({stats.confirmed.length})</h4>
+            <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>Registered Guests ({stats.confirmed.length})</h4>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {stats.confirmed.map(a => (
                 <div key={a.id} style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)" }}>
@@ -1217,4 +1248,72 @@ export function EventDashboard({ ev, st, go }) {
   );
 }
 
-Object.assign(window, { MyTickets, AllTickets, TicketDetail, ClaimFlow, EventDashboard, TicketQR });
+/* ---------------- Scan hub (ticket-scanner-only landing page) ----------------
+   Lists the events the current user can scan tickets for (any active event-team
+   role carrying the checkin.gate_staff capability), sorted soonest-first. Only
+   events currently within their check-in window are clickable. */
+export function ScanHub({ st, go }) {
+  const events = [...(st.scannerEvents || [])].sort((a, b) => new Date(a.starts_at || 0) - new Date(b.starts_at || 0));
+
+  return (
+    <div className="scroll" style={{ padding: "24px 20px", maxWidth: 720, margin: "0 auto" }}>
+      <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
+        <I.scan style={{ width: 20, height: 20 }} /> Scan tickets
+      </h2>
+      <p style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 20 }}>Events you're a ticket scanner for. Only events currently in their check-in window can be opened.</p>
+
+      {events.length === 0 ? (
+        <Empty title="No scan assignments" desc="You'll see events here once you're assigned as a ticket scanner." />
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {events.map(ev => {
+            const open = isCheckinWindowOpen(ev);
+            const win = checkinWindow(ev);
+            const startsAt = ev.starts_at ? new Date(ev.starts_at) : null;
+            return (
+              <button
+                key={ev.id}
+                disabled={!open}
+                onClick={() => open && go("scan-event", ev)}
+                className="fcard"
+                style={{
+                  textAlign: "left", padding: 16, border: "1px solid var(--border)", background: "var(--surface)",
+                  opacity: open ? 1 : 0.5, cursor: open ? "pointer" : "not-allowed",
+                  display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 14.5 }}>{ev.title || "Untitled event"}</div>
+                  <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>
+                    {startsAt ? startsAt.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : "Date TBD"}
+                  </div>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 999, whiteSpace: "nowrap", color: open ? "#1f9d57" : "var(--ink-3)", background: open ? "rgba(31,157,87,0.1)" : "var(--field)" }}>
+                  {open ? "Open now" : win ? `Opens ${win.opensAt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : "Not scheduled"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function ScanEventPage({ ev, go }) {
+  useEffect(() => {
+    if (!ev || !isCheckinWindowOpen(ev)) go("scan");
+  }, [ev]);
+
+  if (!ev || !isCheckinWindowOpen(ev)) return null;
+
+  return (
+    <div className="scroll" style={{ padding: "24px 20px", maxWidth: 560, margin: "0 auto" }}>
+      <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => go("scan")} style={{ marginBottom: 14 }}>&larr; Back to Scan</button>
+      <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>{ev.title || "Untitled event"}</h2>
+      <VerifyTicketPanel eventId={ev.id} onCheckedIn={() => {}} />
+    </div>
+  );
+}
+
+Object.assign(window, { MyTickets, AllTickets, TicketDetail, ClaimFlow, EventDashboard, TicketQR, VerifyTicketPanel, ScanHub, ScanEventPage });

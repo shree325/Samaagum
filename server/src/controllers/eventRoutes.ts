@@ -34,6 +34,17 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
         }
     });
 
+    // GET /scanner-events - events the current user can scan tickets for (any active
+    // team role carrying the checkin.gate_staff capability, e.g. ticket_scanner).
+    fastify.get('/scanner-events', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            const events = await EventService.getScannerEvents(request.user.id);
+            return reply.send({ success: true, data: events });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
     // GET /qr/:token - real scannable QR code image for a ticket's qr_token.
     // No auth required: an <img> tag can't send an Authorization header, and the
     // token itself is an opaque random UUID that only the ticket holder / event
@@ -785,8 +796,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
             const { id, attendeeId } = request.params as any;
 
-            const isAdmin = await EventService.verifyEventAdmin(request.user.id, id);
-            if (!isAdmin) {
+            const canScan = await EventService.verifyEventScanner(request.user.id, id);
+            if (!canScan) {
                 return reply.status(403).send({ success: false, message: 'Forbidden' });
             }
 
@@ -834,13 +845,13 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
             const { id, qrToken } = request.params as any;
 
-            const isAdmin = await EventService.verifyEventAdmin(request.user.id, id);
-            if (!isAdmin) {
+            const canScan = await EventService.verifyEventScanner(request.user.id, id);
+            if (!canScan) {
                 return reply.status(403).send({ success: false, message: 'Forbidden' });
             }
 
             const ticket = await prisma.tickets.findFirst({
-                where: { qr_token: qrToken },
+                where: { OR: [{ qr_token: qrToken }, { ticket_code: qrToken }] },
                 include: {
                     booking_line_items: { include: { bookings: true } },
                     attendees: true
@@ -878,13 +889,13 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
             const { id, qrToken } = request.params as any;
 
-            const isAdmin = await EventService.verifyEventAdmin(request.user.id, id);
-            if (!isAdmin) {
+            const canScan = await EventService.verifyEventScanner(request.user.id, id);
+            if (!canScan) {
                 return reply.status(403).send({ success: false, message: 'Forbidden' });
             }
 
             const ticket = await prisma.tickets.findFirst({
-                where: { qr_token: qrToken },
+                where: { OR: [{ qr_token: qrToken }, { ticket_code: qrToken }] },
                 include: {
                     booking_line_items: { include: { bookings: true } },
                     attendees: true

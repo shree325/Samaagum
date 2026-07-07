@@ -19,7 +19,7 @@ import { Profile } from './home-profile';
 import { SettingsPage } from './home-settings';
 import { CityPicker, Sidebar, Topbar } from './home-shell';
 import { apiBase, UpgradePage, CheckoutPage, CheckoutSuccessPage } from './home-subscription';
-import { ClaimFlow, EventDashboard, MyTickets, AllTickets, TicketDetail } from './home-tickets';
+import { ClaimFlow, EventDashboard, MyTickets, AllTickets, TicketDetail, ScanHub, ScanEventPage } from './home-tickets';
 import { Waitlist } from './home-waitlist';
 import { I, tick } from './home-icons';
 import { PublicProfile } from './public-profile';
@@ -83,12 +83,15 @@ export function TabBar({ view, go, counts, chatSettings }) {
   );
 }
 
-export function MobileTop({ go, counts, city, chatSettings }) {
+export function MobileTop({ go, counts, city, chatSettings, hasScannerEvents }) {
   const showMessages = chatSettings?.allowSiteMessaging !== false;
   return (
     <div className="m-top">
       <Mark size={26}/>
       <div className="m-search" onClick={()=>go("discover")}><I.search/> Search Samaagum</div>
+      {hasScannerEvents && (
+        <button className="tb-icon" style={{ width:38, height:38 }} onClick={()=>go("scan")}><I.scan/></button>
+      )}
       {showMessages && (
         <button className="tb-icon" style={{ width:38, height:38 }} onClick={()=>go("messages")}><I.chat/>{counts.messages?<span className="badge">{counts.messages}</span>:null}</button>
       )}
@@ -840,6 +843,7 @@ export function DashboardApp() {
   const [createdEvents, setCreatedEvents] = useState(() => []);
   const [joinedEvents, setJoinedEvents] = useState([]);
   const [eventRoles, setEventRoles] = useState([]);
+  const [scannerEvents, setScannerEvents] = useState([]);
 
   const fetchEvents = useCallback(() => {
     const token = localStorage.getItem('token');
@@ -887,6 +891,23 @@ export function DashboardApp() {
     .catch(err => console.error('Error fetching event roles', err));
 }, [apiBase]);
 
+// Events the user can scan tickets for — powers the ticket-scanner-only "Scan" nav item.
+const fetchScannerEvents = useCallback(() => {
+  const token = localStorage.getItem('token');
+  if (!token) return;
+
+  fetch(`${apiBase}/api/events/scanner-events`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then(res => res.json())
+    .then(res => {
+      if (res.success && res.data) {
+        setScannerEvents(res.data);
+      }
+    })
+    .catch(err => console.error('Error fetching scanner events', err));
+}, [apiBase]);
+
 // Events the user is hosting/co-hosting — powers the "Created" tab in My Tickets.
 const fetchCreatedEvents = useCallback(() => {
   const token = localStorage.getItem('token');
@@ -909,7 +930,8 @@ useEffect(() => {
   fetchEventRoles();
   fetchJoinedEvents();
   fetchCreatedEvents();
-}, [fetchEvents, fetchEventRoles, fetchJoinedEvents, fetchCreatedEvents]);
+  fetchScannerEvents();
+}, [fetchEvents, fetchEventRoles, fetchJoinedEvents, fetchCreatedEvents, fetchScannerEvents]);
   const addCreatedEvent = useCallback((ev) => {
     setCreatedEvents(prev => {
       if (prev.some(x => x.id === ev.id)) {
@@ -942,6 +964,7 @@ useEffect(() => {
     createdEvents, setCreatedEvents, createdGroups, setCreatedGroups, fetchCreatedEvents,
     joinedEvents, setJoinedEvents, fetchJoinedEvents,
     eventRoles, fetchEventRoles,
+    scannerEvents, fetchScannerEvents,
     fetchEvents,
     addCreatedEvent, addCreatedGroup,
     subscription, setSubscription,
@@ -1044,6 +1067,8 @@ useEffect(() => {
     if (v === "create-group") return <CreateGroup go={go} mobile={mobile} st={st} />;
     if (v === "edit-group") return <CreateGroup mode="edit" editGroup={cur.param} go={go} mobile={mobile} st={st} />;
     if (v === "event-dashboard") return <EventDashboard ev={cur.param} st={st} go={go} />;
+    if (v === "scan") return <ScanHub st={st} go={go} />;
+    if (v === "scan-event") return <ScanEventPage ev={cur.param} go={go} />;
     if (v === "ticket") return <TicketDetail tkt={cur.param} st={st} go={go} />;
     if (v === "waitlist") return <Waitlist ev={cur.param} st={st} go={go} />;
     if (v === "claim") return <ClaimFlow st={st} go={go} />;
@@ -1056,14 +1081,15 @@ useEffect(() => {
   // discover/events/groups map to sidebar active key
   const navKey = ["events", "event-dashboard", "edit-event"].includes(cur.view) ? "events"
     : ["groups", "group-dashboard", "edit-group"].includes(cur.view) ? "groups"
-      : ["create-event", "create-group"].includes(cur.view) ? null
-        : cur.view;
+      : ["scan", "scan-event"].includes(cur.view) ? "scan"
+        : ["create-event", "create-group"].includes(cur.view) ? null
+          : cur.view;
 
   return (
     <div className={`app ${mobile?"mobile":""} ${sidebarCollapsed?"collapsed":""}`}>
-      {!mobile && <Sidebar view={navKey} go={go} counts={counts} collapsed={sidebarCollapsed} onToggleCollapse={()=>setSidebarCollapsed(v=>!v)} chatSettings={chatSettings} />}
+      {!mobile && <Sidebar view={navKey} go={go} counts={counts} collapsed={sidebarCollapsed} onToggleCollapse={()=>setSidebarCollapsed(v=>!v)} chatSettings={chatSettings} hasScannerEvents={scannerEvents.length > 0} />}
       <div className="content">
-        {mobile ? <MobileTop go={go} counts={counts} city={city} chatSettings={chatSettings} />
+        {mobile ? <MobileTop go={go} counts={counts} city={city} chatSettings={chatSettings} hasScannerEvents={scannerEvents.length > 0} />
           : <Topbar go={go} counts={counts} dark={t.dark} onToggleTheme={() => setTweak("dark", !t.dark)} city={city} onCity={() => setCityOpen(true)} chatSettings={chatSettings} />}
         {renderView()}
         {mobile && <TabBar view={cur.view} go={go} counts={counts} chatSettings={chatSettings} />}

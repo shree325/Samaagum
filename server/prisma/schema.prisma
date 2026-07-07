@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -159,6 +160,10 @@ model booking_line_items {
   unit_price_amount_minor BigInt?
   unit_price_currency     String?              @db.Char(3)
   line_status             String               @default("active")
+  discount_minor          BigInt               @default(0)
+  tax_minor               BigInt               @default(0)
+  total_minor             BigInt?
+  attendee_capture_mode   String?
   bookings                bookings             @relation(fields: [booking_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenants                 tenants              @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   ticket_types            ticket_types?        @relation(fields: [ticket_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -191,6 +196,7 @@ model bookings {
   tenants               tenants                 @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   coupon_redemptions    coupon_redemptions[]
   disputes              disputes[]
+  invoices              invoices?
   payments              payments[]
   referral_clicks       referral_clicks[]
 
@@ -381,24 +387,26 @@ model coupon_redemptions {
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model coupons {
-  id                    String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id             String               @db.Uuid
-  event_id              String               @db.Uuid
-  code                  String
-  discount_type         coupon_discount
-  discount_amount_minor BigInt?
-  discount_currency     String?              @db.Char(3)
-  discount_percent      Decimal?             @db.Decimal(5, 2)
-  valid_from            DateTime?            @db.Timestamptz(6)
-  valid_to              DateTime?            @db.Timestamptz(6)
-  max_total             Int?
-  max_per_user          Int?
-  status                String               @default("active")
-  created_at            DateTime             @default(now()) @db.Timestamptz(6)
-  updated_at            DateTime             @default(now()) @db.Timestamptz(6)
-  coupon_redemptions    coupon_redemptions[]
-  events                events               @relation(fields: [event_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tenants               tenants              @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                         String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                  String               @db.Uuid
+  event_id                   String               @db.Uuid
+  code                       String
+  discount_type              coupon_discount
+  discount_amount_minor      BigInt?
+  discount_currency          String?              @db.Char(3)
+  discount_percent           Decimal?             @db.Decimal(5, 2)
+  valid_from                 DateTime?            @db.Timestamptz(6)
+  valid_to                   DateTime?            @db.Timestamptz(6)
+  max_total                  Int?
+  max_per_user               Int?
+  status                     String               @default("active")
+  created_at                 DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime             @default(now()) @db.Timestamptz(6)
+  min_purchase_amount_minor  BigInt?
+  applicable_ticket_type_ids String[]             @db.Uuid
+  coupon_redemptions         coupon_redemptions[]
+  events                     events               @relation(fields: [event_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenants                    tenants              @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([event_id, code])
 }
@@ -555,6 +563,7 @@ model events {
   created_at             DateTime                 @default(now()) @db.Timestamptz(6)
   updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
   instruction            String?
+  eligibility_rules      Json                     @default("{}")
   addons                 addons[]
   bookings               bookings[]
   bundles                bundles[]
@@ -562,6 +571,7 @@ model events {
   collaborations         collaborations[]
   conversations          conversations[]
   coupons                coupons[]
+  event_invitations      event_invitations[]
   eventMedias            event_media[]
   event_team_assignments event_team_assignments[]
   entities               entities                 @relation(fields: [hosted_by_entity_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -575,26 +585,25 @@ model events {
   ticket_types           ticket_types[]
   waitlist_entries       waitlist_entries[]
   wishlists              wishlists[]
-  event_invitations      event_invitations[]
 
   @@index([hosted_by_entity_id], map: "idx_events_hosted_by_entity_id")
   @@index([status], map: "idx_events_status")
 }
 
 model event_invitations {
-  id                                             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  event_id                                       String    @db.Uuid
-  purpose                                        String
-  token                                          String    @unique
-  status                                         String    @default("pending")
-  created_by                                     String?   @db.Uuid
-  used_by                                        String?   @db.Uuid
-  used_at                                        DateTime? @db.Timestamptz(6)
-  created_at                                     DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at                                     DateTime  @default(now()) @db.Timestamptz(6)
-  events                                         events    @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  users_event_invitations_created_byTousers      users?    @relation("event_invitations_created_byTousers", fields: [created_by], references: [id], onDelete: SetNull)
-  users_event_invitations_used_byTousers         users?    @relation("event_invitations_used_byTousers", fields: [used_by], references: [id], onDelete: SetNull)
+  id                                        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id                                  String    @db.Uuid
+  purpose                                   String
+  token                                     String    @unique
+  status                                    String    @default("pending")
+  created_by                                String?   @db.Uuid
+  used_by                                   String?   @db.Uuid
+  used_at                                   DateTime? @db.Timestamptz(6)
+  created_at                                DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at                                DateTime? @default(now()) @db.Timestamptz(6)
+  users_event_invitations_created_byTousers users?    @relation("event_invitations_created_byTousers", fields: [created_by], references: [id], onUpdate: NoAction)
+  events                                    events    @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_event_invitations_used_byTousers    users?    @relation("event_invitations_used_byTousers", fields: [used_by], references: [id], onUpdate: NoAction)
 
   @@index([event_id], map: "idx_event_invitations_event")
   @@index([token], map: "idx_event_invitations_token")
@@ -1267,6 +1276,9 @@ model referral_links {
   commission_rule       Json?
   created_at            DateTime                @default(now()) @db.Timestamptz(6)
   updated_at            DateTime                @default(now()) @db.Timestamptz(6)
+  status                String                  @default("active")
+  clicked_count         Int                     @default(0)
+  converted_count       Int                     @default(0)
   affiliate_commissions affiliate_commissions[]
   referral_clicks       referral_clicks[]
   affiliates            affiliates              @relation(fields: [affiliate_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -1644,11 +1656,11 @@ model tickets {
   attendee_email     String?            @db.Citext
   attendee_gender    String?
   qr_token           String             @unique
-  ticket_code        String?            @unique
   status             ticket_status      @default(reserved)
   claimed_by_user_id String?            @db.Uuid
   created_at         DateTime           @default(now()) @db.Timestamptz(6)
   updated_at         DateTime           @default(now()) @db.Timestamptz(6)
+  ticket_code        String?            @unique
   attendees          attendees[]
   checkins           checkins[]
   ticket_claims      ticket_claims[]
@@ -1723,8 +1735,6 @@ model users {
   attendees_attendees_created_byTousers                                attendees[]                  @relation("attendees_created_byTousers")
   attendees_attendees_updated_byTousers                                attendees[]                  @relation("attendees_updated_byTousers")
   attendees_attendees_user_idTousers                                   attendees[]                  @relation("attendees_user_idTousers")
-  event_invitations_event_invitations_created_byTousers                event_invitations[]          @relation("event_invitations_created_byTousers")
-  event_invitations_event_invitations_used_byTousers                   event_invitations[]          @relation("event_invitations_used_byTousers")
   auth_identities                                                      auth_identities[]
   blocked_users_blocked_users_blocked_idTousers                        blocked_users[]              @relation("blocked_users_blocked_idTousers")
   blocked_users_blocked_users_blocker_idTousers                        blocked_users[]              @relation("blocked_users_blocker_idTousers")
@@ -1741,6 +1751,8 @@ model users {
   entities                                                             entities[]
   event_categories_event_categories_created_byTousers                  event_categories[]           @relation("event_categories_created_byTousers")
   event_categories_event_categories_updated_byTousers                  event_categories[]           @relation("event_categories_updated_byTousers")
+  event_invitations_event_invitations_created_byTousers                event_invitations[]          @relation("event_invitations_created_byTousers")
+  event_invitations_event_invitations_used_byTousers                   event_invitations[]          @relation("event_invitations_used_byTousers")
   event_media_event_media_created_byTousers                            event_media[]                @relation("event_media_created_byTousers")
   event_media_event_media_updated_byTousers                            event_media[]                @relation("event_media_updated_byTousers")
   event_team_assignments_event_team_assignments_granted_byTousers      event_team_assignments[]     @relation("event_team_assignments_granted_byTousers")
@@ -1937,10 +1949,10 @@ model admin_subscription_plans {
   rbac_role_id        String?               @db.Uuid
   rbac_position_id    String?               @db.Uuid
   rbac_auto_assign    Boolean               @default(false)
-  is_default          Boolean               @default(false)
   tenant_id           String?               @db.Uuid
   created_at          DateTime              @default(now()) @db.Timestamptz(6)
   updated_at          DateTime              @default(now()) @db.Timestamptz(6)
+  is_default          Boolean?              @default(false)
   admin_positions     admin_positions?      @relation(fields: [rbac_position_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   admin_roles         admin_roles?          @relation(fields: [rbac_role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenants             tenants?              @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -2020,17 +2032,18 @@ model subscription_orders {
 }
 
 model invoices {
-  id             String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  invoice_number String              @unique
-  order_id       String              @unique @db.Uuid
+  id             String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoice_number String               @unique
+  order_id       String?              @unique @db.Uuid
+  created_at     DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime             @default(now()) @db.Timestamptz(6)
   pdf_data       Bytes
-  created_at     DateTime            @default(now()) @db.Timestamptz(6)
-  updated_at     DateTime            @default(now()) @db.Timestamptz(6)
-  order          subscription_orders @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  booking_id     String?              @unique(map: "idx_invoices_booking_unique", where: raw("(booking_id IS NOT NULL)")) @db.Uuid
+  bookings       bookings?            @relation(fields: [booking_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  order          subscription_orders? @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([order_id], map: "idx_invoices_order")
 }
-
 
 model otp_verifications {
   id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -2642,7 +2655,6 @@ model messaging_requests {
   @@unique([sender_id, receiver_id])
 }
 
-
 enum assignment_state {
   invited
   active
@@ -2931,4 +2943,3 @@ enum ConversationParticipantStatus {
   LEFT
   EXPIRED
 }
-

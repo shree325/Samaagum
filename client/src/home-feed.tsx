@@ -269,12 +269,18 @@ export function Discover({ st, go }) {
       price: priceVal,
       attendees: [],
       status: e.status,
-      starts_at: e.starts_at
+      starts_at: e.starts_at,
+      ends_at: e.ends_at
     };
   }).filter(e => {
     if (e.status !== "published") return false;
     if (cat !== "All" && e.cat !== cat) return false;
-    if (e.starts_at && new Date(e.starts_at) < new Date()) return false;
+    
+    // Only hide events that have already ended (or started > 24h ago if no ends_at)
+    if (e.starts_at) {
+      const endTime = e.ends_at ? new Date(e.ends_at) : new Date(new Date(e.starts_at).getTime() + 24 * 60 * 60 * 1000);
+      if (endTime < new Date()) return false;
+    }
     
     const isRegistered = registered?.has(e.id);
     if (eventFilter === "joined" && !isRegistered) return false;
