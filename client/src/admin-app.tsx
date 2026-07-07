@@ -140,7 +140,7 @@ export const FEATURE_FLAGS = [
 ];
 
 // --- UNIFIED API CLIENT FOR ADMIN PANEL ---
-export const apiClient = new window.AdminApiClient();
+export const apiClient = new AdminApiClient();
 
 export const adminApi = {
   // Provider settings from unified-admin-service.yaml configuration logic

@@ -3,7 +3,23 @@ import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'mpa-fallback',
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (req.url) {
+            const urlPath = req.url.split('?')[0];
+            if (urlPath === '/pages/admin' || urlPath === '/pages/admin/') {
+              req.url = '/pages/admin/index.html' + (req.url.includes('?') ? '?' + req.url.split('?')[1] : '');
+            }
+          }
+          next();
+        });
+      }
+    }
+  ],
   root: '.',
   build: {
     outDir: 'dist',

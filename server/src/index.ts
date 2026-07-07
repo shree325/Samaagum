@@ -239,4 +239,4 @@ process.once('SIGUSR2', () => gracefulShutdown('SIGUSR2'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
-start();
+start(); // Trigger nodemon restart
