@@ -58,7 +58,7 @@ export function FeedFilters({ cat, setCat, quick, setQuick }) {
 export function HomeFeed({ st, go }) {
   const [cat, setCat] = useState("All");
   const [quick, setQuick] = useState([]);
-  const { saved, toggleSave, connected, toggleConnect, registered, city } = st;
+  const { wishlisted, wishlistCounts, toggleWishlist, connected, toggleConnect, registered, city } = st;
 
   const filtered = EVENTS.filter(e => {
     if (cat !== "All" && e.cat !== cat) return false;
@@ -74,7 +74,7 @@ export function HomeFeed({ st, go }) {
         <FeedFilters cat={cat} setCat={setCat} quick={quick} setQuick={setQuick} />
 
         {/* Featured */}
-        <FeatureCard ev={FEATURED} onOpen={(e) => go("event", e)} saved={saved.has(FEATURED.id)} onSave={() => toggleSave(FEATURED.id)} />
+        <FeatureCard ev={FEATURED} onOpen={(e) => go("event", e)} wishlisted={wishlisted.has(FEATURED.id)} wishlistCount={wishlistCounts[FEATURED.id] || 0} onWishlist={() => toggleWishlist(FEATURED.id)} />
 
         {/* Recommended rail */}
         <div className="section">
@@ -83,7 +83,7 @@ export function HomeFeed({ st, go }) {
             <div className="ev-rail">
               {filtered.map(ev => (
                 <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)}
-                  saved={saved.has(ev.id)} onSave={() => toggleSave(ev.id)} registered={registered.has(ev.id)} />
+                  wishlisted={wishlisted.has(ev.id)} wishlistCount={wishlistCounts[ev.id] || 0} onWishlist={() => toggleWishlist(ev.id)} registered={registered.has(ev.id)} />
               ))}
             </div>
           ) : (
@@ -99,7 +99,7 @@ export function HomeFeed({ st, go }) {
           <div className="ev-grid">
             {UPCOMING.map(ev => (
               <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)}
-                saved={saved.has(ev.id)} onSave={() => toggleSave(ev.id)} registered={true} />
+                wishlisted={wishlisted.has(ev.id)} wishlistCount={wishlistCounts[ev.id] || 0} onWishlist={() => toggleWishlist(ev.id)} registered={true} />
             ))}
           </div>
         </div>
@@ -150,7 +150,7 @@ export function Discover({ st, go }) {
   const [cat, setCat] = useState("All");
   const [groupFilter, setGroupFilter] = useState("all");
   const [eventFilter, setEventFilter] = useState("all");
-  const { saved, toggleSave, registered, city, addJoined, addPending } = st;
+  const { wishlisted, wishlistCounts, toggleWishlist, registered, city, addJoined, addPending } = st;
   const [dbEvents, setDbEvents] = useState([]);
 
   const [dbGroups, setDbGroups] = useState([]);
@@ -335,7 +335,7 @@ export function Discover({ st, go }) {
             <Empty icon={<I.ticket />} title="No events found" text="There are no events scheduled in this category." />
           ) : (
             <div className="ev-grid">
-              {evs.map(ev => <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)} saved={saved.has(ev.id)} onSave={() => toggleSave(ev.id)} registered={registered.has(ev.id)} />)}
+              {evs.map(ev => <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)} wishlisted={wishlisted.has(ev.id)} wishlistCount={wishlistCounts[ev.id] || 0} onWishlist={() => toggleWishlist(ev.id)} registered={registered.has(ev.id)} />)}
             </div>
           )
         ) : (

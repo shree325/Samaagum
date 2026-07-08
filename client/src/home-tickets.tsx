@@ -315,7 +315,8 @@ export function MyTickets({ st, go }) {
       : tab === "past" ? pastList
         : tab === "waitlist" ? waitlistedEvents
           : tab === "archived" ? archivedList
-            : createdList;
+            : tab === "wishlist" ? (st.wishlistEvents || [])
+              : createdList;
 
   return (
     <div className="scroll">
@@ -323,13 +324,14 @@ export function MyTickets({ st, go }) {
         <div className="sec-bar" style={{ marginBottom: 18 }}>
           <h2 style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => go("discover", "events")}>
             My Events
-            <span style={{ fontSize: 18, color: "var(--ink-3)", fontWeight: 500 }}>{upcoming.length + pending.length + waitlistedEvents.length + createdList.length + pastList.length + archivedList.length}</span>
+            <span style={{ fontSize: 18, color: "var(--ink-3)", fontWeight: 500 }}>{upcoming.length + pending.length + waitlistedEvents.length + createdList.length + pastList.length + archivedList.length + (st.wishlistEvents?.length || 0)}</span>
           </h2>
           <div style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
             <div className="seg-tabs">
               <button className={tab === "upcoming" ? "on" : ""} onClick={() => setTab("upcoming")}>Upcoming · {upcoming.length}</button>
               <button className={tab === "pending" ? "on" : ""} onClick={() => setTab("pending")}>Pending · {pending.length}</button>
               <button className={tab === "waitlist" ? "on" : ""} onClick={() => setTab("waitlist")}>Waitlist · {waitlistedEvents.length}</button>
+              <button className={tab === "wishlist" ? "on" : ""} onClick={() => setTab("wishlist")}>Wishlist · {st.wishlistEvents?.length || 0}</button>
               <button className={tab === "created" ? "on" : ""} onClick={() => setTab("created")}>Created · {createdList.length}</button>
               <button className={tab === "past" ? "on" : ""} onClick={() => setTab("past")}>Past · {pastList.length}</button>
               <button className={tab === "archived" ? "on" : ""} onClick={() => setTab("archived")}>Archived · {archivedList.length}</button>
@@ -344,6 +346,8 @@ export function MyTickets({ st, go }) {
           <Empty icon={<I.groups />} title="No waitlisted events" text="You aren't on the waitlist for any events yet." action={<button className="hbtn hbtn--primary" onClick={() => go("discover", "events")}>Discover events</button>} />
         ) : tab === "created" && createdList.length === 0 ? (
           <Empty icon={<I.plus />} title="No hosted events" text="Create and share your first event to host it here." action={<button className="hbtn hbtn--primary" onClick={() => go("create-event")}>Create Event</button>} />
+        ) : tab === "wishlist" && (st.wishlistEvents?.length || 0) === 0 ? (
+          <Empty icon={<I.heart />} title="Your wishlist is empty" text="Save events you're interested in to easily find them later." action={<button className="hbtn hbtn--primary" onClick={() => go("discover", "events")}>Discover events</button>} />
         ) : tab === "archived" && archivedList.length === 0 ? (
           <Empty icon={<I.archive />} title="No archived events" text="Cancelled or removed events will appear here for your records." action={<button className="hbtn hbtn--primary" onClick={() => go("discover", "events")}>Discover events</button>} />
         ) : list.length === 0 ? (
@@ -381,6 +385,44 @@ export function MyTickets({ st, go }) {
                 </div>
               );
             })}
+          </div>
+        ) : tab === "wishlist" ? (
+          <div className="wallet-grid">
+            {st.wishlistEvents?.length === 0 ? (
+              <Empty icon={<I.heart />} title="No wishlisted events" text="Events you wishlist will appear here." action={<button className="hbtn hbtn--primary" onClick={() => go("discover", "events")}>Discover events</button>} />
+            ) : (
+              st.wishlistEvents?.map(e => {
+                const startsAt = e.starts_at ? new Date(e.starts_at) : null;
+                const dateStr = startsAt ? startsAt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : "Date TBD";
+                const timeStr = startsAt ? startsAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : "";
+                let venueObj = {};
+                if (typeof e.venue === 'object' && e.venue !== null) venueObj = e.venue;
+                else if (typeof e.venue === 'string') { try { venueObj = JSON.parse(e.venue); } catch { venueObj = { name: e.venue }; } }
+                const venueStr = e.location_type === 'online' ? 'Online' : (venueObj.name || venueObj.address || 'Venue TBD');
+                return (
+                  <div key={e.id} className="tkt" onClick={() => go("event", e)}>
+                    <div className="tkt-cov" style={{ background: e.cover && !e.cover.startsWith('http') ? e.cover : `url(${e.cover || ''}) center/cover no-repeat` }}>
+                      <Grain />
+                      <span className="pill" style={{ background: "rgba(236,72,153,0.92)", color: "#fff" }}>
+                        <span className="pdot" style={{ background: "#fff" }} />Wishlisted
+                      </span>
+                    </div>
+                    <span className="perf l" /><span className="perf r" />
+                    <div className="tkt-body">
+                      <div className="tkt-ttl">{e.title}</div>
+                      <div className="tkt-meta">
+                        <span><I.cal style={{ width: 14, height: 14 }} /> {dateStr} · {timeStr}</span>
+                        <span>{e.location_type === 'online' ? <I.online style={{ width: 14, height: 14 }} /> : <I.pin style={{ width: 14, height: 14 }} />} {venueStr}</span>
+                      </div>
+                      <div className="tkt-foot">
+                        <span className="tkt-id">#{e.id?.slice(0, 8)}</span>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--accent-1)" }}>Wishlisted ❤️</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         ) : tab === "waitlist" ? (
           <div className="wallet-grid">
@@ -702,6 +744,21 @@ export function TicketDetail({ tkt, st, go }) {
   const used = t.status === "used" || t.checkedIn;
   const verifyToken = t.qrToken || t.id;
 
+  const addToCalendar = () => {
+    const startStr = t.starts_at ? new Date(t.starts_at).toISOString().replace(/-|:|\.\d\d\d/g, "") : "";
+    let endStr = t.ends_at ? new Date(t.ends_at).toISOString().replace(/-|:|\.\d\d\d/g, "") : "";
+    if (!endStr && startStr) {
+      // Default to 1 hour duration if no end time
+      endStr = new Date(new Date(t.starts_at).getTime() + 60 * 60 * 1000).toISOString().replace(/-|:|\.\d\d\d/g, "");
+    }
+    const dates = startStr && endStr ? `&dates=${startStr}/${endStr}` : "";
+    const title = encodeURIComponent(t.ev || "Event");
+    const details = encodeURIComponent("Tickets booked via Samaagum");
+    const location = encodeURIComponent(t.venue !== "Online" ? t.venue || "" : "");
+    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}${dates}&details=${details}&location=${location}`;
+    window.open(url, "_blank");
+  };
+
   return (
     <div className="scroll">
       <div className="flow view-enter" style={{ padding: "26px 24px 80px" }}>
@@ -758,7 +815,7 @@ export function TicketDetail({ tkt, st, go }) {
 
             <div style={{ display: "flex", gap: 9, marginTop: 18 }}>
               <button className="hbtn hbtn--ghost" style={{ flex: 1 }} onClick={() => downloadInvoice(t)}><I.download /> Invoice</button>
-              <button className="hbtn hbtn--ghost" style={{ flex: 1 }} onClick={() => alert("Event added to your calendar.")}><I.cal /> Add to calendar</button>
+              <button className="hbtn hbtn--ghost" style={{ flex: 1 }} onClick={addToCalendar}><I.cal /> Add to calendar</button>
               <button className="hbtn hbtn--ghost" style={{ flex: 1 }} onClick={() => shareTicket(t)}><I.share /> Share</button>
             </div>
           </div>
@@ -1018,7 +1075,7 @@ export function VerifyTicketPanel({ eventId, onCheckedIn }) {
 
 export function EventDashboard({ ev, st, go }) {
   const e = ev || st.createdEvents[0];
-  const [stats, setStats] = useState({ totalAttendees: 0, checkedInCount: 0, pendingRequestsCount: 0, revenue: 0, capacity: 120, confirmed: [], requests: [] });
+  const [stats, setStats] = useState({ totalAttendees: 0, checkedInCount: 0, pendingRequestsCount: 0, revenue: 0, capacity: 120, wishlistCount: 0, confirmed: [], requests: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -1169,6 +1226,10 @@ export function EventDashboard({ ev, st, go }) {
             <div style={{ background: "var(--field)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
               <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Registered</div>
               <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>{stats.totalAttendees} <span style={{ fontSize: 13, fontWeight: 400, color: "var(--ink-3)" }}>/ {stats.capacity}</span></div>
+            </div>
+            <div style={{ background: "var(--field)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
+              <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Wishlisted</div>
+              <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: "#e91e63" }}>❤️ {stats.wishlistCount || 0}</div>
             </div>
             <div style={{ background: "var(--field)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
               <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Estimated Revenue</div>

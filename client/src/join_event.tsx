@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { I, Avatar, Grain } from './home-icons';
 import { FEATURED, ME } from './home-data';
 
@@ -48,10 +48,36 @@ export function JoinEventPage({ ev, st, go }) {
         }
     }
 
-    const { saved, toggleSave, register, city, waitlisted } = st;
-    const isSaved = saved.has(e.id);
+    const { wishlisted, toggleWishlist, register, city, waitlisted } = st;
+    const isWishlisted = wishlisted ? wishlisted.has(e.id) : false;
     const isWaitlisted = waitlisted ? waitlisted.has(e.id) : false;
     const isSoldOut = e.going >= (e.cap || 9999) || e.id === "ev-feat";
+    const [regStatus, setRegStatus] = useState(
+        e.registrationStatus || e.registration_status || "OPEN"
+    );
+    const isClosed = regStatus === "CLOSED";
+    const isScheduled = regStatus === "SCHEDULED";
+
+    // Always fetch live registration status from server so the button state
+    // reflects reality even if the card navigation data was stale.
+    const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+    const UUID_RE_J = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    useEffect(() => {
+        if (!e.id || !UUID_RE_J.test(e.id)) return;
+        const tok = localStorage.getItem('token');
+        fetch(`${apiBase}/api/events/${e.id}`, {
+            headers: tok ? { 'Authorization': `Bearer ${tok}` } : {}
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.data?.event) {
+                    const srv = data.data.event;
+                    const s = srv.registrationStatus || srv.registration_status || "OPEN";
+                    setRegStatus(s);
+                }
+            })
+            .catch(() => {});
+    }, [e.id]);
 
     const chatSettings = st.chatSettings || {
         allowSiteMessaging: true,
@@ -90,7 +116,7 @@ export function JoinEventPage({ ev, st, go }) {
                     <Grain /><div className="scrim" />
                     <button className="detail-back" onClick={() => { go("home"); }}><I.arrowL />Back</button>
                     <div className="detail-actions-top">
-                        <button className={`cbtn ${isSaved ? "on" : ""}`} onClick={() => toggleSave(e.id)}>{isSaved ? <I.bookmarkF /> : <I.bookmark />}</button>
+                        <button className={`cbtn ${isWishlisted ? "on" : ""}`} onClick={() => toggleWishlist && toggleWishlist(e.id)}>{isWishlisted ? <I.heartF /> : <I.heart />}</button>
                         <button className="cbtn"><I.share /></button>
                     </div>
                 </div>
@@ -151,71 +177,90 @@ export function JoinEventPage({ ev, st, go }) {
                                 </div>
                             )}
 
-                            <div className="ev-block">
-                                <h3>{e.going} attending</h3>
-                                <div className="att-grid">
-                                    {attendees.map(n => <div key={n} className="att"><Avatar name={n} size={28} /><span className="nm">{n}</span></div>)}
-                                    <div className="att" style={{ paddingRight: 14 }}><div className="av" style={{ width: 28, height: 28, fontSize: 11, background: "var(--surface-2)", color: "var(--ink-2)" }}>+{Math.max(0, e.going - attendees.length)}</div><span className="nm">more</span></div>
+                            {!(isClosed || isScheduled) && (
+                                <div className="ev-block">
+                                    <h3>{e.going} attending</h3>
+                                    <div className="att-grid">
+                                        {attendees.map(n => <div key={n} className="att"><Avatar name={n} size={28} /><span className="nm">{n}</span></div>)}
+                                        <div className="att" style={{ paddingRight: 14 }}><div className="av" style={{ width: 28, height: 28, fontSize: 11, background: "var(--surface-2)", color: "var(--ink-2)" }}>+{Math.max(0, e.going - attendees.length)}</div><span className="nm">more</span></div>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
 
                         {/* Ticket sidebar */}
                         <div className="ev-aside">
-                            <div className="ticket-box">
-                                <div className="tb-head">
-                                    <div className="pmeta">
-                                        <span className="price-big" style={e.type === "Free" ? { color: "#1f9d57" } : {}}>{sel.free ? "Free" : sel.p}</span>
-                                        {!sel.free && <span className="price-un">onwards</span>}
+                            {isClosed || isScheduled ? (
+                                <div className="ticket-box" style={{ padding: "32px 24px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+                                    <div style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--surface-3)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-2)" }}>
+                                        {isScheduled ? <I.clock style={{ width: 24, height: 24 }} /> : <I.lock style={{ width: 24, height: 24 }} />}
                                     </div>
-                                    <div className="seats">
-                                        <span style={{ whiteSpace: "nowrap" }}>{e.cap - e.going} left</span>
-                                        <div className="bar"><i style={{ width: `${pct}%` }} /></div>
-                                        <span style={{ whiteSpace: "nowrap", color: "var(--ink-3)" }}>{pct}% full</span>
-                                    </div>
+                                    <h3 style={{ margin: 0, fontSize: 18 }}>{isScheduled ? "Coming Soon" : "Registration Closed"}</h3>
+                                    <p style={{ margin: 0, fontSize: 13.5, color: "var(--ink-3)", lineHeight: 1.4 }}>
+                                        {isScheduled 
+                                            ? "Registration for this event will open soon. Save the event to be notified." 
+                                            : "The host has closed registration for this event."}
+                                    </p>
+                                    <button className="hbtn hbtn--primary hbtn--block" style={{ marginTop: 8 }} onClick={() => toggleWishlist && toggleWishlist(e.id)}>
+                                        {isWishlisted ? "Wishlisted" : "Add to Wishlist"}
+                                    </button>
                                 </div>
-                                <div className="tier-list">
-                                    {tiers.map(t => (
-                                        <div key={t.id} className={`tier ${tier === t.id ? "on" : ""}`} onClick={() => setTier(t.id)}>
-                                            <span className="radio" />
-                                            <div className="ti"><div className="n">{t.n}</div><div className="d">{t.d}</div>{t.early && <span className="early">EARLY BIRD</span>}</div>
-                                            <div className={`tp ${t.free ? "free" : ""}`}>{t.free ? "Free" : t.p}</div>
+                            ) : (
+                                <div className="ticket-box">
+                                    <div className="tb-head">
+                                        <div className="pmeta">
+                                            <span className="price-big" style={e.type === "Free" ? { color: "#1f9d57" } : {}}>{sel.free ? "Free" : sel.p}</span>
+                                            {!sel.free && <span className="price-un">onwards</span>}
                                         </div>
-                                    ))}
-                                </div>
-                                <div className="ticket-foot">
-                                    <div className="qty">
-                                        <span className="lbl">Quantity</span>
-                                        <div className="stepper">
-                                            <button onClick={() => setQty(q => Math.max(1, q - 1))}>–</button>
-                                            <span className="n">{qty}</span>
-                                            <button onClick={() => setQty(q => Math.min(6, q + 1))}>+</button>
+                                        <div className="seats">
+                                            <span style={{ whiteSpace: "nowrap" }}>{e.cap - e.going} left</span>
+                                            <div className="bar"><i style={{ width: `${pct}%` }} /></div>
+                                            <span style={{ whiteSpace: "nowrap", color: "var(--ink-3)" }}>{pct}% full</span>
                                         </div>
                                     </div>
-                                    {e.bookingStatus === 'pending_approval' ? (
-                                        <button className="hbtn hbtn--soft hbtn--block" disabled>
-                                            Pending Approval
-                                        </button>
-                                    ) : isSoldOut ? (
-                                        isWaitlisted ? (
-                                            <button className="hbtn hbtn--soft hbtn--block" style={{ color: "var(--accent-2)" }} onClick={() => go("waitlist", e)}>
-                                                <I.users /> View Waitlist Status
+                                    <div className="tier-list">
+                                        {tiers.map(t => (
+                                            <div key={t.id} className={`tier ${tier === t.id ? "on" : ""}`} onClick={() => setTier(t.id)}>
+                                                <span className="radio" />
+                                                <div className="ti"><div className="n">{t.n}</div><div className="d">{t.d}</div>{t.early && <span className="early">EARLY BIRD</span>}</div>
+                                                <div className={`tp ${t.free ? "free" : ""}`}>{t.free ? "Free" : t.p}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="ticket-foot">
+                                        <div className="qty">
+                                            <span className="lbl">Quantity</span>
+                                            <div className="stepper">
+                                                <button onClick={() => setQty(q => Math.max(1, q - 1))}>–</button>
+                                                <span className="n">{qty}</span>
+                                                <button onClick={() => setQty(q => Math.min(6, q + 1))}>+</button>
+                                            </div>
+                                        </div>
+                                        {e.bookingStatus === 'pending_approval' ? (
+                                            <button className="hbtn hbtn--soft hbtn--block" disabled>
+                                                Pending Approval
                                             </button>
+                                        ) : isSoldOut ? (
+                                            isWaitlisted ? (
+                                                <button className="hbtn hbtn--soft hbtn--block" style={{ color: "var(--accent-2)" }} onClick={() => go("waitlist", e)}>
+                                                    <I.users /> View Waitlist Status
+                                                </button>
+                                            ) : (
+                                                <button className="hbtn hbtn--primary hbtn--block" onClick={() => { st.toggleWaitlist(e.id); go("waitlist", e); }}>
+                                                    Join Waitlist
+                                                </button>
+                                            )
                                         ) : (
-                                            <button className="hbtn hbtn--primary hbtn--block" onClick={() => { st.toggleWaitlist(e.id); go("waitlist", e); }}>
-                                                Join Waitlist
+                                            <button className="hbtn hbtn--primary hbtn--block" onClick={() => { register(e.id, false, null, e.inviteToken); go("events"); }}>
+                                                {e.type === "Free" ? "Request to join" : `Get ${qty > 1 ? qty + " tickets" : "ticket"}`}
                                             </button>
-                                        )
-                                    ) : (
-                                        <button className="hbtn hbtn--primary hbtn--block" onClick={() => { register(e.id, false, null, e.inviteToken); go("events"); }}>
-                                            {e.type === "Free" ? "Request to join" : `Get ${qty > 1 ? qty + " tickets" : "ticket"}`}
-                                        </button>
-                                    )}
-                                    <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center", marginTop: 11, fontSize: 12, color: "var(--ink-3)" }}>
-                                        <I.check style={{ width: 13, height: 13, color: "#1f9d57" }} /> {isSoldOut ? "Waitlist claim window: 15 mins" : e.type === "Free" ? "Approval-based · free" : "Secure checkout · instant ticket"}
+                                        )}
+                                        <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center", marginTop: 11, fontSize: 12, color: "var(--ink-3)" }}>
+                                            <I.check style={{ width: 13, height: 13, color: "#1f9d57" }} /> {isSoldOut ? "Waitlist claim window: 15 mins" : e.type === "Free" ? "Approval-based · free" : "Secure checkout · instant ticket"}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
 
                             <div className="host-card">
                                 <div className="hh"><Avatar name={e.hostBy || e.host} size={46} /><div><div className="n">{e.host}</div><div className="r">Organizer · 24 events</div></div></div>

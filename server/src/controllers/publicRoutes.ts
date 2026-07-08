@@ -29,6 +29,10 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
   });
 
   // Active locations for client-side filtering
+  fastify.get('/health', async (request, reply) => {
+    return reply.send({ status: 'ok', version: '2026-07-08T07:04:00Z' });
+  });
+
   fastify.get('/locations/active', async (request, reply) => {
     try {
       const rows = await prisma.$queryRawUnsafe<any[]>(

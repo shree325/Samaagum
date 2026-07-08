@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { R_events } from '../repositories/R_events';
 import { R_ticket_types } from '../repositories/R_ticket_types';
+import { R_wishlists } from '../repositories/R_wishlists';
 import { R_forumPosts } from '../repositories/R_forumPosts';
 import { R_forumComments } from '../repositories/R_forumComments';
 import { R_forum_reactions } from '../repositories/R_forum_reactions';
@@ -24,6 +25,7 @@ export class EventService {
   private static votesRepo = new R_forum_votes();
   private static reactionsRepo = new R_forum_reactions();
   private static usersRepo = new R_users(prisma);
+  private static wishlistRepo = new R_wishlists(prisma);
 
   /**
    * Validates event creation and update parameters against user plan entitlements.
@@ -265,7 +267,20 @@ export class EventService {
 
       const tickets = await this.ticketTypesRepo.getByEventId(ev.id!);
       const hostInfo = await this.resolveHostInfo(ev.hosted_by_entity_id);
-      enrichedList.push({ ...ev, tickets, ...hostInfo });
+      
+      const wishlistCount = await this.wishlistRepo.getCountByEventId(ev.id!);
+      const isWishlisted = userId ? await this.wishlistRepo.isWishlisted(ev.id!, userId) : false;
+
+      enrichedList.push({ 
+        ...ev, 
+        tickets, 
+        ...hostInfo,
+        wishlistCount,
+        isWishlisted,
+        registrationStatus: ev.registration_status,
+        registrationOpensAt: ev.registration_opens_at,
+        registrationClosesAt: ev.registration_closes_at
+      });
     }
     return enrichedList;
   }
@@ -303,7 +318,20 @@ export class EventService {
     for (const ev of list) {
       const tickets = await this.ticketTypesRepo.getByEventId(ev.id);
       const hostInfo = await this.resolveHostInfo(ev.hosted_by_entity_id);
-      enrichedList.push({ ...ev, tickets, ...hostInfo });
+
+      const wishlistCount = await this.wishlistRepo.getCountByEventId(ev.id);
+      const isWishlisted = await this.wishlistRepo.isWishlisted(ev.id, userId);
+
+      enrichedList.push({ 
+        ...ev, 
+        tickets, 
+        ...hostInfo,
+        wishlistCount,
+        isWishlisted,
+        registrationStatus: ev.registration_status,
+        registrationOpensAt: ev.registration_opens_at,
+        registrationClosesAt: ev.registration_closes_at
+      });
     }
     return enrichedList;
   }
@@ -321,7 +349,22 @@ export class EventService {
 
     const tickets = await this.ticketTypesRepo.getByEventId(id);
     const hostInfo = await this.resolveHostInfo(event.hosted_by_entity_id);
-    return { event: { ...event, ...hostInfo }, tickets };
+    
+    const wishlistCount = await this.wishlistRepo.getCountByEventId(id);
+    const isWishlisted = userId ? await this.wishlistRepo.isWishlisted(id, userId) : false;
+
+    return { 
+      event: { 
+        ...event, 
+        ...hostInfo,
+        wishlistCount,
+        isWishlisted,
+        registrationStatus: event.registration_status,
+        registrationOpensAt: event.registration_opens_at,
+        registrationClosesAt: event.registration_closes_at
+      }, 
+      tickets 
+    };
   }
 
   static async getAvailableEventRoles() {
@@ -511,6 +554,106 @@ export class EventService {
 
     const updated = await this.eventsRepo.update(id, { status: 'published' });
     return updated;
+  }
+
+  static async getWishlistEvents(userId: string) {
+    const wishlistItems = await this.wishlistRepo.getByUserId(userId);
+    const eventIds = wishlistItems.map(item => item.event_id);
+    if (eventIds.length === 0) return [];
+
+    const list = await prisma.events.findMany({
+      where: { id: { in: eventIds } },
+      orderBy: { starts_at: 'asc' }
+    });
+
+    const enrichedList = [];
+    for (const ev of list) {
+      const tickets = await this.ticketTypesRepo.getByEventId(ev.id);
+      const hostInfo = await this.resolveHostInfo(ev.hosted_by_entity_id);
+      const wishlistCount = await this.wishlistRepo.getCountByEventId(ev.id);
+
+      enrichedList.push({ 
+        ...ev, 
+        tickets, 
+        ...hostInfo,
+        wishlistCount,
+        isWishlisted: true,
+        registrationStatus: ev.registration_status,
+        registrationOpensAt: ev.registration_opens_at,
+        registrationClosesAt: ev.registration_closes_at
+      });
+    }
+    return enrichedList;
+  }
+
+  static async toggleWishlist(eventId: string, userId: string) {
+    return await this.wishlistRepo.toggle(eventId, userId);
+  }
+
+  static async removeWishlist(eventId: string, userId: string) {
+    return await this.wishlistRepo.removeByEventAndUser(eventId, userId);
+  }
+
+  static async updateRegistrationSettings(
+    eventId: string,
+    userId: string,
+    settings: { status: 'OPEN' | 'CLOSED' | 'SCHEDULED', opensAt?: Date, closesAt?: Date }
+  ) {
+    const event = await this.eventsRepo.getById(eventId);
+    if (!event) throw new Error('Event not found');
+
+    const isHostOrCoHost = await this.verifyEventHostOrCoHost(userId, eventId);
+    if (!isHostOrCoHost) {
+      throw new Error('Forbidden: You do not have permission to manage registration for this event');
+    }
+
+    const previousStatus = event.registration_status;
+    const isNowOpen = settings.status === 'OPEN';
+    const wasClosed = previousStatus === 'CLOSED' || previousStatus === 'SCHEDULED';
+
+    await this.eventsRepo.updateRegistrationStatus(eventId, settings.status, settings.opensAt, settings.closesAt);
+
+    // Audit log
+    await prisma.$queryRawUnsafe(`
+      INSERT INTO event_registration_log (event_id, changed_by, action)
+      VALUES ($1::uuid, $2::uuid, $3)
+    `, eventId, userId, `status_changed_to_${settings.status.toLowerCase()}`);
+
+    // Notification Fanout
+    if (wasClosed && isNowOpen) {
+      const wishlistingUsers = await this.wishlistRepo.getUsersWishlistingEvent(eventId);
+      if (wishlistingUsers.length > 0) {
+        // notify via db and socket
+        try {
+          const notificationsData = wishlistingUsers.map(({ user_id }) => ({
+            tenant_id: event.tenant_id || '00000000-0000-0000-0000-000000000000',
+            user_id: user_id,
+            channel: 'socket',
+            template_key: 'registration_opened',
+            status: 'sent',
+            provider_ref: JSON.stringify({ eventId: event.id, eventTitle: event.title })
+          }));
+
+          await prisma.notification_log.createMany({
+            data: notificationsData,
+            skipDuplicates: true
+          });
+
+          for (const { user_id } of wishlistingUsers) {
+            sendNotificationToUser(user_id, 'group.notification', {
+              type: 'registration_opened',
+              eventId: eventId,
+              eventTitle: event.title,
+              text: `Registration is now OPEN for ${event.title}!`
+            });
+          }
+        } catch (e) {
+          console.error('Failed to send wishlist notification', e);
+        }
+      }
+    }
+
+    return { status: settings.status };
   }
 
   static async verifyEventAdmin(userId: string, eventId: string): Promise<boolean> {
@@ -1440,4 +1583,6 @@ export class EventService {
       });
     }
   }
+
+
 }

@@ -5,6 +5,7 @@ import { conversationReadService } from '../services/ConversationReadService';
 import { GroupService } from '../services/GroupService';
 import { EventService } from '../services/EventService';
 import { EventInvitationService } from '../services/EventInvitationService';
+import { sendEmail, generateTicketHtml } from '../utils/email';
 
 // Must exactly match the client-side formula in normalizeJoinedEvent
 // (client/src/home-tickets.tsx) that computes the "friendly" ticket id shown to users,
@@ -986,6 +987,34 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           }
         }
 
+        if (l.template_key === 'registration_opened' && l.provider_ref) {
+          try {
+            const data = JSON.parse(l.provider_ref);
+            return {
+              id: l.id,
+              who: data.eventTitle || "Event",
+              type: "registration_opened",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `Registration is now OPEN for <b>${data.eventTitle}</b>! Grab your tickets before they run out.`,
+              action: "view_event",
+              eventId: data.eventId
+            };
+          } catch (e) {
+            return {
+              id: l.id,
+              who: "Event",
+              type: "registration_opened",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `Registration is now OPEN for an event in your wishlist!`,
+              action: "events" // Fallback
+            };
+          }
+        }
+
         if (l.template_key === 'group_created') {
           return {
             id: l.id,
@@ -1252,14 +1281,22 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         return reply.status(404).send({ success: false, message: 'Event not found' });
       }
 
+      const isHostOrCoHost = await EventService.verifyEventHostOrCoHost(userId, eventId);
+
+      // Check registration status
+      const isActuallyOpen = event.registration_status === 'OPEN' || 
+        (event.registration_status === 'SCHEDULED' && event.registration_opens_at && new Date() >= event.registration_opens_at);
+
+      if (!isActuallyOpen && !isHostOrCoHost) {
+        return reply.status(403).send({ success: false, message: 'Registration is currently closed for this event.' });
+      }
+
       // Check if access is restricted
       const venueObj = (event.venue as any) || {};
       const meta = venueObj.meta || {};
       const isRestricted = meta.joinEligibility === 'restricted';
       const isInviteOnly = meta.joinEligibility === 'invite';
       const approvalRequired = event.approval_required || isRestricted;
-
-      const isHostOrCoHost = await EventService.verifyEventHostOrCoHost(userId, eventId);
 
       if (isRestricted && !isHostOrCoHost) {
         const allowedGroups: string[] = meta.selectedAccess?.restricted?.groups || [];
@@ -1358,8 +1395,11 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       const initialStatus = approvalRequired ? 'pending_approval' : 'confirmed';
       const initialTicketStatus = approvalRequired ? 'reserved' : 'confirmed';
 
+      // Remove from wishlist if they join
+      await EventService.removeWishlist(eventId, userId).catch(err => console.error('Failed to auto-remove from wishlist', err));
+
       // Perform transaction to create booking, line item, ticket, and attendee
-      const { booking } = await prisma.$transaction(async (tx) => {
+      const { booking, ticket } = await prisma.$transaction(async (tx) => {
         const bk = await tx.bookings.create({
           data: {
             tenant_id: event.tenant_id,
@@ -1417,8 +1457,11 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           }
         });
 
-        return { booking: bk };
+        return { booking: bk, ticket: tk };
       });
+
+      // Auto-remove from wishlist if successful
+      await EventService.removeWishlist(eventId, userId).catch(() => {});
 
       // Invite unlocks the normal join flow above; it doesn't auto-confirm. Consume it now
       // that the request has actually gone through, so it can't be reused.
@@ -1495,7 +1538,39 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         if (groupsNamespace) {
           groupsNamespace.to(`event_${eventId}`).emit('dashboard_updated', { action: 'join', eventId });
         }
-        return reply.send({ success: true, status: 'confirmed', message: 'Joined event successfully.' });
+
+        let emailMsg = '';
+        if (requesterEmail) {
+          try {
+            const dateStr = event.starts_at ? new Date(event.starts_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'TBD';
+            const vObj = (event.venue as any) || {};
+            const venueStr = vObj.address || vObj.name || event.location_type || 'TBD';
+            const htmlContent = generateTicketHtml({
+              qrToken: ticket.qr_token,
+              ticketCode: ticket.ticket_code || ticket.id,
+              attendeeName: requesterName,
+              dateString: dateStr,
+              venueString: venueStr,
+              paidAmount: booking.payment_method === 'free' ? 'Free' : `₹${booking.total_amount_minor || 0}`,
+              status: ticket.status === 'confirmed' ? 'Confirmed' : 'Reserved'
+            });
+
+            await sendEmail({
+              to: requesterEmail,
+              subject: `Your ticket for ${event.title}`,
+              html: htmlContent
+            });
+            console.log(`Ticket email sent to ${requesterEmail}`);
+            emailMsg = ` Ticket emailed to ${requesterEmail}.`;
+          } catch (err: any) {
+            console.error('Failed to send ticket email:', err);
+            emailMsg = ` Failed to email ticket.`;
+          }
+        } else {
+          emailMsg = ` No email address found for user.`;
+        }
+
+        return reply.send({ success: true, status: 'confirmed', message: 'Joined event successfully.' + emailMsg });
       }
     } catch (err: any) {
       return reply.status(500).send({ success: false, message: err.message });
@@ -1586,6 +1661,43 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         const groupsNamespace = (fastify as any).io?.of('/groups');
         if (groupsNamespace) {
           groupsNamespace.to(`event_${eventId}`).emit('dashboard_updated', { action: 'accept', eventId });
+        }
+
+        try {
+          const userRec = await prisma.users.findUnique({ where: { id: requesterId } });
+          if (userRec?.primary_email && booking) {
+            const li = await prisma.booking_line_items.findFirst({ where: { booking_id: booking.id } });
+            if (li) {
+              const tk = await prisma.tickets.findFirst({ where: { line_item_id: li.id } });
+              if (tk) {
+                // Fetch the real event so we can show the correct date and venue
+                const eventForEmail = await prisma.events.findUnique({ where: { id: eventId } });
+                const vObj = (eventForEmail?.venue as any) || {};
+                const dateStr = eventForEmail?.starts_at
+                  ? new Date(eventForEmail.starts_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                  : 'TBD';
+                const venueStr = vObj.address || vObj.name || eventForEmail?.location_type || 'TBD';
+                const htmlContent = generateTicketHtml({
+                  qrToken: tk.qr_token,
+                  ticketCode: tk.ticket_code || tk.id,
+                  attendeeName: requesterName,
+                  dateString: dateStr,
+                  venueString: venueStr,
+                  paidAmount: booking.payment_method === 'free' ? 'Free' : `₹${Number(booking.total_amount_minor || 0) / 100}`,
+                  status: 'Confirmed'
+                });
+
+                await sendEmail({
+                  to: userRec.primary_email,
+                  subject: `Your ticket for ${eventTitle}`,
+                  html: htmlContent
+                });
+                console.log(`[messagingRoutes] Ticket acceptance email sent to ${userRec.primary_email}`);
+              }
+            }
+          }
+        } catch (err: any) {
+          console.error('[messagingRoutes] Failed to send accept email:', err);
         }
 
         return reply.send({ success: true, action: 'accepted' });

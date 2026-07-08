@@ -518,6 +518,25 @@ export function DashboardApp() {
         }
       })
       .catch(err => console.error('Error fetching joined events', err));
+
+    // Fetch user's wishlist
+    fetch(`${apiBase}/api/events/my/wishlist`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.data) {
+          const ids = new Set<string>();
+          const counts: Record<string, number> = {};
+          res.data.forEach((e: any) => {
+            ids.add(e.id);
+            counts[e.id] = e.wishlistCount || 1;
+          });
+          setWishlisted(ids);
+          setWishlistCounts(counts);
+        }
+      })
+      .catch(err => console.error('Error fetching wishlist', err));
   }, []);
 
   const location = useLocation();
@@ -610,7 +629,88 @@ export function DashboardApp() {
   }, [go, apiBase]);
 
       // engagement state
-  const [saved, toggleSave] = useSet([]);
+  const [wishlisted, setWishlisted] = useState<Set<string>>(new Set());
+  const [wishlistCounts, setWishlistCounts] = useState<Record<string, number>>({});
+
+  const [wishlistEvents, setWishlistEvents] = useState([]);
+
+  const fetchWishlistEvents = useCallback(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    fetch(`${apiBase}/api/events/my/wishlist`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.data) {
+          setWishlistEvents(res.data);
+        }
+      })
+      .catch(err => console.error("Error fetching wishlist events:", err));
+  }, [apiBase]);
+
+  useEffect(() => {
+    fetchWishlistEvents();
+  }, [fetchWishlistEvents]);
+
+  const toggleWishlist = useCallback(async (eventId: string) => {
+    // Optimistic update
+    const wasWishlisted = wishlisted.has(eventId);
+    setWishlisted(prev => {
+      const n = new Set(prev);
+      wasWishlisted ? n.delete(eventId) : n.add(eventId);
+      return n;
+    });
+    // Adjust count optimistically
+    setWishlistCounts(prev => ({
+      ...prev,
+      [eventId]: (prev[eventId] || 0) + (wasWishlisted ? -1 : 1)
+    }));
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      // Revert if not logged in
+      setWishlisted(prev => {
+        const n = new Set(prev);
+        wasWishlisted ? n.add(eventId) : n.delete(eventId);
+        return n;
+      });
+      setWishlistCounts(prev => ({
+        ...prev,
+        [eventId]: (prev[eventId] || 0) + (wasWishlisted ? 1 : -1)
+      }));
+      window.samaagum_go('login');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${apiBase}/api/events/${eventId}/wishlist`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(r => r.json());
+
+      if (res.success) {
+        // Sync server state
+        setWishlisted(prev => {
+          const n = new Set(prev);
+          res.data.wishlisted ? n.add(eventId) : n.delete(eventId);
+          return n;
+        });
+        setWishlistCounts(prev => ({ ...prev, [eventId]: res.data.count }));
+      }
+    } catch {
+      // Revert on error
+      setWishlisted(prev => {
+        const n = new Set(prev);
+        wasWishlisted ? n.add(eventId) : n.delete(eventId);
+        return n;
+      });
+      setWishlistCounts(prev => ({
+        ...prev,
+        [eventId]: (prev[eventId] || 0) + (wasWishlisted ? 1 : -1)
+      }));
+    }
+  }, [wishlisted, apiBase]);
   const [joined, toggleJoin, addJoined] = useSet(["g1", "g2", "g4"]);
   const [pending, togglePending, addPending] = useSet([]);
   const [createdGroups, setCreatedGroups] = useState(() => [GROUPS[1]]);
@@ -959,7 +1059,7 @@ useEffect(() => {
   }, [toggleJoin, togglePending]);
 
   const st = {
-    saved, toggleSave, joined, addJoined, pending, addPending, toggleJoin: handleJoin, connected, toggleConnect, registered, register, city,
+    wishlisted, wishlistCounts, toggleWishlist, wishlistEvents, fetchWishlistEvents, joined, addJoined, pending, addPending, toggleJoin: handleJoin, connected, toggleConnect, registered, register, city,
     myTickets, setMyTickets, waitlisted, toggleWaitlist, addClaimedTicket,
     createdEvents, setCreatedEvents, createdGroups, setCreatedGroups, fetchCreatedEvents,
     joinedEvents, setJoinedEvents, fetchJoinedEvents,

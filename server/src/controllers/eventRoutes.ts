@@ -3,6 +3,7 @@ import { EventService } from '../services/EventService';
 import { EventInvitationService } from '../services/EventInvitationService';
 import prisma from '../config/prisma';
 import QRCode from 'qrcode';
+import { sendEmail, generateTicketHtml } from '../utils/email';
 
 // Best-effort JWT decode for routes that are public but want to personalize the response
 // (e.g. visibility gating, booking status) when a caller happens to be logged in.
@@ -90,6 +91,46 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
         try {
             if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
             const data = await EventService.getUserEvents(request.user.id);
+            return reply.send({ success: true, data });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // POST /:id/wishlist
+    fastify.post('/:id/wishlist', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const data = await EventService.toggleWishlist(request.params.id, request.user.id);
+            return reply.send({ success: true, data });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // PATCH /:id/registration
+    fastify.patch('/:id/registration', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { status, opensAt, closesAt } = request.body;
+            if (!status) return reply.status(400).send({ success: false, message: 'status is required' });
+            
+            const data = await EventService.updateRegistrationSettings(
+                request.params.id,
+                request.user.id,
+                { status, opensAt, closesAt }
+            );
+            return reply.send({ success: true, data });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // GET /my/wishlist
+    fastify.get('/my/wishlist', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const data = await EventService.getWishlistEvents(request.user.id);
             return reply.send({ success: true, data });
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });
@@ -666,6 +707,10 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 .reduce((sum, b) => sum + Number(b.total_amount_minor || 0), 0);
 
             const checkedInCount = confirmedAttendees.filter(a => a.checkin_status === 'checked_in').length;
+            
+            const wishlistCount = await prisma.event_wishlist.count({
+                where: { event_id: id }
+            });
 
             return {
                 success: true,
@@ -675,6 +720,7 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                     pendingRequestsCount: pendingRequests.length,
                     revenue: totalRevenueMinor / 100,
                     capacity: event.capacity_total || 120,
+                    wishlistCount,
                     confirmed: confirmedAttendees.map(a => {
                         let parsedAnswers = {};
                         try {
@@ -782,6 +828,45 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const groupsNamespace = (fastify as any).io?.of('/groups');
             if (groupsNamespace) {
                 groupsNamespace.to(`event_${id}`).emit('dashboard_updated', { action, eventId: id });
+            }
+
+            // Send ticket email if request was accepted
+            if (action === 'accept' && guestId) {
+                try {
+                    const guestUser = await prisma.users.findUnique({ where: { id: guestId } });
+                    if (guestUser?.primary_email) {
+                        const li = await prisma.booking_line_items.findFirst({ where: { booking_id: bookingId } });
+                        const tk = li ? await prisma.tickets.findFirst({ where: { line_item_id: li.id } }) : null;
+                        if (tk) {
+                            const guestProfile = await prisma.profiles.findUnique({ where: { user_id: guestId } });
+                            const guestName = guestProfile?.display_name ||
+                                [guestUser.first_name, guestUser.last_name].filter(Boolean).join(' ') ||
+                                guestUser.primary_email.split('@')[0];
+                            const vObj = (event?.venue as any) || {};
+                            const dateStr = event?.starts_at
+                                ? new Date(event.starts_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                                : 'TBD';
+                            const venueStr = vObj.address || vObj.name || event?.location_type || 'TBD';
+                            const htmlContent = generateTicketHtml({
+                                qrToken: tk.qr_token,
+                                ticketCode: tk.ticket_code || tk.id,
+                                attendeeName: guestName,
+                                dateString: dateStr,
+                                venueString: venueStr,
+                                paidAmount: booking.payment_method === 'free' ? 'Free' : `₹${Number(booking.total_amount_minor || 0) / 100}`,
+                                status: 'Confirmed'
+                            });
+                            await sendEmail({
+                                to: guestUser.primary_email,
+                                subject: `Your ticket for ${event?.title}`,
+                                html: htmlContent
+                            });
+                            console.log(`[eventRoutes] Ticket email sent to ${guestUser.primary_email} after admin approval`);
+                        }
+                    }
+                } catch (emailErr: any) {
+                    console.error('[eventRoutes] Failed to send ticket email after approval:', emailErr.message);
+                }
             }
 
             return { success: true, message: `Request ${action}ed successfully.` };
@@ -1431,4 +1516,5 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             return reply.status(500).send({ success: false, message: e.message });
         }
     });
+
 };
