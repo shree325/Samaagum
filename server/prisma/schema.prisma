@@ -562,6 +562,7 @@ model events {
   collaborations         collaborations[]
   conversations          conversations[]
   coupons                coupons[]
+  event_invitations      event_invitations[]
   eventMedias            event_media[]
   event_team_assignments event_team_assignments[]
   entities               entities                 @relation(fields: [hosted_by_entity_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -575,26 +576,25 @@ model events {
   ticket_types           ticket_types[]
   waitlist_entries       waitlist_entries[]
   wishlists              wishlists[]
-  event_invitations      event_invitations[]
 
   @@index([hosted_by_entity_id], map: "idx_events_hosted_by_entity_id")
   @@index([status], map: "idx_events_status")
 }
 
 model event_invitations {
-  id                                             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  event_id                                       String    @db.Uuid
-  purpose                                        String
-  token                                          String    @unique
-  status                                         String    @default("pending")
-  created_by                                     String?   @db.Uuid
-  used_by                                        String?   @db.Uuid
-  used_at                                        DateTime? @db.Timestamptz(6)
-  created_at                                     DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at                                     DateTime  @default(now()) @db.Timestamptz(6)
-  events                                         events    @relation(fields: [event_id], references: [id], onDelete: Cascade)
-  users_event_invitations_created_byTousers      users?    @relation("event_invitations_created_byTousers", fields: [created_by], references: [id], onDelete: SetNull)
-  users_event_invitations_used_byTousers         users?    @relation("event_invitations_used_byTousers", fields: [used_by], references: [id], onDelete: SetNull)
+  id                                        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id                                  String    @db.Uuid
+  purpose                                   String
+  token                                     String    @unique
+  status                                    String    @default("pending")
+  created_by                                String?   @db.Uuid
+  used_by                                   String?   @db.Uuid
+  used_at                                   DateTime? @db.Timestamptz(6)
+  created_at                                DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at                                DateTime? @default(now()) @db.Timestamptz(6)
+  users_event_invitations_created_byTousers users?    @relation("event_invitations_created_byTousers", fields: [created_by], references: [id], onUpdate: NoAction)
+  events                                    events    @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_event_invitations_used_byTousers    users?    @relation("event_invitations_used_byTousers", fields: [used_by], references: [id], onUpdate: NoAction)
 
   @@index([event_id], map: "idx_event_invitations_event")
   @@index([token], map: "idx_event_invitations_token")
@@ -695,8 +695,8 @@ model forum_comments {
   status               content_status   @default(active)
   created_at           DateTime         @default(now()) @db.Timestamptz(6)
   updated_at           DateTime         @default(now()) @db.Timestamptz(6)
-  parent_id            String?          @db.Uuid
   deleted_at           DateTime?        @db.Timestamptz(6)
+  parent_id            String?          @db.Uuid
   users                users            @relation(fields: [author_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   forum_comments       forum_comments?  @relation("forum_commentsToforum_comments", fields: [parent_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   other_forum_comments forum_comments[] @relation("forum_commentsToforum_comments")
@@ -721,11 +721,11 @@ model forum_posts {
   status          content_status    @default(active)
   created_at      DateTime          @default(now()) @db.Timestamptz(6)
   updated_at      DateTime          @default(now()) @db.Timestamptz(6)
+  archived        Boolean           @default(false)
+  deleted_at      DateTime?         @db.Timestamptz(6)
   locked          Boolean           @default(false)
   solved          Boolean           @default(false)
-  archived        Boolean           @default(false)
   view_count      Int               @default(0)
-  deleted_at      DateTime?         @db.Timestamptz(6)
   forum_comments  forum_comments[]
   forum_post_tags forum_post_tags[]
   users           users             @relation(fields: [author_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -793,14 +793,14 @@ model groups {
   join_mode         join_mode           @default(open)
   join_form_id      String?             @db.Uuid
   listed            listed_state        @default(unlisted)
-  description       String?
-  category          String?
-  icon              String?
-  cover             String?
   banner            String?
-  settings          Json?               @default("{}")
   banner_data       Bytes?
+  category          String?
+  cover             String?
+  description       String?
+  icon              String?
   icon_data         Bytes?
+  settings          Json?               @default("{}")
   group_invitations group_invitations[]
   forms             forms?              @relation(fields: [join_form_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_groups_join_form")
   entities          entities            @relation(fields: [entity_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -1019,11 +1019,11 @@ model messages {
   is_edited            Boolean?               @default(false)
   is_deleted           Boolean?               @default(false)
   updated_at           DateTime?              @default(now()) @db.Timestamptz(6)
-  edited_at            DateTime?              @db.Timestamptz(6)
-  deleted_at           DateTime?              @db.Timestamptz(6)
-  reply_to_message_id  String?                @db.Uuid
   attachments_count    Int?                   @default(0)
+  deleted_at           DateTime?              @db.Timestamptz(6)
   deleted_for_everyone Boolean                @default(false)
+  edited_at            DateTime?              @db.Timestamptz(6)
+  reply_to_message_id  String?                @db.Uuid
   status               MessageStatus          @default(ACTIVE)
   type                 MessageType            @default(TEXT)
   version              Int                    @default(1)
@@ -1216,8 +1216,8 @@ model profiles {
   phone_number                                       String?       @db.VarChar(20)
   user_name                                          String?
   headline                                           String?
-  privacy_prefs                                      Json?         @default("{}")
   messaging_restriction                              String?       @default("anyone") @db.VarChar(50)
+  privacy_prefs                                      Json?         @default("{}")
   media_assets_profiles_cover_asset_idTomedia_assets media_assets? @relation("profiles_cover_asset_idTomedia_assets", fields: [cover_asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_profiles_cover")
   media_assets_profiles_photo_asset_idTomedia_assets media_assets? @relation("profiles_photo_asset_idTomedia_assets", fields: [photo_asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_profiles_photo")
   tenants                                            tenants       @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -1644,7 +1644,6 @@ model tickets {
   attendee_email     String?            @db.Citext
   attendee_gender    String?
   qr_token           String             @unique
-  ticket_code        String?            @unique
   status             ticket_status      @default(reserved)
   claimed_by_user_id String?            @db.Uuid
   created_at         DateTime           @default(now()) @db.Timestamptz(6)
@@ -1723,8 +1722,6 @@ model users {
   attendees_attendees_created_byTousers                                attendees[]                  @relation("attendees_created_byTousers")
   attendees_attendees_updated_byTousers                                attendees[]                  @relation("attendees_updated_byTousers")
   attendees_attendees_user_idTousers                                   attendees[]                  @relation("attendees_user_idTousers")
-  event_invitations_event_invitations_created_byTousers                event_invitations[]          @relation("event_invitations_created_byTousers")
-  event_invitations_event_invitations_used_byTousers                   event_invitations[]          @relation("event_invitations_used_byTousers")
   auth_identities                                                      auth_identities[]
   blocked_users_blocked_users_blocked_idTousers                        blocked_users[]              @relation("blocked_users_blocked_idTousers")
   blocked_users_blocked_users_blocker_idTousers                        blocked_users[]              @relation("blocked_users_blocker_idTousers")
@@ -1741,6 +1738,8 @@ model users {
   entities                                                             entities[]
   event_categories_event_categories_created_byTousers                  event_categories[]           @relation("event_categories_created_byTousers")
   event_categories_event_categories_updated_byTousers                  event_categories[]           @relation("event_categories_updated_byTousers")
+  event_invitations_event_invitations_created_byTousers                event_invitations[]          @relation("event_invitations_created_byTousers")
+  event_invitations_event_invitations_used_byTousers                   event_invitations[]          @relation("event_invitations_used_byTousers")
   event_media_event_media_created_byTousers                            event_media[]                @relation("event_media_created_byTousers")
   event_media_event_media_updated_byTousers                            event_media[]                @relation("event_media_updated_byTousers")
   event_team_assignments_event_team_assignments_granted_byTousers      event_team_assignments[]     @relation("event_team_assignments_granted_byTousers")
@@ -1937,10 +1936,10 @@ model admin_subscription_plans {
   rbac_role_id        String?               @db.Uuid
   rbac_position_id    String?               @db.Uuid
   rbac_auto_assign    Boolean               @default(false)
-  is_default          Boolean               @default(false)
   tenant_id           String?               @db.Uuid
   created_at          DateTime              @default(now()) @db.Timestamptz(6)
   updated_at          DateTime              @default(now()) @db.Timestamptz(6)
+  is_default          Boolean?              @default(false)
   admin_positions     admin_positions?      @relation(fields: [rbac_position_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   admin_roles         admin_roles?          @relation(fields: [rbac_role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenants             tenants?              @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -2023,14 +2022,13 @@ model invoices {
   id             String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   invoice_number String              @unique
   order_id       String              @unique @db.Uuid
-  pdf_data       Bytes
   created_at     DateTime            @default(now()) @db.Timestamptz(6)
   updated_at     DateTime            @default(now()) @db.Timestamptz(6)
+  pdf_data       Bytes
   order          subscription_orders @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([order_id], map: "idx_invoices_order")
 }
-
 
 model otp_verifications {
   id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -2310,8 +2308,8 @@ model message_receipts {
   user_id      String    @db.Uuid
   delivered_at DateTime? @db.Timestamptz(6)
   seen_at      DateTime? @db.Timestamptz(6)
-  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   failed_at    DateTime? @db.Timestamptz(6)
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   messages     messages  @relation(fields: [message_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   users        users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
@@ -2642,7 +2640,6 @@ model messaging_requests {
   @@unique([sender_id, receiver_id])
 }
 
-
 enum assignment_state {
   invited
   active
@@ -2931,4 +2928,3 @@ enum ConversationParticipantStatus {
   LEFT
   EXPIRED
 }
-
