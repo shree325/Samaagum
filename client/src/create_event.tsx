@@ -1581,7 +1581,8 @@ export const DEFAULT_FREE_ENTITLEMENTS = {
   group_max_capacity: 25,
   group_can_restricted_access: false,
   event_allowed_registration_modes: ['free', 'cash'],
-  event_allowed_visibility: ['unlisted', 'invite_only'],
+  event_allowed_visibility: ['unlisted', 'custom'],
+  event_allowed_join_modes: ['restricted', 'invite'],
   event_max_participants: 100,
   event_checkin_methods: ['scanner', 'manual', 'gate'],
   event_can_create_paid_tickets: false
@@ -1639,7 +1640,8 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
   // Plan entitlements gate what a *new* event can default to / offer; an event already saved
   // keeps its existing values regardless of the current plan (handled per-field below).
   const entitlements = st?.entitlements || DEFAULT_FREE_ENTITLEMENTS;
-  const allowedVisibilities = entitlements.event_allowed_visibility || ['unlisted', 'invite_only'];
+  const allowedVisibilities = entitlements.event_allowed_visibility || ['unlisted', 'custom'];
+  const allowedJoinModes = entitlements.event_allowed_join_modes || ['restricted', 'invite'];
   const eventMaxParticipants = entitlements.event_max_participants ?? 100;
   const canCreatePaidTickets = entitlements.event_can_create_paid_tickets ?? false;
 
@@ -1706,7 +1708,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
     draft?.visibility
     ?? editEv?.venue_raw?.visibility
     ?? editEv?.venue?.visibility
-    ?? (allowedVisibilities.includes("public") ? "public" : (allowedVisibilities[0] || "unlisted"))
+    ?? (allowedVisibilities.includes("public") ? "public" : (allowedVisibilities.includes("unlisted") ? "unlisted" : (allowedVisibilities[0] || "unlisted")))
   );
   const [calendar, setCalendar] = useState(draft?.calendar ?? "Main Calendar");
   const initDT = useMemo(() => {
@@ -2806,6 +2808,14 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                           triggerUpgrade("Public Event Visibility");
                           return;
                         }
+                        if (val === "unlisted" && !allowedVisibilities.includes("unlisted")) {
+                          triggerUpgrade("Unlisted Event Visibility");
+                          return;
+                        }
+                        if (val === "custom" && !allowedVisibilities.includes("custom")) {
+                          triggerUpgrade("Custom Access Event Visibility");
+                          return;
+                        }
                         setVisibility(val);
                         if (val === "custom") {
                           setAccessModalOpen(true);
@@ -2814,8 +2824,8 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                       style={{ background: "var(--field)", border: "1px solid var(--border)", height: 42 }}
                     >
                       <option value="public">{!allowedVisibilities.includes("public") && "🔒 "}Public</option>
-                      <option value="unlisted">Unlisted</option>
-                      <option value="custom">Custom Access</option>
+                      <option value="unlisted">{!allowedVisibilities.includes("unlisted") && "🔒 "}Unlisted</option>
+                      <option value="custom">{!allowedVisibilities.includes("custom") && "🔒 "}Custom Access</option>
                     </select>
                   </div>
 
@@ -2989,7 +2999,13 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                   <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr 1fr", gap: 12, marginTop: 8 }}>
                     <button
                       type="button"
-                      onClick={() => setJoinEligibility("public")}
+                      onClick={() => {
+                        if (!allowedJoinModes.includes("public")) {
+                          triggerUpgrade("Public Event Join Eligibility");
+                          return;
+                        }
+                        setJoinEligibility("public");
+                      }}
                       style={{
                         padding: "12px",
                         borderRadius: "var(--r-md)",
@@ -3003,12 +3019,16 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                         fontFamily: "inherit"
                       }}
                     >
-                      🌐 Public Event
+                      {!allowedJoinModes.includes("public") && "🔒 "}🌐 Public Event
                       <div style={{ fontSize: 11, fontWeight: 400, color: "var(--ink-3)", marginTop: 4 }}>Anyone can view and register for this event.</div>
                     </button>
                     <button
                       type="button"
                       onClick={() => {
+                        if (!allowedJoinModes.includes("restricted")) {
+                          triggerUpgrade("Restricted Access Event Join Eligibility");
+                          return;
+                        }
                         setJoinEligibility("restricted");
                         setAccessModalOpen(true);
                       }}
@@ -3025,12 +3045,18 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                         fontFamily: "inherit"
                       }}
                     >
-                      👥 Restricted Access
+                      {!allowedJoinModes.includes("restricted") && "🔒 "}👥 Restricted Access
                       <div style={{ fontSize: 11, fontWeight: 400, color: "var(--ink-3)", marginTop: 4 }}>Only members of selected groups can join.</div>
                     </button>
                     <button
                       type="button"
-                      onClick={() => setJoinEligibility("invite")}
+                      onClick={() => {
+                        if (!allowedJoinModes.includes("invite")) {
+                          triggerUpgrade("Invite Only Event Join Eligibility");
+                          return;
+                        }
+                        setJoinEligibility("invite");
+                      }}
                       style={{
                         padding: "12px",
                         borderRadius: "var(--r-md)",
@@ -3044,7 +3070,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                         fontFamily: "inherit"
                       }}
                     >
-                      ✉️ Invite Only
+                      {!allowedJoinModes.includes("invite") && "🔒 "}✉️ Invite Only
                       <div style={{ fontSize: 11, fontWeight: 400, color: "var(--ink-3)", marginTop: 4 }}>Only invited guests can register for this event.</div>
                     </button>
                   </div>

@@ -175,7 +175,29 @@ export class GroupService {
         
         // 2. Check restricted access in settings
         const settings = body.settings !== undefined ? body.settings : (existingGroup ? (existingGroup.settings || {}) : {});
-        const hasRestrictedAccess = !!(settings?.restrictedAccess?.enabled || settings?.restrictedAccess?.visibility?.enabled || settings?.restrictedAccess?.join?.enabled);
+        const joinRestricted = settings?.restrictedAccess?.join?.restricted;
+        const visibilityRestricted = settings?.restrictedAccess?.visibility;
+        
+        const hasJoinRestricted = joinRestricted && (
+            (Array.isArray(joinRestricted.communities) && joinRestricted.communities.length > 0) ||
+            (Array.isArray(joinRestricted.subCommunities) && joinRestricted.subCommunities.length > 0) ||
+            (Array.isArray(joinRestricted.groups) && joinRestricted.groups.length > 0)
+        );
+        
+        const hasVisibilityRestricted = visibilityRestricted && (
+            (Array.isArray(visibilityRestricted.communities) && visibilityRestricted.communities.length > 0) ||
+            (Array.isArray(visibilityRestricted.subCommunities) && visibilityRestricted.subCommunities.length > 0) ||
+            (Array.isArray(visibilityRestricted.groups) && visibilityRestricted.groups.length > 0)
+        );
+
+        const hasRestrictedAccess = !!(
+            hasJoinRestricted ||
+            hasVisibilityRestricted ||
+            settings?.restrictedAccess?.enabled ||
+            settings?.restrictedAccess?.visibility?.enabled ||
+            settings?.restrictedAccess?.join?.enabled
+        );
+
         if (hasRestrictedAccess && !ents.group_can_restricted_access) {
             throw new Error(`Restricted access controls are locked for your current plan (${planDisplayName}). Please upgrade your plan to use them.`);
         }

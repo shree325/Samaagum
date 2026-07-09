@@ -45,11 +45,34 @@ export class EventService {
       throw new Error('Paid events are locked for your current plan. Upgrade to Standard to sell tickets.');
     }
 
-    // 3. Event visibility (listed state)
-    const listedVal = eventData.listed;
-    if (listedVal === 'listed') {
-      if (!ents.event_allowed_visibility.includes('public')) {
-        throw new Error('Your current plan only allows creating unlisted events. Upgrade to Standard to create public events.');
+    // 3. Event visibility and join eligibility checks
+    const visibilityVal = eventData.venue && typeof eventData.venue === 'object' ? eventData.venue.visibility : undefined;
+    const metaVal = eventData.venue && typeof eventData.venue === 'object' ? eventData.venue.meta : undefined;
+    const joinEligibilityVal = metaVal && typeof metaVal === 'object' ? metaVal.joinEligibility : undefined;
+
+    // Check visibility
+    if (visibilityVal) {
+      if (visibilityVal === 'public' && !ents.event_allowed_visibility.includes('public')) {
+        throw new Error('Public event visibility is locked for your current plan.');
+      }
+      if (visibilityVal === 'unlisted' && !ents.event_allowed_visibility.includes('unlisted')) {
+        throw new Error('Unlisted event visibility is locked for your current plan.');
+      }
+      if (visibilityVal === 'custom' && !ents.event_allowed_visibility.includes('custom')) {
+        throw new Error('Custom Access event visibility is locked for your current plan.');
+      }
+    }
+
+    // Check join eligibility / join modes
+    if (joinEligibilityVal) {
+      if (joinEligibilityVal === 'public' && !(ents.event_allowed_join_modes || []).includes('public')) {
+        throw new Error('Public join eligibility is locked for your current plan.');
+      }
+      if (joinEligibilityVal === 'restricted' && !(ents.event_allowed_join_modes || []).includes('restricted')) {
+        throw new Error('Restricted join eligibility is locked for your current plan.');
+      }
+      if (joinEligibilityVal === 'invite' && !(ents.event_allowed_join_modes || []).includes('invite')) {
+        throw new Error('Invite-only join eligibility is locked for your current plan.');
       }
     }
 
