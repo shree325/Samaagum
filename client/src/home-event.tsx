@@ -22,7 +22,7 @@ function EventDetail({ ev, st, go }) {
 
     const venueObj = e.venue || {};
     const meta = venueObj.meta || {};
-    const priceVal = e.tickets?.[0] ? `₹${(e.tickets[0].price_minor / 100).toFixed(0)}` : ((e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : '—');
+    const priceVal = e.price || (e.tickets?.[0] ? `₹${(e.tickets[0].price_minor / 100).toFixed(0)}` : ((e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : '—'));
 
     e = {
       ...e,
@@ -75,9 +75,9 @@ function EventDetail({ ev, st, go }) {
   const tiers = e.type === "Free"
     ? [{ id: "rsvp", n: "General RSVP", d: "Free entry · approval-based", p: "Free", free: true }]
     : [
-      { id: "early", n: "Early Bird", d: "Limited · ends Jun 14", p: priceStr, early: true },
-      { id: "std", n: "General Admission", d: "Standard entry", p: priceStr.replace(/\d+/, m => String(Math.round(+m * 1.4))) },
-      { id: "vip", n: "VIP · Front tables", d: "Reserved seating + drink", p: priceStr.replace(/\d+/, m => String(Math.round(+m * 2.2))) },
+      { id: "early", n: "Early Bird", d: "Limited · ends Jun 14", p: priceStr, early: true, free: false },
+      { id: "std", n: "General Admission", d: "Standard entry", p: priceStr.replace(/\d+/, m => String(Math.round(+m * 1.4))), free: false },
+      { id: "vip", n: "VIP · Front tables", d: "Reserved seating + drink", p: priceStr.replace(/\d+/, m => String(Math.round(+m * 2.2))), free: false },
     ];
   const [tier, setTier] = useState(tiers[0].id);
   const [qty, setQty] = useState(1);
@@ -198,7 +198,7 @@ function EventDetail({ ev, st, go }) {
                       <button onClick={() => setQty(q => Math.min(6, q + 1))}>+</button>
                     </div>
                   </div>
-                   {isReg || e.bookingStatus === 'confirmed' ? (
+                   {isReg || e.bookingStatus === 'confirmed' || e.bookingStatus === 'pending_payment' ? (
                     <button className="hbtn hbtn--ghost hbtn--block" style={{ color: "var(--accent-2)" }} onClick={() => go("events")}>
                       <I.check />You're registered (View Ticket)
                     </button>
@@ -236,8 +236,8 @@ function EventDetail({ ev, st, go }) {
                     <button
                       className="hbtn hbtn--ghost hbtn--sm hbtn--block"
                       onClick={() => {
-                        if (window.initiateChatWithName) {
-                          window.initiateChatWithName(e.hostBy || e.host);
+                        if ((window as any).initiateChatWithName) {
+                          (window as any).initiateChatWithName(e.hostBy || e.host);
                         }
                       }}
                     >

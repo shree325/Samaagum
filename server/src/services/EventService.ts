@@ -40,6 +40,10 @@ export class EventService {
     }
 
     // 2. Event type (registration mode and payment options)
+    const currentMode = eventData.cash_enabled ? 'cash' : (eventData.registration_mode === 'paid' ? 'paid' : 'free');
+    if (!(ents.event_allowed_registration_modes || []).includes(currentMode)) {
+      throw new Error(`The registration/payment mode "${currentMode === 'free' ? 'free RSVP' : currentMode}" is locked for your current plan.`);
+    }
     const isPaid = eventData.registration_mode === 'paid' || !!eventData.price;
     if (isPaid && !ents.event_can_create_paid_tickets) {
       throw new Error('Paid events are locked for your current plan. Upgrade to Standard to sell tickets.');
@@ -189,6 +193,7 @@ export class EventService {
       capacity_total: body.capacity_total,
       registration_mode: body.registration_mode === 'free' ? 'free_rsvp' : (body.registration_mode || 'free_rsvp'),
       approval_required: body.approval_required || false,
+      cash_enabled: body.cash_enabled || false,
       instruction: body.instruction,
     });
 
@@ -546,6 +551,7 @@ export class EventService {
       capacity_total: body.capacity_total,
       registration_mode: body.registration_mode,
       approval_required: body.approval_required,
+      cash_enabled: body.cash_enabled,
       location_type: body.location_type,
       venue: body.venue,
       online_link: body.online_link,
@@ -1310,7 +1316,7 @@ export class EventService {
     });
 
     const bookings = await prisma.bookings.findMany({
-      where: { event_id: eventId, status: { in: ['confirmed', 'pending_approval'] } },
+      where: { event_id: eventId, status: { in: ['confirmed', 'pending_approval', 'pending_payment'] } },
       include: {
         users: { select: { id: true, first_name: true, last_name: true, primary_email: true, profile_image_data: true, profiles: { select: { display_name: true } } } }
       }
@@ -1500,7 +1506,7 @@ export class EventService {
     }
 
     const booking = await prisma.bookings.findFirst({
-      where: { event_id: eventId, booker_user_id: userId, status: 'confirmed' }
+      where: { event_id: eventId, booker_user_id: userId, status: { in: ['confirmed', 'pending_payment'] } }
     });
     if (booking) return 'member';
 

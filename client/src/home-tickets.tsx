@@ -563,6 +563,9 @@ export function AllTickets({ st, go }) {
   const confirmedJoined = joinedEvents
     .filter(j => j.bookingStatus === "confirmed")
     .map(normalizeJoinedEvent);
+  const pendingPaymentJoined = joinedEvents
+    .filter(j => j.bookingStatus === "pending_payment")
+    .map(normalizeJoinedEvent);
   const pendingJoined = joinedEvents.filter(j => j.bookingStatus === "pending_approval");
 
   // Every real/synthetic ticket the user holds — newest first, voided ones dropped.
@@ -571,6 +574,7 @@ export function AllTickets({ st, go }) {
   // local placeholder that hasn't been superseded yet.
   const allTickets = [
     ...confirmedJoined,
+    ...pendingPaymentJoined,
     ...tickets.filter(t => t.status !== "voided")
   ];
 
@@ -639,6 +643,8 @@ export function AllTickets({ st, go }) {
                     <div style={{ fontSize: 16, fontWeight: 700, color: t.paid === "Free" ? "#1f9d57" : "var(--ink)" }}>{t.paid}</div>
                     {attended ? (
                       <span className="pill gray" style={{ marginTop: 6, display: "inline-block" }}>Attended</span>
+                    ) : t.bookingStatus === "pending_payment" ? (
+                      <span className="pill" style={{ marginTop: 6, display: "inline-block", background: "rgba(245,158,11,0.12)", color: "#f59e0b" }}>Pending Payment</span>
                     ) : (
                       <span className="pill green" style={{ marginTop: 6, display: "inline-block" }}><span className="pdot" />Confirmed</span>
                     )}
@@ -806,6 +812,8 @@ export function TicketDetail({ tkt, st, go }) {
                 <span className="v">
                   {used ? (
                     <span className="pill gray">Used</span>
+                  ) : t.bookingStatus === "pending_payment" ? (
+                    <span className="pill" style={{ background: "rgba(245,158,11,0.12)", color: "#f59e0b" }}>Pending Payment</span>
                   ) : (
                     <span className="pill green"><span className="pdot" />Confirmed</span>
                   )}
@@ -953,18 +961,28 @@ export function VerifyTicketPanel({ eventId, onCheckedIn }) {
     }
   };
 
-  const confirmCheckin = async () => {
+  const confirmCheckin = async (paymentReceived = false) => {
     if (!result?.valid || result.alreadyCheckedIn) return;
+    if (result.isCashPayment && result.isPaymentPending && !paymentReceived) {
+      if (!window.confirm(`Has cash payment of ₹${(result.amountMinor || 0) / 100} been collected?`)) {
+        return;
+      }
+      paymentReceived = true;
+    }
     setBusy(true);
     try {
       const authToken = localStorage.getItem('token');
       const res = await fetch(`${apiBase}/api/events/${eventId}/verify/${encodeURIComponent(result.token)}/checkin`, {
         method: 'POST',
-        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+        },
+        body: JSON.stringify({ paymentReceived })
       });
       const data = await res.json();
       if (data.success) {
-        setResult(r => ({ ...r, alreadyCheckedIn: true }));
+        setResult(r => ({ ...r, alreadyCheckedIn: true, isPaymentPending: false }));
         onCheckedIn && onCheckedIn();
       } else {
         alert(data.message || "Check-in failed.");
@@ -1057,11 +1075,16 @@ export function VerifyTicketPanel({ eventId, onCheckedIn }) {
               <div>
                 <div style={{ fontWeight: 600, fontSize: 13.5 }}>{result.name}</div>
                 {result.email && <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{result.email}</div>}
+                {result.isCashPayment && (
+                  <div style={{ fontSize: 12, fontWeight: 500, color: result.isPaymentPending ? "#f59e0b" : "#1f9d57", marginTop: 4 }}>
+                    {result.isPaymentPending ? `⚠️ Cash Payment Pending: ₹${(result.amountMinor || 0) / 100}` : "✅ Cash Collected"}
+                  </div>
+                )}
               </div>
               {result.alreadyCheckedIn ? (
                 <span style={{ fontSize: 11, fontWeight: 600, color: "var(--accent-2)", background: "rgba(124,90,255,0.1)", padding: "4px 10px", borderRadius: 999 }}>Already checked in</span>
               ) : (
-                <button className="hbtn hbtn--primary hbtn--sm" disabled={busy} onClick={confirmCheckin}>Confirm Check-in</button>
+                <button className="hbtn hbtn--primary hbtn--sm" disabled={busy} onClick={() => confirmCheckin(false)}>Confirm Check-in</button>
               )}
             </div>
           ) : (
@@ -1139,6 +1162,14 @@ export function EventDashboard({ ev, st, go }) {
   };
 
   const handleCheckin = async (attendeeId) => {
+    const attendee = stats?.confirmed?.find(a => a.id === attendeeId);
+    let paymentReceived = false;
+    if (attendee?.isCashPayment && attendee?.bookingStatus === 'pending_payment') {
+      if (!window.confirm(`Has cash payment of ₹${(attendee.amountMinor || 0) / 100} been collected?`)) {
+        return;
+      }
+      paymentReceived = true;
+    }
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${apiBase}/api/events/${e.id}/attendees/${attendeeId}/checkin`, {
@@ -1146,7 +1177,8 @@ export function EventDashboard({ ev, st, go }) {
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        }
+        },
+        body: JSON.stringify({ paymentReceived })
       });
       const data = await res.json();
       if (data.success) {
@@ -1290,7 +1322,15 @@ export function EventDashboard({ ev, st, go }) {
                       </div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontSize: 11.5, color: "#1f9d57", display: "flex", alignItems: "center", gap: 4 }}><I.check style={{ width: 12, height: 12 }} /> Confirmed</span>
+                      {a.isCashPayment && a.bookingStatus === 'pending_payment' ? (
+                        <span style={{ fontSize: 11.5, color: "#f59e0b", display: "flex", alignItems: "center", gap: 4 }}>
+                          <I.warning style={{ width: 12, height: 12 }} /> Cash Pending (₹{(a.amountMinor || 0) / 100})
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 11.5, color: "#1f9d57", display: "flex", alignItems: "center", gap: 4 }}>
+                          <I.check style={{ width: 12, height: 12 }} /> Confirmed
+                        </span>
+                      )}
                       {a.checkinStatus === 'checked_in' ? (
                         <span style={{ fontSize: 11, fontWeight: 600, color: "var(--accent-2)", background: "rgba(124, 90, 255, 0.1)", padding: "3px 8px", borderRadius: 999 }}>Checked In</span>
                       ) : (
