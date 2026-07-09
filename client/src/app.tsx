@@ -3,7 +3,6 @@ import React, { Fragment, useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { SCENES, useAuth } from './auth-flow';
 import { Ic, LeftPanel, MeshBg, Reveal, Wordmark } from './components';
-import { Discover } from './home-feed';
 import { useTweaks } from './tweaks-panel';
 
 /* ============================================================

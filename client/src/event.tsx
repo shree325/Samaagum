@@ -112,6 +112,10 @@ export function EventPage({ ev, st, go }) {
   // whatever was passed in via navigation.
   e = { ...e, ...currentEvent };
   const attendees = currentEvent.attendees || [];
+  const getQuestionLabel = (fieldId) => {
+    const field = (currentEvent.formFields || []).find(f => f.id === fieldId);
+    return field?.question || field?.label || fieldId;
+  };
   const [hostStats, setHostStats] = useState(null);
   const [eventMembers, setEventMembers] = useState(null);
   const [availableRoles, setAvailableRoles] = useState(null);
@@ -361,6 +365,28 @@ export function EventPage({ ev, st, go }) {
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleRemoveEventMember = async (userId) => {
+    if (!userId) return;
+    if (!confirm('Are you sure you want to remove this member from the event?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${apiBase}/api/events/${e.id}/memberships/${userId}`, {
+        method: 'DELETE',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (window.toast) window.toast('Member removed from event', 'success');
+        fetchEventMembers();
+        fetchHostStats();
+      } else {
+        if (window.toast) window.toast(data.message || 'Failed to remove member', 'error');
+      }
+    } catch (err) {
+      if (window.toast) window.toast('Error removing member', 'error');
     }
   };
 
@@ -1009,7 +1035,7 @@ export function EventPage({ ev, st, go }) {
                           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
                             {eventMembers.filter(m => m.state === 'active').slice(0, 6).map(m => (
                               <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8 }}>
-                                <Avatar name={m.name} size={30} />
+                                <Avatar name={m.name} userId={m.id} img={m.picture} size={30} />
                                 <div style={{ minWidth: 0 }}>
                                   <div style={{ fontSize: 13.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</div>
                                   <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{m.role === 'event_host' ? 'Host' : m.role === 'event_cohost' ? 'Co-host' : 'Member'}</div>
@@ -1057,7 +1083,7 @@ export function EventPage({ ev, st, go }) {
                               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
                                   onClick={() => r.userId && go("profile", { id: r.userId })}>
-                                  <Avatar name={r.name || "User"} size={38} />
+                                  <Avatar name={r.name || "User"} userId={r.userId} img={r.picture} size={38} />
                                   <div>
                                     <div style={{ fontWeight: 700, fontSize: 14.5, color: "var(--ink)" }}>{r.name || "Unknown"}</div>
                                     <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 2 }}>{r.email || ""}</div>
@@ -1090,12 +1116,15 @@ export function EventPage({ ev, st, go }) {
                                   <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                                     Questionnaire Answers
                                   </div>
-                                  {Object.entries(r.answers).map(([key, val]) => (
-                                    <div key={key} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                                      <div style={{ fontSize: 13, color: "var(--ink-2)", fontWeight: 500 }}>Q: {key}</div>
-                                      <div style={{ fontSize: 13, color: "var(--ink)", fontWeight: 600 }}>A: {String(val)}</div>
-                                    </div>
-                                  ))}
+                                  {Object.entries(r.answers).map(([key, val]) => {
+                                    const label = getQuestionLabel(key);
+                                    return (
+                                      <div key={key} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                                        <div style={{ fontSize: 13, color: "var(--ink-2)", fontWeight: 500 }}>Q: {label}</div>
+                                        <div style={{ fontSize: 13, color: "var(--ink)", fontWeight: 600 }}>A: {String(val)}</div>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               )}
                             </div>
@@ -1185,6 +1214,7 @@ export function EventPage({ ev, st, go }) {
                               const myLevel = roleMeta(myRoleKey)?.hierarchy_level ?? Infinity;
                               const theirLevel = roleMeta(a.role)?.hierarchy_level ?? Infinity;
                               const canChangeRole = isHostOrCoHost && myLevel < theirLevel;
+                              const canRemoveMember = userId !== ME?.id && (isOwner || (isHostOrCoHost && myLevel < theirLevel));
 
                               // Questionnaire answers this member submitted at registration
                               // (sourced from their booking's notes, via dashboard-stats).
@@ -1207,7 +1237,7 @@ export function EventPage({ ev, st, go }) {
                                   onMouseLeave={ev => { ev.currentTarget.style.background = ""; }}
                                 >
                                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                    <Avatar name={name} size={32} />
+                                    <Avatar name={name} userId={userId} img={a.picture} size={32} />
                                     <div>
                                       <div style={{ fontWeight: 600, fontSize: 13.5 }}>{name}</div>
                                       {email && <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{email}</div>}
@@ -1229,6 +1259,15 @@ export function EventPage({ ev, st, go }) {
                                       <span style={{ fontSize: 11, fontWeight: 600, color: a.role === 'member' ? "#1f9d57" : (ROLE_BADGE_COLORS[(availableRoles || []).findIndex(r => r.key === a.role) % ROLE_BADGE_COLORS.length] || "#1f9d57"), background: "rgba(0,0,0,0.05)", padding: "3px 8px", borderRadius: 999 }}>
                                         {roleMeta(a.role)?.display_name || 'Member'}
                                       </span>
+                                    )}
+                                    {canRemoveMember && (
+                                      <button
+                                        className="hbtn hbtn--soft hbtn--sm"
+                                        style={{ fontSize: 11.5, padding: "4px 10px", color: "#ef4444" }}
+                                        onClick={(ev) => { ev.stopPropagation(); handleRemoveEventMember(userId); }}
+                                      >
+                                        Remove
+                                      </button>
                                     )}
                                     {(isHostOrCoHost || isAdmin || isModerator) && (
                                       <button
@@ -2191,7 +2230,7 @@ export function EventPage({ ev, st, go }) {
                         style={{ cursor: a.userId ? "pointer" : "default" }}
                         onClick={() => a.userId && go("profile", { id: a.userId })}
                       >
-                        <Avatar name={a.name || "Guest"} size={28} />
+                        <Avatar name={a.name || "Guest"} userId={a.userId || a.id} img={a.picture} size={28} />
                         <span className="nm">{a.name || "Guest"}</span>
                       </div>
                     ))}
@@ -2207,7 +2246,7 @@ export function EventPage({ ev, st, go }) {
                 </div>
 
                 <div className="host-card" style={{ marginTop: 16 }}>
-                  <div className="hh"><Avatar name={e.hostBy || e.host} size={46} /><div><div className="n">{e.host}</div><div className="r">{e.hostType === 'group' ? 'Group' : 'Organizer'}</div></div></div>
+                  <div className="hh"><Avatar name={e.hostBy || e.host} userId={e.hostUserId} img={e.hostPhoto} size={46} /><div><div className="n">{e.host}</div><div className="r">{e.hostType === 'group' ? 'Group' : 'Organizer'}</div></div></div>
                   <div className="hb">Curating the best gatherings in {e.city || city}. Follow to never miss an update.</div>
                 </div>
               </div>
@@ -2270,7 +2309,7 @@ export function EventPage({ ev, st, go }) {
           <div style={{ background: "var(--surface)", width: "min(480px,95vw)", maxHeight: "80vh", overflowY: "auto", borderRadius: "var(--r-xl)", boxShadow: "var(--sh-xl)", display: "flex", flexDirection: "column" }} onClick={ev => ev.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: "1px solid var(--border)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <Avatar name={responseMember.name} size={34} />
+                <Avatar name={responseMember.name} userId={responseMember.id} img={responseMember.picture} size={34} />
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 15 }}>{responseMember.name}</div>
                   {responseMember.email && <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{responseMember.email}</div>}
@@ -2281,8 +2320,7 @@ export function EventPage({ ev, st, go }) {
             <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
               {responseMember.answers && Object.keys(responseMember.answers).length > 0 ? (
                 Object.entries(responseMember.answers).map(([key, val]) => {
-                  const field = (currentEvent.formFields || []).find(f => f.id === key);
-                  const label = field ? field.question : key;
+                  const label = getQuestionLabel(key);
                   return (
                     <div key={key}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>{label}</div>

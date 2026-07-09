@@ -50,7 +50,7 @@ export function PublicProfile({ profile, go, socket }) {
     website: "https://samaagum.com",
     whatsapp: "+1234567890",
     profilePhoto: "https://i.pravatar.cc/200?img=47",
-    coverBanner: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&q=80&w=1200",
+    coverBanner: "",
   };
 
   const p = loadedProfile || initialProfile;
@@ -483,7 +483,7 @@ export function PublicProfile({ profile, go, socket }) {
       <div className="view-enter" style={{ position: "relative", minHeight: "100vh", width: "100%", background: colors.bgContainer, color: colors.textMain, display: "flex", flexDirection: "column", transition: "background 0.3s ease, color 0.3s ease" }}>
 
         {/* Full Bleed Cover Background */}
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "65vh", backgroundImage: `url(${p.coverBanner || 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&q=80&w=1200'})`, backgroundSize: "cover", backgroundPosition: "center", zIndex: 0 }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "65vh", backgroundImage: p.coverBanner ? `url(${p.coverBanner})` : "none", backgroundColor: isDark ? "#121212" : "#f3f4f6", backgroundSize: "cover", backgroundPosition: "center", zIndex: 0 }}>
           <div style={{ position: "absolute", inset: 0, background: colors.gradientOverlay, transition: "background 0.3s ease" }} />
         </div>
 
@@ -492,7 +492,7 @@ export function PublicProfile({ profile, go, socket }) {
 
           {/* Top Navbar */}
           <div style={{ display: "flex", justifyContent: "space-between", padding: "16px 20px" }}>
-            <button onClick={() => go("home")} style={{ width: 44, height: 44, borderRadius: "50%", background: colors.navBg, backdropFilter: "blur(4px)", color: colors.textMain, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(0,0,0,0.05)", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+            <button onClick={() => go("back")} style={{ width: 44, height: 44, borderRadius: "50%", background: colors.navBg, backdropFilter: "blur(4px)", color: colors.textMain, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(0,0,0,0.05)", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
               <ChevronLeft style={{ width: 20, height: 20 }} />
             </button>
             <button onClick={toggleTheme} style={{ width: 44, height: 44, borderRadius: "50%", background: colors.navBg, backdropFilter: "blur(4px)", color: colors.textMain, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(0,0,0,0.05)", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>

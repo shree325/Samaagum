@@ -355,6 +355,23 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
         }
     });
 
+    // DELETE /:id/memberships/:userId
+    fastify.delete('/:id/memberships/:userId', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, userId } = request.params as any;
+            await EventService.removeMember(id, userId, request.user.id);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('dashboard_updated', { action: 'remove_member', eventId: id, userId });
+            }
+            return reply.send({ success: true, message: 'Member removed successfully' });
+        } catch (e: any) {
+            fastify.log.error(e, 'DELETE /events/:id/memberships/:userId failed');
+            const code = e.message.startsWith('Forbidden') ? 403 : 500;
+            return reply.status(code).send({ success: false, message: e.message });
+        }
+    });
+
     // GET /:id/posts
     fastify.get('/:id/posts', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
         try {
@@ -741,6 +758,35 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
 
             const guestId = booking.booker_user_id;
             const event = await prisma.events.findUnique({ where: { id } });
+
+            // Mark corresponding event_join_request notifications as read/acted
+            const pendingNotifs = await prisma.notification_log.findMany({
+                where: {
+                    template_key: 'event_join_request',
+                    status: { not: 'read' }
+                }
+            });
+
+            for (const notif of pendingNotifs) {
+                try {
+                    const parsed = JSON.parse(notif.provider_ref || '{}');
+                    if (parsed.eventId === id && parsed.requesterId === guestId) {
+                        await prisma.notification_log.update({
+                            where: { id: notif.id },
+                            data: { status: 'read' }
+                        });
+
+                        const chatNamespace = (fastify as any).io?.of('/chat');
+                        if (chatNamespace) {
+                            chatNamespace.to(`user:${notif.user_id}`).emit('notification.acted', {
+                                notificationId: notif.id,
+                                action: action === 'accept' ? 'accepted' : 'declined'
+                            });
+                        }
+                    }
+                } catch (jsonErr) {}
+            }
+
             const templateKey = action === 'accept' ? 'event_request_accepted' : 'event_request_declined';
 
             await prisma.notification_log.create({

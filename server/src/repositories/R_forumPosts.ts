@@ -27,7 +27,7 @@ export class R_forumPosts extends PostgresBaseRepository<IForumPost> implements 
             fp.id, fp.title, fp.body, fp.pinned, fp.locked, fp.solved, fp.archived,
             fp.view_count, fp.status, fp.created_at, fp.updated_at, fp.deleted_at,
             fp.author_user_id, fp.scope_type, fp.scope_id,
-            u.first_name, u.last_name, u.primary_email,
+            u.first_name, u.last_name, u.primary_email, u.profile_image_data,
             COALESCE(SUM(fv.vote), 0)::int AS vote_score,
             (SELECT fv2.vote FROM forum_votes fv2 WHERE fv2.target_id = fp.id AND fv2.target_type = 'post' AND fv2.user_id = $2::uuid LIMIT 1) AS user_vote,
             COUNT(DISTINCT fc.id)::int AS comments_count
@@ -36,7 +36,7 @@ export class R_forumPosts extends PostgresBaseRepository<IForumPost> implements 
         LEFT JOIN forum_votes fv ON fv.target_id = fp.id AND fv.target_type = 'post'
         LEFT JOIN forum_comments fc ON fc.post_id = fp.id AND fc.deleted_at IS NULL
         WHERE fp.scope_type = 'group' AND fp.scope_id = $1::uuid AND fp.deleted_at IS NULL${whereExtra}
-        GROUP BY fp.id, u.first_name, u.last_name, u.primary_email
+        GROUP BY fp.id, u.first_name, u.last_name, u.primary_email, u.profile_image_data
         ORDER BY ${orderBy}
         LIMIT $3 OFFSET $4
     `, groupId, safeUserId, limit, skip, ...queryParams);
@@ -56,7 +56,7 @@ export class R_forumPosts extends PostgresBaseRepository<IForumPost> implements 
             fp.id, fp.title, fp.body, fp.pinned, fp.locked, fp.solved, fp.archived,
             fp.view_count, fp.status, fp.created_at, fp.updated_at, fp.deleted_at,
             fp.author_user_id, fp.scope_type, fp.scope_id,
-            u.first_name, u.last_name, u.primary_email,
+            u.first_name, u.last_name, u.primary_email, u.profile_image_data,
             COALESCE(SUM(fv.vote), 0)::int AS vote_score,
             (SELECT fv2.vote FROM forum_votes fv2 WHERE fv2.target_id = fp.id AND fv2.target_type = 'post' AND fv2.user_id = $2::uuid LIMIT 1) AS user_vote,
             COUNT(DISTINCT fc.id)::int AS comments_count
@@ -65,7 +65,7 @@ export class R_forumPosts extends PostgresBaseRepository<IForumPost> implements 
         LEFT JOIN forum_votes fv ON fv.target_id = fp.id AND fv.target_type = 'post'
         LEFT JOIN forum_comments fc ON fc.post_id = fp.id AND fc.deleted_at IS NULL
         WHERE fp.scope_type = 'event' AND fp.scope_id = $1::uuid AND fp.deleted_at IS NULL ${statusFilter}${whereExtra}
-        GROUP BY fp.id, u.first_name, u.last_name, u.primary_email
+        GROUP BY fp.id, u.first_name, u.last_name, u.primary_email, u.profile_image_data
         ORDER BY ${orderBy}
         LIMIT $3 OFFSET $4
     `, eventId, userId, limit, skip, ...queryParams);
@@ -100,28 +100,28 @@ export class R_forumPosts extends PostgresBaseRepository<IForumPost> implements 
   async getPostWithAuthorAndVotes(postId: string, userId: string | null, groupId: string): Promise<any> {
     const safeUserId = userId || '00000000-0000-0000-0000-000000000000';
     const postRows: any[] = await prisma.$queryRawUnsafe(`
-        SELECT fp.*, u.first_name, u.last_name, u.primary_email,
+        SELECT fp.*, u.first_name, u.last_name, u.primary_email, u.profile_image_data,
             COALESCE(SUM(fv.vote), 0)::int AS vote_score,
             (SELECT fv2.vote FROM forum_votes fv2 WHERE fv2.target_id = fp.id AND fv2.target_type = 'post' AND fv2.user_id = $2::uuid LIMIT 1) AS user_vote
         FROM forum_posts fp
         LEFT JOIN users u ON u.id = fp.author_user_id
         LEFT JOIN forum_votes fv ON fv.target_id = fp.id AND fv.target_type = 'post'
         WHERE fp.id = $1::uuid AND fp.scope_type = 'group' AND fp.scope_id = $3::uuid AND fp.deleted_at IS NULL
-        GROUP BY fp.id, u.first_name, u.last_name, u.primary_email
+        GROUP BY fp.id, u.first_name, u.last_name, u.primary_email, u.profile_image_data
     `, postId, safeUserId, groupId);
     return postRows[0] || null;
   }
 
   async getEventPostWithAuthorAndVotes(postId: string, userId: string | null, eventId: string): Promise<any> {
     const postRows: any[] = await prisma.$queryRawUnsafe(`
-        SELECT fp.*, u.first_name, u.last_name, u.primary_email,
+        SELECT fp.*, u.first_name, u.last_name, u.primary_email, u.profile_image_data,
             COALESCE(SUM(fv.vote), 0)::int AS vote_score,
             (SELECT fv2.vote FROM forum_votes fv2 WHERE fv2.target_id = fp.id AND fv2.target_type = 'post' AND fv2.user_id = $2::uuid LIMIT 1) AS user_vote
         FROM forum_posts fp
         LEFT JOIN users u ON u.id = fp.author_user_id
         LEFT JOIN forum_votes fv ON fv.target_id = fp.id AND fv.target_type = 'post'
         WHERE fp.id = $1::uuid AND fp.scope_type = 'event' AND fp.scope_id = $3::uuid AND fp.deleted_at IS NULL
-        GROUP BY fp.id, u.first_name, u.last_name, u.primary_email
+        GROUP BY fp.id, u.first_name, u.last_name, u.primary_email, u.profile_image_data
     `, postId, userId, eventId);
     return postRows[0] || null;
   }

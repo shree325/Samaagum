@@ -1,9 +1,4 @@
 import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Icons } from './admin-app';
-import { Discover } from './home-feed';
-import { Avatar } from './home-icons';
-import { apiBase } from './home-subscription';
-import { Networking } from './landing-features2';
 
 /* ============================================================
    Samaagum — shared atoms, icons, data, immersive panel

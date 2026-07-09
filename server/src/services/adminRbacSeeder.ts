@@ -148,6 +148,14 @@ const rolesToSeed = [
         baseline_capabilities: ['group.manage']
     },
     {
+        key: 'group_moderator',
+        name: 'Group Moderator',
+        level: 'group',
+        phase: 'MVP',
+        reserved: false,
+        baseline_capabilities: ['group.view', 'group.moderate']
+    },
+    {
         key: 'group_member',
         name: 'Group Member',
         level: 'group',
@@ -436,7 +444,7 @@ export async function seedAdminRBAC(): Promise<void> {
         if (key === 'checkin_lead') return 600;
         if (key === 'gate_staff' || key === 'session_gate_staff' || key === 'ticket_scanner') return 700;
         if (key === 'basic_host') return 800;
-        if (key === 'free_user' || level === 'participation') return 1000;
+        if (key === 'free_user' || key === 'group_member' || level === 'participation') return 1000;
         return 500; // default fallback
     };
 

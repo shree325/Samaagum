@@ -137,14 +137,14 @@ export function SettingsPage({ st, go, activeTabParam }) {
           ...(token ? { "Authorization": `Bearer ${token}` } : {})
         }
       })
-      .then(res => res.json())
-      .then(res => {
-        if (res.success && res.data && res.data.length > 0) {
-          setSessions(res.data);
-        }
-      })
-      .catch(err => console.error("Error fetching sessions:", err))
-      .finally(() => setLoadingSessions(false));
+        .then(res => res.json())
+        .then(res => {
+          if (res.success && res.data && res.data.length > 0) {
+            setSessions(res.data);
+          }
+        })
+        .catch(err => console.error("Error fetching sessions:", err))
+        .finally(() => setLoadingSessions(false));
     }
   }, [activeTab]);
 
@@ -153,7 +153,7 @@ export function SettingsPage({ st, go, activeTabParam }) {
       setLoadingBilling(true);
       const api = window.location.port === "8080" ? "http://localhost:3000" : window.location.origin;
       const token = localStorage.getItem('token');
-      
+
       Promise.all([
         fetch(`${api}/api/subscription/status`, {
           headers: { ...(token ? { "Authorization": `Bearer ${token}` } : {}) }
@@ -162,18 +162,18 @@ export function SettingsPage({ st, go, activeTabParam }) {
           headers: { ...(token ? { "Authorization": `Bearer ${token}` } : {}) }
         }).then(res => res.json())
       ])
-      .then(([statusRes, ordersRes]) => {
-        if (statusRes.success && statusRes.data) {
-          setBillingData(statusRes.data.subscription);
-        } else {
-          setBillingData(null);
-        }
-        if (ordersRes.success && ordersRes.data) {
-          setBillingOrders(ordersRes.data);
-        }
-      })
-      .catch(err => console.error("Error fetching billing details:", err))
-      .finally(() => setLoadingBilling(false));
+        .then(([statusRes, ordersRes]) => {
+          if (statusRes.success && statusRes.data) {
+            setBillingData(statusRes.data.subscription);
+          } else {
+            setBillingData(null);
+          }
+          if (ordersRes.success && ordersRes.data) {
+            setBillingOrders(ordersRes.data);
+          }
+        })
+        .catch(err => console.error("Error fetching billing details:", err))
+        .finally(() => setLoadingBilling(false));
     }
   }, [activeTab]);
 
@@ -318,18 +318,18 @@ export function SettingsPage({ st, go, activeTabParam }) {
     {
       title: "General Settings",
       items: [
-        { id: "apps", label: "Apps", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8"/><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8"/></svg> },
-        { id: "account", label: "Account", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="8.5" r="3.6" stroke="currentColor" strokeWidth="1.8"/><path d="M5 19.5c.8-3.4 3.6-5 7-5s6.2 1.6 7 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg> },
-        { id: "session", label: "Sessions", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><rect x="5" y="3" width="14" height="18" rx="2" stroke="currentColor" strokeWidth="1.8"/><line x1="12" y1="17" x2="12.01" y2="17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg> },
-        { id: "notification", label: "Notification", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M6 9a6 6 0 0112 0c0 4 1.2 5.5 2 6.5H4c.8-1 2-2.5 2-6.5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/><path d="M10 19a2 2 0 004 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg> },
-        { id: "language", label: "Language & Region", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="12" r="8.3" stroke="currentColor" strokeWidth="1.8"/><path d="M3.7 12h16.6M12 3.7c2.2 2.2 3.3 5 3.3 8.3S14.2 18.1 12 20.3c-2.2-2.2-3.3-5-3.3-8.3S9.8 5.9 12 3.7z" stroke="currentColor" strokeWidth="1.8"/></svg> },
+        { id: "apps", label: "Apps", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8" /><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8" /><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8" /><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8" /></svg> },
+        { id: "account", label: "Account", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="8.5" r="3.6" stroke="currentColor" strokeWidth="1.8" /><path d="M5 19.5c.8-3.4 3.6-5 7-5s6.2 1.6 7 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg> },
+        { id: "session", label: "Sessions", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><rect x="5" y="3" width="14" height="18" rx="2" stroke="currentColor" strokeWidth="1.8" /><line x1="12" y1="17" x2="12.01" y2="17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg> },
+        { id: "notification", label: "Notification", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M6 9a6 6 0 0112 0c0 4 1.2 5.5 2 6.5H4c.8-1 2-2.5 2-6.5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /><path d="M10 19a2 2 0 004 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg> },
+        { id: "language", label: "Language & Region", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="12" r="8.3" stroke="currentColor" strokeWidth="1.8" /><path d="M3.7 12h16.6M12 3.7c2.2 2.2 3.3 5 3.3 8.3S14.2 18.1 12 20.3c-2.2-2.2-3.3-5-3.3-8.3S9.8 5.9 12 3.7z" stroke="currentColor" strokeWidth="1.8" /></svg> },
       ]
     },
     {
       title: "Workspace Settings",
       items: [
-        { id: "general", label: "General", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" stroke="currentColor" strokeWidth="1.8"/></svg> },
-        { id: "billing", label: "Billing", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M20 7H4a2 2 0 00-2 2v8a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" stroke="currentColor" strokeWidth="1.8"/><path d="M22 13h-4v2h4v-2zM4 7V5a2 2 0 012-2h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg> },
+        { id: "general", label: "General", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" stroke="currentColor" strokeWidth="1.8" /></svg> },
+        { id: "billing", label: "Billing", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M20 7H4a2 2 0 00-2 2v8a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" stroke="currentColor" strokeWidth="1.8" /><path d="M22 13h-4v2h4v-2zM4 7V5a2 2 0 012-2h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg> },
       ]
     }
   ];
@@ -337,7 +337,7 @@ export function SettingsPage({ st, go, activeTabParam }) {
   return (
     <div className="scroll" style={{ flex: 1, overflowY: "auto", background: "var(--bg-2)" }}>
       <div className="view-enter" style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 24px" }}>
-        
+
         {/* Breadcrumb Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
           <button onClick={() => go("home")} style={{ background: "none", border: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: "14px", display: "flex", alignItems: "center", gap: 4 }}>
@@ -352,7 +352,7 @@ export function SettingsPage({ st, go, activeTabParam }) {
         </h1>
 
         <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 40, alignItems: "start" }}>
-          
+
           {/* Settings Sub-Sidebar Menu */}
           <aside style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             {menuSections.map((sec, sIdx) => (
@@ -397,7 +397,7 @@ export function SettingsPage({ st, go, activeTabParam }) {
 
           {/* Settings Main Panels */}
           <main style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", padding: 40, boxShadow: "var(--sh-sm)" }}>
-                       {activeTab !== "account" && activeTab !== "session" && activeTab !== "billing" ? (
+            {activeTab !== "account" && activeTab !== "session" && activeTab !== "billing" ? (
               // Empty state for other sections
               <div style={{ textAlign: "center", padding: "64px 0", color: "var(--ink-3)" }}>
                 <div style={{ fontSize: "48px", marginBottom: 16 }}>⚙️</div>
@@ -422,7 +422,7 @@ export function SettingsPage({ st, go, activeTabParam }) {
                   ) : (
                     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                       {sessions.map(sess => (
-                        <div 
+                        <div
                           key={sess.id}
                           style={{
                             display: "flex",
@@ -446,9 +446,9 @@ export function SettingsPage({ st, go, activeTabParam }) {
                               color: sess.current ? "var(--accent-2)" : "var(--ink-2)"
                             }}>
                               {sess.os === 'iOS' || sess.os === 'Android' ? (
-                                <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><rect x="5" y="2" width="14" height="20" rx="3" stroke="currentColor" strokeWidth="1.8"/><circle cx="12" cy="18" r="1" fill="currentColor"/></svg>
+                                <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><rect x="5" y="2" width="14" height="20" rx="3" stroke="currentColor" strokeWidth="1.8" /><circle cx="12" cy="18" r="1" fill="currentColor" /></svg>
                               ) : (
-                                <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><rect x="3" y="4" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="1.8"/><path d="M7 20h10M12 16v4" stroke="currentColor" strokeWidth="1.8"/></svg>
+                                <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><rect x="3" y="4" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="1.8" /><path d="M7 20h10M12 16v4" stroke="currentColor" strokeWidth="1.8" /></svg>
                               )}
                             </div>
                             <div>
@@ -572,7 +572,7 @@ export function SettingsPage({ st, go, activeTabParam }) {
                                 transition: "all var(--t-fast)"
                               }}
                             >
-                              <svg viewBox="0 0 24 24" fill="none" width="14" height="14" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+                              <svg viewBox="0 0 24 24" fill="none" width="14" height="14" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
                               {billingData && billingData.plan ? "Renew / Upgrade" : "Upgrade Plan"}
                             </button>
                           </div>
@@ -580,35 +580,35 @@ export function SettingsPage({ st, go, activeTabParam }) {
 
                         {billingData && billingData.plan ? (
                           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 20, borderTop: "1px solid var(--border)", paddingTop: 20 }}>
-                             <div>
-                               <div style={{ fontSize: "12px", color: "var(--ink-3)", marginBottom: 4 }}>Billing Cycle</div>
-                               <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
-                                 {billingData.billingCycle === "yearly" ? "Yearly" : "Monthly"}
-                               </div>
-                             </div>
-                             <div>
-                               <div style={{ fontSize: "12px", color: "var(--ink-3)", marginBottom: 4 }}>Purchase Date</div>
-                               <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
-                                 {new Date(billingData.startDate).toLocaleDateString(undefined, { dateStyle: "medium" })}
-                               </div>
-                             </div>
-                             <div>
-                               <div style={{ fontSize: "12px", color: "var(--ink-3)", marginBottom: 4 }}>Expiry Date</div>
-                               <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
-                                 {new Date(billingData.endDate).toLocaleDateString(undefined, { dateStyle: "medium" })}
-                               </div>
-                             </div>
-                             <div>
-                               <div style={{ fontSize: "12px", color: "var(--ink-3)", marginBottom: 4 }}>Time Remaining</div>
-                               <div style={{ fontSize: "14px", fontWeight: 600, color: billingData?.endDate && Math.ceil((new Date(billingData.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) <= 5 ? "rgb(239, 68, 68)" : "var(--ink)" }}>
-                                 {(() => {
-                                   const days = Math.ceil((new Date(billingData.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-                                   if (days < 0) return "Expired";
-                                   if (days === 0) return "Expires today";
-                                   return `${days} days left`;
-                                 })()}
-                               </div>
-                             </div>
+                            <div>
+                              <div style={{ fontSize: "12px", color: "var(--ink-3)", marginBottom: 4 }}>Billing Cycle</div>
+                              <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
+                                {billingData.billingCycle === "yearly" ? "Yearly" : "Monthly"}
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: "12px", color: "var(--ink-3)", marginBottom: 4 }}>Purchase Date</div>
+                              <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
+                                {new Date(billingData.startDate).toLocaleDateString(undefined, { dateStyle: "medium" })}
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: "12px", color: "var(--ink-3)", marginBottom: 4 }}>Expiry Date</div>
+                              <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
+                                {new Date(billingData.endDate).toLocaleDateString(undefined, { dateStyle: "medium" })}
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: "12px", color: "var(--ink-3)", marginBottom: 4 }}>Time Remaining</div>
+                              <div style={{ fontSize: "14px", fontWeight: 600, color: billingData?.endDate && Math.ceil((new Date(billingData.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) <= 5 ? "rgb(239, 68, 68)" : "var(--ink)" }}>
+                                {(() => {
+                                  const days = Math.ceil((new Date(billingData.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                                  if (days < 0) return "Expired";
+                                  if (days === 0) return "Expires today";
+                                  return `${days} days left`;
+                                })()}
+                              </div>
+                            </div>
                           </div>
                         ) : (
                           <div style={{ color: "var(--ink-2)", fontSize: "14px", borderTop: "1px solid var(--border)", paddingTop: 20 }}>
@@ -676,7 +676,7 @@ export function SettingsPage({ st, go, activeTabParam }) {
                                     </td>
                                     <td style={{ padding: "12px 16px" }}>
                                       {order.status === "completed" && (
-                                        <button 
+                                        <button
                                           onClick={() => downloadInvoice(order.id, order.order_number)}
                                           style={{
                                             display: "flex",
@@ -762,7 +762,7 @@ export function SettingsPage({ st, go, activeTabParam }) {
                     </div>
 
                     {privacy.profileVisibility === "private" && (
-                      <div 
+                      <div
                         className="view-enter"
                         style={{
                           background: "var(--surface-2)",
@@ -779,12 +779,12 @@ export function SettingsPage({ st, go, activeTabParam }) {
                         <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
                           Private Profile Settings
                         </div>
-                        
+
                         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                           <label style={{ display: "flex", alignItems: "flex-start", gap: 12, cursor: "pointer" }}>
-                            <input 
-                              type="radio" 
-                              name="privateProfileMode" 
+                            <input
+                              type="radio"
+                              name="privateProfileMode"
                               value="hide_all"
                               checked={privacy.privateProfileMode === "hide_all"}
                               onChange={() => {
@@ -800,9 +800,9 @@ export function SettingsPage({ st, go, activeTabParam }) {
                           </label>
 
                           <label style={{ display: "flex", alignItems: "flex-start", gap: 12, cursor: "pointer" }}>
-                            <input 
-                              type="radio" 
-                              name="privateProfileMode" 
+                            <input
+                              type="radio"
+                              name="privateProfileMode"
                               value="custom_fields"
                               checked={privacy.privateProfileMode === "custom_fields"}
                               onChange={() => {
@@ -819,14 +819,14 @@ export function SettingsPage({ st, go, activeTabParam }) {
                         </div>
 
                         {privacy.privateProfileMode === "custom_fields" && (
-                          <div 
-                            style={{ 
-                              display: "grid", 
-                              gridTemplateColumns: "1fr 1fr", 
-                              gap: "12px 20px", 
-                              borderTop: "1px solid var(--border)", 
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "1fr 1fr",
+                              gap: "12px 20px",
+                              borderTop: "1px solid var(--border)",
                               paddingTop: "16px",
-                              marginTop: "8px" 
+                              marginTop: "8px"
                             }}
                           >
                             <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--ink-3)", gridColumn: "1 / -1", marginBottom: "4px" }}>
@@ -842,8 +842,8 @@ export function SettingsPage({ st, go, activeTabParam }) {
                               { key: "virtualCard", label: "Virtual Card" }
                             ].map(field => (
                               <label key={field.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "13px", color: "var(--ink)", cursor: "pointer" }}>
-                                <input 
-                                  type="checkbox" 
+                                <input
+                                  type="checkbox"
                                   checked={privacy.visibleFields?.[field.key] || false}
                                   onChange={() => {
                                     setPrivacy(prev => ({
@@ -874,7 +874,7 @@ export function SettingsPage({ st, go, activeTabParam }) {
                         <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>Show active status</div>
                         <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Allow other community members to see when you are online in chats.</div>
                       </div>
-                      <button 
+                      <button
                         onClick={() => handleToggle("showActiveStatus")}
                         style={{
                           background: privacy.showActiveStatus ? "var(--accent-2)" : "var(--border-3, #ccc)",
@@ -906,7 +906,7 @@ export function SettingsPage({ st, go, activeTabParam }) {
                         <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>Search Engine Indexing</div>
                         <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Allow search engines like Google to index your public Samaagum profile page.</div>
                       </div>
-                      <button 
+                      <button
                         onClick={() => handleToggle("searchIndexing")}
                         style={{
                           background: privacy.searchIndexing ? "var(--accent-2)" : "var(--border-3, #ccc)",
@@ -954,8 +954,8 @@ export function SettingsPage({ st, go, activeTabParam }) {
                         desc: "Any Samaagum member can send you a direct message, even without connecting first.",
                         icon: (
                           <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
-                            <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.8"/>
-                            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                            <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.8" />
+                            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                           </svg>
                         )
                       },
@@ -965,7 +965,7 @@ export function SettingsPage({ st, go, activeTabParam }) {
                         desc: "Only people you have accepted a connection with can start a conversation with you.",
                         icon: (
                           <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
-                            <path d="M17 20c0-2.76-2.24-5-5-5s-5 2.24-5 5M12 15a4 4 0 100-8 4 4 0 000 8zM22 11a3 3 0 11-6 0 3 3 0 016 0zM2 11a3 3 0 116 0 3 3 0 01-6 0z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                            <path d="M17 20c0-2.76-2.24-5-5-5s-5 2.24-5 5M12 15a4 4 0 100-8 4 4 0 000 8zM22 11a3 3 0 11-6 0 3 3 0 016 0zM2 11a3 3 0 116 0 3 3 0 01-6 0z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                           </svg>
                         )
                       },
@@ -975,8 +975,8 @@ export function SettingsPage({ st, go, activeTabParam }) {
                         desc: "Nobody can send you direct messages. The message icon is hidden from your profile entirely.",
                         icon: (
                           <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
-                            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
-                            <line x1="4" y1="4" x2="20" y2="20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                            <line x1="4" y1="4" x2="20" y2="20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                           </svg>
                         )
                       }
@@ -1066,7 +1066,7 @@ export function SettingsPage({ st, go, activeTabParam }) {
                         <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>Support access</div>
                         <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>You have granted us to access to your account for support purposes until Aug 31, 2023, 9:40 PM.</div>
                       </div>
-                      <button 
+                      <button
                         onClick={() => handleToggle("supportAccess")}
                         style={{
                           background: privacy.supportAccess ? "var(--accent-2)" : "var(--border-3, #ccc)",
@@ -1098,7 +1098,7 @@ export function SettingsPage({ st, go, activeTabParam }) {
                         <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>Log out of all devices</div>
                         <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Log out of all other active sessions on other devices besides this one.</div>
                       </div>
-                      <button 
+                      <button
                         onClick={() => window.toast ? window.toast("Logged out of all other devices successfully.") : alert("Logged out")}
                         style={{
                           background: "var(--surface-2)",
@@ -1121,7 +1121,7 @@ export function SettingsPage({ st, go, activeTabParam }) {
                         <div style={{ fontSize: "14px", fontWeight: 600, color: "#e5484d", marginBottom: 4 }}>Delete my account</div>
                         <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Permanently delete the account and remove access from all workspaces.</div>
                       </div>
-                      <button 
+                      <button
                         onClick={() => {
                           if (confirm("Are you absolutely sure you want to delete your account? This action is irreversible.")) {
                             localStorage.clear();

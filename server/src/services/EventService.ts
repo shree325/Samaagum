@@ -194,22 +194,33 @@ export class EventService {
 
   // Resolves an entity_id (from events.hosted_by_entity_id) into a display name/type so the
   // client can render "Hosted by <name>" instead of only having the raw UUID.
-  static async resolveHostInfo(hostedByEntityId: string | null | undefined): Promise<{ hostType: string | null; hostName: string | null }> {
-    if (!hostedByEntityId) return { hostType: null, hostName: null };
-    const rows = await prisma.$queryRawUnsafe<{ entity_type: string; group_name: string | null; user_display_name: string | null }[]>(
-      `SELECT e.entity_type, g.name as group_name, p.display_name as user_display_name
+  static async resolveHostInfo(hostedByEntityId: string | null | undefined): Promise<{ hostType: string | null; hostName: string | null; hostUserId: string | null; hostPhoto: string | null }> {
+    if (!hostedByEntityId) return { hostType: null, hostName: null, hostUserId: null, hostPhoto: null };
+    const rows = await prisma.$queryRawUnsafe<{ entity_type: string; user_id: string | null; group_name: string | null; user_display_name: string | null; user_profile_image: any | null; group_icon: any | null }[]>(
+      `SELECT e.entity_type, e.user_id, g.name as group_name, p.display_name as user_display_name, u.profile_image_data as user_profile_image, g.icon_data as group_icon
        FROM entities e
        LEFT JOIN groups g ON g.entity_id = e.id
+       LEFT JOIN users u ON u.id = e.user_id
        LEFT JOIN profiles p ON p.user_id = e.user_id
        WHERE e.id = $1::uuid
        LIMIT 1`,
       hostedByEntityId
     );
     const row = rows[0];
-    if (!row) return { hostType: null, hostName: null };
+    if (!row) return { hostType: null, hostName: null, hostUserId: null, hostPhoto: null };
+    
+    let hostPhoto: string | null = null;
+    if (row.entity_type === 'group' && row.group_icon) {
+      hostPhoto = `data:image/jpeg;base64,${Buffer.from(row.group_icon).toString('base64')}`;
+    } else if (row.entity_type === 'user' && row.user_profile_image) {
+      hostPhoto = `data:image/jpeg;base64,${Buffer.from(row.user_profile_image).toString('base64')}`;
+    }
+
     return {
       hostType: row.entity_type,
       hostName: row.entity_type === 'group' ? row.group_name : row.user_display_name,
+      hostUserId: row.user_id,
+      hostPhoto
     };
   }
 
@@ -412,6 +423,66 @@ export class EventService {
     } : {
       venue: body.venue,
     });
+
+    if (isFullyAuthorized) {
+      const venueObj = body.venue || {};
+      const meta = venueObj.meta || {};
+      const isRestricted = meta.joinEligibility === 'restricted';
+      const approvalRequired = body.approval_required === true || isRestricted;
+
+      if (!approvalRequired) {
+        const pendingBookings = await prisma.bookings.findMany({
+          where: { event_id: id, status: 'pending_approval' }
+        });
+
+        if (pendingBookings.length > 0) {
+          const bookingIds = pendingBookings.map(b => b.id);
+          const bookerUserIds = pendingBookings.map(b => b.booker_user_id);
+          await prisma.$transaction(async (tx) => {
+            await tx.bookings.updateMany({
+              where: { id: { in: bookingIds } },
+              data: { status: 'confirmed' }
+            });
+            const lineItems = await tx.booking_line_items.findMany({
+              where: { booking_id: { in: bookingIds } }
+            });
+            const liIds = lineItems.map(li => li.id);
+            await tx.tickets.updateMany({
+              where: { line_item_id: { in: liIds } },
+              data: { status: 'confirmed' }
+            });
+          });
+
+          try {
+            const { sendNotificationToUser } = require('./messagingSocket');
+            const logs = await prisma.notification_log.findMany({
+              where: {
+                template_key: 'event_join_request',
+                status: { not: 'read' }
+              }
+            });
+
+            for (const log of logs) {
+              try {
+                const data = JSON.parse(log.provider_ref || '{}');
+                if (data.eventId === id && bookerUserIds.includes(data.requesterId)) {
+                  await prisma.notification_log.update({
+                    where: { id: log.id },
+                    data: { status: 'read' }
+                  });
+                  sendNotificationToUser(log.user_id, 'notification.acted', {
+                    notificationId: log.id,
+                    action: 'accepted'
+                  });
+                }
+              } catch {}
+            }
+          } catch (e) {
+            console.error('Error auto-resolving event notifications on update:', e);
+          }
+        }
+      }
+    }
 
     return updated;
   }
@@ -718,39 +789,41 @@ export class EventService {
     await prisma.$executeRaw`UPDATE forum_posts SET status = 'active', updated_at = NOW() WHERE id = ${postId}::uuid`;
 
     // Notify the thread author that their post was approved
-    try {
-      const event = await prisma.events.findUnique({ where: { id: eventId } });
-      const approverUser = await prisma.users.findUnique({ where: { id: userId } });
-      const approverName = approverUser
-        ? (`${approverUser.first_name || ''} ${approverUser.last_name || ''}`).trim() || approverUser.primary_email.split('@')[0]
-        : 'An organizer';
+    if ((post as any).author_user_id !== userId) {
+      try {
+        const event = await prisma.events.findUnique({ where: { id: eventId } });
+        const approverUser = await prisma.users.findUnique({ where: { id: userId } });
+        const approverName = approverUser
+          ? (`${approverUser.first_name || ''} ${approverUser.last_name || ''}`).trim() || approverUser.primary_email.split('@')[0]
+          : 'An organizer';
 
-      const tenant_id = (post as any).tenant_id || '00000000-0000-0000-0000-000000000000';
-      await prisma.notification_log.create({
-        data: {
-          tenant_id,
-          user_id: (post as any).author_user_id,
-          channel: 'socket',
-          template_key: 'forum_thread_approved',
-          status: 'sent',
-          provider_ref: JSON.stringify({
-            postId,
-            postTitle: (post as any).title || '',
-            approverName,
-            eventId,
-            eventTitle: event?.title || ''
-          })
-        }
-      });
+        const tenant_id = (post as any).tenant_id || '00000000-0000-0000-0000-000000000000';
+        await prisma.notification_log.create({
+          data: {
+            tenant_id,
+            user_id: (post as any).author_user_id,
+            channel: 'socket',
+            template_key: 'forum_thread_approved',
+            status: 'sent',
+            provider_ref: JSON.stringify({
+              postId,
+              postTitle: (post as any).title || '',
+              approverName,
+              eventId,
+              eventTitle: event?.title || ''
+            })
+          }
+        });
 
-      sendNotificationToUser((post as any).author_user_id, 'group.notification', {
-        type: 'forum_thread_approved',
-        text: `<b>${approverName}</b> approved your thread in <b>${event?.title || 'event'}</b>!`,
-        eventId,
-        postId
-      });
-    } catch (e) {
-      console.error('Error sending thread approved notification:', e);
+        sendNotificationToUser((post as any).author_user_id, 'group.notification', {
+          type: 'forum_thread_approved',
+          text: `<b>${approverName}</b> approved your thread in <b>${event?.title || 'event'}</b>!`,
+          eventId,
+          postId
+        });
+      } catch (e) {
+        console.error('Error sending thread approved notification:', e);
+      }
     }
 
     return { success: true };
@@ -1000,7 +1073,7 @@ export class EventService {
     const assignments = await prisma.event_team_assignments.findMany({
       where: { event_id: eventId },
       include: {
-        users_event_team_assignments_user_idTousers: { select: { id: true, first_name: true, last_name: true, primary_email: true, profiles: { select: { display_name: true } } } },
+        users_event_team_assignments_user_idTousers: { select: { id: true, first_name: true, last_name: true, primary_email: true, profile_image_data: true, profiles: { select: { display_name: true } } } },
         roles: true
       }
     });
@@ -1008,7 +1081,7 @@ export class EventService {
     const bookings = await prisma.bookings.findMany({
       where: { event_id: eventId, status: { in: ['confirmed', 'pending_approval'] } },
       include: {
-        users: { select: { id: true, first_name: true, last_name: true, primary_email: true, profiles: { select: { display_name: true } } } }
+        users: { select: { id: true, first_name: true, last_name: true, primary_email: true, profile_image_data: true, profiles: { select: { display_name: true } } } }
       }
     });
 
@@ -1016,12 +1089,14 @@ export class EventService {
 
     for (const a of assignments) {
       if (a.users_event_team_assignments_user_idTousers) {
+        const u = a.users_event_team_assignments_user_idTousers;
+        const picture = u.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
         memberMap.set(a.user_id, {
-          id: a.users_event_team_assignments_user_idTousers.id,
-          name: a.users_event_team_assignments_user_idTousers.first_name ? `${a.users_event_team_assignments_user_idTousers.first_name} ${a.users_event_team_assignments_user_idTousers.last_name || ''}`.trim() : 'Unknown',
-          display_name: a.users_event_team_assignments_user_idTousers.profiles?.display_name || a.users_event_team_assignments_user_idTousers.first_name,
-          picture: null,
-          email: a.users_event_team_assignments_user_idTousers.primary_email,
+          id: u.id,
+          name: u.first_name ? `${u.first_name} ${u.last_name || ''}`.trim() : 'Unknown',
+          display_name: u.profiles?.display_name || u.first_name,
+          picture,
+          email: u.primary_email,
           role: a.roles?.key || 'member',
           state: a.state
         });
@@ -1030,12 +1105,14 @@ export class EventService {
 
     for (const b of bookings) {
       if (!memberMap.has(b.booker_user_id) && b.users) {
+        const u = b.users;
+        const picture = u.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
         memberMap.set(b.booker_user_id, {
-          id: b.users.id,
-          name: b.users.first_name ? `${b.users.first_name} ${b.users.last_name || ''}`.trim() : 'Unknown',
-          display_name: b.users.profiles?.display_name || b.users.first_name,
-          picture: null,
-          email: b.users.primary_email,
+          id: u.id,
+          name: u.first_name ? `${u.first_name} ${u.last_name || ''}`.trim() : 'Unknown',
+          display_name: u.profiles?.display_name || u.first_name,
+          picture,
+          email: u.primary_email,
           role: 'member',
           state: b.status === 'pending_approval' ? 'pending' : 'active'
         });
@@ -1044,14 +1121,16 @@ export class EventService {
 
     const event = await prisma.events.findUnique({ where: { id: eventId } });
     if (event) {
-        const entity = await prisma.entities.findUnique({ where: { id: event.hosted_by_entity_id }, include: { users: { select: { id: true, first_name: true, last_name: true, primary_email: true, profiles: { select: { display_name: true } } } } }});
+        const entity = await prisma.entities.findUnique({ where: { id: event.hosted_by_entity_id }, include: { users: { select: { id: true, first_name: true, last_name: true, primary_email: true, profile_image_data: true, profiles: { select: { display_name: true } } } } }});
         if (entity && entity.entity_type === 'user' && !memberMap.has(entity.user_id) && entity.users) {
+            const u = entity.users;
+            const picture = u.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
             memberMap.set(entity.user_id, {
-                id: entity.users.id,
-                name: entity.users.first_name ? `${entity.users.first_name} ${entity.users.last_name || ''}`.trim() : 'Unknown',
-                display_name: entity.users.profiles?.display_name || entity.users.first_name,
-                picture: null,
-                email: entity.users.primary_email,
+                id: u.id,
+                name: u.first_name ? `${u.first_name} ${u.last_name || ''}`.trim() : 'Unknown',
+                display_name: u.profiles?.display_name || u.first_name,
+                picture,
+                email: u.primary_email,
                 role: topRoleKey || 'member',
                 state: 'active'
             });
@@ -1113,6 +1192,62 @@ export class EventService {
       });
     }
     return { success: true };
+  }
+
+  static async removeMember(eventId: string, targetUserId: string, currentUserId: string) {
+    if (targetUserId === currentUserId) {
+      throw new Error('Cannot remove yourself');
+    }
+
+    const event = await prisma.events.findUnique({ where: { id: eventId } });
+    if (!event) throw new Error('Event not found');
+
+    const entityRows = await prisma.$queryRawUnsafe<{ user_id: string }[]>(
+      `SELECT user_id FROM entities WHERE id = $1::uuid LIMIT 1`,
+      event.hosted_by_entity_id
+    );
+    const isOwner = entityRows[0]?.user_id === currentUserId;
+
+    if (!isOwner && !(await this.verifyEventCapability(currentUserId, eventId, 'event.manage'))) {
+      throw new Error('Forbidden: You do not have permission to remove members.');
+    }
+
+    const [callerAssignment, targetAssignment] = await Promise.all([
+      prisma.event_team_assignments.findFirst({ where: { event_id: eventId, user_id: currentUserId }, include: { roles: true } }),
+      prisma.event_team_assignments.findFirst({ where: { event_id: eventId, user_id: targetUserId }, include: { roles: true } }),
+    ]);
+
+    const callerRoleKey = callerAssignment?.roles?.key;
+    const targetRoleKey = targetAssignment?.roles?.key || 'member';
+    const hierarchy = await this.getRoleHierarchyLevels([callerRoleKey, targetRoleKey]);
+    const callerLevel = isOwner ? 0 : hierarchy[callerRoleKey!] ?? Infinity;
+    const targetLevel = hierarchy[targetRoleKey] ?? Infinity;
+
+    if (!isOwner && targetLevel <= callerLevel) {
+      throw new Error('Forbidden: Cannot remove a user with equal or higher permissions.');
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.event_team_assignments.deleteMany({
+        where: { event_id: eventId, user_id: targetUserId }
+      });
+
+      const bookings = await tx.bookings.findMany({
+        where: { event_id: eventId, booker_user_id: targetUserId }
+      });
+
+      for (const b of bookings) {
+        await tx.bookings.update({
+          where: { id: b.id },
+          data: { status: 'cancelled' }
+        });
+        const lineItems = await tx.booking_line_items.findMany({ where: { booking_id: b.id } });
+        const liIds = lineItems.map(li => li.id);
+        if (liIds.length > 0) {
+          await tx.tickets.updateMany({ where: { line_item_id: { in: liIds } }, data: { status: 'cancelled' } });
+        }
+      }
+    });
   }
 
   static async getEventUserRole(userId: string, eventId: string): Promise<string> {

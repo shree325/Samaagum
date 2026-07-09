@@ -20,28 +20,35 @@ export function SaveBtn({ saved, onClick, Cls = "save" }) {
 
 /* ---------------- Event card (rail / grid) ---------------- */
 export const EventCard = React.memo(function EventCard({ ev, onOpen, saved, onSave, registered }) {
+  const month = ev.month || (ev.starts_at ? new Date(ev.starts_at).toLocaleString('en-US', { month: 'short' }).toUpperCase() : 'TBD');
+  const day = ev.day || (ev.starts_at ? new Date(ev.starts_at).getDate().toString() : '');
+  const dateStr = ev.date || (ev.starts_at ? new Date(ev.starts_at).toLocaleDateString() : 'Date TBD');
+  const timeStr = ev.time || (ev.starts_at ? new Date(ev.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Time TBD');
+  const venueStr = ev.online ? 'Online' : (typeof ev.venue === 'object' && ev.venue !== null ? (ev.venue.name || ev.venue.address || 'Venue TBD') : (ev.venue || 'Venue TBD'));
+  const coverBg = ev.cover && (ev.cover.startsWith("linear-gradient") || ev.cover.startsWith("radial-gradient") || ev.cover.startsWith("var(")) ? ev.cover : (ev.cover ? `url(${ev.cover}) center/cover no-repeat` : 'var(--dusk)');
+
   return (
     <div className="ecard rise" onClick={()=>onOpen(ev)}>
-      <div className="cover" style={{ background: ev.cover && (ev.cover.startsWith("linear-gradient") || ev.cover.startsWith("radial-gradient") || ev.cover.startsWith("var(")) ? ev.cover : `url(${ev.cover}) center/cover no-repeat` }}>
+      <div className="cover" style={{ background: coverBg }}>
         <Grain/>
-        <DateBadge month={ev.month} day={ev.day} />
+        <DateBadge month={month} day={day} />
         <SaveBtn saved={saved} onClick={onSave} />
         <span className="cat">{ev.online ? "Online" : ev.cat}</span>
       </div>
       <div className="body">
         <div className="ttl">{ev.title}</div>
-        <div className="meta-row"><span className="ic"><I.clock/></span>{ev.date} · {ev.time}</div>
-        <div className="meta-row"><span className="ic">{ev.online?<I.online/>:<I.pin/>}</span>{ev.venue}</div>
+        <div className="meta-row"><span className="ic"><I.clock/></span>{dateStr} · {timeStr}</div>
+        <div className="meta-row"><span className="ic">{ev.online?<I.online/>:<I.pin/>}</span>{venueStr}</div>
         <div className="foot">
           <div className="going">
             <div className="stack">
               {(ev.attendees||[]).slice(0,3).map((n,i)=><Avatar key={i} name={n} size={24}/>)}
             </div>
-            <span className="lbl">{ev.going} going</span>
+            <span className="lbl">{ev.going || 0} going</span>
           </div>
           {registered
             ? <span className="price" style={{ color:"var(--accent-2)", display:"inline-flex", alignItems:"center", gap:5 }}><I.check/>Going</span>
-            : <span className={`price ${ev.type==="Free"?"free":""}`}>{ev.price}</span>}
+            : <span className={`price ${ev.type==="Free"?"free":""}`}>{ev.price || (ev.registration_mode === 'free' ? 'Free' : '')}</span>}
         </div>
       </div>
     </div>
@@ -50,9 +57,14 @@ export const EventCard = React.memo(function EventCard({ ev, onOpen, saved, onSa
 
 /* ---------------- Featured (hero) ---------------- */
 export const FeatureCard = React.memo(function FeatureCard({ ev, onOpen, saved, onSave }) {
+  const dateStr = ev.date || (ev.starts_at ? new Date(ev.starts_at).toLocaleDateString() : 'Date TBD');
+  const timeStr = ev.time || (ev.starts_at ? new Date(ev.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Time TBD');
+  const venueStr = ev.online ? 'Online' : (typeof ev.venue === 'object' && ev.venue !== null ? (ev.venue.name || ev.venue.address || 'Venue TBD') : (ev.venue || 'Venue TBD'));
+  const coverBg = ev.cover && (ev.cover.startsWith("linear-gradient") || ev.cover.startsWith("radial-gradient") || ev.cover.startsWith("var(")) ? ev.cover : (ev.cover ? `url(${ev.cover}) center/cover no-repeat` : 'var(--sunset)');
+
   return (
     <div className="feature rise" onClick={()=>onOpen(ev)}>
-      <div className="fcover" style={{ background: ev.cover && (ev.cover.startsWith("linear-gradient") || ev.cover.startsWith("radial-gradient") || ev.cover.startsWith("var(")) ? ev.cover : `url(${ev.cover}) center/cover no-repeat` }}>
+      <div className="fcover" style={{ background: coverBg }}>
         <Grain/>
         {ev.live && <span className="live"><span className="pulse"/>Selling fast</span>}
         <span className="ftag">{ev.cat}</span>
@@ -62,14 +74,14 @@ export const FeatureCard = React.memo(function FeatureCard({ ev, onOpen, saved, 
         <div className="ttl">{ev.title}</div>
         <p className="dsc">{ev.desc}</p>
         <div className="fmeta">
-          <div className="row"><span className="ico"><I.cal/></span><span><span className="k">When</span><br/><span className="v">{ev.date} · {ev.time}</span></span></div>
-          <div className="row"><span className="ico"><I.pin/></span><span><span className="k">Where</span><br/><span className="v">{ev.venue}, {ev.city}</span></span></div>
+          <div className="row"><span className="ico"><I.cal/></span><span><span className="k">When</span><br/><span className="v">{dateStr} · {timeStr}</span></span></div>
+          <div className="row"><span className="ico"><I.pin/></span><span><span className="k">Where</span><br/><span className="v">{venueStr}, {ev.city || ''}</span></span></div>
         </div>
         <div className="factions">
-          <button className="hbtn hbtn--primary" onClick={(e)=>{ e.stopPropagation(); onOpen(ev); }}>Get tickets · {ev.price}</button>
+          <button className="hbtn hbtn--primary" onClick={(e)=>{ e.stopPropagation(); onOpen(ev); }}>Get tickets · {ev.price || 'Free'}</button>
           <div className="att"><div className="going"><div className="stack" style={{ display:"flex" }}>
             {["Kabir A","Dev K","Riya T","Sam K"].map((n,i)=><Avatar key={i} name={n} size={26} style={{ marginLeft: i? -9:0, border:"2px solid var(--surface)" }}/>)}
-          </div></div><span>{ev.going} going</span></div>
+          </div></div><span>{ev.going || 0} going</span></div>
         </div>
       </div>
     </div>

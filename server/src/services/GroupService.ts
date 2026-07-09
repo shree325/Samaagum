@@ -21,6 +21,7 @@ import { R_audit_log } from '../repositories/R_audit_log';
 import { InvitationService } from './InvitationService';
 import prisma from '../config/prisma';
 import { PlanEntitlementService } from './PlanEntitlementService';
+import accessControlService from './AccessControlService';
 
 export class GroupService {
     private static groupRepo = new R_groups();
@@ -284,8 +285,12 @@ export class GroupService {
             const settings = g.settings as any || {};
             if (settings.isDraft && enhancedGroup.isOwner) {
                 draftGroups.push(enhancedGroup);
-            } else if (settings.isArchived && enhancedGroup.isOwner) {
-                archivedGroups.push(enhancedGroup);
+            } else if (settings.isArchived) {
+                if (enhancedGroup.isOwner) {
+                    archivedGroups.push(enhancedGroup);
+                }
+                // Skip for non-owner members
+                continue;
             } else if (enhancedGroup.isOwner) {
                 ownedGroups.push(enhancedGroup);
             } else if (m.state === 'active') {
@@ -405,11 +410,13 @@ export class GroupService {
                 name = full || username || 'Unknown User';
             }
 
+            const profilePhoto = u?.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
             return {
                 id: m.user_id,
                 name,
                 username,
-                role
+                role,
+                profilePhoto
             };
         });
 
@@ -477,6 +484,69 @@ export class GroupService {
             settings: body.settings ?? group.settings,
             visibility: body.visibility
         });
+
+        if ((body.joinMode ?? group.join_mode) === 'open') {
+            const settings = body.settings ?? group.settings ?? {};
+            const capacity = settings.capacity || {};
+            let maxToApprove = -1;
+
+            if (capacity.limit === true && capacity.max > 0) {
+                const groupEntity = await prisma.entities.findUnique({ where: { id: groupId }, select: { user_id: true } });
+                const ownerUserId = groupEntity?.user_id;
+                const activeCount = await prisma.group_memberships.count({
+                    where: {
+                        group_id: groupId,
+                        state: 'active',
+                        ...(ownerUserId ? { user_id: { not: ownerUserId } } : {})
+                    }
+                });
+                maxToApprove = capacity.max - activeCount;
+            }
+
+            if (maxToApprove === -1 || maxToApprove > 0) {
+                const pendingMembers = await prisma.group_memberships.findMany({
+                    where: { group_id: groupId, state: 'pending' },
+                    orderBy: { created_at: 'asc' },
+                    ...(maxToApprove !== -1 ? { take: maxToApprove } : {})
+                });
+
+                 if (pendingMembers.length > 0) {
+                    await prisma.group_memberships.updateMany({
+                        where: { id: { in: pendingMembers.map(m => m.id) } },
+                        data: { state: 'active', joined_at: new Date() }
+                    });
+
+                    try {
+                        const { sendNotificationToUser } = require('./messagingSocket');
+                        const memberIds = pendingMembers.map(m => m.user_id);
+                        const logs = await prisma.notification_log.findMany({
+                            where: {
+                                template_key: 'group_join_request',
+                                status: { not: 'read' }
+                            }
+                        });
+
+                        for (const log of logs) {
+                            try {
+                                const data = JSON.parse(log.provider_ref || '{}');
+                                if (data.groupId === groupId && memberIds.includes(data.requesterId)) {
+                                    await prisma.notification_log.update({
+                                        where: { id: log.id },
+                                        data: { status: 'read' }
+                                    });
+                                    sendNotificationToUser(log.user_id, 'notification.acted', {
+                                        notificationId: log.id,
+                                        action: 'accepted'
+                                    });
+                                }
+                            } catch {}
+                        }
+                    } catch (e) {
+                        console.error('Error auto-resolving group notifications on update:', e);
+                    }
+                }
+            }
+        }
 
         return this.toClientGroup(updatedGroup);
     }
@@ -743,6 +813,68 @@ export class GroupService {
             if (existing.state === 'rejected') {
                 await this.groupMembershipsRepo.deleteMembership(groupId, userId);
             } else {
+                if (existing.state === 'pending' && group.join_mode === 'open') {
+                    const settings = group.settings as any || {};
+                    const capacity = settings.capacity || {};
+                    let isWaitlisted = false;
+
+                    if (capacity.limit === true && capacity.max > 0) {
+                        const groupEntity = await prisma.entities.findUnique({ where: { id: groupId }, select: { user_id: true } });
+                        const ownerUserId = groupEntity?.user_id;
+                        const activeCount = await prisma.group_memberships.count({
+                            where: {
+                                group_id: groupId,
+                                state: 'active',
+                                ...(ownerUserId ? { user_id: { not: ownerUserId } } : {})
+                            }
+                        });
+
+                        if (activeCount >= capacity.max) {
+                            if (capacity.waitlist === true) {
+                                isWaitlisted = true;
+                            } else {
+                                throw new Error('Group is at full capacity');
+                            }
+                        }
+                    }
+
+                    if (!isWaitlisted) {
+                        await this.groupMembershipsRepo.update(existing.id, {
+                            state: 'active',
+                            joined_at: new Date()
+                        });
+
+                        try {
+                            const { sendNotificationToUser } = require('./messagingSocket');
+                            const logs = await prisma.notification_log.findMany({
+                                where: {
+                                    template_key: 'group_join_request',
+                                    status: { not: 'read' }
+                                }
+                            });
+
+                            for (const log of logs) {
+                                try {
+                                    const data = JSON.parse(log.provider_ref || '{}');
+                                    if (data.groupId === groupId && data.requesterId === userId) {
+                                        await prisma.notification_log.update({
+                                            where: { id: log.id },
+                                            data: { status: 'read' }
+                                        });
+                                        sendNotificationToUser(log.user_id, 'notification.acted', {
+                                            notificationId: log.id,
+                                            action: 'accepted'
+                                        });
+                                    }
+                                } catch {}
+                            }
+                        } catch (e) {
+                            console.error('Error auto-resolving group notifications on join:', e);
+                        }
+
+                        return { state: 'active' };
+                    }
+                }
                 return { state: existing.state };
             }
         }
@@ -862,9 +994,10 @@ export class GroupService {
             const u = usersMap.get(m.user_id);
             const username = u?.primary_email ? u.primary_email.split('@')[0] : 'unknown';
             const displayName = u ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : username;
+            const profilePhoto = u?.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
             return {
                 ...m,
-                users: u ? { id: u.id, first_name: u.first_name, last_name: u.last_name, primary_email: u.primary_email, display_name: displayName || username, username } : null,
+                users: u ? { id: u.id, first_name: u.first_name, last_name: u.last_name, primary_email: u.primary_email, display_name: displayName || username, username, profilePhoto } : null,
                 roles: rolesByUser[m.user_id] || ['group_member']
             };
         });
@@ -894,9 +1027,53 @@ export class GroupService {
         return 'none';
     }
 
+    static async getAvailableGroupRoles() {
+        return prisma.$queryRawUnsafe<{ role_id: string; key: string; display_name: string; description: string | null; hierarchy_level: number; capabilities: string[] }[]>(
+            `SELECT r.id as role_id, r.key, ar.display_name, ar.description, ar.hierarchy_level,
+                    r.baseline_capabilities as capabilities
+             FROM roles r
+             JOIN admin_roles ar ON ar.name = r.key
+             JOIN admin_responsibilities resp ON resp.name = 'groups_management'
+             WHERE ar.is_active = true
+               AND ar.tenant_id IS NULL
+               AND ar.responsibility_ids @> jsonb_build_array(resp.id::text)
+               AND (r.level = 'group')
+             ORDER BY ar.hierarchy_level ASC`
+        );
+    }
+
+    static async verifyGroupCapability(userId: string, groupId: string, capability: string): Promise<boolean> {
+        const group = await prisma.groups.findUnique({ where: { entity_id: groupId } });
+        if (!group) return false;
+        const entityRows = await prisma.$queryRawUnsafe<{ user_id: string }[]>(
+            `SELECT user_id FROM entities WHERE id = $1::uuid LIMIT 1`,
+            groupId
+        );
+        if (entityRows[0]?.user_id === userId) return true;
+
+        const assignment = await prisma.role_assignments.findFirst({
+            where: {
+                scope_entity_id: groupId,
+                user_id: userId,
+                OR: [
+                    { expires_at: null },
+                    { expires_at: { gt: new Date() } }
+                ]
+            },
+            include: { roles: true }
+        });
+        const roleKey = assignment?.roles?.key;
+        if (roleKey) {
+            const role = await prisma.roles.findUnique({ where: { key: roleKey } });
+            const caps = Array.isArray(role?.baseline_capabilities) ? role!.baseline_capabilities as string[] : [];
+            if (caps.includes(capability)) return true;
+        }
+
+        return accessControlService.hasCapability(userId, capability, groupId);
+    }
+
     static async verifyGroupAdmin(userId: string, groupId: string) {
-        const role = await this.getHighestGroupRole(userId, groupId);
-        return ['group_owner', 'group_admin', 'group_moderator'].includes(role);
+        return this.verifyGroupCapability(userId, groupId, 'group.manage');
     }
 
     static async requireActiveMember(groupId: string, requestingUser?: any) {
@@ -917,17 +1094,30 @@ export class GroupService {
     }
 
     static async checkForumPermission(userId: string, groupId: string, permType: 'create_thread' | 'reply_thread', settings: any): Promise<boolean> {
-        const perm = permType === 'create_thread'
-            ? (settings?.forums?.threadPerm || 'everyone')
-            : (settings?.forums?.replyPerm || 'everyone');
         const membership = await this.getUserMembership(userId, groupId);
         if (membership.isOwner) return true;
         if (membership.state !== 'active') return false;
-        if (perm === 'everyone') return true;
-        if (perm === 'members') return true;
+
+        const forumSettings = settings?.forums || {};
+        const roleBucket = permType === 'create_thread' ? forumSettings.threadRoles : forumSettings.replyRoles;
+
+        if (roleBucket) {
+            if (roleBucket.public === true) return true;
+            if (Array.isArray(roleBucket.roles)) {
+                const userRoles = membership.roles || [];
+                const effectiveRoles = userRoles.length > 0 ? userRoles : ['group_member'];
+                return effectiveRoles.some((r: string) => roleBucket.roles.includes(r));
+            }
+        }
+
+        const perm = permType === 'create_thread'
+            ? (forumSettings.threadPerm || 'everyone')
+            : (forumSettings.replyPerm || 'everyone');
+
+        if (perm === 'everyone' || perm === 'members') return true;
         if (perm === 'admins') {
             const roles = membership.roles || [];
-            return roles.some((r: string) => ['group_admin', 'group_moderator'].includes(r));
+            return roles.some((r: string) => ['group_admin', 'group_moderator', 'group_owner'].includes(r));
         }
         if (perm === 'selected') {
             const res = await this.fmpRepo.findAll({ group_id: groupId, user_id: userId, perm_type: permType });
@@ -977,6 +1167,15 @@ export class GroupService {
         );
     }
 
+    private static async getRoleHierarchyLevel(roleKey: string): Promise<number> {
+        if (roleKey === 'group_owner') return 100;
+        if (roleKey === 'group_member' || roleKey === 'none') return 1000;
+        const ar = await prisma.admin_roles.findFirst({
+            where: { name: roleKey, is_active: true }
+        });
+        return ar?.hierarchy_level ?? 500;
+    }
+
     static async updateMemberRole(groupId: string, memberId: string, role: string, adminUser: any) {
         if (adminUser.id === memberId) {
             throw new Error('Cannot modify your own role');
@@ -985,15 +1184,23 @@ export class GroupService {
         const requesterRole = await this.getHighestGroupRole(adminUser.id, groupId);
         const targetRole = await this.getHighestGroupRole(memberId, groupId);
 
-        if (requesterRole === 'none' || requesterRole === 'group_member' || requesterRole === 'group_moderator') {
-            throw new Error('Forbidden');
+        const reqLevel = await this.getRoleHierarchyLevel(requesterRole);
+        const targetLevel = await this.getRoleHierarchyLevel(targetRole);
+        const newRoleLevel = await this.getRoleHierarchyLevel(role);
+
+        // 1. Requester must have role priority < 1000
+        if (reqLevel >= 1000) {
+            throw new Error('Forbidden: You do not have permission to manage roles');
         }
-        if (requesterRole === 'group_admin') {
-            if (role === 'group_admin' || role === 'group_owner') throw new Error('Admins cannot assign Admin or Owner roles');
-            if (targetRole === 'group_owner' || targetRole === 'group_admin') throw new Error('Admins cannot modify Admins or Owners');
+
+        // 2. Requester cannot change the role of someone with equal or higher priority
+        if (reqLevel >= targetLevel) {
+            throw new Error('Forbidden: You cannot change the role of a user with equal or higher priority');
         }
-        if (requesterRole === 'group_owner') {
-            if (targetRole === 'group_owner') throw new Error('Cannot modify another Owner directly');
+
+        // 3. Requester cannot assign a role with higher priority than their own
+        if (newRoleLevel < reqLevel) {
+            throw new Error('Forbidden: You cannot allocate a role of higher priority than your own');
         }
 
         const roleDef = (await this.rolesRepo.findAll({ key: role }))[0];
@@ -1072,14 +1279,14 @@ export class GroupService {
         const requesterRole = await this.getHighestGroupRole(adminUser.id, groupId);
         const targetRole = await this.getHighestGroupRole(memberId, groupId);
 
-        if (requesterRole === 'none' || requesterRole === 'group_member' || requesterRole === 'group_moderator') {
-            throw new Error('Forbidden');
+        const reqLevel = await this.getRoleHierarchyLevel(requesterRole);
+        const targetLevel = await this.getRoleHierarchyLevel(targetRole);
+
+        if (reqLevel >= 1000) {
+            throw new Error('Forbidden: You do not have permission to remove members');
         }
-        if (requesterRole === 'group_admin') {
-            if (targetRole === 'group_owner' || targetRole === 'group_admin') throw new Error('Admins cannot remove Admins or Owners');
-        }
-        if (requesterRole === 'group_owner') {
-            if (targetRole === 'group_owner') throw new Error('Cannot remove another Owner');
+        if (reqLevel >= targetLevel) {
+            throw new Error('Forbidden: You cannot remove a user with equal or higher priority');
         }
 
         const groupRoles = await this.rolesRepo.findAll({ key: { in: ['group_owner', 'group_admin', 'group_moderator', 'group_member'] } });
@@ -1251,12 +1458,13 @@ export class GroupService {
             const username = p.primary_email ? p.primary_email.split('@')[0] : 'unknown';
             const name = (`${p.first_name || ''} ${p.last_name || ''}`).trim() || username || 'Unknown User';
             const pid = String(p.id);
+            const authorPhoto = p.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(p.profile_image_data).toString('base64')}` : null;
             return {
                 id: pid, title: p.title, body: p.body, pinned: p.pinned, locked: p.locked,
                 solved: p.solved, archived: p.archived, view_count: Number(p.view_count),
                 status: p.status, created_at: p.created_at, updated_at: p.updated_at,
                 author_user_id: p.author_user_id, scope_type: p.scope_type, scope_id: p.scope_id,
-                author_name: name, author_username: username,
+                author_name: name, author_username: username, author_photo: authorPhoto,
                 vote_score: Number(p.vote_score || 0),
                 user_vote: p.user_vote ? Number(p.user_vote) : 0,
                 comments_count: Number(p.comments_count || 0),
@@ -1367,11 +1575,12 @@ export class GroupService {
         const flatComments = commentRows.map((c: any) => {
             const username = c.primary_email ? c.primary_email.split('@')[0] : 'unknown';
             const name = (`${c.first_name || ''} ${c.last_name || ''}`).trim() || username || 'Unknown User';
+            const commentAuthorPhoto = c.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(c.profile_image_data).toString('base64')}` : null;
             return {
                 id: String(c.id), post_id: String(c.post_id), parent_id: c.parent_id ? String(c.parent_id) : null,
                 author_user_id: String(c.author_user_id), body: c.body, status: c.status,
                 created_at: c.created_at, updated_at: c.updated_at, depth: Number(c.depth),
-                author_name: name, author_username: username,
+                author_name: name, author_username: username, author_photo: commentAuthorPhoto,
                 vote_score: Number(c.vote_score || 0), user_vote: c.user_vote ? Number(c.user_vote) : 0,
                 replies: []
             };
@@ -1388,13 +1597,14 @@ export class GroupService {
 
         const username = post.primary_email ? post.primary_email.split('@')[0] : 'unknown';
         const name = (`${post.first_name || ''} ${post.last_name || ''}`).trim() || username || 'Unknown User';
+        const postAuthorPhoto = post.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(post.profile_image_data).toString('base64')}` : null;
 
         return {
             id: String(post.id), title: post.title, body: post.body, pinned: post.pinned, locked: post.locked,
             solved: post.solved, archived: post.archived, view_count: Number(post.view_count) + 1,
             status: post.status, created_at: post.created_at, updated_at: post.updated_at,
             author_user_id: String(post.author_user_id), scope_type: post.scope_type, scope_id: String(post.scope_id),
-            author_name: name, author_username: username,
+            author_name: name, author_username: username, author_photo: postAuthorPhoto,
             vote_score: Number(post.vote_score || 0), user_vote: post.user_vote ? Number(post.user_vote) : 0,
             reactions, tags, comments
         };
@@ -1706,13 +1916,13 @@ export class GroupService {
     }
 
     static async approveGalleryItem(groupId: string, itemId: string, user: any) {
-        if (!(await this.verifyGroupAdmin(user.id, groupId))) throw new Error('Admins only');
+        if (!(await this.verifyGroupCapability(user.id, groupId, 'group.moderate'))) throw new Error('Admins only');
         await this.groupGalleryRepo.update(itemId, { status: 'approved' });
     }
 
     static async deleteGalleryItem(groupId: string, itemId: string, user: any) {
-        const isAdmin = await this.verifyGroupAdmin(user.id, groupId);
-        if (!isAdmin) {
+        const isMod = await this.verifyGroupCapability(user.id, groupId, 'group.moderate');
+        if (!isMod) {
             const row = await this.groupGalleryRepo.findOne({ id: itemId });
             if (!row || row.uploader_user_id !== user.id) {
                 throw new Error('Forbidden');
@@ -1722,7 +1932,7 @@ export class GroupService {
     }
 
     static async updateSettings(groupId: string, settings: any, user: any) {
-        if (!(await this.verifyGroupAdmin(user.id, groupId))) throw new Error('Forbidden');
+        if (!(await this.verifyGroupCapability(user.id, groupId, 'group.settings'))) throw new Error('Forbidden');
 
         await this.groupRepo.update(groupId, { settings });
     }

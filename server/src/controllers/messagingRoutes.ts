@@ -107,6 +107,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
               users: {
                 select: {
                   primary_email: true,
+                  profile_image_data: true,
                   profiles: {
                     select: { display_name: true, messaging_restriction: true }
                   }
@@ -145,12 +146,16 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           updatedAt: c.updated_at,
           preview: lastMsg?.body || null,
           unread: unreadCount,
-          participants: c.conversation_participants.map(p => ({
-            userId: p.user_id,
-            role: p.role,
-            name: p.users?.profiles?.display_name || p.users?.primary_email || "Unknown User",
-            messagingRestriction: p.users?.profiles?.messaging_restriction || "anyone"
-          }))
+          participants: c.conversation_participants.map(p => {
+            const img = p.users?.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(p.users.profile_image_data).toString('base64')}` : null;
+            return {
+              userId: p.user_id,
+              role: p.role,
+              name: p.users?.profiles?.display_name || p.users?.primary_email || "Unknown User",
+              messagingRestriction: p.users?.profiles?.messaging_restriction || "anyone",
+              img
+            };
+          })
         };
       }));
 
@@ -180,7 +185,9 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             display_name: { contains: q, mode: 'insensitive' }
           }
         },
-        include: {
+        select: {
+          id: true,
+          profile_image_data: true,
           profiles: {
             select: {
               display_name: true
@@ -190,10 +197,14 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         take: 20
       });
       
-      const results = users.map(u => ({
-        id: u.id,
-        name: u.profiles?.display_name || null
-      }));
+      const results = users.map(u => {
+        const img = u.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
+        return {
+          id: u.id,
+          name: u.profiles?.display_name || null,
+          img
+        };
+      });
 
       return reply.send({ success: true, data: results });
     } catch (err: any) {
@@ -292,6 +303,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
               users: {
                 select: {
                   primary_email: true,
+                  profile_image_data: true,
                   profiles: {
                     select: { display_name: true, messaging_restriction: true }
                   }
@@ -312,12 +324,16 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             createdById: existing.created_by,
             createdAt: existing.created_at,
             updatedAt: existing.updated_at,
-            participants: existing.conversation_participants.map((p: any) => ({
-              userId: p.user_id,
-              role: p.role,
-              name: p.users?.profiles?.display_name || p.users?.primary_email || "Unknown User",
-              messagingRestriction: p.users?.profiles?.messaging_restriction || "anyone"
-            }))
+            participants: existing.conversation_participants.map((p: any) => {
+              const img = p.users?.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(p.users.profile_image_data).toString('base64')}` : null;
+              return {
+                userId: p.user_id,
+                role: p.role,
+                name: p.users?.profiles?.display_name || p.users?.primary_email || "Unknown User",
+                messagingRestriction: p.users?.profiles?.messaging_restriction || "anyone",
+                img
+              };
+            })
           }
         });
       }
@@ -345,6 +361,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
               users: {
                 select: {
                   primary_email: true,
+                  profile_image_data: true,
                   profiles: {
                     select: { display_name: true, messaging_restriction: true }
                   }
@@ -364,12 +381,16 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           createdById: conversation.created_by,
           createdAt: conversation.created_at,
           updatedAt: conversation.updated_at,
-          participants: conversation.conversation_participants.map((p: any) => ({
-            userId: p.user_id,
-            role: p.role,
-            name: p.users?.profiles?.display_name || p.users?.primary_email || "Unknown User",
-            messagingRestriction: p.users?.profiles?.messaging_restriction || "anyone"
-          }))
+          participants: conversation.conversation_participants.map((p: any) => {
+            const img = p.users?.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(p.users.profile_image_data).toString('base64')}` : null;
+            return {
+              userId: p.user_id,
+              role: p.role,
+              name: p.users?.profiles?.display_name || p.users?.primary_email || "Unknown User",
+              messagingRestriction: p.users?.profiles?.messaging_restriction || "anyone",
+              img
+            };
+          })
         }
       });
     } catch (error: any) {
@@ -392,6 +413,14 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         },
         include: {
           message_receipts: true,
+          users: {
+            select: {
+              profile_image_data: true,
+              profiles: {
+                select: { display_name: true }
+              }
+            }
+          },
           messages: {
             select: {
               id: true,
@@ -430,6 +459,8 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           messageId: m.id,
           conversationId: m.conversation_id,
           senderId: m.sender_user_id,
+          senderName: m.users?.profiles?.display_name || "User",
+          senderImg: m.users?.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(m.users.profile_image_data).toString('base64')}` : null,
           content: m.body,
           body: m.body,
           isEdited: m.is_edited,
@@ -787,6 +818,58 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       }) : [];
       const forumPostsMap = new Map<string, string>(forumPosts.map((fp: any) => [fp.id, fp.scope_id]));
 
+      // Pre-fetch bookings for event join requests
+      const eventJoinLogs = logs.filter(l => l.template_key === 'event_join_request' && l.provider_ref);
+      const bookingQueries = eventJoinLogs.map(l => {
+        try {
+          const data = JSON.parse(l.provider_ref || '{}');
+          return { eventId: data.eventId, bookerUserId: data.requesterId };
+        } catch (e) {
+          return null;
+        }
+      }).filter(Boolean) as { eventId: string, bookerUserId: string }[];
+
+      const bookings = bookingQueries.length > 0 ? await prisma.bookings.findMany({
+        where: {
+          OR: bookingQueries.map(q => ({
+            event_id: q.eventId,
+            booker_user_id: q.bookerUserId
+          }))
+        },
+        select: { event_id: true, booker_user_id: true, status: true }
+      }) : [];
+
+      const bookingStatusMap = new Map<string, string>();
+      for (const b of bookings) {
+        bookingStatusMap.set(`${b.event_id}:${b.booker_user_id}`, b.status);
+      }
+
+      // Pre-fetch group memberships for group join requests
+      const groupJoinLogs = logs.filter(l => l.template_key === 'group_join_request' && l.provider_ref);
+      const membershipQueries = groupJoinLogs.map(l => {
+        try {
+          const data = JSON.parse(l.provider_ref || '{}');
+          return { groupId: data.groupId, userId: data.requesterId };
+        } catch (e) {
+          return null;
+        }
+      }).filter(Boolean) as { groupId: string, userId: string }[];
+
+      const memberships = membershipQueries.length > 0 ? await prisma.group_memberships.findMany({
+        where: {
+          OR: membershipQueries.map(q => ({
+            group_id: q.groupId,
+            user_id: q.userId
+          }))
+        },
+        select: { group_id: true, user_id: true, state: true }
+      }) : [];
+
+      const membershipStatusMap = new Map<string, string>();
+      for (const m of memberships) {
+        membershipStatusMap.set(`${m.group_id}:${m.user_id}`, m.state);
+      }
+
       const mappedLogs = logs.map(l => {
         const time = new Date(l.created_at);
         const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -894,11 +977,17 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         if (l.template_key === 'event_join_request' && l.provider_ref) {
           try {
             const data = JSON.parse(l.provider_ref);
+            const bStatus = bookingStatusMap.get(`${data.eventId}:${data.requesterId}`);
+            let actedVal: string | null = null;
+            if (bStatus === 'confirmed') actedVal = 'accepted';
+            else if (bStatus === 'cancelled') actedVal = 'declined';
+
             return {
               id: l.id,
               who: data.requesterName || "A user",
               type: "registration",
               unread: l.status !== 'read',
+              acted: actedVal,
               day: dayLabel,
               time: timeStr,
               text: `<b>${data.requesterName}</b> requested to join <b>${data.eventTitle}</b>`,
@@ -906,7 +995,8 @@ export async function messagingRoutes(fastify: FastifyInstance) {
               eventId: data.eventId,
               eventTitle: data.eventTitle,
               requesterId: data.requesterId,
-              answers: data.answers || {}
+              answers: data.answers || {},
+              questionLabels: data.questionLabels || {}
             };
           } catch (e) {
             return {
@@ -918,6 +1008,43 @@ export async function messagingRoutes(fastify: FastifyInstance) {
               time: timeStr,
               text: `A user has requested to join your event`,
               action: "event_request"
+            };
+          }
+        }
+
+        if (l.template_key === 'group_join_request' && l.provider_ref) {
+          try {
+            const data = JSON.parse(l.provider_ref);
+            const mStatus = membershipStatusMap.get(`${data.groupId}:${data.requesterId}`);
+            let actedVal: string | null = null;
+            if (mStatus === 'active') actedVal = 'accepted';
+            else if (mStatus === 'rejected' || mStatus === 'cancelled') actedVal = 'declined';
+
+            return {
+              id: l.id,
+              who: data.requesterName || "A user",
+              type: "join",
+              unread: l.status !== 'read',
+              acted: actedVal,
+              day: dayLabel,
+              time: timeStr,
+              text: `<b>${data.requesterName}</b> requested to join <b>${data.groupName}</b>`,
+              action: "group_request",
+              groupId: data.groupId,
+              groupName: data.groupName,
+              requesterId: data.requesterId,
+              answers: data.answers || {}
+            };
+          } catch (e) {
+            return {
+              id: l.id,
+              who: "Someone",
+              type: "join",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `A user has requested to join your group`,
+              action: "group_request"
             };
           }
         }
@@ -1292,6 +1419,56 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         }
       });
       if (existingBooking) {
+        if (existingBooking.status === 'pending_approval' && !approvalRequired) {
+          await prisma.$transaction(async (tx) => {
+            await tx.bookings.update({
+              where: { id: existingBooking.id },
+              data: { status: 'confirmed' }
+            });
+            const lineItems = await tx.booking_line_items.findMany({
+              where: { booking_id: existingBooking.id }
+            });
+            const liIds = lineItems.map(li => li.id);
+            await tx.tickets.updateMany({
+              where: { line_item_id: { in: liIds } },
+              data: { status: 'confirmed' }
+            });
+          });
+
+          try {
+            const logs = await prisma.notification_log.findMany({
+              where: {
+                template_key: 'event_join_request',
+                status: { not: 'read' }
+              }
+            });
+
+            for (const log of logs) {
+              try {
+                const data = JSON.parse(log.provider_ref || '{}');
+                if (data.eventId === eventId && data.requesterId === userId) {
+                  await prisma.notification_log.update({
+                    where: { id: log.id },
+                    data: { status: 'read' }
+                  });
+                  const { sendNotificationToUser } = require('../services/messagingSocket');
+                  sendNotificationToUser(log.user_id, 'notification.acted', {
+                    notificationId: log.id,
+                    action: 'accepted'
+                  });
+                }
+              } catch {}
+            }
+          } catch (e) {
+            console.error('Error auto-resolving event notifications on join:', e);
+          }
+
+          const groupsNamespace = (fastify as any).io?.of('/groups');
+          if (groupsNamespace) {
+            groupsNamespace.to(`event_${eventId}`).emit('dashboard_updated', { action: 'join', eventId });
+          }
+          return reply.send({ success: true, status: 'confirmed', message: 'Joined event successfully.' });
+        }
         return reply.status(400).send({
           success: false,
           message: existingBooking.status === 'confirmed' ? 'Already registered for this event.' : 'Join request is already pending approval.'
@@ -1437,7 +1614,19 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         }
 
         // Create notification for owner/admin
-        const notif = await prisma.notification_log.create({
+        const venueObj: any = typeof event.venue === 'string' && event.venue.trim().startsWith('{')
+        ? JSON.parse(event.venue)
+        : (event.venue || {});
+      const eventMeta = venueObj?.meta || {};
+      const formFields = Array.isArray(eventMeta?.formFields) ? eventMeta.formFields : [];
+      const questionLabels = formFields.reduce((acc: Record<string, string>, field: any) => {
+        if (field?.id && field?.question) {
+          acc[field.id] = field.question;
+        }
+        return acc;
+      }, {});
+
+      const notif = await prisma.notification_log.create({
           data: {
             tenant_id: event.tenant_id,
             user_id: ownerUserId,
@@ -1449,7 +1638,8 @@ export async function messagingRoutes(fastify: FastifyInstance) {
               eventTitle: event.title,
               requesterId: userId,
               requesterName,
-              answers
+              answers,
+              questionLabels
             })
           }
         });
@@ -1462,7 +1652,8 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             type: 'registration',
             text: `<b>${requesterName}</b> requested to join <b>${event.title}</b>`,
             eventId: eventId,
-            answers
+            answers,
+            questionLabels
           });
         }
 
@@ -1565,6 +1756,14 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           });
         }
 
+        const chatNamespace2 = (fastify as any).io?.of('/chat');
+        if (chatNamespace2) {
+          chatNamespace2.to(`user:${userId}`).emit('notification.acted', {
+            notificationId,
+            action: 'accepted'
+          });
+        }
+
         const groupsNamespace = (fastify as any).io?.of('/groups');
         if (groupsNamespace) {
           groupsNamespace.to(`event_${eventId}`).emit('dashboard_updated', { action: 'accept', eventId });
@@ -1596,6 +1795,14 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           });
         }
 
+        const chatNamespace2 = (fastify as any).io?.of('/chat');
+        if (chatNamespace2) {
+          chatNamespace2.to(`user:${userId}`).emit('notification.acted', {
+            notificationId,
+            action: 'declined'
+          });
+        }
+
         const groupsNamespace = (fastify as any).io?.of('/groups');
         if (groupsNamespace) {
           groupsNamespace.to(`event_${eventId}`).emit('dashboard_updated', { action: 'decline', eventId });
@@ -1603,6 +1810,60 @@ export async function messagingRoutes(fastify: FastifyInstance) {
 
         return reply.send({ success: true, action: 'declined' });
       }
+    } catch (err: any) {
+      return reply.status(500).send({ success: false, message: err.message });
+    }
+  });
+
+  // POST /api/messaging/groups/requests/:notificationId/action
+  fastify.post<{ Params: { notificationId: string }, Body: { action: 'accept' | 'decline' } }>('/groups/requests/:notificationId/action', { preHandler: [(fastify as any).authenticate] }, async (request, reply) => {
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply.status(401).send({ success: false, message: 'Unauthorized' });
+    }
+    const { notificationId } = request.params;
+    const { action } = request.body || {};
+
+    try {
+      const log = await prisma.notification_log.findUnique({
+        where: { id: notificationId }
+      });
+      if (!log || log.template_key !== 'group_join_request') {
+        return reply.status(404).send({ success: false, message: 'Request not found' });
+      }
+
+      const data = JSON.parse(log.provider_ref || '{}');
+      const { groupId, requesterId } = data;
+
+      // Mark request as read
+      await prisma.notification_log.update({
+        where: { id: notificationId },
+        data: { status: 'read' }
+      });
+
+      if (action === 'accept') {
+        // Approve membership using GroupService
+        await GroupService.approveMembership(groupId, requesterId, userId);
+      } else {
+        // Reject membership using GroupService
+        await GroupService.rejectMembership(groupId, requesterId, userId);
+      }
+
+      // Emit notification.acted to self/other tabs
+      const chatNamespace = (fastify as any).io?.of('/chat');
+      if (chatNamespace) {
+        chatNamespace.to(`user:${userId}`).emit('notification.acted', {
+          notificationId,
+          action: action === 'accept' ? 'accepted' : 'declined'
+        });
+      }
+
+      const groupsNamespace = (fastify as any).io?.of('/groups');
+      if (groupsNamespace) {
+        groupsNamespace.to(`group_${groupId}`).emit('dashboard_updated', { action: action === 'accept' ? 'approve_member' : 'reject_member' });
+      }
+
+      return reply.send({ success: true, action: action === 'accept' ? 'accepted' : 'declined' });
     } catch (err: any) {
       return reply.status(500).send({ success: false, message: err.message });
     }

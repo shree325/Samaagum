@@ -1,5 +1,4 @@
 import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Icons } from './admin-app';
 
 /* ============================================================
    Samaagum Home — icons, logo, avatar helpers

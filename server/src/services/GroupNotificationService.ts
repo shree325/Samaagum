@@ -215,6 +215,7 @@ export class GroupNotificationService {
       if (ownerId) recipientIds.add(ownerId);
       assignments.forEach(a => recipientIds.add(a.user_id));
       recipientIds.add(joinedUserId); // Include the user themselves
+      recipientIds.delete(approverId); // Do not notify the approver themselves
 
       if (recipientIds.size === 0) return;
 
