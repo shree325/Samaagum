@@ -102,8 +102,8 @@ export function EventPage({ ev, st, go }) {
     }
   }
 
-  const { saved, toggleSave, city } = st;
-  const isSaved = saved.has(e.id);
+  const { wishlisted, toggleWishlist, city } = st;
+  const isSaved = wishlisted ? wishlisted.has(e.id) : false;
 
   const [currentEvent, setCurrentEvent] = useState(e);
   // Once fetchEventDetails() resolves with the real server record (including the resolved
@@ -437,6 +437,51 @@ export function EventPage({ ev, st, go }) {
   const [discussionApprovalRequired, setDiscussionApprovalRequired] = useState(false);
   const [threadRolesModalOpen, setThreadRolesModalOpen] = useState(false);
   const [replyRolesModalOpen, setReplyRolesModalOpen] = useState(false);
+
+  // Registration open/closed toggle (host-only)
+  const regStatusRaw = currentEvent?.registrationStatus || currentEvent?.registration_status || e.registrationStatus || e.registration_status || 'OPEN';
+  const [registrationOpen, setRegistrationOpen] = useState(regStatusRaw !== 'CLOSED');
+  const [regToggleLoading, setRegToggleLoading] = useState(false);
+
+  // Sync from server once event details are loaded
+  useEffect(() => {
+    const s = currentEvent?.registrationStatus || currentEvent?.registration_status;
+    if (s) setRegistrationOpen(s !== 'CLOSED');
+  }, [currentEvent?.registrationStatus, currentEvent?.registration_status]);
+
+  const handleToggleRegistration = async () => {
+    if (!isRealEventId(e.id) || regToggleLoading) return;
+    const newStatus = registrationOpen ? 'CLOSED' : 'OPEN';
+    setRegToggleLoading(true);
+    try {
+      const tok = localStorage.getItem('token');
+      const res = await fetch(`${apiBase}/api/events/${e.id}/registration`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(tok ? { 'Authorization': `Bearer ${tok}` } : {})
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setRegistrationOpen(!registrationOpen);
+        setCurrentEvent(prev => ({
+          ...prev,
+          registration_status: newStatus,
+          registrationStatus: newStatus
+        }));
+        if (window.toast) window.toast(`Registration is now ${newStatus === 'OPEN' ? 'Open 🟢' : 'Closed 🔴'}`, newStatus === 'OPEN' ? 'success' : 'warning');
+      } else {
+        if (window.toast) window.toast(data.message || 'Failed to update registration status', 'warning');
+      }
+    } catch (err) {
+      console.error(err);
+      if (window.toast) window.toast('Failed to update registration status', 'warning');
+    } finally {
+      setRegToggleLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (currentEvent && currentEvent.venue_raw) {
@@ -850,11 +895,37 @@ export function EventPage({ ev, st, go }) {
             </div>
 
             <div className="gh-act">
-              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => toggleSave(e.id)}>
-                {isSaved ? <I.bookmarkF /> : <I.bookmark />} Save
+              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => toggleWishlist && toggleWishlist(e.id)}>
+                {isSaved ? <I.heartF /> : <I.heart />} {isSaved ? "Wishlisted" : "Wishlist"}
               </button>
               {isHostOrCoHost && (
                 <>
+                  {/* Registration Open/Close toggle — host only */}
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    background: registrationOpen ? "rgba(31,157,87,0.10)" : "rgba(239,68,68,0.10)",
+                    border: `1px solid ${registrationOpen ? "rgba(31,157,87,0.3)" : "rgba(239,68,68,0.3)"}`,
+                    borderRadius: "var(--r-full, 9999px)",
+                    padding: "5px 12px 5px 8px",
+                    cursor: regToggleLoading ? "wait" : "pointer",
+                    transition: "all 0.25s",
+                    userSelect: "none"
+                  }} onClick={handleToggleRegistration} title={registrationOpen ? "Click to close registration" : "Click to open registration"}>
+                    <span style={{
+                      width: 32, height: 18, borderRadius: 9, background: registrationOpen ? "#1f9d57" : "#ef4444",
+                      display: "inline-flex", alignItems: "center", position: "relative",
+                      transition: "background 0.25s", flexShrink: 0
+                    }}>
+                      <span style={{
+                        position: "absolute", width: 14, height: 14, borderRadius: "50%", background: "#fff",
+                        top: 2, left: registrationOpen ? 16 : 2,
+                        transition: "left 0.22s", boxShadow: "0 1px 4px rgba(0,0,0,0.18)"
+                      }} />
+                    </span>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: registrationOpen ? "#1f9d57" : "#ef4444" }}>
+                      {regToggleLoading ? "…" : registrationOpen ? "Registration Open" : "Registration Closed"}
+                    </span>
+                  </div>
                   <button className="hbtn hbtn--soft hbtn--sm" onClick={() => go("edit-event", currentEvent || e)}>
                     <I.edit style={{ width: 14 }} /> Edit Event
                   </button>
@@ -863,7 +934,7 @@ export function EventPage({ ev, st, go }) {
                   </button>
                 </>
               )}
-              {effectiveIsMember && (
+              {effectiveIsMember && !isHostOrCoHost && (
                 <button className="hbtn hbtn--sm" style={{ background: "#e5484d", color: "#fff" }} onClick={handleLeaveEvent}>
                   Leave Event
                 </button>
@@ -895,6 +966,17 @@ export function EventPage({ ev, st, go }) {
                       <div>
                         <div style={{ fontWeight: 700, fontSize: 14, color: "var(--ink)" }}>This event has been archived</div>
                         <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>This event was cancelled and is no longer active. It now appears in the Archived section of My Events.</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Registration closed banner — visible to non-host members/visitors */}
+                  {!registrationOpen && !isHostOrCoHost && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "var(--r-md)", padding: "14px 16px" }}>
+                      <span style={{ fontSize: 22 }}>🔒</span>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 14, color: "#ef4444" }}>Registration is currently closed</div>
+                        <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>The host has temporarily closed registration. Add to your wishlist to get notified when it reopens.</div>
                       </div>
                     </div>
                   )}
