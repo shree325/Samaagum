@@ -22,7 +22,7 @@ export function EventPage({ ev, st, go }) {
     const time = startsAt ? startsAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : "Time TBD";
     const dateStr = startsAt ? startsAt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : "Date TBD";
 
-    let venueObj = {};
+    let venueObj: any = {};
     if (typeof e.venue === 'string') {
       const trimmed = e.venue.trim();
       if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
@@ -39,7 +39,7 @@ export function EventPage({ ev, st, go }) {
       venueObj = e.venue;
     }
 
-    let meta = {};
+    let meta: any = {};
     if (venueObj && venueObj.meta) {
       if (typeof venueObj.meta === 'string') {
         try {
@@ -1048,7 +1048,7 @@ export function EventPage({ ev, st, go }) {
                 const memberCount = eventMembers ? eventMembers.filter(m => m.state === 'active').length : attendees.length;
                 const revenueDisplay = !hostStats ? null : (hostStats.revenue === 0 ? "Free" : `₹${hostStats.revenue.toLocaleString()}`);
 
-                const StatCard = ({ label, value, sub, color }) => (
+                const StatCard = ({ label, value, sub, color }: { label: any; value: any; sub?: any; color?: any }) => (
                   <div style={{ background: "var(--field)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
                     <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{label}</div>
                     <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: color || "var(--ink)" }}>
