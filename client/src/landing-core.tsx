@@ -12,55 +12,79 @@ export const REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").mat
 
 declare const Lenis: any;
 
-/* ---------- Smooth scroll (Lenis) ---------- */
+/* ---------- Smooth scroll (Native fallback) ---------- */
 export function initLenis() {
-  if (REDUCED || typeof Lenis === "undefined") return null;
-  const lenis = new Lenis({ duration: 1.1, lerp: 0.1, smoothWheel: true, wheelMultiplier: 1 });
-  function raf(t) { lenis.raf(t); requestAnimationFrame(raf); }
-  requestAnimationFrame(raf);
-  // anchor links
-  document.addEventListener("click", (e) => {
+  if (typeof document === "undefined") return null;
+  // anchor links smooth scroll
+  const handler = (e: MouseEvent) => {
     const target = e.target as HTMLElement;
     const a = target.closest('a[href^="#"]');
     if (!a) return;
     const id = a.getAttribute("href");
-    if (id.length < 2) return;
+    if (!id || id.length < 2) return;
     const el = document.querySelector(id);
-    if (el) { e.preventDefault(); lenis.scrollTo(el, { offset: -90, duration: 1.3 }); }
-  });
-  return lenis;
+    if (el) {
+      e.preventDefault();
+      const top = el.getBoundingClientRect().top + window.scrollY - 90;
+      window.scrollTo({
+        top,
+        behavior: REDUCED ? "auto" : "smooth",
+      });
+    }
+  };
+  document.addEventListener("click", handler);
+  return {
+    destroy: () => {
+      document.removeEventListener("click", handler);
+    }
+  };
 }
 
 /* ---------- Scrub engine (scroll-gated, rAF, imperative) ---------- */
 export const scrubs = new Set<any>();
-export let rafId = null;
-let scrollDirty = true; // run at least once on mount
+export const rafId = null;
+let isTickScheduled = false;
 
 function runScrubs() {
+  if (typeof window === 'undefined') return;
   const vh = window.innerHeight;
+
+  // Batch all reads to prevent layout thrashing (forced synchronous layout reflows)
+  const itemsWithRects: any[] = [];
   scrubs.forEach((item) => {
+    if (!item.el) return;
     const r = item.el.getBoundingClientRect();
-    const p = (vh - r.top) / (vh + r.height);
-    item.fn(Math.max(0, Math.min(1, p)), r, vh, item.el);
+    
+    // Performance optimization: skip off-screen elements that are way out of view
+    // (e.g. more than 1 viewport height above or below the viewport)
+    if (r.bottom < -vh || r.top > vh * 2) {
+      return;
+    }
+    
+    const p = Math.max(0, Math.min(1, (vh - r.top) / (vh + r.height)));
+    itemsWithRects.push({ item, r, p });
+  });
+
+  // Batch all writes
+  itemsWithRects.forEach(({ item, r, p }) => {
+    item.fn(p, r, vh, item.el);
   });
 }
 
-export function tick() {
-  if (scrollDirty) {
-    scrollDirty = false;
-    runScrubs();
-  }
-  if (scrubs.size > 0) {
-    rafId = requestAnimationFrame(tick);
-  } else {
-    rafId = null;
+export function scheduleTick() {
+  if (!isTickScheduled) {
+    isTickScheduled = true;
+    requestAnimationFrame(() => {
+      runScrubs();
+      isTickScheduled = false;
+    });
   }
 }
 
-// Mark dirty only when actually scrolling
+// Mark dirty and schedule tick only when actually scrolling or resizing
 if (typeof window !== 'undefined') {
-  window.addEventListener('scroll', () => { scrollDirty = true; }, { passive: true });
-  window.addEventListener('resize', () => { scrollDirty = true; }, { passive: true });
+  window.addEventListener('scroll', scheduleTick, { passive: true });
+  window.addEventListener('resize', scheduleTick, { passive: true });
 }
 
 export function useScrub(fn, deps = []) {
@@ -70,14 +94,9 @@ export function useScrub(fn, deps = []) {
     if (!el || REDUCED) return;
     const item = { el, fn };
     scrubs.add(item);
-    scrollDirty = true;
-    if (rafId == null) rafId = requestAnimationFrame(tick);
+    scheduleTick();
     return () => {
       scrubs.delete(item);
-      if (scrubs.size === 0 && rafId != null) {
-        cancelAnimationFrame(rafId);
-        rafId = null;
-      }
     };
   }, deps);
   return ref;

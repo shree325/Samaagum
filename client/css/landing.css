@@ -23,10 +23,10 @@ body.landing {
   overflow-x: hidden;
 }
 
-/* Lenis */
-html.lenis, html.lenis body { height: auto; }
-.lenis.lenis-smooth { scroll-behavior: auto !important; }
-.lenis.lenis-stopped { overflow: hidden; }
+/* Smooth Scroll */
+html {
+  scroll-behavior: smooth;
+}
 
 /* ---------------- Layout primitives ---------------- */
 .wrap { width: 100%; max-width: 1200px; margin: 0 auto; padding: 0 28px; }
