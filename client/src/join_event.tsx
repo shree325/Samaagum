@@ -193,7 +193,7 @@ export function JoinEventPage({ ev, st, go }) {
                                     })}
                                     <div className="att" style={{ paddingRight: 14 }}><div className="av" style={{ width: 28, height: 28, fontSize: 11, background: "var(--surface-2)", color: "var(--ink-2)" }}>+{Math.max(0, e.going - attendees.length)}</div><span className="nm">more</span></div>
                                 </div>
-                            )}
+                            </div>
                         </div>
 
                         {/* Ticket sidebar */}

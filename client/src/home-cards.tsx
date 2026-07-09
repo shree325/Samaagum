@@ -20,7 +20,7 @@ export function WishlistBtn({ wishlisted, onClick, count = 0, Cls = "save" }) {
 }
 
 /* ---------------- Event card (rail / grid) ---------------- */
-export const EventCard = React.memo(function EventCard({ ev, onOpen, saved, onSave, registered }) {
+export const EventCard = React.memo(function EventCard({ ev, onOpen, wishlisted, wishlistCount, onWishlist, registered }: any) {
   const month = ev.month || (ev.starts_at ? new Date(ev.starts_at).toLocaleString('en-US', { month: 'short' }).toUpperCase() : 'TBD');
   const day = ev.day || (ev.starts_at ? new Date(ev.starts_at).getDate().toString() : '');
   const dateStr = ev.date || (ev.starts_at ? new Date(ev.starts_at).toLocaleDateString() : 'Date TBD');
@@ -33,7 +33,7 @@ export const EventCard = React.memo(function EventCard({ ev, onOpen, saved, onSa
       <div className="cover" style={{ background: coverBg }}>
         <Grain/>
         <DateBadge month={month} day={day} />
-        <SaveBtn saved={saved} onClick={onSave} />
+        <WishlistBtn wishlisted={wishlisted} count={wishlistCount} onClick={onWishlist} />
         <span className="cat">{ev.online ? "Online" : ev.cat}</span>
       </div>
       <div className="body">
@@ -57,11 +57,15 @@ export const EventCard = React.memo(function EventCard({ ev, onOpen, saved, onSa
 });
 
 /* ---------------- Featured (hero) ---------------- */
-export const FeatureCard = React.memo(function FeatureCard({ ev, onOpen, saved, onSave }) {
+export const FeatureCard = React.memo(function FeatureCard({ ev, onOpen, wishlisted, wishlistCount, onWishlist }: any) {
   const dateStr = ev.date || (ev.starts_at ? new Date(ev.starts_at).toLocaleDateString() : 'Date TBD');
   const timeStr = ev.time || (ev.starts_at ? new Date(ev.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Time TBD');
   const venueStr = ev.online ? 'Online' : (typeof ev.venue === 'object' && ev.venue !== null ? (ev.venue.name || ev.venue.address || 'Venue TBD') : (ev.venue || 'Venue TBD'));
   const coverBg = ev.cover && (ev.cover.startsWith("linear-gradient") || ev.cover.startsWith("radial-gradient") || ev.cover.startsWith("var(")) ? ev.cover : (ev.cover ? `url(${ev.cover}) center/cover no-repeat` : 'var(--sunset)');
+
+  const regStatus = ev.registrationStatus || ev.registration_status || "OPEN";
+  const isClosed = regStatus === "CLOSED";
+  const isScheduled = regStatus === "SCHEDULED";
 
   return (
     <div className="feature rise" onClick={()=>onOpen(ev)}>
