@@ -54,8 +54,8 @@ function EventDetail({ ev, st, go }) {
     }
   }
 
-  const { saved, toggleSave, registered, register, city, waitlisted } = st;
-  const isSaved = saved.has(e.id);
+  const { wishlisted, toggleWishlist, registered, register, city, waitlisted } = st;
+  const isSaved = wishlisted ? wishlisted.has(e.id) : false;
   const isReg = registered.has(e.id);
   const isWaitlisted = waitlisted ? waitlisted.has(e.id) : false;
   const isSoldOut = e.going >= (e.cap || 9999) || e.id === "ev-feat";
@@ -93,7 +93,7 @@ function EventDetail({ ev, st, go }) {
           <Grain /><div className="scrim" />
           <button className="detail-back" onClick={() => { if (e.id === "new") { go("create-event"); } else { go("home"); } }}><I.arrowL />Back</button>
           <div className="detail-actions-top">
-            <button className={`cbtn ${isSaved ? "on" : ""}`} onClick={() => toggleSave(e.id)}>{isSaved ? <I.bookmarkF /> : <I.bookmark />}</button>
+            <button className={`cbtn ${isSaved ? "on" : ""}`} onClick={() => toggleWishlist(e.id)}>{isSaved ? <I.bookmarkF /> : <I.bookmark />}</button>
             <button className="cbtn"><I.share /></button>
           </div>
         </div>

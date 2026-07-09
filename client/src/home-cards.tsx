@@ -10,10 +10,11 @@ export function DateBadge({ month, day }) {
   return <div className="date-badge"><div className="m">{month}</div><div className="d">{day}</div></div>;
 }
 
-export function SaveBtn({ saved, onClick, Cls = "save" }) {
+export function WishlistBtn({ wishlisted, onClick, count = 0, Cls = "save" }) {
   return (
-    <button className={`${Cls} ${saved?"on":""}`} onClick={(e)=>{ e.stopPropagation(); onClick(); }} title={saved?"Saved":"Save"}>
-      {saved ? <I.bookmarkF/> : <I.bookmark/>}
+    <button className={`${Cls} ${wishlisted?"on":""}`} onClick={(e)=>{ e.stopPropagation(); onClick(); }} title={wishlisted?"Remove from Wishlist":"Add to Wishlist"}>
+      {wishlisted ? <I.heartF/> : <I.heart/>}
+      {count > 0 && <span className="w-count">{count}</span>}
     </button>
   );
 }
@@ -66,8 +67,13 @@ export const FeatureCard = React.memo(function FeatureCard({ ev, onOpen, saved, 
     <div className="feature rise" onClick={()=>onOpen(ev)}>
       <div className="fcover" style={{ background: coverBg }}>
         <Grain/>
-        {ev.live && <span className="live"><span className="pulse"/>Selling fast</span>}
+        {isScheduled ? <span className="live"><span className="pulse"/>Coming Soon</span> :
+         isClosed ? <span className="live" style={{ background: 'var(--surface-3)', color: 'var(--text-2)' }}>Registration Closed</span> :
+         ev.live ? <span className="live"><span className="pulse"/>Selling fast</span> : null}
         <span className="ftag">{ev.cat}</span>
+        <div style={{ position: 'absolute', top: 16, right: 16 }}>
+          <WishlistBtn wishlisted={wishlisted} count={wishlistCount} onClick={onWishlist} Cls="save dark" />
+        </div>
       </div>
       <div className="fbody">
         <span className="eyebrow2">Featured this week</span>
@@ -89,7 +95,7 @@ export const FeatureCard = React.memo(function FeatureCard({ ev, onOpen, saved, 
 });
 
 /* ---------------- Group card (grid) ---------------- */
-export const GroupCard = React.memo(function GroupCard({ g, onOpen, joined, onJoin }) {
+export const GroupCard = React.memo(function GroupCard({ g, onOpen, joined, onJoin }: any) {
   const _apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
   const _resolveImg = (url) => url && !url.startsWith('blob:') ? (url.startsWith('/api/') ? _apiBase + url : url) : null;
   const bannerSrc = _resolveImg(g.banner);
@@ -149,7 +155,7 @@ export const GroupCard = React.memo(function GroupCard({ g, onOpen, joined, onJo
 });
 
 /* ---------------- Group row (trending list) ---------------- */
-export const GroupRow = React.memo(function GroupRow({ g, rank, onOpen, joined, onJoin }) {
+export const GroupRow = React.memo(function GroupRow({ g, rank, onOpen, joined, onJoin }: any) {
   const _apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
   const _resolveImg = (url) => url && !url.startsWith('blob:') ? (url.startsWith('/api/') ? _apiBase + url : url) : null;
   const iconSrc = _resolveImg(g.icon);
@@ -192,7 +198,7 @@ export const GroupRow = React.memo(function GroupRow({ g, rank, onOpen, joined, 
 });
 
 /* ---------------- Person card (horizontal scroll) ---------------- */
-export const PersonCard = React.memo(function PersonCard({ p, connected, onConnect }) {
+export const PersonCard = React.memo(function PersonCard({ p, connected, onConnect }: any) {
   return (
     <div className="pcard rise">
       <div className="pc-cov" style={{ background: p.cover }} />
@@ -212,7 +218,7 @@ export const PersonCard = React.memo(function PersonCard({ p, connected, onConne
 });
 
 /* ---------------- Discussion row (feed) ---------------- */
-export const DiscussionRow = React.memo(function DiscussionRow({ d, onOpen }) {
+export const DiscussionRow = React.memo(function DiscussionRow({ d, onOpen }: any) {
   return (
     <div className="disc" onClick={onOpen}>
       <Avatar name={d.who} size={40} />

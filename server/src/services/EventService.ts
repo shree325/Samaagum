@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { R_events } from '../repositories/R_events';
 import { R_ticket_types } from '../repositories/R_ticket_types';
+import { R_wishlists } from '../repositories/R_wishlists';
 import { R_forumPosts } from '../repositories/R_forumPosts';
 import { R_forumComments } from '../repositories/R_forumComments';
 import { R_forum_reactions } from '../repositories/R_forum_reactions';
@@ -24,6 +25,7 @@ export class EventService {
   private static votesRepo = new R_forum_votes();
   private static reactionsRepo = new R_forum_reactions();
   private static usersRepo = new R_users(prisma);
+  private static wishlistRepo = new R_wishlists(prisma);
 
   /**
    * Validates event creation and update parameters against user plan entitlements.
@@ -245,6 +247,11 @@ export class EventService {
     });
     if (hasBooking) return true;
 
+    if (ev.hosted_by_entity_id) {
+      const isGroupMember = await GroupService.userInGroups(userId, [ev.hosted_by_entity_id]).catch(() => false);
+      if (isGroupMember) return true;
+    }
+
     if (visibility === 'custom') {
       const groups: string[] = (ev.venue as any)?.meta?.selectedAccess?.restricted?.groups || [];
       if (groups.length > 0 && await GroupService.userInGroups(userId, groups)) return true;
@@ -258,14 +265,33 @@ export class EventService {
     const enrichedList = [];
     for (const ev of list) {
       const visibility = (ev.venue as any)?.visibility;
-      // Discover feed: unlisted events never appear here regardless of who's asking;
-      // custom events only appear for users who already pass the access check.
-      if (visibility === 'unlisted') continue;
-      if (visibility === 'custom' && !(await this.canUserAccessEvent(ev, userId))) continue;
+      
+      let hasAccess = false;
+      if (!visibility || visibility === 'public') {
+        hasAccess = true;
+      } else if (userId) {
+        hasAccess = await this.canUserAccessEvent(ev, userId);
+      }
+
+      if (visibility === 'unlisted' && !hasAccess) continue;
+      if (visibility === 'custom' && !hasAccess) continue;
 
       const tickets = await this.ticketTypesRepo.getByEventId(ev.id!);
       const hostInfo = await this.resolveHostInfo(ev.hosted_by_entity_id);
-      enrichedList.push({ ...ev, tickets, ...hostInfo });
+      
+      const wishlistCount = await this.wishlistRepo.getCountByEventId(ev.id!);
+      const isWishlisted = userId ? await this.wishlistRepo.isWishlisted(ev.id!, userId) : false;
+
+      enrichedList.push({ 
+        ...ev, 
+        tickets, 
+        ...hostInfo,
+        wishlistCount,
+        isWishlisted,
+        registrationStatus: ev.registration_status,
+        registrationOpensAt: ev.registration_opens_at,
+        registrationClosesAt: ev.registration_closes_at
+      });
     }
     return enrichedList;
   }
@@ -275,15 +301,48 @@ export class EventService {
       `SELECT id FROM entities WHERE user_id = $1::uuid AND entity_type = 'user' LIMIT 1`,
       userId
     );
-    const hostedByEntityId = entityRows[0]?.id;
-    if (!hostedByEntityId) return [];
+    const userEntityId = entityRows[0]?.id;
+    const validHostIds = userEntityId ? [userEntityId] : [];
 
-    const list = await this.eventsRepo.getByHostEntity(hostedByEntityId);
+    const managedGroups = await GroupService.getMyManagedGroups(userId).catch(() => []);
+    validHostIds.push(...managedGroups.map((g: any) => g.id));
+
+    const assignments = await prisma.event_team_assignments.findMany({
+      where: { user_id: userId, state: 'active' },
+      select: { event_id: true }
+    });
+    const assignedEventIds = assignments.map(a => a.event_id);
+
+    if (validHostIds.length === 0 && assignedEventIds.length === 0) return [];
+
+    const list = await prisma.events.findMany({
+      where: {
+        OR: [
+          ...(validHostIds.length > 0 ? [{ hosted_by_entity_id: { in: validHostIds } }] : []),
+          ...(assignedEventIds.length > 0 ? [{ id: { in: assignedEventIds } }] : [])
+        ]
+      },
+      orderBy: { created_at: 'desc' }
+    });
+
     const enrichedList = [];
     for (const ev of list) {
-      const tickets = await this.ticketTypesRepo.getByEventId(ev.id!);
+      const tickets = await this.ticketTypesRepo.getByEventId(ev.id);
       const hostInfo = await this.resolveHostInfo(ev.hosted_by_entity_id);
-      enrichedList.push({ ...ev, tickets, ...hostInfo });
+
+      const wishlistCount = await this.wishlistRepo.getCountByEventId(ev.id);
+      const isWishlisted = await this.wishlistRepo.isWishlisted(ev.id, userId);
+
+      enrichedList.push({ 
+        ...ev, 
+        tickets, 
+        ...hostInfo,
+        wishlistCount,
+        isWishlisted,
+        registrationStatus: ev.registration_status,
+        registrationOpensAt: ev.registration_opens_at,
+        registrationClosesAt: ev.registration_closes_at
+      });
     }
     return enrichedList;
   }
@@ -301,7 +360,22 @@ export class EventService {
 
     const tickets = await this.ticketTypesRepo.getByEventId(id);
     const hostInfo = await this.resolveHostInfo(event.hosted_by_entity_id);
-    return { event: { ...event, ...hostInfo }, tickets };
+    
+    const wishlistCount = await this.wishlistRepo.getCountByEventId(id);
+    const isWishlisted = userId ? await this.wishlistRepo.isWishlisted(id, userId) : false;
+
+    return { 
+      event: { 
+        ...event, 
+        ...hostInfo,
+        wishlistCount,
+        isWishlisted,
+        registrationStatus: event.registration_status,
+        registrationOpensAt: event.registration_opens_at,
+        registrationClosesAt: event.registration_closes_at
+      }, 
+      tickets 
+    };
   }
 
   static async getAvailableEventRoles() {
@@ -367,6 +441,40 @@ export class EventService {
 
   static async verifyEventTicketManager(userId: string, eventId: string): Promise<boolean> {
     return this.verifyEventCapability(userId, eventId, 'event.configure_tickets');
+  }
+
+  static async verifyEventScanner(userId: string, eventId: string): Promise<boolean> {
+    return this.verifyEventCapability(userId, eventId, 'checkin.gate_staff');
+  }
+
+  // Events the user should see in the dedicated ticket-scanner nav/hub. Scoped to the
+  // exact 'ticket_scanner' role assignment (not the broader checkin.gate_staff capability
+  // that other roles like gate_staff/co_host also carry) — if a host reassigns someone
+  // away from Ticket Scanner to another role, this list (and the Scan nav item) disappears
+  // for them, even though that other role may still be able to check in via the dashboard.
+  static async getScannerEvents(userId: string) {
+    const assignments = await prisma.event_team_assignments.findMany({
+      where: { user_id: userId, state: 'active' },
+      include: { roles: true, events: true }
+    });
+
+    const seen = new Set<string>();
+    const results: any[] = [];
+    for (const a of assignments) {
+      if (a.roles?.key !== 'ticket_scanner') continue;
+      const ev = a.events;
+      if (!ev || seen.has(ev.id) || ev.status === 'cancelled') continue;
+      seen.add(ev.id);
+      results.push({
+        id: ev.id,
+        title: ev.title,
+        starts_at: ev.starts_at,
+        ends_at: ev.ends_at,
+        venue_timezone: ev.venue_timezone,
+        status: ev.status
+      });
+    }
+    return results;
   }
 
   static async updateEvent(id: string, userId: string, body: any) {
@@ -517,6 +625,106 @@ export class EventService {
 
     const updated = await this.eventsRepo.update(id, { status: 'published' });
     return updated;
+  }
+
+  static async getWishlistEvents(userId: string) {
+    const wishlistItems = await this.wishlistRepo.getByUserId(userId);
+    const eventIds = wishlistItems.map(item => item.event_id);
+    if (eventIds.length === 0) return [];
+
+    const list = await prisma.events.findMany({
+      where: { id: { in: eventIds } },
+      orderBy: { starts_at: 'asc' }
+    });
+
+    const enrichedList = [];
+    for (const ev of list) {
+      const tickets = await this.ticketTypesRepo.getByEventId(ev.id);
+      const hostInfo = await this.resolveHostInfo(ev.hosted_by_entity_id);
+      const wishlistCount = await this.wishlistRepo.getCountByEventId(ev.id);
+
+      enrichedList.push({ 
+        ...ev, 
+        tickets, 
+        ...hostInfo,
+        wishlistCount,
+        isWishlisted: true,
+        registrationStatus: ev.registration_status,
+        registrationOpensAt: ev.registration_opens_at,
+        registrationClosesAt: ev.registration_closes_at
+      });
+    }
+    return enrichedList;
+  }
+
+  static async toggleWishlist(eventId: string, userId: string) {
+    return await this.wishlistRepo.toggle(eventId, userId);
+  }
+
+  static async removeWishlist(eventId: string, userId: string) {
+    return await this.wishlistRepo.removeByEventAndUser(eventId, userId);
+  }
+
+  static async updateRegistrationSettings(
+    eventId: string,
+    userId: string,
+    settings: { status: 'OPEN' | 'CLOSED' | 'SCHEDULED', opensAt?: Date, closesAt?: Date }
+  ) {
+    const event = await this.eventsRepo.getById(eventId);
+    if (!event) throw new Error('Event not found');
+
+    const isHostOrCoHost = await this.verifyEventHostOrCoHost(userId, eventId);
+    if (!isHostOrCoHost) {
+      throw new Error('Forbidden: You do not have permission to manage registration for this event');
+    }
+
+    const previousStatus = event.registration_status;
+    const isNowOpen = settings.status === 'OPEN';
+    const wasClosed = previousStatus === 'CLOSED' || previousStatus === 'SCHEDULED';
+
+    await this.eventsRepo.updateRegistrationStatus(eventId, settings.status, settings.opensAt, settings.closesAt);
+
+    // Audit log
+    await prisma.$queryRawUnsafe(`
+      INSERT INTO event_registration_log (event_id, changed_by, action)
+      VALUES ($1::uuid, $2::uuid, $3)
+    `, eventId, userId, `status_changed_to_${settings.status.toLowerCase()}`);
+
+    // Notification Fanout
+    if (wasClosed && isNowOpen) {
+      const wishlistingUsers = await this.wishlistRepo.getUsersWishlistingEvent(eventId);
+      if (wishlistingUsers.length > 0) {
+        // notify via db and socket
+        try {
+          const notificationsData = wishlistingUsers.map(({ user_id }) => ({
+            tenant_id: event.tenant_id || '00000000-0000-0000-0000-000000000000',
+            user_id: user_id,
+            channel: 'socket',
+            template_key: 'registration_opened',
+            status: 'sent',
+            provider_ref: JSON.stringify({ eventId: event.id, eventTitle: event.title })
+          }));
+
+          await prisma.notification_log.createMany({
+            data: notificationsData,
+            skipDuplicates: true
+          });
+
+          for (const { user_id } of wishlistingUsers) {
+            sendNotificationToUser(user_id, 'group.notification', {
+              type: 'registration_opened',
+              eventId: eventId,
+              eventTitle: event.title,
+              text: `Registration is now OPEN for ${event.title}!`
+            });
+          }
+        } catch (e) {
+          console.error('Failed to send wishlist notification', e);
+        }
+      }
+    }
+
+    return { status: settings.status };
   }
 
   static async verifyEventAdmin(userId: string, eventId: string): Promise<boolean> {
@@ -1510,4 +1718,6 @@ export class EventService {
       });
     }
   }
+
+
 }

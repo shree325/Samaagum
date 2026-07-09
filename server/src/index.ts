@@ -25,6 +25,7 @@ import { seedPlatformSettings } from './settings-library/settingsSeeder';
 import { startMessaging, stopMessaging, getMessagingHealth } from './services/messagingSocket';
 import { startGroupsSocket } from './services/groupSocket';
 import { SubscriptionNotificationService } from './services/SubscriptionNotificationService';
+import { EventReminderService } from './services/EventReminderService';
 import { messagingTestRoutes } from './controllers/messagingTestRoutes';
 import { messagingRoutes } from './controllers/messagingRoutes';
 import { connectionRoutes } from './controllers/connectionRoutes';
@@ -202,6 +203,9 @@ const start = async () => {
 
         // Start subscription expiration scheduler
         SubscriptionNotificationService.startScheduler();
+
+        // Start event reminder scheduler (60 / 30 / 10 min before start)
+        EventReminderService.startScheduler();
 
         await fastify.listen({ port: PORT, host: '0.0.0.0' });
         console.log(`🚀 Server is running on port ${PORT}`);

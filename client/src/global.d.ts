@@ -33,6 +33,14 @@ declare global {
   const EventCard: any;
   const Grain: any;
   const ME: any;
+  const FEATURED: any;
+
+  interface Window {
+    toast?: (...args: any[]) => any;
+    io?: (...args: any[]) => any;
+    ME?: any;
+    TicketQR?: any;
+  }
 }
 
 export {};

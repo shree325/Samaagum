@@ -13,6 +13,7 @@ export async function sendEmail({
   attachments?: Array<{ filename: string; content: Buffer }>;
 }) {
   const inviterName = 'Admin';
+
   // 1. Fetch communication settings from database
   let commSettings: any = null;
   try {
@@ -31,6 +32,7 @@ export async function sendEmail({
     if (commSettings.provider === 'brevo') {
       const apiKey = commSettings.brevoApiKey;
       if (apiKey && apiKey !== 'mock-key' && apiKey.trim() !== '' && !apiKey.includes('••••')) {
+        console.log(`[sendEmail] Sending via Brevo to ${to}`);
         try {
           const payload: any = {
             to: [{ email: to }],
@@ -38,7 +40,6 @@ export async function sendEmail({
             subject,
             htmlContent: html,
           };
-          // Attach PDF invoices if provided
           if (attachments && attachments.length > 0) {
             payload.attachment = attachments.map(att => ({
               content: att.content.toString('base64'),
@@ -56,16 +57,19 @@ export async function sendEmail({
           });
           const result = await response.json() as any;
           if (response.status >= 200 && response.status < 300) {
-            console.log(`Email successfully sent via Brevo: ${result.messageId}`);
+            console.log(`[sendEmail] ✅ Email successfully sent via Brevo to ${to}. MessageId: ${result.messageId}`);
             return;
           } else {
-            console.error(`Brevo sending failed: ${result.message || JSON.stringify(result)}`);
+            console.error(`[sendEmail] ❌ Brevo sending failed to ${to}: ${result.message || JSON.stringify(result)}`);
           }
         } catch (fetchErr: any) {
-          console.error(`Brevo HTTP request failed: ${fetchErr.message}`);
+          console.error(`[sendEmail] ❌ Brevo HTTP request failed for ${to}: ${fetchErr.message}`);
         }
+      } else {
+        console.warn(`[sendEmail] ⚠️ Brevo API Key is invalid or empty: '${apiKey}'`);
       }
     } else if (commSettings.provider === 'smtp') {
+      console.log(`[sendEmail] Sending via DB SMTP to ${to} (${commSettings.smtpHost})`);
       try {
         const transporter = nodemailer.createTransport({
           host: commSettings.smtpHost,
@@ -83,13 +87,19 @@ export async function sendEmail({
           html,
           attachments: attachments?.map(att => ({ filename: att.filename, content: att.content }))
         });
-        console.log(`Email successfully sent via DB SMTP: ${info.messageId}`);
+        console.log(`[sendEmail] ✅ Email successfully sent via DB SMTP to ${to}. MessageId: ${info.messageId}`);
         return;
       } catch (smtpErr: any) {
-        console.error(`DB SMTP sending failed: ${smtpErr.message}`);
+        console.error(`[sendEmail] ❌ DB SMTP sending failed to ${to}: ${smtpErr.message}`);
       }
+    } else {
+      console.warn(`[sendEmail] ⚠️ Unknown provider: '${commSettings.provider}'`);
     }
+  } else {
+    console.warn(`[sendEmail] ⚠️ DB communication settings are disabled or null.`);
   }
+
+  console.log(`[sendEmail] Falling back to environment variables SMTP for ${to}...`);
 
   // 3. Fallback to process.env SMTP settings if database settings failed or aren't set
   try {
@@ -103,21 +113,109 @@ export async function sendEmail({
       },
     });
     const info = await transporter.sendMail({
-      from: `${inviterName} <${process.env.SMTP_USER || 'no-reply@samaagum.com'}>`,
+      from: `"${inviterName}" <${process.env.SMTP_USER || 'no-reply@samaagum.com'}>`,
       to,
       subject,
       html,
       attachments: attachments?.map(att => ({ filename: att.filename, content: att.content }))
     });
-    console.log(`Email successfully sent via env SMTP: ${info.messageId}`);
+    console.log(`[sendEmail] ✅ Email successfully sent via ENV SMTP to ${to}: ${info.messageId}`);
   } catch (err: any) {
-    console.warn('All email sending methods failed. Falling back to console log:', err.message);
+    console.error(`[sendEmail] ❌ ENV SMTP fallback failed to ${to}:`, err);
+    console.log(`[sendEmail] Falling back to console log for: ${to}`);
     console.log(`======================================================================`);
     console.log(`✉️  SIMULATED EMAIL TO: ${to}`);
     console.log(`Subject: ${subject}`);
-    console.log(`HTML: ${html}`);
+    console.log(`Content:\n${html}`);
     console.log(`======================================================================`);
   }
+}
+
+export function generateTicketHtml({
+  qrToken,
+  ticketCode,
+  attendeeName,
+  dateString,
+  venueString,
+  paidAmount,
+  status
+}: {
+  qrToken: string;
+  ticketCode: string;
+  attendeeName: string;
+  dateString: string;
+  venueString: string;
+  paidAmount: string;
+  status: string;
+}) {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f9fafb; padding: 20px; }
+  .ticket-card { background: white; max-width: 400px; margin: 0 auto; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); overflow: hidden; padding-bottom: 20px; }
+  .qr-section { text-align: center; padding: 40px 20px 20px; background: #fff; }
+  .qr-code { width: 200px; height: 200px; border-radius: 8px; border: 1px solid #e5e7eb; padding: 10px; margin: 0 auto; display: block; }
+  .scan-text { color: #6b7280; font-size: 14px; margin-top: 15px; }
+  .token-text { color: #9ca3af; font-size: 12px; margin-top: 4px; font-family: monospace; }
+  .divider { height: 1px; background: #f3f4f6; margin: 20px; }
+  .details { padding: 0 20px; }
+  .row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f9fafb; }
+  .row:last-child { border-bottom: none; }
+  .label { color: #9ca3af; font-size: 14px; font-weight: 500; }
+  .value { color: #111827; font-size: 14px; font-weight: 600; text-align: right; }
+  .status-badge { display: inline-flex; align-items: center; background: #ecfdf5; color: #059669; padding: 4px 10px; border-radius: 9999px; font-size: 13px; font-weight: 600; }
+  .status-dot { width: 6px; height: 6px; background: #10b981; border-radius: 50%; margin-right: 6px; display: inline-block; }
+</style>
+</head>
+<body>
+<div class="ticket-card">
+  <div class="qr-section">
+    <img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrToken)}" alt="QR Code" />
+    <div class="scan-text">Show this at the gate for scanning</div>
+    <div class="token-text">Token: ${qrToken}</div>
+  </div>
+  <div class="divider"></div>
+  <div class="details">
+    <div class="row">
+      <div class="label">Ticket ID</div>
+      <div class="value">${ticketCode}</div>
+    </div>
+    <div class="row">
+      <div class="label">Attendee</div>
+      <div class="value">${attendeeName}</div>
+    </div>
+    <div class="row">
+      <div class="label">Date</div>
+      <div class="value">${dateString}</div>
+    </div>
+    <div class="row">
+      <div class="label">Venue</div>
+      <div class="value">${venueString}</div>
+    </div>
+    <div class="row">
+      <div class="label">Quantity</div>
+      <div class="value">1</div>
+    </div>
+    <div class="row">
+      <div class="label">Paid</div>
+      <div class="value">${paidAmount}</div>
+    </div>
+    <div class="row">
+      <div class="label">Status</div>
+      <div class="value">
+        <div class="status-badge">
+          <div class="status-dot"></div>
+          ${status}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
+  `;
 }
 
 export async function sendInvitationEmail(

@@ -20,6 +20,7 @@ export const NTYPE = {
   message:     { ico:<I.msg style={{width:13,height:13}}/>,    c:"linear-gradient(135deg,#8b5cf6,#e5489d)" },
   forum:       { ico:<I.comment style={{width:13,height:13}}/>,c:"linear-gradient(135deg,#f59e0b,#ef6f53)" },
   registration:{ ico:<I.ticket style={{width:13,height:13}}/>, c:"linear-gradient(135deg,#0ea5a4,#3b82f6)" },
+  registration_opened: { ico:<I.ticket style={{width:13,height:13}}/>, c:"linear-gradient(135deg,#0ea5a4,#3b82f6)" },
   system:      { ico:<I.bell style={{width:13,height:13}}/>,   c:"linear-gradient(135deg,#f59e0b,#ef6f53)" },
   billing:     { ico:<svg viewBox="0 0 24 24" fill="none" width="13" height="13" stroke="currentColor" strokeWidth="2"><path d="M20 7H4a2 2 0 00-2 2v8a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M22 13h-4v2h4v-2zM4 7V5a2 2 0 012-2h10"/></svg>, c:"linear-gradient(135deg,#f43f5e,#ec4899)" },
   group_created: { ico:<I.groups style={{width:14,height:14}}/>, c:"linear-gradient(135deg,#6d5efc,#2a7fff)" },

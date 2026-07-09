@@ -50,7 +50,7 @@ export function CreateMenu({ onPick }) {
 }
 
 /* ---------------- Sidebar ---------------- */
-export function Sidebar({ view, go, counts, collapsed, onToggleCollapse, chatSettings }) {
+export function Sidebar({ view, go, counts, collapsed, onToggleCollapse, chatSettings, hasScannerEvents }) {
   const [createOpen, setCreateOpen] = useState(false);
   const showMessages = chatSettings?.allowSiteMessaging !== false;
   const main = [
@@ -58,6 +58,7 @@ export function Sidebar({ view, go, counts, collapsed, onToggleCollapse, chatSet
     { k:"discover", ic:<I.compass/>, label:"Discover" },
     { k:"events", ic:<I.ticket/>, label:"My Events" },
     { k:"groups", ic:<I.groups/>, label:"My Groups" },
+    ...(hasScannerEvents ? [{ k:"scan", ic:<I.scan/>, label:"Scan" }] : []),
   ];
   const social = [
     ...(showMessages ? [{ k:"messages", ic:<I.chat/>, label:"Messages", badge: counts.messages }] : []),

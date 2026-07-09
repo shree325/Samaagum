@@ -1847,6 +1847,26 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
   );
   const [waitlist, setWaitlist] = useState(draft?.waitlist ?? editEv?.waitlist ?? false);
 
+  const [registrationStatus, setRegistrationStatus] = useState(
+    draft?.registrationStatus ?? editEv?.registration_status ?? "OPEN"
+  );
+  
+  const editRegOpensAt = editEv?.registration_opens_at ? new Date(editEv.registration_opens_at) : null;
+  const editRegClosesAt = editEv?.registration_closes_at ? new Date(editEv.registration_closes_at) : null;
+  
+  const [regStartDate, setRegStartDate] = useState(
+    draft?.regStartDate ?? (editRegOpensAt ? `${editRegOpensAt.getFullYear()}-${String(editRegOpensAt.getMonth() + 1).padStart(2, '0')}-${String(editRegOpensAt.getDate()).padStart(2, '0')}` : "")
+  );
+  const [regStartTime, setRegStartTime] = useState(
+    draft?.regStartTime ?? (editRegOpensAt ? `${String(editRegOpensAt.getHours()).padStart(2, '0')}:${String(editRegOpensAt.getMinutes()).padStart(2, '0')}` : "")
+  );
+  const [regEndDate, setRegEndDate] = useState(
+    draft?.regEndDate ?? (editRegClosesAt ? `${editRegClosesAt.getFullYear()}-${String(editRegClosesAt.getMonth() + 1).padStart(2, '0')}-${String(editRegClosesAt.getDate()).padStart(2, '0')}` : "")
+  );
+  const [regEndTime, setRegEndTime] = useState(
+    draft?.regEndTime ?? (editRegClosesAt ? `${String(editRegClosesAt.getHours()).padStart(2, '0')}:${String(editRegClosesAt.getMinutes()).padStart(2, '0')}` : "")
+  );
+
   const initialTickets = editEv?.tickets
     ? editEv.tickets.map((t: any) => ({ n: t.name, cap: String(t.capacity || ""), price: String((t.price_minor || 0) / 100) }))
     : [{ n: "Early Bird", cap: "50", price: "499" }];
@@ -2171,7 +2191,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
 
 
 
-          <EventCard ev={previewEv} onOpen={() => { }} saved={false} onSave={() => { }} />
+          <EventCard ev={previewEv} onOpen={() => { }} wishlisted={false} wishlistCount={0} onWishlist={() => { }} />
 
           {/* Visibility Preview */}
           <div style={cardStyle}>
@@ -2368,6 +2388,9 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
       },
       online_link: locType === 'online' ? venue : null,
       registration_mode: type === 'free' ? 'free_rsvp' : 'paid',
+      registration_status: registrationStatus,
+      registration_opens_at: registrationStatus === 'SCHEDULED' && regStartDate && regStartTime ? new Date(`${regStartDate}T${regStartTime}`).toISOString() : null,
+      registration_closes_at: registrationStatus === 'SCHEDULED' && regEndDate && regEndTime ? new Date(`${regEndDate}T${regEndTime}`).toISOString() : null,
       approval_required: approval,
       capacity_total: capacityEnabled && capacity ? parseInt(capacity) : null,
       waitlist,
@@ -3143,6 +3166,44 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                     </div>
                     </div>
                   </div>
+                </div>
+
+                {/* Registration Schedule UI */}
+                <div style={{ padding: 16, background: "var(--field)", borderRadius: "var(--r-md)", border: "1px solid var(--border)", marginBottom: 20 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Registration Schedule</div>
+                  <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: "var(--ink)" }}>
+                      <input type="radio" checked={registrationStatus === "OPEN"} onChange={() => setRegistrationStatus("OPEN")} style={{ accentColor: "var(--accent-2)" }} />
+                      Open Now
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: "var(--ink)" }}>
+                      <input type="radio" checked={registrationStatus === "CLOSED"} onChange={() => setRegistrationStatus("CLOSED")} style={{ accentColor: "var(--accent-2)" }} />
+                      Closed (Coming Soon)
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: "var(--ink)" }}>
+                      <input type="radio" checked={registrationStatus === "SCHEDULED"} onChange={() => setRegistrationStatus("SCHEDULED")} style={{ accentColor: "var(--accent-2)" }} />
+                      Scheduled
+                    </label>
+                  </div>
+                  
+                  {registrationStatus === "SCHEDULED" && (
+                    <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: "16px" }}>
+                      <div className="cfield" style={{ marginBottom: 0 }}>
+                        <label style={{ fontSize: 12, marginBottom: 4 }}>Registration Opens At</label>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <DatePicker value={regStartDate} onChange={setRegStartDate} mobile={mobile} compact={true} />
+                          <TimePicker value={regStartTime} onChange={setRegStartTime} mobile={mobile} compact={true} />
+                        </div>
+                      </div>
+                      <div className="cfield" style={{ marginBottom: 0 }}>
+                        <label style={{ fontSize: 12, marginBottom: 4 }}>Registration Closes At</label>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <DatePicker value={regEndDate} onChange={setRegEndDate} mobile={mobile} compact={true} />
+                          <TimePicker value={regEndTime} onChange={setRegEndTime} mobile={mobile} compact={true} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: "16px", marginBottom: 16 }}>
