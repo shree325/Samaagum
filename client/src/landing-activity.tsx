@@ -1,7 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react';
 import { CITIES, Wordmark, gradFor, initials } from './components';
-import { Messages } from './home-messages';
 import { ACTIVITY, CountUp, I, Reveal, range, useScrub } from './landing-core';
 import { Communities, Events } from './landing-features';
 import { Networking, Profiles } from './landing-features2';

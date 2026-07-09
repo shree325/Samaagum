@@ -1,7 +1,5 @@
 // @ts-nocheck
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Field } from './components';
-import { Networking } from './landing-features2';
 
 /* ============================================================
    Samaagum landing — core engine, atoms, data

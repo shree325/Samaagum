@@ -2785,8 +2785,17 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
   const [qModal, setQModal] = useState(false);
 
   const [forums, setForums] = useState(isEdit ? (editGroup.settings?.forums?.enabled || false) : (savedDraft.forums || false));
-  const [threadPerm, setThreadPerm] = useState(isEdit ? (editGroup.settings?.forums?.threadPerm || "everyone") : (savedDraft.threadPerm || "everyone"));
-  const [replyPerm, setReplyPerm] = useState(isEdit ? (editGroup.settings?.forums?.replyPerm || "everyone") : (savedDraft.replyPerm || "everyone"));
+  const [forumsThreadRoles, setForumsThreadRoles] = useState(
+    isEdit ? (editGroup.settings?.forums?.threadRoles || { public: true, roles: [] }) : (savedDraft.forumsThreadRoles || { public: true, roles: [] })
+  );
+  const [forumsReplyRoles, setForumsReplyRoles] = useState(
+    isEdit ? (editGroup.settings?.forums?.replyRoles || { public: true, roles: [] }) : (savedDraft.forumsReplyRoles || { public: true, roles: [] })
+  );
+  const [forumsApprove, setForumsApprove] = useState(
+    isEdit ? (editGroup.settings?.forums?.approve || false) : (savedDraft.forumsApprove || false)
+  );
+  const [threadRolesModalOpen, setThreadRolesModalOpen] = useState(false);
+  const [replyRolesModalOpen, setReplyRolesModalOpen] = useState(false);
   const [forumModal, setForumModal] = useState(false);
 
   const [gallery, setGallery] = useState(isEdit ? (editGroup.settings?.gallery?.enabled || false) : (savedDraft.gallery || false));
@@ -2795,6 +2804,14 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
   const [galleryImageOnly, setGalleryImageOnly] = useState(isEdit ? (editGroup.settings?.gallery?.imageOnly || false) : (savedDraft.galleryImageOnly || false));
   const [galleryVideoOnly, setGalleryVideoOnly] = useState(isEdit ? (editGroup.settings?.gallery?.videoOnly || false) : (savedDraft.galleryVideoOnly || false));
   const [galleryApprove, setGalleryApprove] = useState(isEdit ? (editGroup.settings?.gallery?.approve || false) : (savedDraft.galleryApprove || false));
+  const [galleryUploadRoles, setGalleryUploadRoles] = useState(
+    isEdit ? (editGroup.settings?.gallery?.uploadRoles || { public: false, roles: ['group_owner', 'group_admin', 'group_moderator'] }) : (savedDraft.galleryUploadRoles || { public: false, roles: ['group_owner', 'group_admin', 'group_moderator'] })
+  );
+  const [galleryViewRoles, setGalleryViewRoles] = useState(
+    isEdit ? (editGroup.settings?.gallery?.viewRoles || { public: true, roles: [] }) : (savedDraft.galleryViewRoles || { public: true, roles: [] })
+  );
+  const [uploadRolesModalOpen, setUploadRolesModalOpen] = useState(false);
+  const [viewRolesModalOpen, setViewRolesModalOpen] = useState(false);
 
   const [saveAsDraft, setSaveAsDraft] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -2829,12 +2846,13 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
   React.useEffect(() => {
     localStorage.setItem(draftKey, JSON.stringify({
       name, icon, cover, banner, cat, desc, visibility, joinElig,
-      limitCap, maxCap, waitlist, questionnaire, questions, forums, threadPerm, replyPerm, gallery,
-      galleryAllow, galleryImageOnly, galleryVideoOnly, galleryApprove,
+      limitCap, maxCap, waitlist, questionnaire, questions, forums, gallery,
+      galleryAllow, galleryImageOnly, galleryVideoOnly, galleryApprove, galleryUploadRoles, galleryViewRoles,
+      forumsThreadRoles, forumsReplyRoles, forumsApprove,
       locationType, venueName, address, city, locationState, locationCountry, platform, meetingLink,
       selectedAccess, visibilityAccess, approval
     }));
-  }, [name, icon, cover, banner, cat, desc, visibility, joinElig, limitCap, maxCap, waitlist, questionnaire, questions, forums, threadPerm, replyPerm, gallery, galleryAllow, galleryImageOnly, galleryVideoOnly, galleryApprove, locationType, venueName, address, city, locationState, locationCountry, platform, meetingLink, selectedAccess, visibilityAccess, approval]);
+  }, [name, icon, cover, banner, cat, desc, visibility, joinElig, limitCap, maxCap, waitlist, questionnaire, questions, forums, gallery, galleryAllow, galleryImageOnly, galleryVideoOnly, galleryApprove, galleryUploadRoles, galleryViewRoles, forumsThreadRoles, forumsReplyRoles, forumsApprove, locationType, venueName, address, city, locationState, locationCountry, platform, meetingLink, selectedAccess, visibilityAccess, approval]);
 
   const [loading, setLoading] = useState(false);
 
@@ -2869,8 +2887,21 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
           },
           capacity: { limit: limitCap, max: Number(maxCap) || null, waitlist },
           questionnaires: questionnaire ? questions : [],
-          forums: { enabled: forums, threadPerm, replyPerm },
-          gallery: { enabled: gallery, allow: galleryAllow, imageOnly: galleryImageOnly, videoOnly: galleryVideoOnly, approve: galleryApprove }
+          forums: {
+            enabled: forums,
+            threadRoles: forumsThreadRoles,
+            replyRoles: forumsReplyRoles,
+            approve: forumsApprove
+          },
+          gallery: {
+            enabled: gallery,
+            allow: galleryAllow,
+            imageOnly: galleryImageOnly,
+            videoOnly: galleryVideoOnly,
+            approve: galleryApprove,
+            uploadRoles: galleryUploadRoles,
+            viewRoles: galleryViewRoles
+          }
         }
       };
 
@@ -2941,8 +2972,8 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
         const navDest = isDraftSubmit
           ? { view: "groups", param: { tab: "created", createdSub: "drafts" } }
           : isEdit
-          ? { view: "group-dashboard", param: { id: editGroup.id, name } }
-          : { view: "group", param: { ...previewG, id: data.data.id, posts: 0, members: 1, threadPerm, replyPerm } };
+          ? { view: "group", param: { ...editGroup, name, category: cat, description: desc, icon, cover, banner, visibility, joinMode: approval ? "approval" : joinElig === "invite" ? "invite_only" : joinElig === "communities" ? "restricted" : "open" } }
+          : { view: "group", param: { ...previewG, id: data.data.id, posts: 0, members: 1 } };
 
         // Generate shareable link for unlisted groups — show modal and defer navigation
         if (visibility === "private" && !isDraftSubmit) {
@@ -3137,93 +3168,298 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
       {qModal && <QuestionnaireBuilderModal open={qModal} onClose={() => setQModal(false)} questions={questions} setQuestions={setQuestions} />}
 
       {/* Forum Settings Modal */}
-      {forumModal && (
-        <div className="modal-backdrop" onClick={() => setForumModal(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)", animation: "fadeIn 0.2s ease" }}>
-          <div className="setting-modal" onClick={e => e.stopPropagation()} style={{ background: "var(--bg)", width: "100%", maxWidth: 420, borderRadius: "var(--r-xl)", overflow: "hidden", border: "1px solid var(--border)", boxShadow: "0 24px 48px rgba(0,0,0,0.2)", transform: "translateY(0)", animation: "slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)" }}>
-            <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--surface)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "var(--ink)" }}>Forum Settings</h3>
-              </div>
-              <button onClick={() => setForumModal(false)} style={{ background: "var(--field)", border: "none", width: 32, height: 32, borderRadius: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-2)", transition: "all 0.2s" }} onMouseOver={e => { e.currentTarget.style.background = "var(--border)"; e.currentTarget.style.color = "var(--ink)"; }} onMouseOut={e => { e.currentTarget.style.background = "var(--field)"; e.currentTarget.style.color = "var(--ink-2)"; }}>
-                <I.x style={{ width: 16 }} />
-              </button>
-            </div>
-            
-            <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 24 }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <label style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Who can create threads?</label>
-                <div style={{ position: "relative" }}>
-                  <select className="cinput" style={{ width: "100%", cursor: "pointer", background: "var(--field)", border: "1px solid var(--border)", color: "var(--ink)", fontWeight: 500, padding: "12px 16px", borderRadius: "var(--r-md)", fontSize: 15, transition: "border-color 0.2s" }} value={threadPerm} onChange={e => setThreadPerm(e.target.value)}>
-                    <option value="everyone">Everyone (All Members)</option>
-                    <option value="admins">Admins & Moderators Only</option>
-                    <option value="selected">Selected Members Only</option>
-                  </select>
+      {forumModal && (() => {
+        const getRolesSummaryText = (bucket) => {
+          if (!bucket) return "No one";
+          if (bucket.public) return "Public";
+          if (Array.isArray(bucket.roles)) {
+            if (bucket.roles.length === 0) return "No one";
+            if (bucket.roles.length === 4) return "Everyone";
+            const names = bucket.roles.map(k => {
+              if (k === 'group_owner') return 'Owner';
+              if (k === 'group_admin') return 'Admin';
+              if (k === 'group_moderator') return 'Moderator';
+              if (k === 'group_member') return 'Member';
+              return k;
+            });
+            if (names.length === 1) return names[0];
+            if (names.length === 2) return names.join(" & ");
+            const last = names.pop();
+            return names.join(", ") + " & " + last;
+          }
+          return "Custom";
+        };
+
+        const renderSubRolesModal = (isOpen, onClose, bucket, setBucket, titleText) => {
+          if (!isOpen) return null;
+          const current = bucket || { public: false, roles: [] };
+
+          const togglePublic = () => {
+            setBucket({ ...current, public: !current.public });
+          };
+
+          const toggleRole = (key) => {
+            const roles = current.roles.includes(key)
+              ? current.roles.filter(k => k !== key)
+              : [...current.roles, key];
+            setBucket({ ...current, roles });
+          };
+
+          const rolesToRender = [
+            { key: 'group_owner', label: 'Group Owner' },
+            { key: 'group_admin', label: 'Group Admin' },
+            { key: 'group_moderator', label: 'Group Moderator' },
+            { key: 'group_member', label: 'Group Member' }
+          ];
+
+          return (
+            <div className="modal-backdrop" onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div className="setting-modal" onClick={e => e.stopPropagation()} style={{ width: "95%", maxWidth: "380px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", padding: "24px", boxShadow: "var(--sh-xl)", color: "var(--ink)" }}>
+                <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700 }}>{titleText}</h3>
+                
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: "1px solid var(--border-3)" }}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>Public (Everyone)</div>
+                      <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Opens this to everyone, including non-members — overrides role selection below.</div>
+                    </div>
+                    <Toggle on={current.public} onClick={togglePublic} />
+                  </div>
+
+                  {rolesToRender.map(r => (
+                    <div key={r.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", opacity: current.public ? 0.5 : 1 }}>
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>{r.label}</span>
+                      <Toggle on={current.public ? true : current.roles.includes(r.key)} onClick={() => { if (!current.public) toggleRole(r.key); }} />
+                    </div>
+                  ))}
                 </div>
-                <p style={{ margin: "4px 0 0 0", fontSize: 12.5, color: "var(--ink-3)" }}>Determines who has permission to start new discussions.</p>
+
+                <button className="hbtn hbtn--primary" style={{ width: "100%", justifyContent: "center" }} onClick={onClose}>Done</button>
+              </div>
+            </div>
+          );
+        };
+
+        return (
+          <div className="modal-backdrop" onClick={() => setForumModal(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div className="setting-modal" onClick={e => e.stopPropagation()}>
+              <div style={{ padding: 20, borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between" }}>
+                <h3 style={{ margin: 0 }}>Discussion Settings</h3>
+                <button onClick={() => setForumModal(false)} style={{ background: "var(--field)", border: "none", width: 32, height: 32, borderRadius: 16, cursor: "pointer" }}><I.x style={{ width: 16 }} /></button>
+              </div>
+              <div style={{ padding: 20 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <div className="toggle-row" style={{ padding: 0, background: "transparent", border: "none", margin: 0 }}>
+                    <div className="ti">
+                      <div className="t" style={{ fontSize: 14, fontWeight: 600 }}>Enable Discussion</div>
+                      <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Allow members to post and reply to threads.</div>
+                    </div>
+                    <Toggle on={forums} onClick={() => setForums(!forums)} />
+                  </div>
+
+                  {forums && (
+                    <>
+                      <div className="toggle-row" onClick={() => setThreadRolesModalOpen(true)} style={{ padding: 0, background: "transparent", border: "none", margin: 0, cursor: "pointer" }}>
+                        <div className="ti">
+                          <div className="t" style={{ fontSize: 14, fontWeight: 600 }}>Who can create new thread?</div>
+                          <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Click to customize creation permissions</div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 13, color: "var(--accent)", fontWeight: 600 }}>{getRolesSummaryText(forumsThreadRoles)}</span>
+                          <I.arrowR style={{ width: 14, color: "var(--ink-3)" }} />
+                        </div>
+                      </div>
+
+                      <div className="toggle-row" onClick={() => setReplyRolesModalOpen(true)} style={{ padding: 0, background: "transparent", border: "none", margin: 0, cursor: "pointer" }}>
+                        <div className="ti">
+                          <div className="t" style={{ fontSize: 14, fontWeight: 600 }}>Who can reply on thread?</div>
+                          <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Click to customize reply permissions</div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 13, color: "var(--accent)", fontWeight: 600 }}>{getRolesSummaryText(forumsReplyRoles)}</span>
+                          <I.arrowR style={{ width: 14, color: "var(--ink-3)" }} />
+                        </div>
+                      </div>
+
+                      <div className="toggle-row" style={{ padding: 0, background: "transparent", border: "none", margin: 0 }}>
+                        <div className="ti">
+                          <div className="t" style={{ fontSize: 14, fontWeight: 600 }}>Approval required to create a thread?</div>
+                          <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>New threads must be approved by a group owner, admin, or moderator before they become visible.</div>
+                        </div>
+                        <Toggle on={forumsApprove} onClick={() => setForumsApprove(!forumsApprove)} />
+                      </div>
+                    </>
+                  )}
+                </div>
+                <button className="hbtn hbtn--primary" style={{ width: "100%", marginTop: 24, justifyContent: "center" }} onClick={() => setForumModal(false)}>Confirm</button>
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <label style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Who can reply?</label>
-                <div style={{ position: "relative" }}>
-                  <select className="cinput" style={{ width: "100%", cursor: "pointer", background: "var(--field)", border: "1px solid var(--border)", color: "var(--ink)", fontWeight: 500, padding: "12px 16px", borderRadius: "var(--r-md)", fontSize: 15, transition: "border-color 0.2s" }} value={replyPerm} onChange={e => setReplyPerm(e.target.value)}>  
-                    <option value="everyone">Everyone (All Members)</option>
-                    <option value="admins">Admins & Moderators Only</option>
-                    <option value="selected">Selected Members Only</option>
-                  </select>
-                </div>
-                <p style={{ margin: "4px 0 0 0", fontSize: 12.5, color: "var(--ink-3)" }}>Determines who can comment on existing threads.</p>
-              </div>
-              
-              <div style={{ paddingTop: 8 }}>
-                <button className="hbtn hbtn--primary" style={{ width: "100%", justifyContent: "center", padding: "12px", fontSize: 15, fontWeight: 600, borderRadius: "var(--r-md)", background: "var(--accent-1)", boxShadow: "0 4px 12px rgba(var(--accent-1-rgb), 0.25)" }} onClick={() => setForumModal(false)}>Save Settings</button>
-              </div>
+              {renderSubRolesModal(threadRolesModalOpen, () => setThreadRolesModalOpen(false), forumsThreadRoles, setForumsThreadRoles, "Who can create new thread?")}
+              {renderSubRolesModal(replyRolesModalOpen, () => setReplyRolesModalOpen(false), forumsReplyRoles, setForumsReplyRoles, "Who can reply on thread?")}
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Gallery Settings Modal */}
-      {galleryModal && (
-        <div className="modal-backdrop" onClick={() => setGalleryModal(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div className="setting-modal" onClick={e => e.stopPropagation()}>
-            <div style={{ padding: 20, borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between" }}>
-              <h3 style={{ margin: 0 }}>Media Gallery Settings</h3>
-              <button onClick={() => setGalleryModal(false)} style={{ background: "var(--field)", border: "none", width: 32, height: 32, borderRadius: 16, cursor: "pointer" }}><I.x style={{ width: 16 }} /></button>
-            </div>
-            <div style={{ padding: 20 }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <div className="toggle-row" style={{ padding: 0, background: "transparent", border: "none", margin: 0 }}>
-                  <div className="ti"><div className="t">Allow Uploads</div></div>
-                  <Toggle on={galleryAllow} onClick={() => setGalleryAllow(!galleryAllow)} />
+      {galleryModal && (() => {
+        const getRolesSummaryText = (bucket) => {
+          if (!bucket) return "No one";
+          if (bucket.public) return "Public";
+          if (Array.isArray(bucket.roles)) {
+            if (bucket.roles.length === 0) return "No one";
+            if (bucket.roles.length === 4) return "Everyone";
+            const names = bucket.roles.map(k => {
+              if (k === 'group_owner') return 'Owner';
+              if (k === 'group_admin') return 'Admin';
+              if (k === 'group_moderator') return 'Moderator';
+              if (k === 'group_member') return 'Member';
+              return k;
+            });
+            if (names.length === 1) return names[0];
+            if (names.length === 2) return names.join(" & ");
+            const last = names.pop();
+            return names.join(", ") + " & " + last;
+          }
+          return "Custom";
+        };
+
+        const renderSubRolesModal = (isOpen, onClose, bucket, setBucket, titleText) => {
+          if (!isOpen) return null;
+          const current = bucket || { public: false, roles: [] };
+
+          const togglePublic = () => {
+            setBucket({ ...current, public: !current.public });
+          };
+
+          const toggleRole = (key) => {
+            const roles = current.roles.includes(key)
+              ? current.roles.filter(k => k !== key)
+              : [...current.roles, key];
+            setBucket({ ...current, roles });
+          };
+
+          const rolesToRender = [
+            { key: 'group_owner', label: 'Group Owner' },
+            { key: 'group_admin', label: 'Group Admin' },
+            { key: 'group_moderator', label: 'Group Moderator' },
+            { key: 'group_member', label: 'Group Member' }
+          ];
+
+          return (
+            <div className="modal-backdrop" onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div className="setting-modal" onClick={e => e.stopPropagation()} style={{ width: "95%", maxWidth: "380px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", padding: "24px", boxShadow: "var(--sh-xl)", color: "var(--ink)" }}>
+                <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700 }}>{titleText}</h3>
+                
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: "1px solid var(--border-3)" }}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>Public (Everyone)</div>
+                      <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Opens this to everyone, including non-members — overrides role selection below.</div>
+                    </div>
+                    <Toggle on={current.public} onClick={togglePublic} />
+                  </div>
+
+                  {rolesToRender.map(r => (
+                    <div key={r.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", opacity: current.public ? 0.5 : 1 }}>
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>{r.label}</span>
+                      <Toggle on={current.public ? true : current.roles.includes(r.key)} onClick={() => { if (!current.public) toggleRole(r.key); }} />
+                    </div>
+                  ))}
                 </div>
-                {galleryAllow && (
-                  <>
-                    <div className="toggle-row" style={{ padding: 0, background: "transparent", border: "none", margin: 0 }}>
-                      <div className="ti"><div className="t">Image Only</div></div>
-                      <Toggle on={galleryImageOnly} onClick={() => {
-                        setGalleryImageOnly(!galleryImageOnly);
-                        if (!galleryImageOnly) setGalleryVideoOnly(false);
-                      }} />
-                    </div>
-                    <div className="toggle-row" style={{ padding: 0, background: "transparent", border: "none", margin: 0 }}>
-                      <div className="ti"><div className="t">Video Only</div></div>
-                      <Toggle on={galleryVideoOnly} onClick={() => {
-                        setGalleryVideoOnly(!galleryVideoOnly);
-                        if (!galleryVideoOnly) setGalleryImageOnly(false);
-                      }} />
-                    </div>
-                    <div className="toggle-row" style={{ padding: 0, background: "transparent", border: "none", margin: 0 }}>
-                      <div className="ti"><div className="t">Admin Approval Required</div></div>
-                      <Toggle on={galleryApprove} onClick={() => setGalleryApprove(!galleryApprove)} />
-                    </div>
-                  </>
-                )}
+
+                <button className="hbtn hbtn--primary" style={{ width: "100%", justifyContent: "center" }} onClick={onClose}>Done</button>
               </div>
-              <button className="hbtn hbtn--primary" style={{ width: "100%", marginTop: 24, justifyContent: "center" }} onClick={() => setGalleryModal(false)}>Confirm</button>
+            </div>
+          );
+        };
+
+        return (
+          <div className="modal-backdrop" onClick={() => setGalleryModal(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div className="setting-modal" onClick={e => e.stopPropagation()}>
+              <div style={{ padding: 20, borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between" }}>
+                <h3 style={{ margin: 0 }}>Gallery Settings</h3>
+                <button onClick={() => setGalleryModal(false)} style={{ background: "var(--field)", border: "none", width: 32, height: 32, borderRadius: 16, cursor: "pointer" }}><I.x style={{ width: 16 }} /></button>
+              </div>
+              <div style={{ padding: 20 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <div className="toggle-row" style={{ padding: 0, background: "transparent", border: "none", margin: 0 }}>
+                    <div className="ti">
+                      <div className="t" style={{ fontSize: 14, fontWeight: 600 }}>Enable Gallery</div>
+                      <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Allow media uploads and sharing.</div>
+                    </div>
+                    <Toggle on={gallery} onClick={() => setGallery(!gallery)} />
+                  </div>
+
+                  {gallery && (
+                    <>
+                      <div className="toggle-row" onClick={() => setUploadRolesModalOpen(true)} style={{ padding: 0, background: "transparent", border: "none", margin: 0, cursor: "pointer" }}>
+                        <div className="ti">
+                          <div className="t" style={{ fontSize: 14, fontWeight: 600 }}>Who can upload?</div>
+                          <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Click to customize upload permissions</div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 13, color: "var(--accent)", fontWeight: 600 }}>{getRolesSummaryText(galleryUploadRoles)}</span>
+                          <I.arrowR style={{ width: 14, color: "var(--ink-3)" }} />
+                        </div>
+                      </div>
+
+                      <div className="toggle-row" onClick={() => setViewRolesModalOpen(true)} style={{ padding: 0, background: "transparent", border: "none", margin: 0, cursor: "pointer" }}>
+                        <div className="ti">
+                          <div className="t" style={{ fontSize: 14, fontWeight: 600 }}>Who can view?</div>
+                          <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Click to customize view permissions</div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 13, color: "var(--accent)", fontWeight: 600 }}>{getRolesSummaryText(galleryViewRoles)}</span>
+                          <I.arrowR style={{ width: 14, color: "var(--ink-3)" }} />
+                        </div>
+                      </div>
+
+                      <div className="toggle-row" style={{ padding: 0, background: "transparent", border: "none", margin: 0 }}>
+                        <div className="ti">
+                          <div className="t" style={{ fontSize: 14, fontWeight: 600 }}>Permission is required</div>
+                          <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Group owners, admins, and moderators must approve uploads before they appear in the gallery.</div>
+                        </div>
+                        <Toggle on={galleryApprove} onClick={() => setGalleryApprove(!galleryApprove)} />
+                      </div>
+
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-3)", marginTop: 12, textTransform: "uppercase", letterSpacing: "0.05em" }}>Media Support</div>
+
+                      <div className="toggle-row" style={{ padding: 0, background: "transparent", border: "none", margin: 0 }}>
+                        <div className="ti">
+                          <div className="t" style={{ fontSize: 14, fontWeight: 600 }}>Video only</div>
+                          <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Restrict uploads to video formats only.</div>
+                        </div>
+                        <Toggle on={galleryVideoOnly} onClick={() => {
+                          const val = !galleryVideoOnly;
+                          setGalleryVideoOnly(val);
+                          if (val) setGalleryImageOnly(false);
+                        }} />
+                      </div>
+
+                      <div className="toggle-row" style={{ padding: 0, background: "transparent", border: "none", margin: 0 }}>
+                        <div className="ti">
+                          <div className="t" style={{ fontSize: 14, fontWeight: 600 }}>Image only</div>
+                          <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Restrict uploads to image formats only.</div>
+                        </div>
+                        <Toggle on={galleryImageOnly} onClick={() => {
+                          const val = !galleryImageOnly;
+                          setGalleryImageOnly(val);
+                          if (val) setGalleryVideoOnly(false);
+                        }} />
+                      </div>
+                    </>
+                  )}
+                </div>
+                <button className="hbtn hbtn--primary" style={{ width: "100%", marginTop: 24, justifyContent: "center" }} onClick={() => setGalleryModal(false)}>Confirm</button>
+              </div>
+
+              {renderSubRolesModal(uploadRolesModalOpen, () => setUploadRolesModalOpen(false), galleryUploadRoles, setGalleryUploadRoles, "Who can upload?")}
+              {renderSubRolesModal(viewRolesModalOpen, () => setViewRolesModalOpen(false), galleryViewRoles, setGalleryViewRoles, "Who can view?")}
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Theme Picker bottom drawer */}
       {themeDrawer && (

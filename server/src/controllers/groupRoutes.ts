@@ -24,6 +24,16 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
         }
     });
 
+    // GET /available-roles
+    fastify.get('/available-roles', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            const roles = await GroupService.getAvailableGroupRoles();
+            return reply.send({ success: true, data: roles });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
     // GET /my
     fastify.get('/my', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
         try {
@@ -221,6 +231,55 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 }
             }
 
+            if (res.state === 'pending') {
+                const groupEntity = await prisma.entities.findUnique({
+                    where: { id },
+                    select: { user_id: true }
+                });
+                const ownerUserId = groupEntity?.user_id;
+
+                if (ownerUserId) {
+                    const group = await prisma.groups.findUnique({
+                        where: { entity_id: id }
+                    });
+                    const groupName = group?.name || 'group';
+
+                    const requester = await prisma.users.findUnique({
+                        where: { id: request.user.id },
+                        include: { profiles: true }
+                    });
+                    const requesterName = requester?.profiles?.display_name || requester?.primary_email?.split('@')[0] || 'Someone';
+
+                    const notif = await prisma.notification_log.create({
+                        data: {
+                            tenant_id: request.user.tenantId || '00000000-0000-0000-0000-000000000000',
+                            user_id: ownerUserId,
+                            channel: 'app',
+                            template_key: 'group_join_request',
+                            status: 'queued',
+                            provider_ref: JSON.stringify({
+                                groupId: id,
+                                groupName,
+                                requesterId: request.user.id,
+                                requesterName,
+                                answers
+                            })
+                        }
+                    });
+
+                    const chatNamespace = (fastify as any).io?.of('/chat');
+                    if (chatNamespace) {
+                        chatNamespace.to(`user:${ownerUserId}`).emit('group.notification', {
+                            id: notif.id,
+                            type: 'join',
+                            text: `<b>${requesterName}</b> requested to join <b>${groupName}</b>`,
+                            groupId: id,
+                            answers
+                        });
+                    }
+                }
+            }
+
             if (res.state === 'active') {
                 GroupService.getGroupDetails(id, request.user)
                     .then(gDetails => {
@@ -286,6 +345,34 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 (fastify as any).io.of('/groups').to(`group_${id}`).emit('dashboard_updated', { action: 'approve_member' });
             }
 
+            // Mark corresponding group_join_request notifications as read/acted
+            const pendingNotifs = await prisma.notification_log.findMany({
+                where: {
+                    template_key: 'group_join_request',
+                    status: { not: 'read' }
+                }
+            });
+
+            for (const notif of pendingNotifs) {
+                try {
+                    const parsed = JSON.parse(notif.provider_ref || '{}');
+                    if (parsed.groupId === id && parsed.requesterId === memberId) {
+                        await prisma.notification_log.update({
+                            where: { id: notif.id },
+                            data: { status: 'read' }
+                        });
+
+                        const chatNamespace = (fastify as any).io?.of('/chat');
+                        if (chatNamespace) {
+                            chatNamespace.to(`user:${notif.user_id}`).emit('notification.acted', {
+                                notificationId: notif.id,
+                                action: 'accepted'
+                            });
+                        }
+                    }
+                } catch (jsonErr) {}
+            }
+
             GroupService.getGroupDetails(id, request.user)
                 .then(gDetails => {
                     if (gDetails && gDetails.group) {
@@ -310,6 +397,34 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const data = await GroupService.rejectMembership(id, memberId, request.user.id);
             if ((fastify as any).io) {
                 (fastify as any).io.of('/groups').to(`group_${id}`).emit('dashboard_updated', { action: 'reject_member' });
+            }
+
+            // Mark corresponding group_join_request notifications as read/acted
+            const pendingNotifs = await prisma.notification_log.findMany({
+                where: {
+                    template_key: 'group_join_request',
+                    status: { not: 'read' }
+                }
+            });
+
+            for (const notif of pendingNotifs) {
+                try {
+                    const parsed = JSON.parse(notif.provider_ref || '{}');
+                    if (parsed.groupId === id && parsed.requesterId === memberId) {
+                        await prisma.notification_log.update({
+                            where: { id: notif.id },
+                            data: { status: 'read' }
+                        });
+
+                        const chatNamespace = (fastify as any).io?.of('/chat');
+                        if (chatNamespace) {
+                            chatNamespace.to(`user:${notif.user_id}`).emit('notification.acted', {
+                                notificationId: notif.id,
+                                action: 'declined'
+                            });
+                        }
+                    }
+                } catch (jsonErr) {}
             }
 
             GroupService.getGroupDetails(id, request.user)

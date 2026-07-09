@@ -572,10 +572,33 @@ export function DashboardApp() {
   }, [cur]);
 
   const go = useCallback((view, param = null) => {
-    if (view === "home") {
+    if (view === "back") {
+      navigate(-1);
+      return;
+    }
+    let targetView = view;
+    let targetParam = param;
+
+    if (view === "public-profile") {
+      const targetUserId = param?.id || param?.userId || (typeof param === 'string' ? param : null);
+      let currentUserId = null;
+      try {
+        const token = localStorage.getItem('token');
+        if (token) {
+          currentUserId = JSON.parse(atob(token.split('.')[1])).id;
+        }
+      } catch (e) {}
+
+      if (currentUserId && targetUserId === currentUserId) {
+        targetView = "profile";
+        targetParam = null;
+      }
+    }
+
+    if (targetView === "home") {
       navigate("/", { replace: true });
     } else {
-      navigate(`/${view}`, { state: param });
+      navigate(`/${targetView}`, { state: targetParam });
     }
     // scroll the active view to top
     setTimeout(() => { document.querySelectorAll(".scroll").forEach(el => el.scrollTop = 0); }, 0);

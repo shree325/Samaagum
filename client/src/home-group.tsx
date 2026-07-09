@@ -121,7 +121,7 @@ export function ThreadCard({ p, onOpen, voteData, onVote, reactions, onReact, is
           <div style={{ fontSize: 13.5, color: "var(--ink-2)", marginBottom: 8, lineHeight: 1.5 }}>{p.body.slice(0, 120)}{p.body.length > 120 ? '…' : ''}</div>
         )}
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--ink-3)", flexWrap: "wrap" }}>
-          <Avatar name={authorName} size={18} />
+          <Avatar name={authorName} userId={p.author_user_id} img={p.author_photo} size={18} />
           <span style={{ fontWeight: 500, color: "var(--ink-2)" }}>{authorName}</span>
           <span>·</span>
           <span>{timeStr}</span>
@@ -151,7 +151,7 @@ export function CommentItem({ c, depth, canReply, isOwner, currentUserId, replyi
   const replies = c.replies || [];
   return (
     <div style={{ display: "flex", gap: 10, paddingLeft: depth > 0 ? 18 : 0, borderLeft: depth > 0 ? "2px solid var(--border)" : "none", marginTop: depth > 0 ? 10 : 0 }}>
-      <Avatar name={c.author_name || "Unknown"} size={28} />
+      <Avatar name={c.author_name || "Unknown"} userId={c.author_user_id} img={c.author_photo} size={28} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
           <div style={{ fontSize: 13 }}>
@@ -247,6 +247,9 @@ export function GroupDetail({ group, st, go }) {
   const [fullGroup, setFullGroup] = useState(null);
   const [membershipState, setMembershipState] = useState(null);
   const g = fullGroup || group || GROUPS[0];
+  const forumsEnabled = !g.settings?.forums || g.settings.forums.enabled !== false;
+  const gallerySettings = g.settings?.gallery || {};
+  const galleryEnabled = gallerySettings.enabled !== false;
 
   React.useEffect(() => {
     setFullGroup(null);
@@ -269,7 +272,9 @@ export function GroupDetail({ group, st, go }) {
     chatSettings.allowDirectMessaging ||
     (chatSettings.allowGroupChat || chatSettings.allowEventChat)
   );
-  const [tab, setTab] = useState("about");
+  const [tab, setTab] = useState(() => {
+    return sessionStorage.getItem(`group_tab_${g.id || g.entity_id}`) || "about";
+  });
   const [draft, setDraft] = useState("");
   const [posts, setPosts] = useState([]);
   const [posting, setPosting] = useState(false);
@@ -280,6 +285,9 @@ export function GroupDetail({ group, st, go }) {
   const [galleryItems, setGalleryItems] = useState([]);
   const [callerIsAdmin, setCallerIsAdmin] = useState(false);
   const [galleryUploading, setGalleryUploading] = useState(false);
+  const [previewMedia, setPreviewMedia] = useState(null);
+  const [imageZoom, setImageZoom] = useState(1);
+  const [imageOrigin, setImageOrigin] = useState({ x: '50%', y: '50%' });
   const [activeThread, setActiveThread] = useState(null);
   const activeThreadRef = React.useRef(null);
   React.useEffect(() => {
@@ -686,6 +694,23 @@ export function GroupDetail({ group, st, go }) {
   const [invites, setInvites] = useState([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteLink, setInviteLink] = useState("");
+  const [availableRoles, setAvailableRoles] = useState([]);
+
+  const roleHasCap = (roleKey, cap) => (availableRoles || []).find(r => r.key === roleKey)?.capabilities?.includes(cap);
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+        const res = await fetch(`${apiBase}/api/groups/available-roles`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
+        const data = await res.json();
+        if (data.success) setAvailableRoles(data.data || []);
+      } catch (err) { console.error(err); }
+    })();
+  }, []);
 
   // Forum management state
   const [forumMembers, setForumMembers] = useState([]);
@@ -755,7 +780,11 @@ export function GroupDetail({ group, st, go }) {
   };
 
   const fetchInvites = React.useCallback(async () => {
-    if (!g.id || g.id === "newg" || !isOwner) return;
+    const roleKey = isOwner ? 'group_owner' :
+                    (members.find(m => m.id === currentUserId)?.role === 'admin' ? 'group_admin' :
+                     members.find(m => m.id === currentUserId)?.role === 'moderator' ? 'group_moderator' : 'group_member');
+    const hasManageCap = isOwner || (availableRoles || []).find(r => r.key === roleKey)?.capabilities?.includes('group.manage');
+    if (!g.id || g.id === "newg" || !hasManageCap) return;
     try {
       const token = localStorage.getItem('token');
       const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
@@ -789,7 +818,11 @@ export function GroupDetail({ group, st, go }) {
   }, [g.id, isOwner, g.visibility]);
 
   const fetchJoinRequests = React.useCallback(async () => {
-    if (!g.id || g.id === "newg" || !isOwner) return;
+    const roleKey = isOwner ? 'group_owner' :
+                    (members.find(m => m.id === currentUserId)?.role === 'admin' ? 'group_admin' :
+                     members.find(m => m.id === currentUserId)?.role === 'moderator' ? 'group_moderator' : 'group_member');
+    const hasManageCap = isOwner || (availableRoles || []).find(r => r.key === roleKey)?.capabilities?.includes('group.manage');
+    if (!g.id || g.id === "newg" || !hasManageCap) return;
     try {
       const token = localStorage.getItem('token');
       const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
@@ -1075,14 +1108,21 @@ export function GroupDetail({ group, st, go }) {
       if (data.groupId === g.id) setOnlineCount(data.count);
     });
 
-    socket.on('gallery_updated', () => {
-      if (tab === 'gallery') {
-        const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
-        const tkn = localStorage.getItem('token');
-        fetch(`${apiBase}/api/groups/${g.id}/gallery`, {
-          headers: tkn ? { 'Authorization': `Bearer ${tkn}` } : {}
-        }).then(r => r.json()).then(d => { if (d.success) { setGalleryItems(d.data); setCallerIsAdmin(d.callerIsAdmin || false); } }).catch(console.error);
-      }
+    socket.on('gallery_updated', (payload) => {
+      const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+      const tkn = localStorage.getItem('token');
+      fetch(`${apiBase}/api/groups/${g.id}/gallery`, {
+        headers: tkn ? { 'Authorization': `Bearer ${tkn}` } : {}
+      }).then(r => r.json()).then(d => {
+        if (d.success) {
+          const isManager = myRoleRef.current === 'group_owner' || myRoleRef.current === 'group_admin' || myRoleRef.current === 'group_moderator';
+          if (isManager && payload && payload.action === 'upload') {
+            if (window.toast) window.toast("New media approval request received!", "info");
+          }
+          setGalleryItems(d.data);
+          setCallerIsAdmin(d.callerIsAdmin || false);
+        }
+      }).catch(console.error);
     });
 
     return () => {
@@ -1091,11 +1131,23 @@ export function GroupDetail({ group, st, go }) {
     };
   }, [g.id, isOwner, isMember, tab, sort, fetchPosts]);
 
-  if (isOwner) {
+  const myMemberEntry = (members || []).find(m => m.id === currentUserId);
+  const myRoleKey = isOwner ? 'group_owner' :
+                    (myMemberEntry?.role === 'owner' ? 'group_owner' :
+                     myMemberEntry?.role === 'admin' ? 'group_admin' :
+                     myMemberEntry?.role === 'moderator' ? 'group_moderator' : 'group_member');
+
+  const myRoleRef = React.useRef(myRoleKey);
+  React.useEffect(() => {
+    myRoleRef.current = myRoleKey;
+  }, [myRoleKey]);
+
+  const canManageGroup = isOwner || roleHasCap(myRoleKey, 'group.manage');
+
+  if (canManageGroup) {
     if ((g.joinMode === 'invite_only' || g.joinMode === 'approval') && !tabs.find(t => t[0] === 'invites')) {
       tabs.push(["invites", "Invites"]);
     }
-    const forumsEnabled = !g.settings?.forums || g.settings.forums.enabled !== false;
     const threadPerm = g.settings?.forums?.threadPerm || 'everyone';
     const replyPerm = g.settings?.forums?.replyPerm || 'everyone';
     if (forumsEnabled && (threadPerm === 'selected' || replyPerm === 'selected') && !tabs.find(t => t[0] === 'forum-mgmt')) {
@@ -1155,9 +1207,8 @@ export function GroupDetail({ group, st, go }) {
     }
   };
 
-  const gEvents = EVENTS.filter(e => e.hosted_by_entity_id === g.entity_id || e.cat === g.cat).slice(0, 3);
+  const gEvents = (window.EVENTS || EVENTS).filter(e => e.hosted_by_entity_id === g.id);
 
-  const forumsEnabled = !g.settings?.forums || g.settings.forums.enabled !== false;
   const threadPerm = g.settings?.forums?.threadPerm || "everyone";
   const replyPerm = g.settings?.forums?.replyPerm || "everyone";
   const forumPermissions = g.forumPermissions || [];
@@ -1165,11 +1216,54 @@ export function GroupDetail({ group, st, go }) {
   const canPost = !isArchived && forumsEnabled && isMember && (isOwner || threadPerm === "everyone" || threadPerm === "members" || (threadPerm === "selected" && forumPermissions.includes("create_thread")));
   const canReply = !isArchived && forumsEnabled && isMember && (isOwner || replyPerm === "everyone" || replyPerm === "members" || (replyPerm === "selected" && forumPermissions.includes("reply_thread")));
 
+  const forumsPublic = g.settings?.forums?.threadRoles
+    ? (g.settings.forums.threadRoles.public === true || g.settings.forums.replyRoles?.public === true)
+    : (threadPerm === 'everyone' || replyPerm === 'everyone');
+
+  const galleryPublic = g.settings?.gallery?.viewRoles
+    ? g.settings.gallery.viewRoles.public === true
+    : (g.settings?.gallery?.allow !== false);
+
+  const canViewGallery = (() => {
+    const viewRoles = g.settings?.gallery?.viewRoles;
+    if (!viewRoles) return true;
+    if (viewRoles.public) return true;
+    if (isOwner) return true;
+    return viewRoles.roles.includes(myRoleKey);
+  })();
+
   const isAccessRestricted = !isJoined && !isOwner;
-  // Public groups (visibility=public, joinMode=open) allow non-members to read all tabs
   const isPublicGroup = g.visibility === 'public' && g.joinMode === 'open';
-  const protectedTabs = ['discussion', 'events', 'members', 'gallery'];
-  const showMemberOnlyScreen = isAccessRestricted && !isPublicGroup && protectedTabs.includes(tab);
+
+  const showMemberOnlyScreen = (() => {
+    if (!isAccessRestricted) return false;
+    if (tab === 'members') return true;
+    if (tab === 'discussion') return !forumsPublic;
+    if (tab === 'gallery') return !galleryPublic;
+    if (tab === 'events') return !isPublicGroup;
+    return false;
+  })();
+
+  const visibleTabs = tabs.filter(([k]) => {
+    if (k === 'gallery' && !galleryEnabled) return false;
+    if (k === 'discussion' && !forumsEnabled) return false;
+    
+    if (isAccessRestricted) {
+      if (k === 'members') return false;
+      if (k === 'discussion') return forumsPublic;
+      if (k === 'gallery') return galleryPublic;
+      if (k === 'events') return isPublicGroup;
+    } else {
+      if (k === 'gallery') return canViewGallery;
+    }
+    return true;
+  });
+
+  React.useEffect(() => {
+    if (visibleTabs.length > 0 && !visibleTabs.some(t => t[0] === tab)) {
+      setTab(visibleTabs[0][0]);
+    }
+  }, [tab, visibleTabs]);
 
   const filteredPosts = (activeTag
     ? posts.filter(p => (p.tags || []).some(t => t.name === activeTag))
@@ -1185,8 +1279,6 @@ export function GroupDetail({ group, st, go }) {
   const atUserVote = atVotes.userVote !== undefined ? atVotes.userVote : (activeThread ? (activeThread.user_vote || 0) : 0);
   const atReactions = activeThread ? (threadReactions[activeThread.id] || activeThread.reactions || {}) : {};
 
-  const gallerySettings = g.settings?.gallery || {};
-  const galleryEnabled = gallerySettings.enabled !== false;
   const canUpload = !isArchived && galleryEnabled && (isOwner || isJoined);
   const galleryMediaType = gallerySettings.imageOnly ? "Images only" : gallerySettings.videoOnly ? "Videos only" : "Images & videos";
   const galleryNeedsApproval = gallerySettings.approve === true;
@@ -1206,8 +1298,8 @@ export function GroupDetail({ group, st, go }) {
   }, [g.id]);
 
   React.useEffect(() => {
-    if (tab === "gallery") fetchGallery();
-  }, [tab, fetchGallery]);
+    fetchGallery();
+  }, [fetchGallery]);
 
   const handleGalleryUpload = async (e) => {
     const file = e.target.files && e.target.files[0];
@@ -1243,6 +1335,45 @@ export function GroupDetail({ group, st, go }) {
       setGalleryUploading(false);
       e.target.value = "";
     }
+  };
+
+  const openMediaPreview = (item) => {
+    setPreviewMedia(item);
+    setImageZoom(1);
+    setImageOrigin({ x: '50%', y: '50%' });
+  };
+  const closeMediaPreview = () => {
+    setPreviewMedia(null);
+    setImageZoom(1);
+    setImageOrigin({ x: '50%', y: '50%' });
+  };
+  const zoomIn = () => {
+    setImageOrigin({ x: '50%', y: '50%' });
+    setImageZoom(prev => Math.min(prev + 0.25, 3));
+  };
+  const zoomOut = () => {
+    if (imageZoom <= 1.25) {
+      setImageOrigin({ x: '50%', y: '50%' });
+      setImageZoom(1);
+    } else {
+      setImageZoom(prev => Math.max(prev - 0.25, 1));
+    }
+  };
+  const toggleImageZoom = (e) => {
+    e.preventDefault();
+    if (!previewMedia || previewMedia.type === 'video') return;
+    if (imageZoom > 1) {
+      setImageZoom(1);
+      setImageOrigin({ x: '50%', y: '50%' });
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+    const xPct = Math.min(100, Math.max(0, (offsetX / rect.width) * 100));
+    const yPct = Math.min(100, Math.max(0, (offsetY / rect.height) * 100));
+    setImageOrigin({ x: `${xPct}%`, y: `${yPct}%` });
+    setImageZoom(2);
   };
 
   const _gdApiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
@@ -1361,13 +1492,16 @@ export function GroupDetail({ group, st, go }) {
           </div>
 
           <div className="grp-tabs">
-            {tabs.map(([k, l]) => (
-              <button key={k} className={`grp-tab ${tab === k ? "on" : ""}`} onClick={() => { setTab(k); if (k === "dashboard" || k === "members") setNewJoinRequestNotif(false); }}>
+            {visibleTabs.map(([k, l]) => (
+              <button key={k} className={`grp-tab ${tab === k ? "on" : ""}`} onClick={() => { setTab(k); sessionStorage.setItem(`group_tab_${g.id || g.entity_id}`, k); if (k === "dashboard" || k === "members") setNewJoinRequestNotif(false); }}>
                 {l}
-                {k === "members" && isOwner && (dashboardStats.pendingMembers > 0 || newJoinRequestNotif) && (
+                {k === "members" && canManageGroup && (dashboardStats.pendingMembers > 0 || newJoinRequestNotif) && (
                   <span style={{ marginLeft: 6, width: 8, height: 8, borderRadius: "50%", background: "var(--accent-2)", display: "inline-block" }} />
                 )}
                 {k === "dashboard" && newJoinRequestNotif && (
+                  <span style={{ marginLeft: 6, width: 8, height: 8, borderRadius: "50%", background: "var(--accent-2)", display: "inline-block" }} />
+                )}
+                {k === "gallery" && (myRoleKey === 'group_owner' || myRoleKey === 'group_admin' || myRoleKey === 'group_moderator') && galleryItems.some(item => item.status === 'pending') && (
                   <span style={{ marginLeft: 6, width: 8, height: 8, borderRadius: "50%", background: "var(--accent-2)", display: "inline-block" }} />
                 )}
               </button>
@@ -1455,6 +1589,137 @@ export function GroupDetail({ group, st, go }) {
                       )}
                     </div>
                   )}
+                  {tab === "discussion" && activeThread !== null && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                      <button className="hbtn hbtn--ghost hbtn--sm" style={{ alignSelf: "flex-start" }} onClick={() => { setActiveThread(null); setReplyDraft(""); setReplyingToId(null); }}>
+                        <I.arrowL style={{ width: 14, height: 14 }} /> Back to Discussions
+                      </button>
+
+                      <div className={`post ${activeThread.pinned ? "pinned" : ""}`}>
+                        <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+                          <VoteWidget
+                            score={atVoteScore}
+                            userVote={atUserVote}
+                            onUpvote={() => handleVoteThread(activeThread.id, atUserVote === 1 ? 0 : 1)}
+                            onDownvote={() => handleVoteThread(activeThread.id, atUserVote === -1 ? 0 : -1)}
+                          />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
+                              {activeThread.pinned && <span style={{ fontSize: 11, fontWeight: 600, color: "var(--accent-2)", display: "flex", alignItems: "center", gap: 3 }}><I.bookmarkF style={{ width: 10, height: 10 }} />Pinned</span>}
+                              {activeThread.locked && <span style={{ fontSize: 11, fontWeight: 600, color: "#e74c3c", display: "flex", alignItems: "center", gap: 3 }}><I.lock style={{ width: 10, height: 10 }} />Locked</span>}
+                              {activeThread.solved && <span style={{ fontSize: 11, fontWeight: 700, color: "#1a7f37", background: "#e6ffed", borderRadius: 8, padding: "1px 7px" }}>✓ Solved</span>}
+                              {(activeThread.tags || []).map(t => <TagPill key={t.id || t.name} tag={t.name} />)}
+                            </div>
+                            {activeThread.title && <h2 style={{ margin: "0 0 8px 0", fontSize: 20, fontWeight: 700, lineHeight: 1.3 }}>{activeThread.title}</h2>}
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--ink-3)", marginBottom: 12 }}>
+                              <Avatar name={activeThread.author_name || "Unknown"} userId={activeThread.author_user_id} img={activeThread.author_photo} size={22} />
+                              <span style={{ fontWeight: 500, color: "var(--ink-2)" }}>{activeThread.author_name || "Unknown"}</span>
+                              <span>·</span>
+                              <span>{activeThread.created_at ? getRelativeTime(activeThread.created_at) : 'Just now'}</span>
+                              {activeThread.view_count > 0 && <span>· {activeThread.view_count} views</span>}
+                            </div>
+                            {editingPostId === activeThread.id ? (
+                              <div style={{ marginBottom: 12 }}>
+                                <textarea
+                                  autoFocus
+                                  value={editPostDraft}
+                                  onChange={e => setEditPostDraft(e.target.value)}
+                                  rows={4}
+                                  style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 14, fontFamily: "inherit", resize: "vertical", outline: "none", background: "var(--surface)", color: "var(--ink)", boxSizing: "border-box" }}
+                                />
+                                <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", marginTop: 8 }}>
+                                  <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => { setEditingPostId(null); setEditPostDraft(""); }}>Cancel</button>
+                                  <button className="hbtn hbtn--primary hbtn--sm" onClick={handleEditPost}>Save</button>
+                                </div>
+                              </div>
+                            ) : (
+                              activeThread.body && <div className="pbody" style={{ marginBottom: 12 }}>{activeThread.body}</div>
+                            )}
+                            <EmojiBar counts={atReactions} onReact={emoji => handleReactThread(activeThread.id, emoji)} />
+                            {isOwner && (
+                              <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                                <button className="hbtn hbtn--ghost hbtn--sm" onClick={async () => {
+                                  const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+                                  const r = await fetch(`${apiBase}/api/groups/${g.id}/posts/${activeThread.id}/pin`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }, body: JSON.stringify({ pinned: !activeThread.pinned }) });
+                                  const d = await r.json();
+                                  if (d.success) { setActiveThread(prev => ({ ...prev, pinned: !prev.pinned })); setPosts(prev => prev.map(p => p.id === activeThread.id ? { ...p, pinned: !p.pinned } : p)); }
+                                }}>{activeThread.pinned ? "Unpin" : "Pin"}</button>
+                                <button className="hbtn hbtn--ghost hbtn--sm" onClick={async () => {
+                                  const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+                                  const r = await fetch(`${apiBase}/api/groups/${g.id}/posts/${activeThread.id}/lock`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }, body: JSON.stringify({ locked: !activeThread.locked }) });
+                                  const d = await r.json();
+                                  if (d.success) { setActiveThread(prev => ({ ...prev, locked: !prev.locked })); setPosts(prev => prev.map(p => p.id === activeThread.id ? { ...p, locked: !p.locked } : p)); }
+                                }}>{activeThread.locked ? "Unlock" : "Lock"}</button>
+                                <button className="hbtn hbtn--ghost hbtn--sm" style={{ color: activeThread.solved ? "var(--ink-2)" : "#1a7f37" }} onClick={() => handleSolveThread(activeThread.id, !activeThread.solved)}>
+                                  {activeThread.solved ? "Unmark Solved" : "✓ Mark Solved"}
+                                </button>
+                              </div>
+                            )}
+                            {(isOwner || activeThread.author_user_id === currentUserId) && (
+                              <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+                                {canEdit(activeThread.created_at) && activeThread.author_user_id === currentUserId && (
+                                  <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => { setEditingPostId(activeThread.id); setEditPostDraft(activeThread.body); }}>
+                                    <I.edit style={{ width: 13, height: 13 }} /> Edit thread
+                                  </button>
+                                )}
+                                <button className="hbtn hbtn--ghost hbtn--sm" style={{ color: "#e74c3c" }} title="Delete thread" onClick={() => { if (!confirm("Delete this thread and all replies?")) return; handleDeletePost(activeThread.id); setActiveThread(null); }}>
+                                  <I.trash style={{ width: 13, height: 13 }} /> Delete thread
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ fontWeight: 600, fontSize: 15, borderBottom: "1px solid var(--border)", paddingBottom: 10 }}>
+                        {loadingThread ? "Loading replies…" : `${(activeThread.comments || []).length} ${(activeThread.comments || []).length === 1 ? 'Reply' : 'Replies'}`}
+                      </div>
+
+                      {loadingThread && (
+                        <div style={{ textAlign: "center", padding: "24px 0", color: "var(--ink-3)" }}>
+                          <div className="spinner" style={{ margin: "0 auto" }} />
+                        </div>
+                      )}
+
+                      {!loadingThread && (activeThread.comments || []).length === 0 && (
+                        <div style={{ textAlign: "center", padding: "32px 20px", color: "var(--ink-3)", background: "var(--surface)", borderRadius: "var(--r-md)", border: "1px dashed var(--border)" }}>
+                          <p style={{ margin: 0, fontSize: 14 }}>{canReply && !activeThread.locked ? "Be the first to reply!" : "No replies yet."}</p>
+                        </div>
+                      )}
+
+                      {!loadingThread && (activeThread.comments || []).map(c => (
+                        <div key={c.id} style={{ padding: "14px 16px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)" }}>
+                          <CommentItem c={c} depth={0} canReply={canReply && !activeThread.locked} isOwner={isOwner} currentUserId={currentUserId} replyingToId={replyingToId} inlineReplyDraft={inlineReplyDraft} submittingInlineReply={submittingInlineReply} commentVotes={commentVotes} onVote={handleVoteComment} onDelete={handleDeleteComment} onStartReply={handleStartReply} onCancelReply={handleCancelReply} onInlineReplyChange={setInlineReplyDraft} onSubmitInlineReply={handleSubmitInlineReply} canEdit={canEdit} editingCommentId={editingCommentId} editCommentDraft={editCommentDraft} onEditStart={(c) => { setEditingCommentId(c.id); setEditCommentDraft(c.body); }} onEditCancel={() => { setEditingCommentId(null); setEditCommentDraft(""); }} onEditChange={v => setEditCommentDraft(v)} onEditSubmit={handleEditComment} />
+                        </div>
+                      ))}
+
+                      {canReply && !activeThread.locked && (
+                        <div className="composer">
+                          <Avatar name={ME.name} img={ME.img} size={36} />
+                          <div className="ci">
+                            <textarea placeholder="Write a reply…" value={replyDraft} onChange={e => setReplyDraft(e.target.value)} rows={replyDraft ? 3 : 1} />
+                            <div className="cbar">
+                              <button className="hbtn hbtn--primary hbtn--sm" style={{ marginLeft: "auto" }} disabled={!replyDraft.trim() || submittingReply} onClick={handleSubmitReply}>
+                                {submittingReply ? 'Posting…' : 'Reply'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {activeThread.locked && (
+                        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, color: "var(--ink-2)" }}>
+                          <I.lock style={{ width: 16, height: 16, opacity: 0.6 }} />
+                          <span style={{ fontSize: 13 }}>This thread is locked. No new replies.</span>
+                        </div>
+                      )}
+                      {!canReply && !activeThread.locked && forumsEnabled && (
+                        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, color: "var(--ink-2)" }}>
+                          <I.lock style={{ width: 16, height: 16, opacity: 0.6 }} />
+                          <span style={{ fontSize: 13 }}>Only selected roles can reply here.</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {tab === "events" && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                       {/* Create Event button — visible to group owner and admin */}
@@ -1462,7 +1727,7 @@ export function GroupDetail({ group, st, go }) {
                         <div style={{ display: "flex", justifyContent: "flex-end" }}>
                           <button
                             className="hbtn hbtn--primary hbtn--sm"
-                            onClick={() => go("create-event", { hostGroupId: g.entity_id, hostGroupName: g.name })}
+                            onClick={() => go("create-event", { hostGroupId: g.id, hostGroupName: g.name })}
                             style={{ display: "flex", alignItems: "center", gap: 6 }}
                           >
                             <I.plus style={{ width: 14 }} />
@@ -1663,7 +1928,7 @@ export function GroupDetail({ group, st, go }) {
                             return (
                               <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: "var(--r-sm)" }}>
                                 <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                                  <Avatar name={m.name} size={36} />
+                                  <Avatar name={m.name} userId={m.id} img={m.profilePhoto} size={36} />
                                   <div>
                                     <div style={{ fontWeight: 600, fontSize: 14 }}>{m.name}</div>
                                     <div style={{ fontSize: 12, color: "var(--ink-3)" }}>@{m.username} ({m.role})</div>
@@ -1722,14 +1987,21 @@ export function GroupDetail({ group, st, go }) {
                     </div>
                   )}
                   {tab === "gallery" && galleryEnabled && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div>
-                          <h3 style={{ margin: "0 0 4px 0", fontSize: 17, fontWeight: 600 }}>Media Gallery</h3>
-                          <div style={{ fontSize: 12, color: "var(--ink-3)" }}>
-                            {galleryMediaType}{galleryNeedsApproval ? " · Uploads require approval" : ""}
+                    !canViewGallery ? (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 48, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", color: "var(--ink-3)", textAlign: "center" }}>
+                        <I.lock style={{ width: 32, height: 32, marginBottom: 12, color: "var(--ink-3)" }} />
+                        <h4 style={{ margin: "0 0 8px 0", color: "var(--ink)", fontSize: 16 }}>Access Restricted</h4>
+                        <p style={{ margin: 0 }}>You do not have permission to view the media gallery.</p>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div>
+                            <h3 style={{ margin: "0 0 4px 0", fontSize: 17, fontWeight: 600 }}>Media Gallery</h3>
+                            <div style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                              {galleryMediaType}{galleryNeedsApproval ? " · Uploads require approval" : ""}
+                            </div>
                           </div>
-                        </div>
                         {canUpload && (
                           <label className="hbtn hbtn--soft hbtn--sm" style={{ cursor: "pointer" }}>
                             {galleryUploading ? "Uploading..." : <><I.plus style={{ width: 14 }} /> Add Media</>}
@@ -1752,9 +2024,9 @@ export function GroupDetail({ group, st, go }) {
                       ) : (
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
                           {galleryItems.filter(item => callerIsAdmin || item.status === 'approved').map(item => (
-                            <div key={item.id} style={{ position: "relative", borderRadius: "var(--r-sm)", overflow: "hidden", aspectRatio: "1", background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                            <div key={item.id} style={{ position: "relative", borderRadius: "var(--r-sm)", overflow: "hidden", aspectRatio: "1", background: "var(--surface-2)", border: "1px solid var(--border)", cursor: "pointer" }} onClick={() => openMediaPreview(item)}>
                               {item.type === 'video' ? (
-                                <video src={item.src} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted onClick={e => e.currentTarget.paused ? e.currentTarget.play() : e.currentTarget.pause()} />
+                                <video src={item.src} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted playsInline preload="metadata" />
                               ) : (
                                 <img src={item.src} alt="gallery" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                               )}
@@ -1792,7 +2064,8 @@ export function GroupDetail({ group, st, go }) {
                         </div>
                       )}
                     </div>
-                  )}
+                  )
+                )}
                 </>
               )}
             </div>
@@ -1826,7 +2099,7 @@ export function GroupDetail({ group, st, go }) {
                       }}
                       style={{ cursor: "pointer" }}
                     >
-                      <Avatar name={mName} size={32} />
+                      <Avatar name={mName} userId={m.id || m.user_id} img={m.profilePhoto || m.users?.profilePhoto} size={32} />
                       <div className="mi">
                         <div className="n" style={{ display: "flex", alignItems: "center", gap: 5 }}>{mName} {mRole === 'owner' && <I.crown className="crown" />}</div>
                         <div className="r" style={{ display: "flex", gap: 4, alignItems: "center" }}>
@@ -1846,6 +2119,42 @@ export function GroupDetail({ group, st, go }) {
 
 
 
+      {previewMedia && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100001, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={closeMediaPreview}>
+          <div style={{ position: 'relative', width: '100%', maxWidth: 960, maxHeight: '90vh', background: 'var(--bg)', borderRadius: 18, overflow: 'hidden', boxShadow: '0 24px 48px rgba(0,0,0,0.35)' }} onClick={(e) => e.stopPropagation()}>
+            <button onClick={closeMediaPreview} className="tool" style={{ position: 'absolute', top: 16, right: 16, zIndex: 2, background: 'rgba(0,0,0,0.45)', borderRadius: 999, color: '#fff', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <I.x style={{ width: 18, height: 18 }} />
+            </button>
+            {previewMedia.type === 'video' ? (
+              <video src={previewMedia.src} controls autoPlay style={{ display: 'block', width: '100%', maxHeight: '90vh', background: '#000' }} />
+            ) : (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', background: '#000', maxHeight: '90vh' }}>
+                <img
+                  src={previewMedia.src}
+                  alt="Preview"
+                  onDoubleClick={toggleImageZoom}
+                  style={{
+                    transform: `scale(${imageZoom})`,
+                    transformOrigin: `${imageOrigin.x} ${imageOrigin.y}`,
+                    transition: 'transform 0.15s ease',
+                    maxWidth: '100%',
+                    maxHeight: '90vh',
+                    objectFit: 'contain',
+                    cursor: 'zoom-in'
+                  }}
+                />
+              </div>
+            )}
+            {previewMedia.type !== 'video' && (
+              <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 10, background: 'rgba(0,0,0,0.45)', borderRadius: 999, padding: '8px 10px' }}>
+                <button className="hbtn hbtn--ghost hbtn--sm" style={{ color: '#fff' }} onClick={zoomOut} disabled={imageZoom <= 1}>-</button>
+                <span style={{ color: '#fff', fontSize: 13, minWidth: 48, textAlign: 'center' }}>{Math.round(imageZoom * 100)}%</span>
+                <button className="hbtn hbtn--ghost hbtn--sm" style={{ color: '#fff' }} onClick={zoomIn} disabled={imageZoom >= 3}>+</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {showQModal && g.settings && g.settings.questionnaires && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={(e) => { if (e.target === e.currentTarget) setShowQModal(false); }}>
           <div style={{ width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto', background: 'var(--surface)', padding: 28, borderRadius: 16, display: 'flex', flexDirection: 'column', gap: 18, boxShadow: '0 8px 32px rgba(0,0,0,0.28)' }}>
@@ -1968,6 +2277,30 @@ export function GroupDetail({ group, st, go }) {
             >
               Submit & Join
             </button>
+          </div>
+        </div>
+      )}
+
+      {showNewThreadModal && (
+        <div className="modal-overlay" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0, 0, 0, 0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000 }}>
+          <div className="modal-content" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", width: "90%", maxWidth: "500px", padding: 24, boxShadow: "var(--sh-xl)", color: "var(--ink)" }}>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--ink)" }}>New Thread</h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
+              <input className="cinput" placeholder="Title (optional)" value={newThreadTitle} onChange={e => setNewThreadTitle(e.target.value)} />
+              <textarea className="ctextarea" placeholder="What's on your mind? (Markdown supported)" value={newThreadBody} onChange={e => setNewThreadBody(e.target.value)} rows={6} style={{ fontFamily: "inherit" }} />
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-2)", display: "block", marginBottom: 6 }}>Tag (optional)</label>
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  {ALL_FORUM_TAGS.map(t => (
+                    <button key={t} onClick={() => setNewThreadTag(newThreadTag === t ? "" : t)} style={{ fontSize: 12, padding: "4px 10px", borderRadius: 12, border: `1px solid ${newThreadTag === t ? 'var(--accent-2)' : 'var(--border)'}`, background: newThreadTag === t ? 'var(--surface-2)' : 'transparent', color: newThreadTag === t ? 'var(--accent-2)' : 'var(--ink-2)', cursor: "pointer", fontWeight: newThreadTag === t ? 600 : 400 }}>{t}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 24 }}>
+              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => setShowNewThreadModal(false)}>Cancel</button>
+              <button className="hbtn hbtn--primary hbtn--sm" disabled={postingThread || (!newThreadTitle.trim() && !newThreadBody.trim())} onClick={handleNewThread}>{postingThread ? "Posting…" : "Create Thread"}</button>
+            </div>
           </div>
         </div>
       )}
@@ -2104,6 +2437,9 @@ export function MemberManagementPanel({ group, st, go }) {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
   const [groupSettings, setGroupSettings] = useState(g?.settings || {});
+  const [availableRoles, setAvailableRoles] = useState([]);
+
+  const roleHasCap = (roleKey, cap) => (availableRoles || []).find(r => r.key === roleKey)?.capabilities?.includes(cap);
 
   const [selectedMember, setSelectedMember] = useState(null);
   const QUESTIONNAIRE_INIT = { loading: false, error: null, hasForm: null, data: null };
@@ -2125,9 +2461,10 @@ export function MemberManagementPanel({ group, st, go }) {
 
     try {
       const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
-      const [membRes, groupRes] = await Promise.all([
+      const [membRes, groupRes, rolesRes] = await Promise.all([
         fetch(`${apiBase}/api/groups/${g.id}/members`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} }),
-        fetch(`${apiBase}/api/groups/${g.id}`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} })
+        fetch(`${apiBase}/api/groups/${g.id}`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} }),
+        fetch(`${apiBase}/api/groups/available-roles`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} })
       ]);
       const data = await membRes.json();
       if (data.success && data.data) {
@@ -2148,6 +2485,10 @@ export function MemberManagementPanel({ group, st, go }) {
       const groupData = await groupRes.json();
       if (groupData.success && groupData.data?.settings) {
         setGroupSettings(groupData.data.settings);
+      }
+      const rolesData = await rolesRes.json();
+      if (rolesData.success) {
+        setAvailableRoles(rolesData.data || []);
       }
     } catch (e) {
       console.error(e);
@@ -2328,7 +2669,7 @@ export function MemberManagementPanel({ group, st, go }) {
 
   return (
     <div onClick={() => setOpenMenuId(null)} style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      {g.joinMode === 'approval' && requests.length > 0 && ['group_owner', 'group_admin', 'group_moderator'].includes(currentUserRole) && (
+      {g.joinMode === 'approval' && requests.length > 0 && (currentUserRole === 'group_owner' || roleHasCap(currentUserRole, 'group.moderate') || roleHasCap(currentUserRole, 'group.manage')) && (
         <div style={{ marginBottom: 24 }}>
           <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10, display: "flex", gap: 6, alignItems: "center" }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent-2)" }} />
@@ -2339,7 +2680,7 @@ export function MemberManagementPanel({ group, st, go }) {
               <div key={r.user_id} style={{ display: "flex", flexDirection: "column", padding: 10, border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <Avatar name={r.users?.display_name || "Unknown"} size={32} />
+                    <Avatar name={r.users?.display_name || "Unknown"} userId={r.users?.id} img={r.users?.profilePhoto} size={32} />
                     <span style={{ fontSize: 13.5, fontWeight: 600 }}>{r.users?.display_name || "Unknown"}</span>
                   </div>
                   <div style={{ display: "flex", gap: 6 }}>
@@ -2387,19 +2728,25 @@ export function MemberManagementPanel({ group, st, go }) {
             let showMakeMember = false;
             let showRemove = false;
 
-            if (!isMe && targetRole !== 'group_owner') {
-              if (currentUserRole === 'group_owner') {
-                showMakeOwner = true;
-                showMakeAdmin = targetRole !== 'group_admin';
-                showMakeMod = targetRole !== 'group_moderator';
-                showMakeMember = targetRole !== 'group_member';
+            const getRoleHierarchy = (role) => {
+              const meta = (availableRoles || []).find(r => r.key === role);
+              if (meta) return meta.hierarchy_level;
+              if (role === 'group_owner') return 100;
+              if (role === 'group_admin') return 110;
+              if (role === 'group_moderator') return 120;
+              return 1000;
+            };
+
+            const myLevel = getRoleHierarchy(currentUserRole);
+            const theirLevel = getRoleHierarchy(targetRole);
+
+            if (!isMe && myLevel < 1000) {
+              if (myLevel < theirLevel) {
+                showMakeOwner = currentUserRole === 'group_owner';
+                showMakeAdmin = myLevel <= 110 && targetRole !== 'group_admin';
+                showMakeMod = myLevel <= 120 && targetRole !== 'group_moderator';
+                showMakeMember = myLevel <= 1000 && targetRole !== 'group_member';
                 showRemove = true;
-              } else if (currentUserRole === 'group_admin') {
-                if (targetRole !== 'group_admin') {
-                  showMakeMod = targetRole !== 'group_moderator';
-                  showMakeMember = targetRole !== 'group_member';
-                  showRemove = true;
-                }
               }
             }
             const hasMenuOptions = showMakeOwner || showMakeAdmin || showMakeMod || showMakeMember || showRemove;
@@ -2412,7 +2759,7 @@ export function MemberManagementPanel({ group, st, go }) {
               showRemove
             });
 
-            const canViewResponses = currentUserRole === 'group_owner' || currentUserRole === 'group_admin' || currentUserRole === 'group_moderator';
+            const canViewResponses = currentUserRole === 'group_owner' || roleHasCap(currentUserRole, 'group.moderate') || roleHasCap(currentUserRole, 'group.manage');
 
             return (
               <div key={m.user_id} style={{ position: "relative", zIndex: openMenuId === m.user_id ? 50 : 1, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)" }}>
@@ -2420,7 +2767,7 @@ export function MemberManagementPanel({ group, st, go }) {
                   style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
                   onClick={() => m.users && go("public-profile", m.users)}
                 >
-                  <Avatar name={m.users?.display_name || "Unknown"} size={40} />
+                  <Avatar name={m.users?.display_name || "Unknown"} userId={m.users?.id} img={m.users?.profilePhoto} size={40} />
                   <div style={{ display: "flex", flexDirection: "column" }}>
                     <span style={{ fontSize: 14, fontWeight: 600 }}>{m.users?.display_name || "Unknown"}</span>
                     <span style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>@{m.users?.username || "unknown"}</span>
@@ -2451,10 +2798,10 @@ export function MemberManagementPanel({ group, st, go }) {
                       </button>
                       {openMenuId === m.user_id && (
                         <div style={{ display: "flex", flexDirection: "column", position: "absolute", right: 0, top: "100%", marginTop: 4, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "var(--sh-md)", zIndex: 9999, minWidth: 160, padding: 4 }}>
-                          {showMakeOwner && <button className="menu-btn" onClick={() => handleRoleChange(m.user_id, 'group_owner')} style={{ width: "100%", textAlign: "left", padding: "8px 12px", fontSize: 13, background: "none", border: "none", cursor: "pointer" }}>Make Owner</button>}
-                          {showMakeAdmin && <button className="menu-btn" onClick={() => handleRoleChange(m.user_id, 'group_admin')} style={{ width: "100%", textAlign: "left", padding: "8px 12px", fontSize: 13, background: "none", border: "none", cursor: "pointer" }}>Make Admin</button>}
-                          {showMakeMod && <button className="menu-btn" onClick={() => handleRoleChange(m.user_id, 'group_moderator')} style={{ width: "100%", textAlign: "left", padding: "8px 12px", fontSize: 13, background: "none", border: "none", cursor: "pointer" }}>Make Moderator</button>}
-                          {showMakeMember && <button className="menu-btn" onClick={() => handleRoleChange(m.user_id, 'group_member')} style={{ width: "100%", textAlign: "left", padding: "8px 12px", fontSize: 13, background: "none", border: "none", cursor: "pointer" }}>Make Member</button>}
+                          {showMakeOwner && <button className="menu-btn" onClick={() => handleRoleChange(m.user_id, 'group_owner')} style={{ width: "100%", textAlign: "left", padding: "8px 12px", fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--ink)" }}>Make Owner</button>}
+                          {showMakeAdmin && <button className="menu-btn" onClick={() => handleRoleChange(m.user_id, 'group_admin')} style={{ width: "100%", textAlign: "left", padding: "8px 12px", fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--ink)" }}>Make Admin</button>}
+                          {showMakeMod && <button className="menu-btn" onClick={() => handleRoleChange(m.user_id, 'group_moderator')} style={{ width: "100%", textAlign: "left", padding: "8px 12px", fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--ink)" }}>Make Moderator</button>}
+                          {showMakeMember && <button className="menu-btn" onClick={() => handleRoleChange(m.user_id, 'group_member')} style={{ width: "100%", textAlign: "left", padding: "8px 12px", fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--ink)" }}>Make Member</button>}
                           {showRemove && <button className="menu-btn" onClick={() => handleRemove(m.user_id)} style={{ width: "100%", textAlign: "left", padding: "8px 12px", fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "#ef4444", borderTop: "1px solid var(--border)", marginTop: 4, paddingTop: 6 }}>Remove Member</button>}
                         </div>
                       )}
@@ -2472,7 +2819,7 @@ export function MemberManagementPanel({ group, st, go }) {
           <div style={{ background: 'var(--bg)', width: '90%', maxWidth: 500, borderRadius: 12, display: 'flex', flexDirection: 'column', maxHeight: '80vh', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottom: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <Avatar name={selectedMember.users?.display_name || "Unknown"} size={48} />
+                <Avatar name={selectedMember.users?.display_name || "Unknown"} userId={selectedMember.users?.id} img={selectedMember.users?.profilePhoto} size={48} />
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--ink)' }}>{selectedMember.users?.display_name || "Unknown"}</span>
                   <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>@{selectedMember.users?.username || "unknown"}</span>

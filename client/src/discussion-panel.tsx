@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React from 'react';
-import { I } from './home-icons';
+import { I, Avatar } from './home-icons';
 
 /* ============================================================
    Samaagum Shared Discussion Panel Component
@@ -132,7 +132,7 @@ function ThreadCard({ p, onOpen, voteData, onVote, reactions, onReact, isLiked, 
           <div style={{ fontSize: 13.5, color: "var(--ink-2)", marginBottom: 8, lineHeight: 1.5 }}>{p.body.slice(0, 120)}{p.body.length > 120 ? '…' : ''}</div>
         )}
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--ink-3)", flexWrap: "wrap" }}>
-          <Avatar name={authorName} size={18} />
+          <Avatar name={authorName} userId={p.author_user_id} img={p.author_photo} size={18} />
           <span style={{ fontWeight: 500, color: "var(--ink-2)" }}>{authorName}</span>
           <span>·</span>
           <span>{timeStr}</span>
@@ -162,7 +162,7 @@ function CommentItem({ c, depth, canReply, isOwner, currentUserId, replyingToId,
   const replies = c.replies || [];
   return (
     <div style={{ display: "flex", gap: 10, paddingLeft: depth > 0 ? 18 : 0, borderLeft: depth > 0 ? "2px solid var(--border)" : "none", marginTop: depth > 0 ? 10 : 0 }}>
-      <Avatar name={c.author_name || "Unknown"} size={28} />
+      <Avatar name={c.author_name || "Unknown"} userId={c.author_user_id} img={c.author_photo} size={28} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
           <div style={{ fontSize: 13 }}>
@@ -920,7 +920,7 @@ function DiscussionPanel({ entityType, entityId, token, currentUserId, isOwner, 
                 </div>
                 {activeThread.title && <h2 style={{ margin: "0 0 8px 0", fontSize: 20, fontWeight: 700, lineHeight: 1.3 }}>{activeThread.title}</h2>}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--ink-3)", marginBottom: 12 }}>
-                  <Avatar name={activeThread.author_name || "Unknown"} size={22} />
+                  <Avatar name={activeThread.author_name || "Unknown"} userId={activeThread.author_user_id} img={activeThread.author_photo} size={22} />
                   <span style={{ fontWeight: 500, color: "var(--ink-2)" }}>{activeThread.author_name || "Unknown"}</span>
                   <span>·</span>
                   <span>{activeThread.created_at ? getRelativeTime(activeThread.created_at) : 'Just now'}</span>

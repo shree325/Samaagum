@@ -73,14 +73,31 @@ export const uploadRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
         return reply.status(401).send({ success: false, message: 'Unauthorized' });
       }
 
+      if (!request.isMultipart || !request.isMultipart()) {
+        return reply.status(400).send({ success: false, message: 'Form data is required for file upload' });
+      }
+
       const data = await request.file();
       if (!data) {
         return reply.status(400).send({ success: false, message: 'Missing file error' });
       }
 
-      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      const validTypes = [
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/webp',
+        'video/mp4',
+        'video/webm',
+        'video/quicktime',
+        'video/ogg',
+        'video/x-matroska',
+        'video/3gpp',
+        'video/3gpp2',
+        'video/x-msvideo'
+      ];
       if (!validTypes.includes(data.mimetype)) {
-        return reply.status(400).send({ success: false, message: 'Invalid image format error' });
+        return reply.status(400).send({ success: false, message: 'Invalid file format error' });
       }
 
       const buffer = await data.toBuffer();

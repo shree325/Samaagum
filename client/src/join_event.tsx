@@ -131,7 +131,7 @@ export function JoinEventPage({ ev, st, go }) {
                             </div>
                             <div className="ttl">{e.title}</div>
                             <div className="ev-host">
-                                <Avatar name={e.hostBy || e.host} size={34} />
+                                <Avatar name={e.hostBy || e.host} userId={e.hostUserId} img={e.hostPhoto} size={34} />
                                 Hosted by <b>{e.host}</b>
                                 <button className="hbtn hbtn--ghost hbtn--sm" style={{ marginLeft: "auto" }}><I.plus />Follow</button>
                             </div>
@@ -177,13 +177,21 @@ export function JoinEventPage({ ev, st, go }) {
                                 </div>
                             )}
 
-                            {!(isClosed || isScheduled) && (
-                                <div className="ev-block">
-                                    <h3>{e.going} attending</h3>
-                                    <div className="att-grid">
-                                        {attendees.map(n => <div key={n} className="att"><Avatar name={n} size={28} /><span className="nm">{n}</span></div>)}
-                                        <div className="att" style={{ paddingRight: 14 }}><div className="av" style={{ width: 28, height: 28, fontSize: 11, background: "var(--surface-2)", color: "var(--ink-2)" }}>+{Math.max(0, e.going - attendees.length)}</div><span className="nm">more</span></div>
-                                    </div>
+                            <div className="ev-block">
+                                <h3>{e.going} attending</h3>
+                                <div className="att-grid">
+                                    {attendees.map(n => {
+                                        const name = typeof n === 'object' ? (n.name || n.display_name) : n;
+                                        const userId = typeof n === 'object' ? n.id : undefined;
+                                        const picture = typeof n === 'object' ? n.picture : undefined;
+                                        return (
+                                            <div key={name} className="att">
+                                                <Avatar name={name} userId={userId} img={picture} size={28} />
+                                                <span className="nm">{name}</span>
+                                            </div>
+                                        );
+                                    })}
+                                    <div className="att" style={{ paddingRight: 14 }}><div className="av" style={{ width: 28, height: 28, fontSize: 11, background: "var(--surface-2)", color: "var(--ink-2)" }}>+{Math.max(0, e.going - attendees.length)}</div><span className="nm">more</span></div>
                                 </div>
                             )}
                         </div>
@@ -263,7 +271,7 @@ export function JoinEventPage({ ev, st, go }) {
                             )}
 
                             <div className="host-card">
-                                <div className="hh"><Avatar name={e.hostBy || e.host} size={46} /><div><div className="n">{e.host}</div><div className="r">Organizer · 24 events</div></div></div>
+                                <div className="hh"><Avatar name={e.hostBy || e.host} userId={e.hostUserId} img={e.hostPhoto} size={46} /><div><div className="n">{e.host}</div><div className="r">Organizer · 24 events</div></div></div>
                                 <div className="hb">Curating the best gatherings in {e.city || city}. Follow to never miss a drop.</div>
                                 <div style={{ display: "flex", gap: 8 }}>
                                     <button className="hbtn hbtn--ghost hbtn--sm hbtn--block"><I.plus />Follow</button>

@@ -36,7 +36,7 @@ export class R_forumComments extends PostgresBaseRepository<IForumComment> imple
             WHERE fc.deleted_at IS NULL
         )
         SELECT ct.*,
-               u.first_name, u.last_name, u.primary_email,
+               u.first_name, u.last_name, u.primary_email, u.profile_image_data,
                COALESCE(SUM(fv.vote), 0)::int AS vote_score,
                (SELECT fv2.vote FROM forum_votes fv2 WHERE fv2.target_id = ct.id AND fv2.target_type = 'comment' AND fv2.user_id = $2::uuid LIMIT 1) AS user_vote
         FROM comment_tree ct
@@ -44,7 +44,7 @@ export class R_forumComments extends PostgresBaseRepository<IForumComment> imple
         LEFT JOIN forum_votes fv ON fv.target_id = ct.id AND fv.target_type = 'comment'
         GROUP BY ct.id, ct.post_id, ct.parent_id, ct.author_user_id, ct.body, ct.status,
                  ct.deleted_at, ct.created_at, ct.updated_at, ct.depth,
-                 u.first_name, u.last_name, u.primary_email
+                 u.first_name, u.last_name, u.primary_email, u.profile_image_data
         ORDER BY ct.depth ASC, ct.created_at ASC
     `, postId, safeUserId);
   }

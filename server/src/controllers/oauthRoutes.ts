@@ -84,7 +84,15 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 where: { scope_tenant_id: null, key: 'auth_settings' }
             });
             const settings = authRow?.value as any;
-            const { clientId, clientSecret } = settings?.google || {};
+            const { clientId } = settings?.google || {};
+            let clientSecret = settings?.google?.clientSecret;
+            if (clientSecret && typeof clientSecret === 'string') {
+                clientSecret = clientSecret.replace(/\\",\s*\\"?redirect_uris.*/, '')
+                                           .replace(/",\s*"?redirect_uris.*/, '')
+                                           .replace(/\\".*$/, '')
+                                           .replace(/".*$/, '')
+                                           .trim();
+            }
 
             if (!clientId || !clientSecret) {
                 return reply.redirect(`${frontendBase}/?auth_error=oauth_not_configured`);

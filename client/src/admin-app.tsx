@@ -5364,7 +5364,7 @@ export function CategoriesView({ categories, setCategories, tags, setTags, showT
     e.preventDefault();
   };
 
-  const handleDrop = (e, targetId) => {
+  const handleDrop = async (e, targetId) => {
     e.preventDefault();
     if (!draggedId || draggedId === targetId) return;
 
@@ -5382,7 +5382,11 @@ export function CategoriesView({ categories, setCategories, tags, setTags, showT
     }));
 
     setCategories(updatedList);
-    localStorage.setItem('samaagum_admin_categories', JSON.stringify(updatedList));
+    if (adminApi.activeProviders.categories === 'database') {
+      await Promise.all(updatedList.map(cat => adminApi.categories.saveCategory({ displayOrder: cat.displayOrder }, cat.id)));
+    } else {
+      adminApi._setLocalState('categories', updatedList);
+    }
     logAction(user?.email || 'Admin', `Reordered category "${draggedItem.name}" to position ${targetIndex + 1}.`);
     setDraggedId(null);
   };
@@ -5508,7 +5512,7 @@ export function CategoriesView({ categories, setCategories, tags, setTags, showT
     return [...updatedNonDeleted, ...deleted];
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formName.trim()) {
       showToast('Category name is required', 'warning');
       return;
@@ -5526,10 +5530,17 @@ export function CategoriesView({ categories, setCategories, tags, setTags, showT
         status: formStatus,
       };
 
+      const saveRes = await adminApi.categories.saveCategory(newVal, editingCategory.id);
+      if (!saveRes.success) {
+        showToast(`Failed to save category: ${saveRes.message || 'Unknown error'}`, 'warning');
+        return;
+      }
+
+      const savedCategory = saveRes.data ? { ...editingCategory, ...saveRes.data } : { ...editingCategory, ...newVal };
       const targetOrder = Number(formOrder);
       let listWithoutSelf = categories.filter(c => c.id !== editingCategory.id && !c.isDeleted).sort((a, b) => a.displayOrder - b.displayOrder);
       const insertIndex = Math.max(0, Math.min(listWithoutSelf.length, targetOrder - 1));
-      listWithoutSelf.splice(insertIndex, 0, { ...editingCategory, ...newVal });
+      listWithoutSelf.splice(insertIndex, 0, savedCategory);
 
       if (formStatus === 'inactive' && editingCategory.status === 'active' && tags && setTags) {
         const updatedTags = tags.map(t => t.category === editingCategory.name ? { ...t, status: 'inactive' } : t);
@@ -5565,10 +5576,17 @@ export function CategoriesView({ categories, setCategories, tags, setTags, showT
         createdAt: new Date().toISOString(),
       };
 
+      const saveRes = await adminApi.categories.saveCategory(newCat);
+      if (!saveRes.success) {
+        showToast(`Failed to save category: ${saveRes.message || 'Unknown error'}`, 'warning');
+        return;
+      }
+
+      const savedCategory = saveRes.data ? { ...newCat, ...saveRes.data } : newCat;
       const targetOrder = Number(formOrder);
       let listWithoutSelf = categories.filter(c => !c.isDeleted).sort((a, b) => a.displayOrder - b.displayOrder);
       const insertIndex = Math.max(0, Math.min(listWithoutSelf.length, targetOrder - 1));
-      listWithoutSelf.splice(insertIndex, 0, newCat);
+      listWithoutSelf.splice(insertIndex, 0, savedCategory);
 
       updatedList = normalizeOrders([...listWithoutSelf, ...categories.filter(c => c.isDeleted)]);
       setCategories(updatedList);
@@ -5586,27 +5604,35 @@ export function CategoriesView({ categories, setCategories, tags, setTags, showT
     setIsDeleteOpen(true);
   };
 
-  const handleArchive = () => {
+  const handleArchive = async () => {
     if (!deletingCat) return;
     const oldStatus = deletingCat.status;
     const updatedList = categories.map(c => c.id === deletingCat.id ? { ...c, status: 'inactive' } : c);
 
     const normalized = normalizeOrders(updatedList);
     setCategories(normalized);
-    localStorage.setItem('samaagum_admin_categories', JSON.stringify(normalized));
+    if (adminApi.activeProviders.categories === 'database') {
+      await adminApi.categories.saveCategory({ status: 'inactive' }, deletingCat.id);
+    } else {
+      adminApi._setLocalState('categories', normalized);
+    }
     logAction(user?.email || 'Admin', `Archived category "${deletingCat.name}".`);
     showToast(`"${deletingCat.name}" has been archived`, 'warning');
     setIsDeleteOpen(false);
     setDeletingCat(null);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deletingCat) return;
     const updatedList = categories.map(c => c.id === deletingCat.id ? { ...c, isDeleted: true } : c);
 
     const normalized = normalizeOrders(updatedList);
     setCategories(normalized);
-    localStorage.setItem('samaagum_admin_categories', JSON.stringify(normalized));
+    if (adminApi.activeProviders.categories === 'database') {
+      await adminApi.categories.saveCategory({ isDeleted: true }, deletingCat.id);
+    } else {
+      adminApi._setLocalState('categories', normalized);
+    }
     logAction(user?.email || 'Admin', `Deleted category "${deletingCat.name}".`);
     showToast(`"${deletingCat.name}" has been deleted`, 'success');
     setIsDeleteOpen(false);

@@ -131,6 +131,59 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
     }
   });
 
+  // Global search for public events and groups
+  fastify.get('/global-search', async (request: any, reply: any) => {
+    try {
+      const { q } = request.query;
+      if (!q || typeof q !== 'string' || q.trim().length === 0) {
+        return { success: true, data: { events: [], groups: [] } };
+      }
+      const searchStr = q.trim().toLowerCase();
+
+      // Search public events
+      const allEvents = await prisma.events.findMany({
+        where: {
+          status: 'published',
+          title: { contains: searchStr, mode: 'insensitive' }
+        },
+        take: 20
+      });
+      const publicEvents = allEvents.filter((ev: any) => {
+        const venue = ev.venue ? (typeof ev.venue === 'string' ? JSON.parse(ev.venue) : ev.venue) : {};
+        const visibility = venue.visibility || 'public';
+        return visibility === 'public';
+      }).slice(0, 5);
+
+      // Search public groups
+      const allGroups = await prisma.groups.findMany({
+        where: {
+          name: { contains: searchStr, mode: 'insensitive' },
+          entities: {
+            visibility: 'public'
+          }
+        },
+        include: {
+          entities: true
+        },
+        take: 20
+      });
+      const publicGroups = allGroups.filter((g: any) => {
+        const settings = g.settings ? (typeof g.settings === 'string' ? JSON.parse(g.settings) : g.settings) : {};
+        return !settings.isDraft && !settings.isArchived;
+      }).slice(0, 5);
+
+      return {
+        success: true,
+        data: {
+          events: publicEvents.map((e: any) => ({ id: e.id, title: e.title })),
+          groups: publicGroups.map((g: any) => ({ id: g.entity_id, name: g.name }))
+        }
+      };
+    } catch (error: any) {
+      return reply.status(500).send({ success: false, message: error.message || 'Search failed' });
+    }
+  });
+
   // IP-based location detection
   fastify.get('/detect-location', async (request: any, reply: any) => {
     try {
@@ -270,7 +323,7 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
           finalBio = '';
           finalSkills = [];
           finalSocialLinks = [];
-          finalProfilePhoto = '';
+          // Keep profile photo visible even if profile is private
           finalCoverBanner = '';
           showVirtualCard = false;
         } else if (privateProfileMode === 'custom_fields') {

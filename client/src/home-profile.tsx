@@ -283,7 +283,7 @@ export function Profile({ st, go }) {
   const tabs = [["about", "About"], ["events", "Events"], ["groups", "Groups"]];
   const myEvents = [EVENTS[0], EVENTS[5], EVENTS[1]];
   const myGroups = [GROUPS[0], GROUPS[1], GROUPS[3]];
-  
+
   // Network connections state
   const [showNetworkModal, setShowNetworkModal] = useState(false);
   const [networkSearch, setNetworkSearch] = useState("");
@@ -307,7 +307,68 @@ export function Profile({ st, go }) {
       tweaks.dark = (nextTheme === 'dark');
       localStorage.setItem('samaagum_tweaks', JSON.stringify(tweaks));
       window.dispatchEvent(new CustomEvent('tweakchange', { detail: { dark: tweaks.dark } }));
-    } catch (e) {}
+    } catch (e) { }
+  };
+
+  const directAvatarRef = React.useRef(null);
+  const handleDirectAvatarUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64Data = reader.result;
+      const api = window.location.port === "8080" ? "http://localhost:3000" : window.location.origin;
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      const nameParts = (ME.name || "").trim().split(" ");
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || "";
+      
+      formData.append("firstName", firstName);
+      formData.append("lastName", lastName);
+      formData.append("displayName", ME.name || "");
+      formData.append("headline", ME.role || "");
+      formData.append("bio", ME.bio || "");
+      formData.append("location", ME.location || "");
+
+      const base64ToBlob = (base64) => {
+        const arr = base64.split(',');
+        const mime = arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new Blob([u8arr], { type: mime });
+      };
+
+      formData.append("profilePhoto", base64ToBlob(base64Data), "profile.jpg");
+
+      try {
+        if (window.toast) window.toast("Uploading profile photo...");
+        const res = await fetch(`${api}/api/admin/user/profile`, {
+          method: "POST",
+          headers: {
+            ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          },
+          body: formData
+        });
+        
+        if (res.ok) {
+          ME.img = base64Data;
+          window.dispatchEvent(new CustomEvent('samaagum:profileSync', {
+            detail: { userId: ME.id, profilePhoto: base64Data }
+          }));
+          if (window.toast) window.toast("Profile photo updated successfully!");
+        } else {
+          alert("Failed to save profile photo to database");
+        }
+      } catch (err) {
+        alert("Error saving profile photo: " + err.message);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const [isEditingLinks, setIsEditingLinks] = useState(false);
@@ -530,10 +591,13 @@ export function Profile({ st, go }) {
           {/* User Info (overlaid on cover) */}
           <div style={{ padding: "0 40px 32px 40px", maxWidth: 880, margin: "0 auto", width: "100%", display: "flex", alignItems: "flex-end", gap: 24 }}>
             <div style={{ position: "relative", zIndex: 2 }}>
-              <I.Avatar userId={window.ME?.id} name={ME.name} img={ME.img} size={116} style={{ border: `4px solid ${colors.bgContainer}`, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }} />
-              <button onClick={() => setIsEditing(true)} style={{ position: "absolute", bottom: 0, right: 0, background: colors.pillBg, backdropFilter: "blur(8px)", border: `1px solid ${colors.pillBorder}`, color: colors.textMain, borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: colors.pillShadow }}>
+              <div onClick={() => directAvatarRef.current?.click()} style={{ cursor: "pointer" }} title="Click to change profile picture">
+                <I.Avatar userId={window.ME?.id} name={ME.name} img={ME.img} size={116} style={{ border: `4px solid ${colors.bgContainer}`, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }} />
+              </div>
+              <button onClick={() => directAvatarRef.current?.click()} style={{ position: "absolute", bottom: 0, right: 0, background: colors.pillBg, backdropFilter: "blur(8px)", border: `1px solid ${colors.pillBorder}`, color: colors.textMain, borderRadius: "50%", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: colors.pillShadow }} title="Change profile picture">
                 <I.edit style={{ width: 16, height: 16 }} />
               </button>
+              <input type="file" ref={directAvatarRef} hidden accept="image/*" onChange={handleDirectAvatarUpload} />
             </div>
             <div style={{ flex: 1, paddingBottom: 8 }}>
               <h1 style={{ fontSize: 38, fontWeight: 800, color: colors.textMain, letterSpacing: "-0.5px", margin: 0, textShadow: isDark ? "0 2px 12px rgba(0,0,0,0.4)" : "none" }}>
@@ -629,7 +693,7 @@ export function Profile({ st, go }) {
                     overflow: "hidden",
                     animation: "modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
                   }} onClick={(e) => e.stopPropagation()}>
-                    
+
                     {/* Header */}
                     <div style={{
                       display: "flex",
@@ -644,7 +708,7 @@ export function Profile({ st, go }) {
                           {networkData.totalCount} {networkData.totalCount === 1 ? 'connection' : 'connections'}
                         </span>
                       </div>
-                      <button 
+                      <button
                         onClick={() => setShowNetworkModal(false)}
                         style={{
                           width: 32,
@@ -667,10 +731,10 @@ export function Profile({ st, go }) {
                     {/* Search Bar */}
                     <div style={{ padding: "16px 24px", borderBottom: `1px solid ${colors.border}` }}>
                       <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-                        <svg style={{ position: "absolute", left: 14, color: colors.textMuted }} viewBox="0 0 24 24" fill="none" width="16" height="16" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                        <input 
-                          type="text" 
-                          placeholder="Search connections..." 
+                        <svg style={{ position: "absolute", left: 14, color: colors.textMuted }} viewBox="0 0 24 24" fill="none" width="16" height="16" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+                        <input
+                          type="text"
+                          placeholder="Search connections..."
                           value={networkSearch}
                           onChange={(e) => setNetworkSearch(e.target.value)}
                           style={{
@@ -716,8 +780,8 @@ export function Profile({ st, go }) {
                               </h4>
                               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                                 {networkData.mutual.map(user => (
-                                  <div 
-                                    key={user.userId} 
+                                  <div
+                                    key={user.userId}
                                     onClick={() => {
                                       setShowNetworkModal(false);
                                       go("public-profile", user);
@@ -767,8 +831,8 @@ export function Profile({ st, go }) {
                                 {networkData.new.map(user => {
                                   const cState = networkConnectStates[user.userId] || user.connectionState;
                                   return (
-                                    <div 
-                                      key={user.userId} 
+                                    <div
+                                      key={user.userId}
                                       onClick={() => {
                                         setShowNetworkModal(false);
                                         go("public-profile", user);
@@ -802,7 +866,7 @@ export function Profile({ st, go }) {
 
                                       {/* Connection Button */}
                                       {cState === 'none' && (
-                                        <button 
+                                        <button
                                           onClick={(e) => handleConnectFromModal(user.userId, e)}
                                           style={{
                                             padding: "6px 14px",
@@ -820,7 +884,7 @@ export function Profile({ st, go }) {
                                         </button>
                                       )}
                                       {cState === 'loading' && (
-                                        <button 
+                                        <button
                                           disabled
                                           style={{
                                             padding: "6px 14px",
@@ -837,7 +901,7 @@ export function Profile({ st, go }) {
                                         </button>
                                       )}
                                       {cState === 'requested' && (
-                                        <button 
+                                        <button
                                           disabled
                                           style={{
                                             padding: "6px 14px",
@@ -854,7 +918,7 @@ export function Profile({ st, go }) {
                                         </button>
                                       )}
                                       {cState === 'requested_by_them' && (
-                                        <button 
+                                        <button
                                           onClick={(e) => handleConnectFromModal(user.userId, e)}
                                           style={{
                                             padding: "6px 14px",
@@ -886,7 +950,7 @@ export function Profile({ st, go }) {
                           {/* Pagination Load More button */}
                           {networkHasMore && (
                             <div style={{ display: "flex", justifyContent: "center", marginTop: 8 }}>
-                              <button 
+                              <button
                                 onClick={async () => {
                                   const nextPage = networkPage + 1;
                                   setNetworkPage(nextPage);
@@ -1073,10 +1137,10 @@ export function Profile({ st, go }) {
                 return VCard ? <VCard user={ME} /> : null;
               })()}
 
-              {tab==="groups" && (
+              {tab === "groups" && (
                 <div className="prof-section">
                   <div className="ev-grid">
-                    {myGroups.map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={true} onJoin={()=>st.toggleJoin(g)} />)}
+                    {myGroups.map(g => <GroupCard key={g.id} g={g} onOpen={(g) => go("group", g)} joined={true} onJoin={() => st.toggleJoin(g)} />)}
                   </div>
                 </div>
               )}

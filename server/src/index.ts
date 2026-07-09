@@ -54,7 +54,7 @@ prisma.admin_roles.count()
 
 const fastify = Fastify({
     logger: true,
-    bodyLimit: 20 * 1024 * 1024 // 20MB limit to allow base64 image uploads
+    bodyLimit: 200 * 1024 * 1024 // 200MB limit to allow larger base64 uploads for video media
 });
 const PORT = Number(process.env.PORT) || 3001;
 
@@ -68,7 +68,7 @@ fastify.register(cors, {
 // Register Multipart
 fastify.register(fastifyMultipart, {
     limits: {
-        fileSize: 10 * 1024 * 1024 // 10MB limit
+        fileSize: 100 * 1024 * 1024 // 100MB limit for video uploads
     }
 });
 

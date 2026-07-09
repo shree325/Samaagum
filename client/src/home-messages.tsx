@@ -32,6 +32,8 @@ export function Messages({ st, go, mobile, socket }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [replyingTo, setReplyingTo] = useState(null);
+  const [forwardMsg, setForwardMsg] = useState(null);
+  const [forwardSearch, setForwardSearch] = useState("");
 
   const scrollRef = useRef(null);
   const prevActiveIdRef = useRef(null);
@@ -65,10 +67,10 @@ export function Messages({ st, go, mobile, socket }) {
         behavior: 'smooth'
       });
     } else {
-      const firstUnread = messages.find(m => 
-        m.senderId !== currentUserId && 
-        m.senderId !== 'me' && 
-        !m.me && 
+      const firstUnread = messages.find(m =>
+        m.senderId !== currentUserId &&
+        m.senderId !== 'me' &&
+        !m.me &&
         !(m.receipts || []).some(r => r.userId === currentUserId && r.seenAt !== null)
       );
 
@@ -112,9 +114,9 @@ export function Messages({ st, go, mobile, socket }) {
 
   // Sync the currently active conversation ID to window so the shell's socket handler can check it
   useEffect(() => {
-    
+
     return () => {
-      
+
     };
   }, [activeId]);
 
@@ -135,7 +137,7 @@ export function Messages({ st, go, mobile, socket }) {
       const userJoined = st.joined && st.joined.has(g.id);
       const userCreated = st.createdGroups && st.createdGroups.some(cg => cg.id === g.id);
       const meInGroup = userJoined || userCreated || g.owner?.toLowerCase().includes("aanya");
-      
+
       if (!meInGroup) return false;
 
       const membersList = g.memberNames || [];
@@ -683,13 +685,13 @@ export function Messages({ st, go, mobile, socket }) {
   }, [socket, activeId]);
 
   const openThread = (id) => { setActiveId(id); setShowConv(true); };
-  
-  const send = () => { 
-    if (!input.trim() || !activeId) return; 
-    
+
+  const send = () => {
+    if (!input.trim() || !activeId) return;
+
     const currentInput = input;
     const parentId = replyingTo?.id;
-    setInput(""); 
+    setInput("");
     setReplyingTo(null);
 
     if (socket) {
@@ -767,14 +769,14 @@ export function Messages({ st, go, mobile, socket }) {
 
   return (
     <div className="msg-layout">
-      <div className={`msg-list ${mobile && showConv ? "hide-m":""}`}>
+      <div className={`msg-list ${mobile && showConv ? "hide-m" : ""}`}>
         <div className="msg-list-head" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <h2>Messages</h2>
           <div className="msg-search-box" style={{ position: "relative", width: "100%", padding: "0", boxSizing: "border-box" }}>
             <I.search style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", width: 15, height: 15, color: "var(--ink-3)" }} />
-            <input 
-              type="text" 
-              placeholder="Search people..." 
+            <input
+              type="text"
+              placeholder="Search people..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               style={{
@@ -790,7 +792,7 @@ export function Messages({ st, go, mobile, socket }) {
               }}
             />
             {searchQuery && (
-              <button 
+              <button
                 onClick={() => setSearchQuery("")}
                 style={{
                   position: "absolute",
@@ -809,8 +811,8 @@ export function Messages({ st, go, mobile, socket }) {
             )}
           </div>
           <div className="msg-seg">
-            <button className={seg==="messages"?"on":""} onClick={()=>setSeg("messages")}>Chats</button>
-            <button className={seg==="contacts"?"on":""} onClick={()=>setSeg("contacts")}>Contacts</button>
+            <button className={seg === "messages" ? "on" : ""} onClick={() => setSeg("messages")}>Chats</button>
+            <button className={seg === "contacts" ? "on" : ""} onClick={() => setSeg("contacts")}>Contacts</button>
           </div>
         </div>
         <div className="msg-threads">
@@ -824,7 +826,7 @@ export function Messages({ st, go, mobile, socket }) {
             );
             const searchedContacts = searchResults.filter(user => contactUserIds.has(user.id));
             const searchedConnected = searchResults.filter(user => !contactUserIds.has(user.id) && connectedUserIds.has(user.id));
-            
+
             return (
               <div className="search-results-section" style={{ display: "flex", flexDirection: "column", gap: 6, padding: "8px 4px" }}>
                 {searchedContacts.length > 0 && (
@@ -833,7 +835,7 @@ export function Messages({ st, go, mobile, socket }) {
                     {searchedContacts.map(user => (
                       <div key={user.id} className="search-item" onClick={() => selectSearchResult(user)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: "8px", cursor: "pointer" }}>
                         <div style={{ position: "relative" }}>
-                          <I.Avatar userId={user.id} name={user.name || "null"} size={40} />
+                          <I.Avatar userId={user.id} name={user.name || "null"} img={user.img} size={40} />
                           {presenceMap[user.id] && presenceMap[user.id] !== "HIDDEN" && (
                             <span className="search-presence-dot" style={{ position: "absolute", bottom: 0, right: 0, width: 10, height: 10, borderRadius: "50%", background: presenceMap[user.id] === "ONLINE" ? "#2bb673" : "#8e8e93", border: "2px solid var(--surface)" }} />
                           )}
@@ -853,7 +855,7 @@ export function Messages({ st, go, mobile, socket }) {
                     {searchedConnected.map(user => (
                       <div key={user.id} className="search-item" onClick={() => selectSearchResult(user)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: "8px", cursor: "pointer" }}>
                         <div style={{ position: "relative" }}>
-                          <I.Avatar userId={user.id} name={user.name || "null"} size={40} />
+                          <I.Avatar userId={user.id} name={user.name || "null"} img={user.img} size={40} />
                           {presenceMap[user.id] && presenceMap[user.id] !== "HIDDEN" && (
                             <span className="search-presence-dot" style={{ position: "absolute", bottom: 0, right: 0, width: 10, height: 10, borderRadius: "50%", background: presenceMap[user.id] === "ONLINE" ? "#2bb673" : "#8e8e93", border: "2px solid var(--surface)" }} />
                           )}
@@ -863,7 +865,7 @@ export function Messages({ st, go, mobile, socket }) {
                             <ProfileName userId={user.id} name={user.name} />
                           </div>
                         </div>
-                        <button 
+                        <button
                           onClick={(e) => { e.stopPropagation(); selectSearchResult(user); }}
                           className="hbtn hbtn--primary hbtn--sm"
                           style={{
@@ -885,17 +887,17 @@ export function Messages({ st, go, mobile, socket }) {
               </div>
             );
           })() : (
-            seg==="messages" ? (
+            seg === "messages" ? (
               threads.length > 0 ? threads.map(t => {
                 const other = t.participants?.find(p => p.userId !== currentUserId);
                 const displayName = t.type === "GROUP" ? (t.title || "Group Chat") : (other?.name || "Chat Room");
                 const timeStr = t.updatedAt ? new Date(t.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (t.time || "");
                 const presenceStatus = other ? (presenceMap[other.userId] || "OFFLINE") : "OFFLINE";
                 return (
-                  <div key={t.id} className={`thread ${t.id===activeId && !mobile?"on":""}`} onClick={()=>openThread(t.id)}>
-                    <div className="av" style={{ background:"transparent" }}>
-                      <I.Avatar userId={other?.userId || other?.id} name={displayName} size={46}/>
-                      {presenceStatus !== "HIDDEN" && <span className={presenceStatus === "ONLINE" ? "online" : "offline"}/>}
+                  <div key={t.id} className={`thread ${t.id === activeId && !mobile ? "on" : ""}`} onClick={() => openThread(t.id)}>
+                    <div className="av" style={{ background: "transparent" }}>
+                      <I.Avatar userId={other?.userId || other?.id} name={displayName} img={other?.img} size={46} />
+                      {presenceStatus !== "HIDDEN" && <span className={presenceStatus === "ONLINE" ? "online" : "offline"} />}
                     </div>
                     <div className="ti">
                       <div className="tr1">
@@ -903,9 +905,9 @@ export function Messages({ st, go, mobile, socket }) {
                         <span className="tm">{timeStr}</span>
                       </div>
                       <div className="pv">{t.preview}</div>
-                      {t.connected === false && <div style={{ fontSize:11, color:"var(--accent-2)", marginTop:3, display:"flex", alignItems:"center", gap:4 }}><I.users style={{width:11,height:11}}/>via {t.context}</div>}
+                      {t.connected === false && <div style={{ fontSize: 11, color: "var(--accent-2)", marginTop: 3, display: "flex", alignItems: "center", gap: 4 }}><I.users style={{ width: 11, height: 11 }} />via {t.context}</div>}
                     </div>
-                    {t.unread>0 && <span className="unreadc">{t.unread}</span>}
+                    {t.unread > 0 && <span className="unreadc">{t.unread}</span>}
                   </div>
                 );
               }) : (
@@ -914,14 +916,14 @@ export function Messages({ st, go, mobile, socket }) {
                 </div>
               )
             ) : (
-              <div style={{ display:"flex", flexDirection:"column", gap:10, padding:"4px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "4px" }}>
                 {contactsLoading ? (
                   <div style={{ textAlign: "center", color: "var(--ink-3)", padding: 20 }}>Loading...</div>
                 ) : contactsList.length > 0 ? (
                   contactsList.map(c => (
                     <div key={c.userId} className="search-item" onClick={() => selectSearchResult({ id: c.userId, name: c.displayName })} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: "8px", cursor: "pointer" }}>
                       <div style={{ position: "relative" }}>
-                        <I.Avatar userId={c.userId} name={c.displayName} size={40}/>
+                        <I.Avatar userId={c.userId} name={c.displayName} img={c.profilePhoto || c.img} size={40} />
                         {presenceMap[c.userId] && presenceMap[c.userId] !== "HIDDEN" && (
                           <span className="search-presence-dot" style={{ position: "absolute", bottom: 0, right: 0, width: 10, height: 10, borderRadius: "50%", background: presenceMap[c.userId] === "ONLINE" ? "#2bb673" : "#8e8e93", border: "2px solid var(--surface)" }} />
                         )}
@@ -930,7 +932,7 @@ export function Messages({ st, go, mobile, socket }) {
                         <div className="name" style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{c.displayName}</div>
                         <div className="headline" style={{ fontSize: 12, color: "var(--ink-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>{c.headline}</div>
                       </div>
-                      <button 
+                      <button
                         onClick={(e) => { e.stopPropagation(); selectSearchResult({ id: c.userId, name: c.displayName }); }}
                         className="hbtn hbtn--primary hbtn--sm"
                         style={{ padding: "6px 12px", fontSize: "12px", borderRadius: "15px", flexShrink: 0 }}
@@ -946,7 +948,7 @@ export function Messages({ st, go, mobile, socket }) {
                 )}
               </div>
             )
-        )}
+          )}
         </div>
       </div>
 
@@ -970,8 +972,8 @@ export function Messages({ st, go, mobile, socket }) {
         return (
           <div className="msg-conv">
             <div className="conv-head">
-              {mobile && <button className="hbtn hbtn--ghost hbtn--sm" style={{ padding:"7px 10px" }} onClick={()=>setShowConv(false)}><I.arrowL/></button>}
-              <div 
+              {mobile && <button className="hbtn hbtn--ghost hbtn--sm" style={{ padding: "7px 10px" }} onClick={() => setShowConv(false)}><I.arrowL /></button>}
+              <div
                 style={{ display: "flex", alignItems: "center", gap: 10, cursor: other ? "pointer" : "default" }}
                 onClick={() => {
                   if (other) {
@@ -980,9 +982,9 @@ export function Messages({ st, go, mobile, socket }) {
                 }}
                 title={other ? "View Profile" : undefined}
               >
-                <div style={{ position:"relative" }}>
-                  <I.Avatar userId={other?.userId || other?.id} name={displayName} size={40}/>
-                  {presenceStatus !== "HIDDEN" && <span className={presenceStatus === "ONLINE" ? "online" : "offline"} style={{ position:"absolute", bottom:0, right:0, width:11, height:11, borderRadius:"50%", background: presenceStatus === "ONLINE" ? "#2bb673" : "#8e8e93", border:"2px solid var(--surface)" }}/>}
+                <div style={{ position: "relative" }}>
+                  <I.Avatar userId={other?.userId || other?.id} name={displayName} img={other?.img} size={40} />
+                  {presenceStatus !== "HIDDEN" && <span className={presenceStatus === "ONLINE" ? "online" : "offline"} style={{ position: "absolute", bottom: 0, right: 0, width: 11, height: 11, borderRadius: "50%", background: presenceStatus === "ONLINE" ? "#2bb673" : "#8e8e93", border: "2px solid var(--surface)" }} />}
                 </div>
                 <div className="ci">
                   <div className="n">{displayName}</div>
@@ -994,14 +996,14 @@ export function Messages({ st, go, mobile, socket }) {
                 </div>
               </div>
               <div className="cact" style={{ marginLeft: "auto" }}>
-                <button className="tb-icon" style={{ width:36, height:36 }}><I.phone/></button>
-                <button className="tb-icon" style={{ width:36, height:36 }}><I.more/></button>
+                <button className="tb-icon" style={{ width: 36, height: 36 }}><I.phone /></button>
+                <button className="tb-icon" style={{ width: 36, height: 36 }}><I.more /></button>
               </div>
             </div>
 
             {active.connected === false && (
-              <div className="conn-banner" style={{ marginTop:14 }}>
-                <I.users/> You can message {firstName} because you're both in <b style={{ marginLeft:3 }}>{active.context || "same group"}</b>. Send a connection request to chat anytime.
+              <div className="conn-banner" style={{ marginTop: 14 }}>
+                <I.users /> You can message {firstName} because you're both in <b style={{ marginLeft: 3 }}>{active.context || "same group"}</b>. Send a connection request to chat anytime.
               </div>
             )}
 
@@ -1010,7 +1012,7 @@ export function Messages({ st, go, mobile, socket }) {
               {messages.map((m, i) => {
                 const isMe = m.senderId === currentUserId || m.senderId === "me" || m.me === true;
                 const timeStr = m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "now";
-                
+
                 // Time checks: 3 mins for edit, 5 mins for delete
                 const ageMs = m.createdAt ? (Date.now() - new Date(m.createdAt).getTime()) : 0;
                 const canEdit = isMe && ageMs < 180000;
@@ -1020,8 +1022,8 @@ export function Messages({ st, go, mobile, socket }) {
                 return (
                   <div key={m.id || i} id={`msg-item-${m.id}`} className={`msg-row ${isMe ? "me" : "them"}`}>
                     {!isMe && (
-                      <div 
-                        className="msg-avatar-click" 
+                      <div
+                        className="msg-avatar-click"
                         onClick={() => {
                           if (m.senderId && m.senderId !== "them") {
                             go("public-profile", { id: m.senderId });
@@ -1030,15 +1032,15 @@ export function Messages({ st, go, mobile, socket }) {
                         style={{ cursor: (m.senderId && m.senderId !== "them") ? "pointer" : "default", flexShrink: 0, order: 0, marginRight: 8 }}
                         title={m.senderId && m.senderId !== "them" ? "View Profile" : undefined}
                       >
-                        <I.Avatar userId={m.senderId} name={m.senderName || displayName} size={28} />
+                        <I.Avatar userId={m.senderId} name={m.senderName || displayName} img={m.senderImg} size={28} />
                       </div>
                     )}
 
                     {/* Hover Actions */}
                     {!isEditing && (
                       <div className="hover-actions">
-                        <div 
-                          className="hover-action-btn" 
+                        <div
+                          className="hover-action-btn"
                           data-tooltip="More"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1051,7 +1053,7 @@ export function Messages({ st, go, mobile, socket }) {
                               <div className="msg-menu-header">
                                 {new Date(m.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </div>
-                              <button className="msg-menu-item" onClick={() => alert("Forward functionality is not available yet")}>
+                              <button className="msg-menu-item" onClick={() => { setForwardMsg(m); setMenuMsgId(null); }}>
                                 <span>Forward</span>
                                 <I.forward style={{ width: 14, height: 14 }} />
                               </button>
@@ -1060,9 +1062,9 @@ export function Messages({ st, go, mobile, socket }) {
                                 <I.copy style={{ width: 14, height: 14 }} />
                               </button>
                               {isMe && (
-                                <button 
-                                  className="msg-menu-item" 
-                                  disabled={!canEdit} 
+                                <button
+                                  className="msg-menu-item"
+                                  disabled={!canEdit}
                                   onClick={() => { startEdit(m); setMenuMsgId(null); }}
                                 >
                                   <span>Edit</span>
@@ -1070,9 +1072,9 @@ export function Messages({ st, go, mobile, socket }) {
                                 </button>
                               )}
                               {isMe && (
-                                <button 
-                                  className="msg-menu-item danger" 
-                                  disabled={!canDelete} 
+                                <button
+                                  className="msg-menu-item danger"
+                                  disabled={!canDelete}
                                   onClick={() => { deleteMsg(m.id); setMenuMsgId(null); }}
                                 >
                                   <span>Unsend</span>
@@ -1094,7 +1096,7 @@ export function Messages({ st, go, mobile, socket }) {
                     {/* Bubble */}
                     <div className={`bubble ${isMe ? "me" : "them"}`}>
                       {m.replyTo && (
-                        <div 
+                        <div
                           onClick={() => {
                             const element = document.getElementById(`msg-item-${m.replyTo.id}`);
                             if (element) {
@@ -1130,9 +1132,9 @@ export function Messages({ st, go, mobile, socket }) {
                       )}
                       {isEditing ? (
                         <div className="edit-box" style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 150 }}>
-                          <input 
-                            value={editVal} 
-                            onChange={e => setEditVal(e.target.value)} 
+                          <input
+                            value={editVal}
+                            onChange={e => setEditVal(e.target.value)}
                             onKeyDown={e => e.key === "Enter" && saveEdit()}
                             style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", padding: "4px 8px", borderRadius: 4, width: "100%" }}
                           />
@@ -1174,8 +1176,8 @@ export function Messages({ st, go, mobile, socket }) {
                     </div>
 
                     {isMe && (
-                      <div 
-                        className="msg-avatar-click" 
+                      <div
+                        className="msg-avatar-click"
                         onClick={() => {
                           if (currentUserId && currentUserId !== "me") {
                             go("public-profile", { id: currentUserId });
@@ -1184,7 +1186,7 @@ export function Messages({ st, go, mobile, socket }) {
                         style={{ cursor: (currentUserId && currentUserId !== "me") ? "pointer" : "default", flexShrink: 0, order: 3, marginLeft: 8 }}
                         title={currentUserId && currentUserId !== "me" ? "View Profile" : undefined}
                       >
-                        <I.Avatar userId={currentUserId} name="Me" size={28} />
+                        <I.Avatar userId={currentUserId} name="Me" img={ME.profilePhoto} size={28} />
                       </div>
                     )}
                   </div>
@@ -1193,7 +1195,7 @@ export function Messages({ st, go, mobile, socket }) {
             </div>
 
             {replyingTo && (
-              <div 
+              <div
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -1213,7 +1215,7 @@ export function Messages({ st, go, mobile, socket }) {
                     {replyingTo.body || replyingTo.content}
                   </span>
                 </div>
-                <button 
+                <button
                   onClick={() => setReplyingTo(null)}
                   style={{
                     background: "none",
@@ -1253,24 +1255,111 @@ export function Messages({ st, go, mobile, socket }) {
                   <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                 </svg>
                 <div>
-                  <strong>Direct messaging is disabled.</strong><br/>
+                  <strong>Direct messaging is disabled.</strong><br />
                   You can only message users you share a common group or event with.
                 </div>
               </div>
             ) : (
               <div className="conv-compose">
-                <input 
-                  placeholder={`Message ${firstName}…`} 
-                  value={input} 
-                  onChange={e=>setInput(e.target.value)} 
-                  onKeyDown={e=>e.key==="Enter"&&send()} 
+                <input
+                  placeholder={`Message ${firstName}…`}
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && send()}
                 />
-                <button className="send" onClick={send}><I.send/></button>
+                <button className="send" onClick={send}><I.send /></button>
               </div>
             )}
           </div>
         );
       })()}
+      {forwardMsg && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
+          <div style={{ background: "var(--surface)", width: 400, maxHeight: "80vh", borderRadius: "20px", display: "flex", flexDirection: "column", boxShadow: "var(--sh-xl)", overflow: "hidden" }}>
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: "var(--ink)" }}>Forward Message</h3>
+              <button
+                type="button"
+                onClick={() => setForwardMsg(null)}
+                style={{ border: "none", background: "var(--border-2)", borderRadius: "50%", width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "var(--ink-2)" }}
+              >
+                <I.x style={{ width: 12, height: 12 }} />
+              </button>
+            </div>
+
+            <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ position: "relative", width: "100%" }}>
+                <I.search style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", width: 14, height: 14, color: "var(--ink-3)" }} />
+                <input
+                  type="text"
+                  placeholder="Search chats..."
+                  value={forwardSearch}
+                  onChange={(e) => setForwardSearch(e.target.value)}
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    padding: "8px 12px 8px 34px",
+                    borderRadius: "15px",
+                    border: "1px solid var(--border)",
+                    background: "var(--field)",
+                    color: "var(--ink)",
+                    outline: "none",
+                    fontSize: "13px"
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ flex: 1, overflowY: "auto", padding: "10px", display: "flex", flexDirection: "column", gap: 4 }}>
+              {threads
+                .filter(t => {
+                  const other = t.participants?.find(p => p.userId !== currentUserId);
+                  const displayName = t.type === "GROUP" ? (t.title || "Group Chat") : (other?.name || "Chat Room");
+                  return displayName.toLowerCase().includes(forwardSearch.toLowerCase());
+                })
+                .map(t => {
+                  const other = t.participants?.find(p => p.userId !== currentUserId);
+                  const displayName = t.type === "GROUP" ? (t.title || "Group Chat") : (other?.name || "Chat Room");
+                  return (
+                    <div
+                      key={t.id}
+                      onClick={() => {
+                        const content = forwardMsg.body || forwardMsg.content;
+                        if (socket) {
+                          socket.emit("message.send", { conversationId: t.id, content }, (ack) => {
+                            if (ack && !ack.success) {
+                              alert("Failed to forward message: " + ack.error);
+                            } else {
+                              if (window.toast) {
+                                window.toast("Message forwarded!", "success");
+                              } else {
+                                alert("Message forwarded!");
+                              }
+                            }
+                          });
+                        }
+                        setForwardMsg(null);
+                        setForwardSearch("");
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                        padding: "10px 12px",
+                        borderRadius: "10px",
+                        cursor: "pointer"
+                      }}
+                      className="thread"
+                    >
+                      <I.Avatar userId={other?.userId || other?.id} name={displayName} img={other?.img} size={36} />
+                      <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayName}</span>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

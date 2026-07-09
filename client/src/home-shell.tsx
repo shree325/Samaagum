@@ -132,12 +132,172 @@ export function Topbar({ go, counts, dark, onToggleTheme, city, onCity, chatSett
   const [profileOpen, setProfileOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const showMessages = chatSettings?.allowSiteMessaging !== false;
+
+  // Search states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState({ events: [], groups: [] });
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchContainerRef = useRef(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  const handleSearchChange = async (e) => {
+    const q = e.target.value;
+    setSearchQuery(q);
+    if (!q.trim()) {
+      setSearchResults({ events: [], groups: [] });
+      setSearchOpen(false);
+      return;
+    }
+    setSearchOpen(true);
+    setSearchLoading(true);
+    try {
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+      const res = await fetch(`${apiBase}/api/public/global-search?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      if (data.success) {
+        setSearchResults(data.data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleResultClick = (type, item) => {
+    setSearchOpen(false);
+    setSearchQuery("");
+    if (type === "group") {
+      go("group", { id: item.id, entity_id: item.id, name: item.name });
+    } else if (type === "event") {
+      go("event", { id: item.id, entity_id: item.id, title: item.title });
+    }
+  };
+
   return (
     <header className="topbar">
-      <div className="tb-search">
+      <div className="tb-search" ref={searchContainerRef} style={{ position: "relative" }}>
         <span className="ic"><I.search/></span>
-        <input placeholder="Search events, groups, people, interests…" />
+        <input 
+          placeholder="Search events, groups, people, interests…" 
+          value={searchQuery}
+          onChange={handleSearchChange}
+          onFocus={() => { if (searchQuery.trim()) setSearchOpen(true); }}
+        />
         <kbd>/</kbd>
+
+        {searchOpen && (
+          <div 
+            style={{
+              position: "absolute",
+              top: "calc(100% + 8px)",
+              left: 0,
+              right: 0,
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: "12px",
+              boxShadow: "0 8px 30px rgba(0, 0, 0, 0.15)",
+              zIndex: 10000,
+              padding: "12px",
+              maxHeight: "360px",
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px"
+            }}
+          >
+            {searchLoading ? (
+              <div style={{ padding: "12px", textAlign: "center", color: "var(--ink-3)", fontSize: "14px" }}>
+                Searching...
+              </div>
+            ) : (searchResults.events.length === 0 && searchResults.groups.length === 0) ? (
+              <div style={{ padding: "12px", textAlign: "center", color: "var(--ink-3)", fontSize: "14px" }}>
+                No results found
+              </div>
+            ) : (
+              <>
+                {searchResults.events.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--ink-3)", padding: "4px 8px", letterSpacing: "0.5px" }}>
+                      Events
+                    </div>
+                    {searchResults.events.map(ev => (
+                      <button
+                        key={ev.id}
+                        onClick={() => handleResultClick("event", ev)}
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          background: "none",
+                          border: "none",
+                          padding: "8px",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                          color: "var(--ink)",
+                          fontSize: "13.5px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          transition: "background 0.2s"
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = "var(--border)"}
+                        onMouseLeave={(e) => e.currentTarget.style.background = "none"}
+                      >
+                        <I.ticket style={{ width: "16px", height: "16px", color: "var(--accent-2)" }} />
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.title}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {searchResults.groups.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--ink-3)", padding: "4px 8px", letterSpacing: "0.5px" }}>
+                      Groups
+                    </div>
+                    {searchResults.groups.map(grp => (
+                      <button
+                        key={grp.id}
+                        onClick={() => handleResultClick("group", grp)}
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          background: "none",
+                          border: "none",
+                          padding: "8px",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                          color: "var(--ink)",
+                          fontSize: "13.5px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          transition: "background 0.2s"
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = "var(--border)"}
+                        onMouseLeave={(e) => e.currentTarget.style.background = "none"}
+                      >
+                        <I.groups style={{ width: "16px", height: "16px", color: "var(--accent-1)" }} />
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{grp.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
       {window.featureSettings?.location_active !== false && (
         <button className="tb-loc" onClick={onCity}>
