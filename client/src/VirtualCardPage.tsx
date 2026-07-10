@@ -26,8 +26,7 @@ export function VirtualCardPage() {
         if (!username) {
           const token = localStorage.getItem('token');
           if (!token) {
-            setError('No username provided. Example: ?u=yourhandle');
-            setLoading(false);
+            window.location.replace('/');
             return;
           }
           

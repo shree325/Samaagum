@@ -106,7 +106,37 @@ export const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 }/*EDITMODE-END*/;
 
 export function DashboardApp() {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    window.location.replace('/');
+    return null;
+  }
+
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  
+  useEffect(() => {
+    const originalFetch = window.fetch;
+    window.fetch = async (...args) => {
+      const response = await originalFetch(...args);
+      if (response.status === 403) {
+        try {
+          const clone = response.clone();
+          const data = await clone.json();
+          if (data && data.message && data.message.includes('suspended')) {
+            alert(data.message);
+            localStorage.removeItem('token');
+            window.location.replace('/');
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+      return response;
+    };
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, []);
   const [city, setCity] = useState(() => {
     if (window.ME?.location) return window.ME.location;
     const manual = localStorage.getItem('samaagum_selected_city');
@@ -243,6 +273,12 @@ export function DashboardApp() {
       chatSocket.on("connect", () => {
         console.log("🔌 Connected to chat socket as:", userId);
         fetchCounts();
+      });
+
+      chatSocket.on("user.suspended", (payload) => {
+        alert(payload?.message || "You have been suspended. contact admin for futher information ");
+        localStorage.removeItem('token');
+        window.location.replace('/');
       });
 
       chatSocket.on("message.received", (payload) => {
@@ -738,7 +774,7 @@ export function DashboardApp() {
   const [pending, togglePending, addPending] = useSet([]);
   const [createdGroups, setCreatedGroups] = useState(() => [GROUPS[1]]);
   const [connected, toggleConnect] = useSet([]);
-  const [registered, , registerAdd] = useSet(() => {
+  const [registered, toggleRegister, registerAdd] = useSet(() => {
     try {
       return JSON.parse(localStorage.getItem('sg_registered') || '[]');
     } catch (e) {
@@ -1081,8 +1117,14 @@ useEffect(() => {
     }
   }, [toggleJoin, togglePending]);
 
+  const unregister = useCallback((id) => {
+    if (registered.has(id)) {
+      toggleRegister(id);
+    }
+  }, [registered, toggleRegister]);
+
   const st = {
-    wishlisted, wishlistCounts, toggleWishlist, wishlistEvents, fetchWishlistEvents, joined, addJoined, pending, addPending, toggleJoin: handleJoin, connected, toggleConnect, registered, register, city,
+    wishlisted, wishlistCounts, toggleWishlist, wishlistEvents, fetchWishlistEvents, joined, addJoined, pending, addPending, toggleJoin: handleJoin, connected, toggleConnect, registered, register, unregister, city,
     myTickets, setMyTickets, waitlisted, toggleWaitlist, addClaimedTicket,
     createdEvents, setCreatedEvents, createdGroups, setCreatedGroups, fetchCreatedEvents,
     joinedEvents, setJoinedEvents, fetchJoinedEvents,
@@ -1140,11 +1182,13 @@ useEffect(() => {
       const hasConfirmedBooking = bookingStatus === 'confirmed';
       const hasPendingBooking = bookingStatus === 'pending_approval';
       
-      const hasJoined = st.registered.has(e.id) ||
+      const hasJoined = bookingStatus !== 'cancelled' && (
+                        st.registered.has(e.id) ||
                         hasConfirmedBooking ||
                         (st.myTickets && st.myTickets.some(t => t.eventId === e.id || t.ev === e.title)) ||
                         (e.attendees && Array.isArray(e.attendees) && e.attendees.includes(ME.name)) ||
-                        (typeof UPCOMING !== 'undefined' && Array.isArray(UPCOMING) && UPCOMING.some(ue => ue.id === e.id));
+                        (typeof UPCOMING !== 'undefined' && Array.isArray(UPCOMING) && UPCOMING.some(ue => ue.id === e.id))
+                      );
       
       // Determine if Host or Co-host (via event team assignments) — dynamic RBAC capability check
       const joinedRoleMeta = joinedEntry?.role ? (st.eventRoles || []).find(r => r.key === joinedEntry.role) : null;
@@ -1156,9 +1200,6 @@ useEffect(() => {
       const evWithStatus = { ...e, bookingStatus };
 
       if (isReg) {
-        return <EventPage ev={evWithStatus} st={st} go={go} />;
-      } else if (hasPendingBooking) {
-        // User has a pending request - show EventPage with pending state visible
         return <EventPage ev={evWithStatus} st={st} go={go} />;
       } else {
         // Redirect to JoinEventPage

@@ -206,7 +206,7 @@ export const PersonCard = React.memo(function PersonCard({ p, connected, onConne
   return (
     <div className="pcard rise">
       <div className="pc-cov" style={{ background: p.cover }} />
-      <Avatar name={p.name} size={64} />
+      <Avatar name={p.name} size={64} img={p.photo || p.img} />
       <div className="pn">{p.name}</div>
       <div className="ph">{p.role}</div>
       <div className="pmut"><I.users style={{ width:13, height:13 }}/>{p.mutual} mutual connections</div>
@@ -225,7 +225,7 @@ export const PersonCard = React.memo(function PersonCard({ p, connected, onConne
 export const DiscussionRow = React.memo(function DiscussionRow({ d, onOpen }: any) {
   return (
     <div className="disc" onClick={onOpen}>
-      <Avatar name={d.who} size={40} />
+      <Avatar name={d.who} size={40} img={d.photo || d.img || d.cover} />
       <div className="dmain">
         <div className="dtop">
           {d.pinned && <span className="pin"><I.bookmarkF style={{ width:12, height:12 }}/>Pinned</span>}
