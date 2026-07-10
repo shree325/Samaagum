@@ -277,7 +277,7 @@ export function MyTickets({ st, go }) {
   const pending = [];
   for (const e of joinedPool) {
     if (!classified.has(e.id) && e.bookingStatus === 'pending_approval') {
-      pending.push(e);
+      pending.push(normalizeEvent(e));
       classified.add(e.id);
     }
   }
@@ -287,6 +287,12 @@ export function MyTickets({ st, go }) {
   const waitlistedEvents = (typeof FEATURED !== 'undefined' && typeof EVENTS !== 'undefined')
     ? [FEATURED, ...EVENTS].filter((e) => waitlistIds.includes(e.id))
     : [];
+  for (const e of joinedPool) {
+    if (!classified.has(e.id) && e.bookingStatus === 'waitlisted') {
+      waitlistedEvents.push(normalizeEvent(e));
+      classified.add(e.id);
+    }
+  }
 
   // --- 5. UPCOMING ---
   const upcoming = [];
@@ -1023,6 +1029,7 @@ export function VerifyTicketPanel({ eventId, onCheckedIn }) {
             const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const code = jsQR(imgData.data, imgData.width, imgData.height);
             if (code && code.data) {
+              setResult(null);
               setScanning(false);
               setTokenInput(code.data);
               lookup(code.data);
@@ -1052,13 +1059,17 @@ export function VerifyTicketPanel({ eventId, onCheckedIn }) {
       <div style={{ display: "flex", gap: 8 }}>
         <input
           value={tokenInput}
-          onChange={ev2 => setTokenInput(ev2.target.value)}
-          onKeyDown={ev2 => { if (ev2.key === 'Enter') lookup(tokenInput); }}
+          onChange={ev2 => { setTokenInput(ev2.target.value); setResult(null); }}
+          onFocus={() => setResult(null)}
+          onKeyDown={ev2 => { if (ev2.key === 'Enter') { setResult(null); lookup(tokenInput); } }}
           placeholder="Paste or type ticket token…"
           style={{ flex: 1, padding: "9px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)", fontSize: 13 }}
         />
-        <button className="hbtn hbtn--primary hbtn--sm" disabled={busy || !tokenInput.trim()} onClick={() => lookup(tokenInput)}>Verify</button>
-        <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => setScanning(s => !s)}>{scanning ? "Stop scan" : "Scan QR"}</button>
+        <button className="hbtn hbtn--primary hbtn--sm" disabled={busy || !tokenInput.trim()} onClick={() => { setResult(null); lookup(tokenInput); }}>Verify</button>
+        <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => {
+          if (!scanning) setResult(null);
+          setScanning(s => !s);
+        }}>{scanning ? "Stop scan" : "Scan QR"}</button>
       </div>
 
       {scanning && (

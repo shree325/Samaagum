@@ -392,6 +392,12 @@ export function DashboardApp() {
         fetchCounts();
       });
 
+      chatSocket.on("event.wishlist.update", (payload) => {
+        if (payload && payload.eventId && typeof payload.count === 'number') {
+          setWishlistCounts(prev => ({ ...prev, [payload.eventId]: payload.count }));
+        }
+      });
+
       setSocket(chatSocket);
       
 

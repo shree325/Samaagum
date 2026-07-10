@@ -508,10 +508,10 @@ export const adminApi = {
 
 
 
-export const GeoLocationsView = window.GeoLocationsView;
+import { GeoLocationsView } from './admin/pages/GeoLocations/GeoLocationsView';
 export const ChatControlsView = window.ChatControlsView;
-export const GeoIpv4View = window.GeoIpv4View;
-export const GeoIpv6View = window.GeoIpv6View;
+import { GeoIpv4View } from './admin/pages/GeoIpv4/GeoIpv4View';
+import { GeoIpv6View } from './admin/pages/GeoIpv6/GeoIpv6View';
 
 // --- APP COMPONENT ---
 export function App() {

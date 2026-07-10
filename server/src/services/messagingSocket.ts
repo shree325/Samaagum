@@ -800,3 +800,9 @@ export function sendNotificationToUser(userId: string, event: string, payload: a
     chatNamespace.to(`user:${userId}`).emit(event, payload);
   }
 }
+
+export function broadcastWishlistUpdate(eventId: string, count: number) {
+  if (chatNamespace) {
+    chatNamespace.emit('event.wishlist.update', { eventId, count });
+  }
+}

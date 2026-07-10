@@ -24,6 +24,7 @@ export const NTYPE = {
   system:      { ico:<I.bell style={{width:13,height:13}}/>,   c:"linear-gradient(135deg,#f59e0b,#ef6f53)" },
   billing:     { ico:<svg viewBox="0 0 24 24" fill="none" width="13" height="13" stroke="currentColor" strokeWidth="2"><path d="M20 7H4a2 2 0 00-2 2v8a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M22 13h-4v2h4v-2zM4 7V5a2 2 0 012-2h10"/></svg>, c:"linear-gradient(135deg,#f43f5e,#ec4899)" },
   group_created: { ico:<I.groups style={{width:14,height:14}}/>, c:"linear-gradient(135deg,#6d5efc,#2a7fff)" },
+  group_event_created: { ico:<I.cal style={{width:13,height:13}}/>, c:"linear-gradient(135deg,#ff6b4a,#ff4d8d)" },
   group_new_post: { ico:<I.comment style={{width:13,height:13}}/>, c:"linear-gradient(135deg,#f59e0b,#ef6f53)" },
   group_post_activity: { ico:<I.comment style={{width:13,height:13}}/>, c:"linear-gradient(135deg,#10b981,#22d3ee)" },
   group_gallery: { ico:<I.cal style={{width:13,height:13}}/>, c:"linear-gradient(135deg,#8b5cf6,#e5489d)" },
@@ -39,7 +40,7 @@ export function authHeaders() {
 
 export function NotifRow({ n, st, go, onRead }) {
   const meta = NTYPE[n.type] || NTYPE.system;
-  const avatarTypes = ["connect","message","forum","group_user_joined"];
+  const avatarTypes = ["connect","message","forum","group_user_joined","group_event_created"];
   const [acted, setActed] = useState(n.acted || null);
   const [loading, setLoading] = useState(null);
 
@@ -152,6 +153,9 @@ export function NotifRow({ n, st, go, onRead }) {
       onRead();
       if (n.action === "view_user" && n.targetUserId) {
         go("public-profile", { id: n.targetUserId });
+      }
+      if (n.action === "view_event" && n.eventId) {
+        go("event", { id: n.eventId });
       }
     }}>
       <div className="nic" style={{ background: avatarTypes.includes(n.type) ? "transparent" : meta.c, color:"#fff" }}>

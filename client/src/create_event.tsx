@@ -1441,6 +1441,25 @@ export const RECENT_LOCATIONS = [
 export function LocationSection({ venue, setVenue, locType, setLocType }) {
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState(venue);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const apiBase = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? "http://localhost:3000" : "";
+
+  useEffect(() => {
+    if (!draft || draft.length < 2 || draft.startsWith("http")) {
+      setSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      fetch(`${apiBase}/api/public/locations/search?q=${encodeURIComponent(draft)}`)
+        .then(r => r.json())
+        .then(res => {
+          if (res.success) {
+            setSearchResults(res.data);
+          }
+        });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [draft]);
 
   const commit = (value, type) => {
     setVenue(value);
@@ -1503,6 +1522,37 @@ export function LocationSection({ venue, setVenue, locType, setLocType }) {
               style={{ width: "100%", background: "var(--field)", border: "1px solid var(--border)" }}
             />
           </div>
+
+          {/* Search Results */}
+          {searchResults.length > 0 && (
+            <div style={{ maxHeight: 200, overflowY: "auto", border: "1px solid var(--border)", borderRadius: "var(--r-md)", marginTop: 8, marginBottom: 16 }}>
+              {searchResults.map((loc, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => {
+                    if (!loc.is_active) {
+                      alert(`The location '${loc.name}' is currently inactive and cannot be selected for events.`);
+                      return;
+                    }
+                    commit(loc.name, "physical");
+                    setSearchResults([]);
+                  }}
+                  className="loc-sec-btn"
+                  style={{ opacity: loc.is_active ? 1 : 0.5, cursor: loc.is_active ? 'pointer' : 'not-allowed', width: '100%', textAlign: 'left', background: 'var(--surface)', border: 'none', borderBottom: '1px solid var(--border)', padding: '10px 12px' }}
+                >
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                    <I.pin style={{ width: 15, height: 15, color: "var(--ink-3)", marginTop: 2, flexShrink: 0 }} />
+                    <div className="loc-sec-btn-content">
+                      <p style={{ margin: 0, fontSize: "13px", fontWeight: 600, color: "var(--ink)", lineHeight: "1.2" }}>
+                        {loc.name} {loc.is_active ? "" : <span style={{ color: "var(--red)", fontSize: "11px", marginLeft: 4 }}>(Inactive)</span>}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Recent Locations */}
           {RECENT_LOCATIONS.length > 0 && (
@@ -1851,7 +1901,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
         ? (entitlements.event_max_participants !== -1 ? String(entitlements.event_max_participants) : "")
         : (editEv?.capacity_total ?? ""))
   );
-  const [waitlist, setWaitlist] = useState(draft?.waitlist ?? editEv?.waitlist ?? false);
+  const [waitlist, setWaitlist] = useState(draft?.waitlist ?? (editEv?.settings?.capacity?.waitlist ?? editEv?.waitlist ?? false));
 
   const [registrationStatus, setRegistrationStatus] = useState(
     draft?.registrationStatus ?? editEv?.registration_status ?? "OPEN"
@@ -3188,11 +3238,11 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                         on={capacityEnabled}
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (capacityEnabled && eventMaxParticipants !== -1) {
+                          const next = !capacityEnabled;
+                          if (!next && eventMaxParticipants !== -1) {
                             triggerUpgrade("Unlimited Event Capacity");
                             return;
                           }
-                          const next = !capacityEnabled;
                           setCapacityEnabled(next);
                           if (next) {
                             setCapacityModalOpen(true);
@@ -3833,6 +3883,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
         waitlist={waitlist}
         setWaitlist={setWaitlist}
         eventMaxParticipants={eventMaxParticipants}
+        triggerUpgrade={triggerUpgrade}
       />
 
       <AccessControlModal
@@ -3890,7 +3941,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
   );
 }
 
-function CapacitySettingsModal({ open, onClose, capacityEnabled, setCapacityEnabled, capacity, setCapacity, waitlist, setWaitlist, eventMaxParticipants }: any) {
+function CapacitySettingsModal({ open, onClose, capacityEnabled, setCapacityEnabled, capacity, setCapacity, waitlist, setWaitlist, eventMaxParticipants, triggerUpgrade }: any) {
   const [tempEnabled, setTempEnabled] = useState(capacityEnabled);
   const [tempCapacity, setTempCapacity] = useState(capacity);
   const [tempWaitlist, setTempWaitlist] = useState(waitlist);
@@ -3910,9 +3961,13 @@ function CapacitySettingsModal({ open, onClose, capacityEnabled, setCapacityEnab
       alert("Please enter a valid capacity (at least 1).");
       return;
     }
+    if (tempEnabled && eventMaxParticipants !== -1 && parseInt(tempCapacity) > eventMaxParticipants) {
+      alert(`Your plan limits capacity to a maximum of ${eventMaxParticipants}.`);
+      return;
+    }
     setCapacityEnabled(tempEnabled);
     setCapacity(tempEnabled ? tempCapacity : "");
-    setWaitlist(tempWaitlist);
+    setWaitlist(tempEnabled ? tempWaitlist : false);
     onClose();
   };
 
