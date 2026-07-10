@@ -11,6 +11,10 @@ import { Waitlist } from './home-waitlist';
 import { Events } from './landing-features';
 import { Networking } from './landing-features2';
 import { AUTH } from './landing-hero';
+import { ChatControlsView } from './admin/pages/ChatControls/ChatControlsView';
+import { GeoIpv4View } from './admin/pages/GeoIpv4/GeoIpv4View';
+import { GeoIpv6View } from './admin/pages/GeoIpv6/GeoIpv6View';
+import { GeoLocationsView } from './admin/pages/GeoLocations/GeoLocationsView';
 
 /* ============================================================
    Samaagum Admin Panel — React Application
@@ -3074,13 +3078,13 @@ export function UsersView({ users, onUpdateUser, onAddUser, onDeleteUser }) {
                 </td>
                 <td style={{ fontSize: "13px", color: "var(--ink-3)" }}>{u.joined}</td>
                 <td style={{ textAlign: "right" }}>
-                  <button
-                    onClick={() => onUpdateUser(u.id, { status: u.status === "Active" ? "Suspended" : "Active" })}
-                    style={{ background: "transparent", border: "none", color: u.status === "Active" ? "#ef4444" : "#10b981", cursor: "pointer", fontSize: "12.5px", fontWeight: "600" }}
-                  >
-                    {u.status === "Active" ? "Suspend" : "Activate"}
-                  </button>
-                  <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                  <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", alignItems: "center" }}>
+                    <button 
+                      onClick={() => onUpdateUser(u.id, { status: u.status === "Active" ? "Suspended" : "Active" })}
+                      style={{ background: "transparent", border: "none", color: u.status === "Active" ? "#ef4444" : "#10b981", cursor: "pointer", fontSize: "12.5px", fontWeight: "600" }}
+                    >
+                      {u.status === "Active" ? "Suspend" : "Activate"}
+                    </button>
                     <button 
                       onClick={() => handleStartEdit(u)}
                       style={{ background: "transparent", border: "none", color: "var(--accent-2)", cursor: "pointer", fontSize: "12.5px", fontWeight: "600" }}
@@ -3096,12 +3100,6 @@ export function UsersView({ users, onUpdateUser, onAddUser, onDeleteUser }) {
                       style={{ background: "transparent", border: "none", color: "#f43f5e", cursor: "pointer", fontSize: "12.5px", fontWeight: "600" }}
                     >
                       Delete
-                    </button>
-                    <button 
-                      onClick={() => onUpdateUser(u.id, { status: u.status === "Active" ? "Suspended" : "Active" })}
-                      style={{ background: "transparent", border: "none", color: u.status === "Active" ? "#ef4444" : "#10b981", cursor: "pointer", fontSize: "12.5px", fontWeight: "600" }}
-                    >
-                      {u.status === "Active" ? "Suspend" : "Activate"}
                     </button>
                   </div>
                 </td>

@@ -154,6 +154,24 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
         return visibility === 'public';
       }).slice(0, 5);
 
+      const enrichedEvents = await Promise.all(publicEvents.map(async (e: any) => {
+        const attendeeCount = await prisma.attendees.count({
+          where: {
+            bookings: {
+              event_id: e.id,
+              status: 'confirmed'
+            }
+          }
+        });
+        const venueObj = e.venue ? (typeof e.venue === 'string' ? JSON.parse(e.venue) : e.venue) : {};
+        return {
+          id: e.id,
+          title: e.title,
+          cover: venueObj?.meta?.cover || null,
+          attendeeCount
+        };
+      }));
+
       // Search public groups
       const allGroups = await prisma.groups.findMany({
         where: {
@@ -172,11 +190,26 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
         return !settings.isDraft && !settings.isArchived;
       }).slice(0, 5);
 
+      const enrichedGroups = await Promise.all(publicGroups.map(async (g: any) => {
+        const memberCount = await prisma.group_memberships.count({
+          where: {
+            group_id: g.entity_id,
+            state: 'active'
+          }
+        });
+        return {
+          id: g.entity_id,
+          name: g.name,
+          icon: g.icon,
+          memberCount
+        };
+      }));
+
       return {
         success: true,
         data: {
-          events: publicEvents.map((e: any) => ({ id: e.id, title: e.title })),
-          groups: publicGroups.map((g: any) => ({ id: g.entity_id, name: g.name }))
+          events: enrichedEvents,
+          groups: enrichedGroups
         }
       };
     } catch (error: any) {

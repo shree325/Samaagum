@@ -409,40 +409,6 @@ export function ChatControlsView({ user, logAction, addToast }) {
             />
           </div>
 
-          {/* Selector: Who can create group chats */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
-            <div>
-              <span style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: 'var(--ink)' }}>Who can create group chats</span>
-              <span style={{ display: 'block', fontSize: '12px', color: 'var(--ink-3)', marginTop: '2px', lineHeight: '1.4' }}>Restrict which roles can start new group discussions</span>
-            </div>
-            <select 
-              value={chatSettings.communicationPolicies.groupWhoCanCreate} 
-              onChange={(e) => updatePolicyField('groupWhoCanCreate', e.target.value)}
-              style={dropdownStyle}
-            >
-              <option value="all_members">All members</option>
-              <option value="organizers_only">Organizers Only</option>
-              <option value="admins_only">Admins Only</option>
-            </select>
-          </div>
-
-          {/* Selector: Moderation mode */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
-            <div>
-              <span style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: 'var(--ink)' }}>Moderation mode</span>
-              <span style={{ display: 'block', fontSize: '12px', color: 'var(--ink-3)', marginTop: '2px', lineHeight: '1.4' }}>Controls message pacing and posting restrictions in groups</span>
-            </div>
-            <select 
-              value={chatSettings.communicationPolicies.groupModerationMode} 
-              onChange={(e) => updatePolicyField('groupModerationMode', e.target.value)}
-              style={dropdownStyle}
-            >
-              <option value="free_chat">Free chat</option>
-              <option value="restricted">Restricted</option>
-              <option value="slow_mode">Slow Mode</option>
-            </select>
-          </div>
-
           {/* Toggle 2: Allow media in group chats */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
             <div>
@@ -495,23 +461,6 @@ export function ChatControlsView({ user, logAction, addToast }) {
             />
           </div>
 
-          {/* Selector: Default moderation mode */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
-            <div>
-              <span style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: 'var(--ink)' }}>Default moderation mode</span>
-              <span style={{ display: 'block', fontSize: '12px', color: 'var(--ink-3)', marginTop: '2px', lineHeight: '1.4' }}>Applied to all new events unless overridden by the event organizer</span>
-            </div>
-            <select 
-              value={chatSettings.communicationPolicies.eventDefaultModerationMode} 
-              onChange={(e) => updatePolicyField('eventDefaultModerationMode', e.target.value)}
-              style={dropdownStyle}
-            >
-              <option value="free_chat">Free chat</option>
-              <option value="restricted">Restricted</option>
-              <option value="slow_mode">Slow Mode</option>
-            </select>
-          </div>
-
           {/* Toggle 2: Auto-archive after event ends */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
             <div>
@@ -521,18 +470,6 @@ export function ChatControlsView({ user, logAction, addToast }) {
             <ToggleSwitch
               active={chatSettings.communicationPolicies.eventAutoArchive}
               onClick={() => updatePolicyField('eventAutoArchive', !chatSettings.communicationPolicies.eventAutoArchive)}
-            />
-          </div>
-
-          {/* Toggle 3: Organizers can override settings */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
-            <div>
-              <span style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: 'var(--ink)' }}>Organizers can override settings</span>
-              <span style={{ display: 'block', fontSize: '12px', color: 'var(--ink-3)', marginTop: '2px', lineHeight: '1.4' }}>Event creators can adjust moderation mode for their own events</span>
-            </div>
-            <ToggleSwitch
-              active={chatSettings.communicationPolicies.eventOrganizerOverride}
-              onClick={() => updatePolicyField('eventOrganizerOverride', !chatSettings.communicationPolicies.eventOrganizerOverride)}
             />
           </div>
         </div>

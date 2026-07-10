@@ -70,8 +70,9 @@ export function EventPage({ ev, st, go }) {
       going: e.going || 0,
       cap: e.capacity_total || e.cap || 9999,
       price: priceVal,
-      host: e.hostName || e.host || ME.name || "Organizer",
-      hostBy: e.hostName || e.hostBy || ME.name || "Organizer",
+      host: typeof e.host === 'object' && e.host !== null ? (e.host.name || "Organizer") : (e.hostName || e.host || ME.name || "Organizer"),
+      hostBy: typeof e.host === 'object' && e.host !== null ? (e.host.name || "Organizer") : (e.hostName || e.hostBy || ME.name || "Organizer"),
+      hostPhoto: typeof e.host === 'object' && e.host !== null ? (e.host.photo || "") : (e.hostPhoto || ""),
       hostType: e.hostType || null,
       attendees: e.attendees || [],
       instructions: e.instruction || e.instructions || meta.instructions || "",
@@ -276,8 +277,9 @@ export function EventPage({ ev, st, go }) {
           going: ev.going || 0,
           cap: ev.capacity_total || ev.cap || 9999,
           price: priceVal,
-          host: ev.hostName || ev.host || ME.name || "Organizer",
-          hostBy: ev.hostName || ev.hostBy || ME.name || "Organizer",
+          host: typeof ev.host === 'object' && ev.host !== null ? (ev.host.name || "Organizer") : (ev.hostName || ev.host || ME.name || "Organizer"),
+          hostBy: typeof ev.host === 'object' && ev.host !== null ? (ev.host.name || "Organizer") : (ev.hostName || ev.hostBy || ME.name || "Organizer"),
+          hostPhoto: typeof ev.host === 'object' && ev.host !== null ? (ev.host.photo || "") : (ev.hostPhoto || ""),
           hostType: ev.hostType || null,
           attendees: data.data.attendees || [],
           instructions: ev.instruction || ev.instructions || meta.instructions || "",
@@ -449,8 +451,8 @@ export function EventPage({ ev, st, go }) {
 
   const initialGallery = e.gallery || {
     enabled: false,
-    uploadRoles: { owner: true, admin: true, moderator: true, public: false },
-    viewRoles: { owner: true, admin: true, moderator: true, public: true },
+    uploadRoles: { roles: ['event_owner'] },
+    viewRoles: { roles: ['event_owner'] },
     approvalRequired: false,
     videoOnly: false,
     imageOnly: false
@@ -469,8 +471,8 @@ export function EventPage({ ev, st, go }) {
 
   // Discussion states
   const [discussionEnabled, setDiscussionEnabled] = useState(false);
-  const [discussionThreadRoles, setDiscussionThreadRoles] = useState({ owner: true, admin: true, moderator: true, public: true });
-  const [discussionReplyRoles, setDiscussionReplyRoles] = useState({ owner: true, admin: true, moderator: true, public: true });
+  const [discussionThreadRoles, setDiscussionThreadRoles] = useState<any>({ roles: ['event_owner'] });
+  const [discussionReplyRoles, setDiscussionReplyRoles] = useState<any>({ roles: ['event_owner'] });
   const [discussionApprovalRequired, setDiscussionApprovalRequired] = useState(false);
   const [threadRolesModalOpen, setThreadRolesModalOpen] = useState(false);
   const [replyRolesModalOpen, setReplyRolesModalOpen] = useState(false);
@@ -602,6 +604,12 @@ export function EventPage({ ev, st, go }) {
   // Tab State
   const [tab, setTab] = useState("about"); // about | members | gallery | discussion | ticketing | invite | settings
 
+  useEffect(() => {
+    if (tab === "dashboard" && !isOwner) {
+      setTab("about");
+    }
+  }, [tab, isOwner]);
+
   const pendingCount = (hostStats?.requests || []).length;
   const confirmedCount = (hostStats?.confirmed || attendees || []).length;
   const isPaidEvent = currentEvent.registration_mode === 'paid' || e.registration_mode === 'paid';
@@ -611,7 +619,7 @@ export function EventPage({ ev, st, go }) {
 
   const tabs = e.id === "new" ? [["about", "About"]] : [
     ["about", "About"],
-    ...(effectiveIsMember ? [["dashboard", "Dashboard"]] : []),
+    ...(isOwner ? [["dashboard", "Dashboard"]] : []),
     ...(effectiveIsMember ? [["members", `Members${pendingCount > 0 && (isTicketManager || isAdmin || isModerator) ? ` · 🔴${pendingCount}` : ""}`]] : []),
     ...(canViewGallery ? [["gallery", "Gallery"]] : []),
     ...(discussionEnabled && canAccessDiscussion ? [["discussion", "Discussion"]] : []),
@@ -767,6 +775,15 @@ export function EventPage({ ev, st, go }) {
       const data = await res.json();
       if (data.success) {
         alert("You have left the event successfully.");
+        if (st.unregister) {
+          st.unregister(e.id);
+        }
+        if (st.setMyTickets) {
+          st.setMyTickets(prev => prev.filter(t => t.eventId !== e.id && t.ev !== e.title));
+        }
+        if (st.fetchJoinedEvents) {
+          st.fetchJoinedEvents();
+        }
         go("home");
       } else {
         alert(data.message || "Failed to leave event");
@@ -777,32 +794,7 @@ export function EventPage({ ev, st, go }) {
     }
   };
 
-  const handleArchiveEvent = async () => {
-    if (!confirm("Archive this event? It will be marked as cancelled and moved to Archived in My Events. This cannot be undone.")) return;
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${apiBase}/api/events/${e.id}/archive`, {
-        method: 'PATCH',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.success) {
-        // Update local state so the page shows archived status immediately
-        setCurrentEvent(prev => ({ ...(prev || e), status: 'cancelled' }));
-        // Refresh the created events list in the parent state so My Events tab updates
-        if (st?.setCreatedEvents) {
-          st.setCreatedEvents(prev =>
-            prev.map(ev => ev.id === e.id ? { ...ev, status: 'cancelled' } : ev)
-          );
-        }
-      } else {
-        alert(data.message || "Failed to archive event.");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Failed to archive event due to a network error.");
-    }
-  };
+
 
   // Translates a legacy {owner,admin,moderator,member,public} bucket into the new dynamic
   // {public, roles: string[]} shape the first time it's edited via the roles modal below.
@@ -906,7 +898,7 @@ export function EventPage({ ev, st, go }) {
         }}>
           {!e.cover && <Grain />}
           <div className="scrim" />
-          <button className="detail-back" style={{ top: 20, left: 20 }} onClick={() => (e.id === "new" && e.__draft) ? go("edit-event", { __draft: e.__draft }) : go("home")}><I.arrowL />Back</button>
+          <button className="detail-back" style={{ top: 20, left: 20 }} onClick={() => (e.id === "new" && e.__draft) ? go("edit-event", { __draft: e.__draft }) : go("back")}><I.arrowL />Back</button>
         </div>
 
         {/* Group details header container */}
@@ -1028,9 +1020,6 @@ export function EventPage({ ev, st, go }) {
                   </div>
                   <button className="hbtn hbtn--soft hbtn--sm" onClick={() => go("edit-event", currentEvent || e)}>
                     <I.edit style={{ width: 14 }} /> Edit Event
-                  </button>
-                  <button className="hbtn hbtn--sm" style={{ background: "var(--surface-2)", color: "var(--ink-2)" }} onClick={handleArchiveEvent}>
-                    Archive
                   </button>
                 </>
               )}
@@ -2144,11 +2133,19 @@ export function EventPage({ ev, st, go }) {
                       <Toggle on={galleryEnabled} onClick={() => {
                         const next = !galleryEnabled;
                         setGalleryEnabled(next);
+                        let nextUploadRoles = galleryUploadRoles;
+                        let nextViewRoles = galleryViewRoles;
+                        if (next) {
+                          nextUploadRoles = { roles: ['event_owner'] };
+                          nextViewRoles = { roles: ['event_owner'] };
+                          setGalleryUploadRoles(nextUploadRoles);
+                          setGalleryViewRoles(nextViewRoles);
+                        }
                         saveEventSettings({
                           gallery: {
                             enabled: next,
-                            uploadRoles: galleryUploadRoles,
-                            viewRoles: galleryViewRoles,
+                            uploadRoles: nextUploadRoles,
+                            viewRoles: nextViewRoles,
                             approvalRequired: galleryApprovalRequired,
                             videoOnly: galleryVideoOnly,
                             imageOnly: galleryImageOnly
@@ -2286,11 +2283,19 @@ export function EventPage({ ev, st, go }) {
                       <Toggle on={discussionEnabled} onClick={() => {
                         const next = !discussionEnabled;
                         setDiscussionEnabled(next);
+                        let nextThreadRoles = discussionThreadRoles;
+                        let nextReplyRoles = discussionReplyRoles;
+                        if (next) {
+                          nextThreadRoles = { roles: ['event_owner'] };
+                          nextReplyRoles = { roles: ['event_owner'] };
+                          setDiscussionThreadRoles(nextThreadRoles);
+                          setDiscussionReplyRoles(nextReplyRoles);
+                        }
                         saveEventSettings({
                           discussion: {
                             enabled: next,
-                            threadRoles: discussionThreadRoles,
-                            replyRoles: discussionReplyRoles,
+                            threadRoles: nextThreadRoles,
+                            replyRoles: nextReplyRoles,
                             approvalRequired: discussionApprovalRequired
                           }
                         });

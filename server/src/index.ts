@@ -31,6 +31,7 @@ import { messagingRoutes } from './controllers/messagingRoutes';
 import { connectionRoutes } from './controllers/connectionRoutes';
 import { groupRoutes } from './controllers/groupRoutes';
 import { publicRoutes } from './controllers/publicRoutes';
+import { dashboardRoutes } from './controllers/dashboardRoutes';
 
 
 dotenv.config();
@@ -91,6 +92,19 @@ fastify.decorate('authenticate', async (request: any, reply: any) => {
                 if (payload && !payload.tenantId) {
                     payload.tenantId = '00000000-0000-0000-0000-000000000000';
                 }
+
+                // Check if user is suspended in the database
+                const dbUser = await prisma.users.findUnique({
+                    where: { id: payload.id },
+                    select: { state: true }
+                });
+                if (dbUser && dbUser.state === 'suspended') {
+                    return reply.status(403).send({
+                        success: false,
+                        message: 'You have been suspended. contact admin for futher information '
+                    });
+                }
+
                 request.user = payload;
             }
         } catch (err) {
@@ -141,6 +155,7 @@ fastify.register(connectionRoutes, { prefix: '/api/connections' });
 import { eventRoutes } from './controllers/eventRoutes';
 fastify.register(groupRoutes, { prefix: '/api/groups' });
 fastify.register(eventRoutes, { prefix: '/api/events' });
+fastify.register(dashboardRoutes, { prefix: '/api/dashboard' });
 
 // Health check route
 fastify.get('/health', async (request, reply) => {

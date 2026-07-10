@@ -107,6 +107,13 @@ export function TimePicker({ label = undefined, value, onChange, mobile, compact
   const [tempAmPm, setTempAmPm] = useState("PM");
   const [isDragging, setIsDragging] = useState(false);
 
+  const getTouchCoords = (e) => {
+    if (e.touches && e.touches[0]) {
+      return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+    }
+    return null;
+  };
+
   useEffect(() => {
     setInputValue(format24to12(value));
   }, [value]);
@@ -136,7 +143,7 @@ export function TimePicker({ label = undefined, value, onChange, mobile, compact
       setTempAmPm(ampm);
       setMode("hours");
     }
-  }, [open, value]);
+  }, [open]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -229,6 +236,22 @@ export function TimePicker({ label = undefined, value, onChange, mobile, compact
       }
     };
 
+    const handleTouchMove = (e) => {
+      const coords = getTouchCoords(e);
+      if (coords) {
+        const val = calculateValFromCoords(coords.clientX, coords.clientY);
+        if (val !== undefined) {
+          if (mode === "hours") {
+            setTempHour(val);
+            updateTime(val, tempMin, tempAmPm);
+          } else {
+            setTempMin(val);
+            updateTime(tempHour, val, tempAmPm);
+          }
+        }
+      }
+    };
+
     const handleMouseUp = (e) => {
       setIsDragging(false);
       const val = calculateValFromCoords(e.clientX, e.clientY);
@@ -241,11 +264,24 @@ export function TimePicker({ label = undefined, value, onChange, mobile, compact
       }
     };
 
+    const handleTouchEnd = (e) => {
+      setIsDragging(false);
+      if (mode === "hours") {
+        selectHour(tempHour);
+      } else {
+        selectMin(tempMin);
+      }
+    };
+
     document.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mouseup", handleMouseUp);
+    document.addEventListener("touchmove", handleTouchMove, { passive: false });
+    document.addEventListener("touchend", handleTouchEnd);
     return () => {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
+      document.removeEventListener("touchmove", handleTouchMove);
+      document.removeEventListener("touchend", handleTouchEnd);
     };
   }, [isDragging, mode, calculateValFromCoords, tempHour, tempMin, tempAmPm]);
 
@@ -275,6 +311,22 @@ export function TimePicker({ label = undefined, value, onChange, mobile, compact
             } else {
               setTempMin(val);
               updateTime(tempHour, val, tempAmPm);
+            }
+          }
+        }}
+        onTouchStart={(e) => {
+          setIsDragging(true);
+          const coords = getTouchCoords(e);
+          if (coords) {
+            const val = calculateValFromCoords(coords.clientX, coords.clientY);
+            if (val !== undefined) {
+              if (mode === "hours") {
+                setTempHour(val);
+                updateTime(val, tempMin, tempAmPm);
+              } else {
+                setTempMin(val);
+                updateTime(tempHour, val, tempAmPm);
+              }
             }
           }
         }}
@@ -500,7 +552,10 @@ export function TimePicker({ label = undefined, value, onChange, mobile, compact
           <div style={{ display: "flex", gap: "6px", width: "100%", justifyContent: "flex-end", marginTop: "8px", borderTop: "1px solid var(--border)", paddingTop: "12px" }}>
             <button
               className="hbtn hbtn--ghost hbtn--sm"
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                updateTime(tempHour, tempMin, tempAmPm);
+                setOpen(false);
+              }}
               style={{ padding: "6px 12px", border: "none" }}
             >
               Done
@@ -2498,21 +2553,25 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
 
   const CREATE_EVENT_CSS = `
         .create {
-          min-height: 100vh;
+          height: 100%;
           width: 100%;
           display: flex;
           align-items: stretch;
           background: var(--bg-2);
+          overflow: hidden;
         }
 
         .create.single {
           display: block;
+          overflow-y: auto;
+          height: 100%;
         }
 
         .create-form {
           flex: 1 1 auto;
           width: 100%;
-          min-height: 100vh;
+          height: 100%;
+          overflow-y: auto;
           box-sizing: border-box;
         }
 
@@ -2730,7 +2789,8 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
 
         @media (max-width: 768px) {
           .create-form {
-            min-height: 100vh;
+            height: auto;
+            overflow-y: visible;
           }
 
           .create-head h1 {
@@ -2837,7 +2897,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
     <div className={`create ${mobile ? "single" : ""}`}>
       <style dangerouslySetInnerHTML={{ __html: CREATE_EVENT_CSS }} />
 
-      <div className="create-form" style={{ backgroundColor: "var(--bg-2)", padding: mobile ? "14px 12px 110px" : "24px 32px 110px", position: "relative" }}>
+      <div className="create-form" style={{ backgroundColor: "var(--bg-2)", padding: mobile ? "14px 12px 40px" : "24px 32px 40px", position: "relative" }}>
         <div className="cf-inner" style={{ maxWidth: 1080, margin: "0 auto" }}>
 
           <div className="create-head" style={{ marginBottom: 20 }}>
@@ -3261,6 +3321,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                     </div>
                   </div>
                 </div>
+              </div>
 
                 {/* Registration Schedule UI */}
                 <div style={{ padding: 16, background: "var(--field)", borderRadius: "var(--r-md)", border: "1px solid var(--border)", marginBottom: 20 }}>
@@ -3468,6 +3529,22 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
               </div>
             </div>
           </div>
+
+          <div className="create-foot" style={{ border: "1px solid var(--border)", background: "var(--surface)", borderRadius: "var(--r-xl)", padding: "16px 24px", display: "flex", gap: "10px", alignItems: "center", marginTop: 24, boxShadow: "var(--sh-md)" }}>
+            <button className="hbtn hbtn--ghost" onClick={() => { localStorage.removeItem(draftKey); go("home"); }} disabled={loading}>Cancel</button>
+            {submitError && <span style={{ color: "red", fontSize: "12px" }}>{submitError}</span>}
+            <div className="sp" style={{ flex: 1 }} />
+            <button className="hbtn hbtn--ghost" onClick={() => handlePublish(true)} disabled={loading}>
+              {loading ? "Saving..." : "Save draft"}
+            </button>
+            <button className="hbtn hbtn--ghost" style={{ display: "flex", alignItems: "center", gap: 8 }} onClick={() => go("event", { ...previewEv, id: "new", host: ME.name, hostBy: ME.name, city: "Bengaluru", cap: capacity || 180, desc, formFields, __draft: draftSnapshot })} disabled={loading}>
+              <I.external /> Preview
+            </button>
+            <button className="hbtn hbtn--primary" onClick={() => handlePublish(false)} disabled={loading}>
+              <I.check /> {loading ? "Publishing..." : "Publish Event"}
+            </button>
+          </div>
+
         </div>
       </div>
 
@@ -3921,21 +3998,6 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
         setEnableRegForm={setEnableRegForm}
         moveField={moveField}
       />
-
-      <div className="create-foot" style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100, borderTop: "1px solid var(--border)", background: "rgba(255, 255, 255, 0.8)", backdropFilter: "blur(12px)", padding: mobile ? "10px 12px" : "10px 24px", display: "flex", gap: "10px", alignItems: "center" }}>
-        <button className="hbtn hbtn--ghost" onClick={() => { localStorage.removeItem(draftKey); go("home"); }} disabled={loading}>Cancel</button>
-        {submitError && <span style={{ color: "red", fontSize: "12px" }}>{submitError}</span>}
-        <div className="sp" style={{ flex: 1 }} />
-        <button className="hbtn hbtn--ghost" onClick={() => handlePublish(true)} disabled={loading}>
-          {loading ? "Saving..." : "Save draft"}
-        </button>
-        <button className="hbtn hbtn--ghost" style={{ display: "flex", alignItems: "center", gap: 8 }} onClick={() => go("event", { ...previewEv, id: "new", host: ME.name, hostBy: ME.name, city: "Bengaluru", cap: capacity || 180, desc, formFields, __draft: draftSnapshot })} disabled={loading}>
-          <I.external /> Preview
-        </button>
-        <button className="hbtn hbtn--primary" onClick={() => handlePublish(false)} disabled={loading}>
-          <I.check /> {loading ? "Publishing..." : "Publish Event"}
-        </button>
-      </div>
     </div>
     </>
   );
@@ -3981,21 +4043,14 @@ function CapacitySettingsModal({ open, onClose, capacityEnabled, setCapacityEnab
 
         <div style={{ padding: "0 24px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
           {/* Toggle: Enable Capacity Limit */}
-          <div className="switch-container" style={{ alignItems: "flex-start" }}>
+          <div className="switch-container" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div className="switch-label-wrapper">
-              <span className="switch-title" style={{ fontSize: 15 }}>Enable Capacity Limit</span>
+              <span className="switch-title" style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)" }}>Enable Capacity Limit</span>
             </div>
-            <label className="switch">
-              <input
-                type="checkbox"
-                checked={tempEnabled}
-                onChange={(e) => setTempEnabled(e.target.checked)}
-              />
-              <span className="slider"></span>
-            </label>
+            <Toggle on={tempEnabled} onClick={() => setTempEnabled(!tempEnabled)} />
           </div>
 
-{/* Input: Max Capacity */}
+          {/* Input: Max Capacity */}
           {tempEnabled && (
             <div className="cfield" style={{ marginBottom: 0, animation: "fadeIn 0.2s" }}>
               <label style={{ fontSize: 13, color: "var(--ink-3)", fontWeight: 600, marginBottom: 8, display: "block" }}>Max Capacity</label>
@@ -4016,19 +4071,12 @@ function CapacitySettingsModal({ open, onClose, capacityEnabled, setCapacityEnab
           )}
 
           {/* Toggle: Enable Waitlist */}
-          <div className="switch-container" style={{ alignItems: "flex-start" }}>
-            <div className="switch-label-wrapper">
-              <span className="switch-title" style={{ fontSize: 15 }}>Enable Waitlist</span>
-              <span className="switch-desc" style={{ fontSize: 12 }}>Registrations above capacity are added to the waitlist.</span>
+          <div className="switch-container" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div className="switch-label-wrapper" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <span className="switch-title" style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)" }}>Enable Waitlist</span>
+              <span className="switch-desc" style={{ fontSize: 12, color: "var(--ink-3)" }}>Registrations above capacity are added to the waitlist.</span>
             </div>
-            <label className="switch">
-              <input
-                type="checkbox"
-                checked={tempWaitlist}
-                onChange={(e) => setTempWaitlist(e.target.checked)}
-              />
-              <span className="slider"></span>
-            </label>
+            <Toggle on={tempWaitlist} onClick={() => setTempWaitlist(!tempWaitlist)} />
           </div>
         </div>
 {/* Footer */}

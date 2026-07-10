@@ -348,8 +348,6 @@ export function Messages({ st, go, mobile, socket }) {
             if (savedConvId && res.data.some(t => t.id === savedConvId)) {
               setActiveId(savedConvId);
               localStorage.removeItem('active_chat_conv_id');
-            } else if (res.data.length > 0) {
-              setActiveId(res.data[0].id);
             }
           }
         }
@@ -996,7 +994,6 @@ export function Messages({ st, go, mobile, socket }) {
                 </div>
               </div>
               <div className="cact" style={{ marginLeft: "auto" }}>
-                <button className="tb-icon" style={{ width: 36, height: 36 }}><I.phone /></button>
                 <button className="tb-icon" style={{ width: 36, height: 36 }}><I.more /></button>
               </div>
             </div>
@@ -1273,6 +1270,17 @@ export function Messages({ st, go, mobile, socket }) {
           </div>
         );
       })()}
+      {!active && !mobile && (
+        <div className="msg-conv" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "var(--ink-3)", padding: 40, textAlign: "center" }}>
+          <div style={{ background: "var(--field)", width: 80, height: 80, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
+            <I.chat style={{ width: 40, height: 40, color: "var(--ink-2)" }} />
+          </div>
+          <h3 style={{ fontSize: 18, fontWeight: 600, color: "var(--ink)", marginBottom: 8 }}>Your Messages</h3>
+          <p style={{ fontSize: 14, maxWidth: 320, lineHeight: 1.5, color: "var(--ink-3)" }}>
+            Select a conversation from the list to start chatting, or search for friends to start a new thread.
+          </p>
+        </div>
+      )}
       {forwardMsg && (
         <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
           <div style={{ background: "var(--surface)", width: 400, maxHeight: "80vh", borderRadius: "20px", display: "flex", flexDirection: "column", boxShadow: "var(--sh-xl)", overflow: "hidden" }}>

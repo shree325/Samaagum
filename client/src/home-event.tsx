@@ -40,8 +40,9 @@ function EventDetail({ ev, st, go }) {
       going: e.going || 0,
       cap: e.capacity_total || e.cap || 9999,
       price: priceVal,
-      host: e.host || ME.name || "Organizer",
-      hostBy: e.hostBy || ME.name || "Organizer",
+      host: typeof e.host === 'object' && e.host !== null ? (e.host.name || "Organizer") : (e.host || ME.name || "Organizer"),
+      hostBy: typeof e.host === 'object' && e.host !== null ? (e.host.name || "Organizer") : (e.hostBy || ME.name || "Organizer"),
+      hostPhoto: typeof e.host === 'object' && e.host !== null ? (e.host.photo || "") : (e.hostPhoto || ""),
       attendees: e.attendees || []
     };
   } else if (e) {
@@ -97,7 +98,7 @@ function EventDetail({ ev, st, go }) {
       <div className="view-enter">
         <div className="detail-cover" style={{ background: e.cover && (e.cover.startsWith("linear-gradient") || e.cover.startsWith("radial-gradient") || e.cover.startsWith("var(")) ? e.cover : `url(${e.cover}) center/cover no-repeat` }}>
           <Grain /><div className="scrim" />
-          <button className="detail-back" onClick={() => { if (e.id === "new") { go("create-event"); } else { go("home"); } }}><I.arrowL />Back</button>
+          <button className="detail-back" onClick={() => { if (e.id === "new") { go("create-event"); } else { go("back"); } }}><I.arrowL />Back</button>
           <div className="detail-actions-top">
             <button className={`cbtn ${isSaved ? "on" : ""}`} onClick={() => toggleWishlist(e.id)}>{isSaved ? <I.bookmarkF /> : <I.bookmark />}</button>
             <div style={{ position: "relative" }}>
@@ -159,7 +160,6 @@ function EventDetail({ ev, st, go }) {
               <div className="ev-host">
                 <Avatar name={e.hostBy || e.host} userId={e.hostUserId} img={e.hostPhoto} size={34} />
                 Hosted by <b>{e.host}</b>
-                <button className="hbtn hbtn--ghost hbtn--sm" style={{ marginLeft: "auto" }}><I.plus />Follow</button>
               </div>
             </div>
           </div>

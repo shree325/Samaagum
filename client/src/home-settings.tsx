@@ -89,11 +89,7 @@ export function SettingsPage({ st, go, activeTabParam }) {
     }
   };
 
-  useEffect(() => {
-    localStorage.setItem("samaagum_privacy_prefs", JSON.stringify(privacy));
-    ME.privacy = privacy;
-    syncPrivacyToServer(privacy);
-  }, [privacy]);
+
 
   const [sessions, setSessions] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
@@ -197,16 +193,10 @@ export function SettingsPage({ st, go, activeTabParam }) {
 
   const handleToggle = (key) => {
     setPrivacy(prev => ({ ...prev, [key]: !prev[key] }));
-    if (window.toast) {
-      window.toast("Preference updated!");
-    }
   };
 
   const handleVisibilityChange = (value) => {
     setPrivacy(prev => ({ ...prev, profileVisibility: value }));
-    if (window.toast) {
-      window.toast(`Profile visibility set to ${value}`);
-    }
   };
 
   const handleImageChange = (e) => {
@@ -271,6 +261,7 @@ export function SettingsPage({ st, go, activeTabParam }) {
       formData.append("bio", ME.role || "");
       formData.append("location", ME.location || "");
       formData.append("messagingRestriction", profile.messagingRestriction);
+      formData.append("privacyPrefs", JSON.stringify(privacy));
 
       const base64ToBlob = (base64) => {
         const arr = base64.split(',');
@@ -302,6 +293,14 @@ export function SettingsPage({ st, go, activeTabParam }) {
         ME.name = fullName;
         ME.messaging_restriction = profile.messagingRestriction;
         if (profile.img !== undefined) ME.img = profile.img;
+        
+        // Save privacy preferences on success
+        localStorage.setItem("samaagum_privacy_prefs", JSON.stringify(privacy));
+        ME.privacy = privacy;
+        if (window.chatSocket) {
+          window.chatSocket.emit("privacy.update");
+        }
+
         if (window.toast) window.toast("Settings saved successfully!");
       } else {
         const err = await res.json().catch(() => null);

@@ -243,6 +243,19 @@ function DiscussionPanel({ entityType, entityId, token, currentUserId, isOwner, 
   const { useState, useEffect, useRef, useCallback } = React;
   
   const [posts, setPosts] = useState([]);
+  const [globalChatSettings, setGlobalChatSettings] = useState(null);
+
+  useEffect(() => {
+    const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+    fetch(`${apiBase}/api/messaging/settings`)
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.data) {
+          setGlobalChatSettings(res.data);
+        }
+      })
+      .catch(err => console.error("Error fetching global chat settings in discussion panel:", err));
+  }, []);
   const [activeThread, setActiveThread] = useState(null);
   const activeThreadRef = useRef(null);
   useEffect(() => {
@@ -815,6 +828,57 @@ function DiscussionPanel({ entityType, entityId, token, currentUserId, isOwner, 
   const atVoteScore = atVotes.score !== undefined ? atVotes.score : (activeThread ? (activeThread.vote_score || 0) : 0);
   const atUserVote = atVotes.userVote !== undefined ? atVotes.userVote : (activeThread ? (activeThread.user_vote || 0) : 0);
   const atReactions = activeThread ? (threadReactions[activeThread.id] || activeThread.reactions || {}) : {};
+
+  const eventChatDisabled = globalChatSettings && (
+    globalChatSettings.allowEventChat === false || 
+    globalChatSettings.communicationPolicies?.eventChatsEnabled === false
+  );
+
+  if (eventChatDisabled) {
+    return (
+      <div style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "50vh",
+        padding: "48px 24px",
+        textAlign: "center",
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--r-md)",
+        boxShadow: "none",
+        margin: "20px 0",
+        color: "var(--ink)"
+      }}>
+        <div style={{
+          fontSize: "56px",
+          marginBottom: "20px",
+          userSelect: "none"
+        }}>
+          🔒
+        </div>
+        <h2 style={{
+          margin: "0 0 10px 0",
+          fontSize: "20px",
+          fontWeight: 600,
+          color: "var(--ink)",
+          letterSpacing: "-0.01em"
+        }}>
+          This feature is currently disabled from admin side
+        </h2>
+        <p style={{
+          margin: 0,
+          fontSize: "14px",
+          color: "var(--ink-3)",
+          lineHeight: "1.6",
+          maxWidth: "360px"
+        }}>
+          For further information, please contact the administrator.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div>
