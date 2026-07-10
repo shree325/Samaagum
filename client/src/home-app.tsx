@@ -863,6 +863,33 @@ export function DashboardApp() {
             setTimeout(() => {
               go("event", { ...evObj, bookingStatus: 'confirmed' });
             }, 50);
+          } else if (res.status === 'pending_payment') {
+            registerAdd(id);
+            setMyTickets(prev => {
+              if (prev.some(t => t.ev === evObj.title)) return prev;
+              return [
+                {
+                  id: "BL-" + Math.floor(2000 + Math.random() * 500),
+                  ev: evObj.title,
+                  cover: evObj.cover,
+                  tier: "General Admission",
+                  date: evObj.date,
+                  time: evObj.time,
+                  venue: evObj.venue,
+                  online: !!evObj.online,
+                  paid: evObj.price || "Free",
+                  qty: 1,
+                  attendee: window.ME?.name || ME.name,
+                  status: "pending_payment"
+                },
+                ...prev
+              ];
+            });
+            if (window.toast) window.toast("Booking registered! Please pay at the venue.", "info");
+            fetchJoinedEvents();
+            setTimeout(() => {
+              go("event", { ...evObj, bookingStatus: 'pending_payment' });
+            }, 50);
           } else {
             if (window.toast) window.toast("Your request to join is pending approval.", "info");
             fetchJoinedEvents();
@@ -1143,7 +1170,7 @@ useEffect(() => {
       // Check if user has a confirmed or pending booking/membership for this event
       const joinedEntry = st.joinedEvents && st.joinedEvents.find(je => je.id === e.id);
       const bookingStatus = e.bookingStatus || joinedEntry?.bookingStatus || null;
-      const hasConfirmedBooking = bookingStatus === 'confirmed';
+      const hasConfirmedBooking = bookingStatus === 'confirmed' || bookingStatus === 'pending_payment';
       const hasPendingBooking = bookingStatus === 'pending_approval';
       
       const hasJoined = st.registered.has(e.id) ||

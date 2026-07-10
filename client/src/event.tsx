@@ -52,7 +52,7 @@ export function EventPage({ ev, st, go }) {
       }
     }
 
-    const priceVal = e.tickets?.[0] ? `₹${(e.tickets[0].price_minor / 100).toFixed(0)}` : ((e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : '—');
+    const priceVal = e.price || (e.tickets?.[0] ? `₹${(e.tickets[0].price_minor / 100).toFixed(0)}` : ((e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : '—'));
 
     e = {
       ...e,
@@ -131,7 +131,7 @@ export function EventPage({ ev, st, go }) {
   const isModerator = ME.role && ME.role.toLowerCase().includes("moderator");
   // Booking status — passed from home-app router or fetched from server
   const bookingStatusProp = currentEvent.bookingStatus || e.bookingStatus || null;
-  const isJoined = bookingStatusProp === 'confirmed';
+  const isJoined = bookingStatusProp === 'confirmed' || bookingStatusProp === 'pending_payment';
   const isPending = bookingStatusProp === 'pending_approval';
   const isMember = isOwner || isAdmin || isModerator || isJoined;
 
@@ -198,7 +198,7 @@ export function EventPage({ ev, st, go }) {
       const dateStr = dateObj.toLocaleDateString();
       const time = dateObj.toLocaleTimeString();
 
-      const priceVal = e.tickets?.[0] ? `₹${(e.tickets[0].price_minor / 100).toFixed(0)}` : ((e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : '—');
+      const priceVal = e.price || (e.tickets?.[0] ? `₹${(e.tickets[0].price_minor / 100).toFixed(0)}` : ((e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : '—'));
 
       const normalized = {
         ...e,
@@ -223,6 +223,11 @@ export function EventPage({ ev, st, go }) {
         instructions: e.instruction || e.instructions || meta.instructions || "",
         formFields: e.formFields || meta.formFields || [],
         bookingStatus: e.bookingStatus,
+        bookingId: e.bookingId,
+        attendeeId: e.attendeeId,
+        ticketId: e.ticketId,
+        qrToken: e.qrToken,
+        checkinStatus: e.checkinStatus,
         gallery: meta.gallery || e.gallery || {
           enabled: false,
           uploadRoles: { owner: true, admin: true, moderator: true, public: false },
@@ -253,7 +258,7 @@ export function EventPage({ ev, st, go }) {
         const dateStr = dateObj.toLocaleDateString();
         const time = dateObj.toLocaleTimeString();
 
-        const priceVal = data.data.tickets?.[0] ? `₹${(data.data.tickets[0].price_minor / 100).toFixed(0)}` : ((ev.registration_mode === 'free' || ev.registration_mode === 'free_rsvp') ? 'Free' : '—');
+        const priceVal = ev.price || (data.data.tickets?.[0] ? `₹${(data.data.tickets[0].price_minor / 100).toFixed(0)}` : ((ev.registration_mode === 'free' || ev.registration_mode === 'free_rsvp') ? 'Free' : '—'));
 
         const normalized = {
           ...ev,
@@ -278,6 +283,11 @@ export function EventPage({ ev, st, go }) {
           instructions: ev.instruction || ev.instructions || meta.instructions || "",
           formFields: ev.formFields || meta.formFields || [],
           bookingStatus: data.data.bookingStatus,
+          bookingId: data.data.bookingId,
+          attendeeId: data.data.attendeeId,
+          ticketId: data.data.ticketId,
+          qrToken: data.data.qrToken,
+          checkinStatus: data.data.checkinStatus,
           gallery: meta.gallery || ev.gallery || {
             enabled: false,
             uploadRoles: { owner: true, admin: true, moderator: true, public: false },

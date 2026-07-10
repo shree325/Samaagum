@@ -3250,6 +3250,7 @@ export function SubscriptionPlansView({ user, apiBase }) {
     group_can_restricted_access: false,
     event_allowed_registration_modes: [],
     event_allowed_visibility: [],
+    event_allowed_join_modes: [],
     event_max_participants: 100,
     event_checkin_methods: [],
     event_can_create_paid_tickets: false
@@ -3265,7 +3266,8 @@ export function SubscriptionPlansView({ user, apiBase }) {
       group_max_capacity: typeof limits.group_max_capacity === 'number' ? limits.group_max_capacity : 25,
       group_can_restricted_access: typeof limits.group_can_restricted_access === 'boolean' ? limits.group_can_restricted_access : false,
       event_allowed_registration_modes: Array.isArray(limits.event_allowed_registration_modes) ? limits.event_allowed_registration_modes : ['free', 'cash'],
-      event_allowed_visibility: Array.isArray(limits.event_allowed_visibility) ? limits.event_allowed_visibility : ['unlisted', 'invite_only'],
+      event_allowed_visibility: Array.isArray(limits.event_allowed_visibility) ? limits.event_allowed_visibility : ['unlisted', 'custom'],
+      event_allowed_join_modes: Array.isArray(limits.event_allowed_join_modes) ? limits.event_allowed_join_modes : ['restricted', 'invite'],
       event_max_participants: typeof limits.event_max_participants === 'number' ? limits.event_max_participants : 100,
       event_checkin_methods: Array.isArray(limits.event_checkin_methods) ? limits.event_checkin_methods : ['scanner'],
       event_can_create_paid_tickets: typeof limits.event_can_create_paid_tickets === 'boolean' ? limits.event_can_create_paid_tickets : false
@@ -3726,7 +3728,7 @@ export function SubscriptionPlansView({ user, apiBase }) {
                     <label style={{ fontWeight: "600" }}>Allowed Visibilities</label>
                     <div style={{ display: "flex", gap: "16px", marginTop: "6px" }}>
                       {['public', 'unlisted', 'restricted'].map(vis => (
-                        <label key={vis} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", textTransform: "capitalize", cursor: "pointer" }}>
+                        <label key={vis} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", cursor: "pointer" }}>
                           <input 
                             type="checkbox" 
                             checked={entForm.group_allowed_visibility.includes(vis)} 
@@ -3737,7 +3739,7 @@ export function SubscriptionPlansView({ user, apiBase }) {
                               setEntForm({ ...entForm, group_allowed_visibility: list });
                             }}
                           />
-                          {vis}
+                          {vis === 'public' ? 'Public' : vis === 'unlisted' ? 'Unlisted' : 'Restricted-Access'}
                         </label>
                       ))}
                     </div>
@@ -3758,7 +3760,7 @@ export function SubscriptionPlansView({ user, apiBase }) {
                               setEntForm({ ...entForm, group_allowed_join_modes: list });
                             }}
                           />
-                          {mode.replace('_', ' ')}
+                          {mode === 'open' ? 'Public' : mode === 'invite_only' ? 'Invite Only' : 'Restricted Access'}
                         </label>
                       ))}
                     </div>
@@ -3794,7 +3796,7 @@ export function SubscriptionPlansView({ user, apiBase }) {
                   <div className="form-group" style={{ marginBottom: "12px" }}>
                     <label style={{ fontWeight: "600" }}>Allowed Visibilities</label>
                     <div style={{ display: "flex", gap: "16px", marginTop: "6px" }}>
-                      {['public', 'unlisted', 'invite_only'].map(vis => (
+                      {['public', 'unlisted', 'custom'].map(vis => (
                         <label key={vis} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", cursor: "pointer" }}>
                           <input 
                             type="checkbox" 
@@ -3806,7 +3808,29 @@ export function SubscriptionPlansView({ user, apiBase }) {
                               setEntForm({ ...entForm, event_allowed_visibility: list });
                             }}
                           />
-                          {vis.replace('_', ' ')}
+                          {vis === 'custom' ? 'Custom Access' : vis}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: "12px" }}>
+                    <label style={{ fontWeight: "600" }}>Allowed Join Modes</label>
+                    <div style={{ display: "flex", gap: "16px", marginTop: "6px" }}>
+                      {['public', 'restricted', 'invite'].map(mode => (
+                        <label key={mode} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", cursor: "pointer" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={entForm.event_allowed_join_modes && entForm.event_allowed_join_modes.includes(mode)} 
+                            onChange={e => {
+                              const joinModes = entForm.event_allowed_join_modes || [];
+                              const list = e.target.checked 
+                                ? [...joinModes, mode]
+                                : joinModes.filter(x => x !== mode);
+                              setEntForm({ ...entForm, event_allowed_join_modes: list });
+                            }}
+                          />
+                          {mode === 'public' ? 'Public Event' : mode === 'restricted' ? 'Restricted Access' : 'Invite Only'}
                         </label>
                       ))}
                     </div>

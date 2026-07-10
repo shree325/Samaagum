@@ -73,7 +73,7 @@ export class SubscriptionActivationService {
                             key: planNameLower,
                             plan_type: plan.plan_type || 'monthly',
                             version: 1,
-                            entitlements: plan.features || {},
+                            entitlements: plan.limits || {},
                             status: 'active'
                         }
                     });
@@ -431,7 +431,7 @@ export class SubscriptionActivationService {
                             key: planNameLower,
                             plan_type: plan.plan_type || 'monthly',
                             version: 1,
-                            entitlements: plan.features || {},
+                            entitlements: plan.limits || {},
                             status: 'active'
                         }
                     });
@@ -546,7 +546,7 @@ export class SubscriptionActivationService {
                         key: planNameLower,
                         plan_type: defaultAdminPlan.plan_type || 'free',
                         version: 1,
-                        entitlements: defaultAdminPlan.limits || defaultAdminPlan.features || {},
+                        entitlements: defaultAdminPlan.limits || {},
                         status: 'active'
                     }
                 });

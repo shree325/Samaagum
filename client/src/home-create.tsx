@@ -2623,7 +2623,8 @@ export const DEFAULT_FREE_ENTITLEMENTS = {
   group_max_capacity: 25,
   group_can_restricted_access: false,
   event_allowed_registration_modes: ['free', 'cash'],
-  event_allowed_visibility: ['unlisted', 'invite_only'],
+  event_allowed_visibility: ['unlisted', 'custom'],
+  event_allowed_join_modes: ['restricted', 'invite'],
   event_max_participants: 100,
   event_checkin_methods: ['scanner', 'manual', 'gate'],
   event_can_create_paid_tickets: false
@@ -2636,7 +2637,10 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
   const allowedJoinModes = entitlements.group_allowed_join_modes || ['open', 'invite_only'];
   const entitlementMaxCap = entitlements.group_max_capacity ?? 25;
   const canJoinRestricted = allowedJoinModes.includes('restricted_access');
+  const canJoinOpen = allowedJoinModes.includes('open');
+  const canJoinInvite = allowedJoinModes.includes('invite_only');
   const canPublic = allowedVisibilities.includes('public');
+  const canUnlisted = allowedVisibilities.includes('unlisted');
   const canRestricted = allowedVisibilities.includes('restricted');
 
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
@@ -2694,14 +2698,14 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
 
   // Options Modals
   const [visModal, setVisModal] = useState(false);
-  const [visibility, setVisibility] = useState(isEdit ? (editGroup.visibility || "public") : (savedDraft.visibility || "public"));
+  const [visibility, setVisibility] = useState(isEdit ? (editGroup.visibility || "public") : (savedDraft.visibility || (canPublic ? "public" : (canUnlisted ? "private" : "hidden"))));
 
   const [joinElig, setJoinElig] = useState(isEdit ? (() => {
     const sje = editGroup.settings?.joinElig;
     if (sje === 'restricted' || sje === 'communities' || editGroup.joinMode === 'restricted') return 'restricted';
     if (sje === 'invite' || editGroup.joinMode === 'invite_only') return 'invite';
     return 'anyone';
-  })() : (savedDraft.joinElig || "anyone")); // anyone, restricted, invite
+  })() : (savedDraft.joinElig || (canJoinOpen ? "anyone" : (canJoinRestricted ? "restricted" : "invite")))); // anyone, restricted, invite
   const [accessModal, setAccessModal] = useState(false);
   const [selectedAccess, setSelectedAccess] = useState(() => {
     const d = isEdit ? (editGroup.settings?.restrictedAccess?.join || {}) : (savedDraft.selectedAccess || {});
@@ -3710,9 +3714,15 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
                   <button 
                     type="button" 
                     className={`vis-pill ${visibility === "private" ? "on" : ""}`} 
-                    onClick={() => setVisibility("private")}
+                    onClick={() => {
+                      if (!canUnlisted) {
+                        triggerUpgrade("Unlisted Group Visibility");
+                        return;
+                      }
+                      setVisibility("private");
+                    }}
                   >
-                    Unlisted
+                    {!canUnlisted && "🔒 "}Unlisted
                   </button>
                   <button 
                     type="button" 
@@ -3795,8 +3805,16 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
                 value={joinElig}
                 onChange={(e) => {
                   const val = e.target.value;
+                  if (val === "anyone" && !canJoinOpen) {
+                    triggerUpgrade("Public Join Eligibility");
+                    return;
+                  }
                   if (val === "restricted" && !canJoinRestricted) {
                     triggerUpgrade("Restricted Join Eligibility");
+                    return;
+                  }
+                  if (val === "invite" && !canJoinInvite) {
+                    triggerUpgrade("Invite Only Join Eligibility");
                     return;
                   }
                   setJoinElig(val);
@@ -3807,9 +3825,9 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
                 }}
                 style={{ padding: "10px 14px", fontSize: 13.5, width: "100%", marginBottom: 12 }}
               >
-                <option value="anyone">Public</option>
+                <option value="anyone">{!canJoinOpen && "🔒 "}Public</option>
                 <option value="restricted">{!canJoinRestricted && "🔒 "}Restricted Access</option>
-                <option value="invite">Invite Only</option>
+                <option value="invite">{!canJoinInvite && "🔒 "}Invite Only</option>
               </select>
 
               {/* Only the active configuration is rendered, others collapsed/hidden */}

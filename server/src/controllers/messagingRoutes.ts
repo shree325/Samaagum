@@ -1531,7 +1531,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         where: {
           event_id: eventId,
           booker_user_id: userId,
-          status: { in: ['confirmed', 'pending_approval'] }
+          status: { in: ['confirmed', 'pending_approval', 'pending_payment'] }
         }
       });
 
@@ -1678,6 +1678,15 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       const answers = request.body || {};
       const initialStatus = isWaitlisted ? 'waitlisted' : (approvalRequired ? 'pending_approval' : 'confirmed');
       const initialTicketStatus = isWaitlisted ? 'waitlisted' : (approvalRequired ? 'reserved' : 'confirmed');
+      const isCash = event.cash_enabled === true;
+      const initialStatus = approvalRequired
+        ? 'pending_approval'
+        : (isCash ? 'pending_payment' : 'confirmed');
+      const initialTicketStatus = (approvalRequired || isCash)
+        ? 'reserved'
+        : 'confirmed';
+      const paymentMethod = isCash ? 'cash' : 'free';
+      const ticketPriceMinor = ticketType?.price_amount_minor ? Number(ticketType.price_amount_minor) : 0;
 
       // Remove from wishlist if they join
       await EventService.removeWishlist(eventId, userId).catch(err => console.error('Failed to auto-remove from wishlist', err));
@@ -1690,8 +1699,8 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             event_id: eventId,
             booker_user_id: userId,
             status: initialStatus,
-            payment_method: 'free',
-            total_amount_minor: 0,
+            payment_method: paymentMethod,
+            total_amount_minor: ticketPriceMinor,
             total_currency: 'INR'
           }
         });
@@ -1702,7 +1711,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             booking_id: bk.id,
             ticket_type_id: ticketType.id,
             quantity: 1,
-            unit_price_amount_minor: 0,
+            unit_price_amount_minor: ticketPriceMinor,
             unit_price_currency: 'INR'
           }
         });
@@ -1753,7 +1762,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         await EventInvitationService.consumeToken(inviteToken, userId, 'join');
       }
 
-      if (approvalRequired) {
+      if (initialStatus === 'pending_approval') {
         let ownerUserId = null;
         const entityRow = await prisma.entities.findUnique({
           where: { id: event.hosted_by_entity_id }
@@ -1849,7 +1858,9 @@ export async function messagingRoutes(fastify: FastifyInstance) {
               attendeeName: requesterName,
               dateString: dateStr,
               venueString: venueStr,
-              paidAmount: booking.payment_method === 'free' ? 'Free' : `₹${booking.total_amount_minor || 0}`,
+              paidAmount: booking.payment_method === 'free'
+                ? 'Free'
+                : (booking.payment_method === 'cash' ? `₹${Number(booking.total_amount_minor || 0) / 100} (Pay in cash)` : `₹${Number(booking.total_amount_minor || 0) / 100}`),
               status: ticket.status === 'confirmed' ? 'Confirmed' : 'Reserved'
             });
 
@@ -1868,6 +1879,9 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           emailMsg = ` No email address found for user.`;
         }
 
+        if (initialStatus === 'pending_payment') {
+          return reply.send({ success: true, status: 'pending_payment', message: 'Joined event. Booking pending cash payment at the venue.' + emailMsg });
+        }
         return reply.send({ success: true, status: 'confirmed', message: 'Joined event successfully.' + emailMsg });
       }
     } catch (err: any) {

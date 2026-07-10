@@ -65,16 +65,43 @@ export class EventService {
     }
 
     // 2. Event type (registration mode and payment options)
+    const currentMode = eventData.cash_enabled ? 'cash' : (eventData.registration_mode === 'paid' ? 'paid' : 'free');
+    if (!(ents.event_allowed_registration_modes || []).includes(currentMode)) {
+      throw new Error(`The registration/payment mode "${currentMode === 'free' ? 'free RSVP' : currentMode}" is locked for your current plan.`);
+    }
     const isPaid = eventData.registration_mode === 'paid' || !!eventData.price;
     if (isPaid && !ents.event_can_create_paid_tickets) {
       throw new Error('Paid events are locked for your current plan. Upgrade to Standard to sell tickets.');
     }
 
-    // 3. Event visibility (listed state)
-    const listedVal = eventData.listed;
-    if (listedVal === 'listed') {
-      if (!ents.event_allowed_visibility.includes('public')) {
-        throw new Error('Your current plan only allows creating unlisted events. Upgrade to Standard to create public events.');
+    // 3. Event visibility and join eligibility checks
+    const visibilityVal = eventData.venue && typeof eventData.venue === 'object' ? eventData.venue.visibility : undefined;
+    const metaVal = eventData.venue && typeof eventData.venue === 'object' ? eventData.venue.meta : undefined;
+    const joinEligibilityVal = metaVal && typeof metaVal === 'object' ? metaVal.joinEligibility : undefined;
+
+    // Check visibility
+    if (visibilityVal) {
+      if (visibilityVal === 'public' && !ents.event_allowed_visibility.includes('public')) {
+        throw new Error('Public event visibility is locked for your current plan.');
+      }
+      if (visibilityVal === 'unlisted' && !ents.event_allowed_visibility.includes('unlisted')) {
+        throw new Error('Unlisted event visibility is locked for your current plan.');
+      }
+      if (visibilityVal === 'custom' && !ents.event_allowed_visibility.includes('custom')) {
+        throw new Error('Custom Access event visibility is locked for your current plan.');
+      }
+    }
+
+    // Check join eligibility / join modes
+    if (joinEligibilityVal) {
+      if (joinEligibilityVal === 'public' && !(ents.event_allowed_join_modes || []).includes('public')) {
+        throw new Error('Public join eligibility is locked for your current plan.');
+      }
+      if (joinEligibilityVal === 'restricted' && !(ents.event_allowed_join_modes || []).includes('restricted')) {
+        throw new Error('Restricted join eligibility is locked for your current plan.');
+      }
+      if (joinEligibilityVal === 'invite' && !(ents.event_allowed_join_modes || []).includes('invite')) {
+        throw new Error('Invite-only join eligibility is locked for your current plan.');
       }
     }
 
@@ -228,6 +255,7 @@ export class EventService {
       capacity_total: body.capacity_total,
       registration_mode: body.registration_mode === 'free' ? 'free_rsvp' : (body.registration_mode || 'free_rsvp'),
       approval_required: body.approval_required || false,
+      cash_enabled: body.cash_enabled || false,
       instruction: body.instruction,
       registration_status: body.registration_status,
       registration_opens_at: body.registration_opens_at ? new Date(body.registration_opens_at) : null,
@@ -743,6 +771,7 @@ export class EventService {
       capacity_total: body.capacity_total,
       registration_mode: body.registration_mode,
       approval_required: body.approval_required,
+      cash_enabled: body.cash_enabled,
       location_type: body.location_type,
       venue: body.venue,
       online_link: body.online_link,
@@ -1525,7 +1554,7 @@ export class EventService {
     });
 
     const bookings = await prisma.bookings.findMany({
-      where: { event_id: eventId, status: { in: ['confirmed', 'pending_approval'] } },
+      where: { event_id: eventId, status: { in: ['confirmed', 'pending_approval', 'pending_payment'] } },
       include: {
         users: { select: { id: true, first_name: true, last_name: true, primary_email: true, profile_image_data: true, profiles: { select: { display_name: true } } } }
       }
@@ -1715,7 +1744,7 @@ export class EventService {
     }
 
     const booking = await prisma.bookings.findFirst({
-      where: { event_id: eventId, booker_user_id: userId, status: 'confirmed' }
+      where: { event_id: eventId, booker_user_id: userId, status: { in: ['confirmed', 'pending_payment'] } }
     });
     if (booking) return 'member';
 
