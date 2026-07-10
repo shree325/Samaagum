@@ -1142,3 +1142,155 @@ html, body {
   line-height: 1;
   z-index: 2;
 }
+
+/* ============================================================
+   SAMAAGUM — Home Dashboard Enhancements
+   ============================================================ */
+
+/* Hero Carousel */
+.hero-carousel {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  width: 100%;
+  margin-bottom: 28px;
+  box-shadow: var(--sh-md);
+  background: var(--bg-3);
+  user-select: none;
+}
+.hero-track {
+  display: flex;
+  transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  width: 100%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-track {
+    transition: none !important;
+  }
+}
+.hero-slide {
+  flex-shrink: 0;
+  width: 100%;
+  position: relative;
+  cursor: pointer;
+}
+.hero-dots {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+.hero-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  border: none;
+  padding: 0;
+  transition: all 0.3s ease;
+}
+.hero-dot.active {
+  width: 24px;
+  border-radius: 4px;
+  background: #fff;
+}
+.hero-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.2s ease;
+}
+.hero-nav-btn:hover {
+  background: rgba(0, 0, 0, 0.5);
+  scale: 1.05;
+}
+.hero-nav-btn.prev {
+  left: 20px;
+}
+.hero-nav-btn.next {
+  right: 20px;
+}
+
+/* Skeleton loader */
+.skeleton {
+  background: linear-gradient(90deg, var(--border) 25%, var(--border-2) 50%, var(--border) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 8px;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Live badge */
+.badge-live {
+  background: #ef4444;
+  color: #fff;
+  border-radius: 99px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  animation: pulse-badge 1.5s infinite;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+@keyframes pulse-badge {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Countdown */
+.countdown {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+/* Empty states */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 20px;
+  color: var(--ink-3);
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+}
+
+/* Error states */
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px;
+  color: var(--ink-3);
+  text-align: center;
+  border: 1px solid rgba(229, 72, 77, 0.2);
+  border-radius: var(--r-lg);
+  background: rgba(229, 72, 77, 0.04);
+}
+

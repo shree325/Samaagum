@@ -61,7 +61,7 @@ export function Waitlist({ ev, st, go }) {
   const e = ev ? { ...base, ev: ev.title || base.ev, cover: ev.cover || base.cover, date: ev.date || base.date, time: ev.time || base.time, venue: ev.venue || base.venue } : base;
   
   // Detect if user is already waitlisted or if we start in join state
-  const isWaitlisted = st.waitlisted ? st.waitlisted.has(targetId) : false;
+  const isWaitlisted = (st.waitlisted ? st.waitlisted.has(targetId) : false) || (st.joinedEvents?.some(je => je.id === targetId && je.bookingStatus === 'waitlisted') ?? false);
   
   const [state, setState] = useState(isWaitlisted ? "QUEUED" : "JOIN"); // JOIN | QUEUED | INVITED | CONVERTED | EXPIRED
   const [refs, setRefs] = useState(0);
@@ -95,7 +95,7 @@ export function Waitlist({ ev, st, go }) {
     <div className="scroll">
       <div className="flow view-enter" style={{ maxWidth: 560, margin: "0 auto", padding: "24px 16px" }}>
         <div className="flow-head">
-          <button className="back" onClick={() => go("home")}><I.arrowL /></button>
+          <button className="back" onClick={() => go("back")}><I.arrowL /></button>
           <div><div className="flow-title">Waitlist</div><div className="flow-sub">{e.ev}</div></div>
         </div>
 
@@ -209,7 +209,7 @@ export function Waitlist({ ev, st, go }) {
             <div className="fcard-pad" style={{ paddingTop: 4, paddingBottom: 24 }}>
               <div style={{ display: "flex", gap: 10 }}>
                 <button className="hbtn hbtn--primary hbtn--block" onClick={() => { setState("QUEUED"); if (inviteTimer?.reset) inviteTimer.reset(); }}>Rejoin waitlist</button>
-                <button className="hbtn hbtn--ghost" onClick={() => go("home")}>Home</button>
+                <button className="hbtn hbtn--ghost" onClick={() => go("back")}>Back</button>
               </div>
             </div>
           </div>

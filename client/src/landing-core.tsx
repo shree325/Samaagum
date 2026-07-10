@@ -42,30 +42,42 @@ export function initLenis() {
 
 /* ---------- Scrub engine (scroll-gated, rAF, imperative) ---------- */
 export const scrubs = new Set<any>();
-export const rafId = null;
 let isTickScheduled = false;
+
+export function updateLayouts() {
+  if (typeof window === 'undefined') return;
+  scrubs.forEach((item) => {
+    if (item.el) {
+      const rect = item.el.getBoundingClientRect();
+      item.top = rect.top + window.scrollY;
+      item.height = rect.height;
+    }
+  });
+}
 
 function runScrubs() {
   if (typeof window === 'undefined') return;
   const vh = window.innerHeight;
+  const sy = window.scrollY;
 
-  // Batch all reads to prevent layout thrashing (forced synchronous layout reflows)
   const itemsWithRects: any[] = [];
   scrubs.forEach((item) => {
     if (!item.el) return;
-    const r = item.el.getBoundingClientRect();
     
-    // Performance optimization: skip off-screen elements that are way out of view
-    // (e.g. more than 1 viewport height above or below the viewport)
-    if (r.bottom < -vh || r.top > vh * 2) {
+    // Use pre-measured values if available
+    const top = (typeof item.top === 'number' ? item.top : (item.el.getBoundingClientRect().top + sy)) - sy;
+    const height = typeof item.height === 'number' ? item.height : item.el.getBoundingClientRect().height;
+    const bottom = top + height;
+    
+    if (bottom < -vh || top > vh * 2) {
       return;
     }
     
-    const p = Math.max(0, Math.min(1, (vh - r.top) / (vh + r.height)));
+    const p = Math.max(0, Math.min(1, (vh - top) / (vh + height)));
+    const r = { top, bottom, height };
     itemsWithRects.push({ item, r, p });
   });
 
-  // Batch all writes
   itemsWithRects.forEach(({ item, r, p }) => {
     item.fn(p, r, vh, item.el);
   });
@@ -84,7 +96,14 @@ export function scheduleTick() {
 // Mark dirty and schedule tick only when actually scrolling or resizing
 if (typeof window !== 'undefined') {
   window.addEventListener('scroll', scheduleTick, { passive: true });
-  window.addEventListener('resize', scheduleTick, { passive: true });
+  window.addEventListener('resize', () => {
+    updateLayouts();
+    scheduleTick();
+  }, { passive: true });
+  window.addEventListener('load', () => {
+    updateLayouts();
+    scheduleTick();
+  }, { passive: true });
 }
 
 export function useScrub(fn, deps = []) {
@@ -92,11 +111,26 @@ export function useScrub(fn, deps = []) {
   useEffect(() => {
     const el = ref.current;
     if (!el || REDUCED) return;
-    const item = { el, fn };
+    
+    const rect = el.getBoundingClientRect();
+    const item = { 
+      el, 
+      fn,
+      top: rect.top + window.scrollY,
+      height: rect.height
+    };
     scrubs.add(item);
     scheduleTick();
+    
+    // Recalculate shortly after mount in case layout shifted from dynamic content/fonts
+    const timerId = setTimeout(() => {
+      updateLayouts();
+      scheduleTick();
+    }, 450);
+    
     return () => {
       scrubs.delete(item);
+      clearTimeout(timerId);
     };
   }, deps);
   return ref;

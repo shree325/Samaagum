@@ -63,7 +63,6 @@ export function Sidebar({ view, go, counts, collapsed, onToggleCollapse, chatSet
   const social = [
     ...(showMessages ? [{ k:"messages", ic:<I.chat/>, label:"Messages", badge: counts.messages }] : []),
     { k:"notifications", ic:<I.bell/>, label:"Notifications", badge: counts.notifs },
-    { k:"profile", ic:<I.user/>, label:"Profile" },
   ];
   const active = (k) => view === k || (k==="events" && view==="event") || (k==="groups" && view==="group");
   return (
@@ -114,7 +113,7 @@ export function Sidebar({ view, go, counts, collapsed, onToggleCollapse, chatSet
       </nav>
       <div className="sb-foot" style={collapsed ? { display: "flex", justifyContent: "center" } : {}}>
         <button className="sb-user" onClick={()=>go("profile")} title={ME.name} style={collapsed ? { padding: 4, justifyContent: "center" } : {}}>
-          <Avatar name={ME.name} size={36} className="ring" />
+          <Avatar userId={window.ME?.id} name={ME.name} img={ME.img} size={36} className="ring" />
           {!collapsed && (
             <>
               <span className="meta"><span className="n">{ME.name}</span><span className="h">{ME.handle}</span></span>
@@ -232,32 +231,43 @@ export function Topbar({ go, counts, dark, onToggleTheme, city, onCity, chatSett
                     <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--ink-3)", padding: "4px 8px", letterSpacing: "0.5px" }}>
                       Events
                     </div>
-                    {searchResults.events.map(ev => (
-                      <button
-                        key={ev.id}
-                        onClick={() => handleResultClick("event", ev)}
-                        style={{
-                          width: "100%",
-                          textAlign: "left",
-                          background: "none",
-                          border: "none",
-                          padding: "8px",
-                          borderRadius: "6px",
-                          cursor: "pointer",
-                          color: "var(--ink)",
-                          fontSize: "13.5px",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          transition: "background 0.2s"
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.background = "var(--border)"}
-                        onMouseLeave={(e) => e.currentTarget.style.background = "none"}
-                      >
-                        <I.ticket style={{ width: "16px", height: "16px", color: "var(--accent-2)" }} />
-                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.title}</span>
-                      </button>
-                    ))}
+                    {searchResults.events.map(ev => {
+                      const noImageUrl = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200"><rect width="100%" height="100%" fill="%23f3f4f6" /><circle cx="100" cy="90" r="45" fill="none" stroke="%230f4c81" stroke-width="4"/><line x1="68" y1="58" x2="132" y2="122" stroke="%230f4c81" stroke-width="4"/><path d="M82 78h36v26H82zm7-8h22l2 4H87z" fill="none" stroke="%230f4c81" stroke-width="3" stroke-linejoin="round"/><circle cx="100" cy="91" r="7" fill="none" stroke="%230f4c81" stroke-width="3"/><text x="100" y="165" font-family="sans-serif" font-size="14" font-weight="bold" fill="%230f4c81" text-anchor="middle">NO IMAGE</text></svg>';
+                      const coverUrl = ev.cover 
+                        ? (ev.cover.startsWith("http") || ev.cover.startsWith("data:") || ev.cover.startsWith("linear-gradient") || ev.cover.startsWith("var(")
+                            ? ev.cover 
+                            : `${apiBase}/${ev.cover.startsWith('/') ? ev.cover.substring(1) : ev.cover}`)
+                        : noImageUrl;
+                      const coverBg = `url("${coverUrl}") center/cover no-repeat`;
+                      return (
+                        <button
+                          key={ev.id}
+                          onClick={() => handleResultClick("event", ev)}
+                          style={{
+                            width: "100%",
+                            textAlign: "left",
+                            background: "none",
+                            border: "none",
+                            padding: "8px",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            color: "var(--ink)",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "12px",
+                            transition: "background 0.2s"
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = "var(--border)"}
+                          onMouseLeave={(e) => e.currentTarget.style.background = "none"}
+                        >
+                          <div style={{ width: "60px", height: "34px", borderRadius: "6px", background: coverBg, flexShrink: 0 }} />
+                          <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+                            <span style={{ fontSize: "13.5px", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.title}</span>
+                            <span style={{ fontSize: "11px", color: "var(--ink-3)", marginTop: "2px" }}>{ev.attendeeCount || 0} {ev.attendeeCount === 1 ? 'attendee' : 'attendees'}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -266,32 +276,43 @@ export function Topbar({ go, counts, dark, onToggleTheme, city, onCity, chatSett
                     <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--ink-3)", padding: "4px 8px", letterSpacing: "0.5px" }}>
                       Groups
                     </div>
-                    {searchResults.groups.map(grp => (
-                      <button
-                        key={grp.id}
-                        onClick={() => handleResultClick("group", grp)}
-                        style={{
-                          width: "100%",
-                          textAlign: "left",
-                          background: "none",
-                          border: "none",
-                          padding: "8px",
-                          borderRadius: "6px",
-                          cursor: "pointer",
-                          color: "var(--ink)",
-                          fontSize: "13.5px",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          transition: "background 0.2s"
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.background = "var(--border)"}
-                        onMouseLeave={(e) => e.currentTarget.style.background = "none"}
-                      >
-                        <I.groups style={{ width: "16px", height: "16px", color: "var(--accent-1)" }} />
-                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{grp.name}</span>
-                      </button>
-                    ))}
+                    {searchResults.groups.map(grp => {
+                      const noImageUrl = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200"><rect width="100%" height="100%" fill="%23f3f4f6" /><circle cx="100" cy="90" r="45" fill="none" stroke="%230f4c81" stroke-width="4"/><line x1="68" y1="58" x2="132" y2="122" stroke="%230f4c81" stroke-width="4"/><path d="M82 78h36v26H82zm7-8h22l2 4H87z" fill="none" stroke="%230f4c81" stroke-width="3" stroke-linejoin="round"/><circle cx="100" cy="91" r="7" fill="none" stroke="%230f4c81" stroke-width="3"/><text x="100" y="165" font-family="sans-serif" font-size="14" font-weight="bold" fill="%230f4c81" text-anchor="middle">NO IMAGE</text></svg>';
+                      const iconUrl = grp.icon 
+                        ? (grp.icon.startsWith("http") || grp.icon.startsWith("data:") || grp.icon.startsWith("linear-gradient") || grp.icon.startsWith("var(")
+                            ? grp.icon 
+                            : `${apiBase}/${grp.icon.startsWith('/') ? grp.icon.substring(1) : grp.icon}`)
+                        : noImageUrl;
+                      const iconBg = `url("${iconUrl}") center/cover no-repeat`;
+                      return (
+                        <button
+                          key={grp.id}
+                          onClick={() => handleResultClick("group", grp)}
+                          style={{
+                            width: "100%",
+                            textAlign: "left",
+                            background: "none",
+                            border: "none",
+                            padding: "8px",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            color: "var(--ink)",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "12px",
+                            transition: "background 0.2s"
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = "var(--border)"}
+                          onMouseLeave={(e) => e.currentTarget.style.background = "none"}
+                        >
+                          <div style={{ width: "60px", height: "34px", borderRadius: "6px", background: iconBg, flexShrink: 0 }} />
+                          <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+                            <span style={{ fontSize: "13.5px", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{grp.name}</span>
+                            <span style={{ fontSize: "11px", color: "var(--ink-3)", marginTop: "2px" }}>{grp.memberCount || 0} {grp.memberCount === 1 ? 'member' : 'members'}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </>

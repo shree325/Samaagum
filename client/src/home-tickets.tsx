@@ -277,7 +277,7 @@ export function MyTickets({ st, go }) {
   const pending = [];
   for (const e of joinedPool) {
     if (!classified.has(e.id) && e.bookingStatus === 'pending_approval') {
-      pending.push(e);
+      pending.push(normalizeEvent(e));
       classified.add(e.id);
     }
   }
@@ -287,6 +287,12 @@ export function MyTickets({ st, go }) {
   const waitlistedEvents = (typeof FEATURED !== 'undefined' && typeof EVENTS !== 'undefined')
     ? [FEATURED, ...EVENTS].filter((e) => waitlistIds.includes(e.id))
     : [];
+  for (const e of joinedPool) {
+    if (!classified.has(e.id) && e.bookingStatus === 'waitlisted') {
+      waitlistedEvents.push(normalizeEvent(e));
+      classified.add(e.id);
+    }
+  }
 
   // --- 5. UPCOMING ---
   const upcoming = [];
@@ -314,9 +320,8 @@ export function MyTickets({ st, go }) {
     : tab === "pending" ? pending
       : tab === "past" ? pastList
         : tab === "waitlist" ? waitlistedEvents
-          : tab === "archived" ? archivedList
-            : tab === "wishlist" ? (st.wishlistEvents || [])
-              : createdList;
+          : tab === "wishlist" ? (st.wishlistEvents || [])
+            : createdList;
 
   return (
     <div className="scroll">
@@ -324,7 +329,7 @@ export function MyTickets({ st, go }) {
         <div className="sec-bar" style={{ marginBottom: 18 }}>
           <h2 style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => go("discover", "events")}>
             My Events
-            <span style={{ fontSize: 18, color: "var(--ink-3)", fontWeight: 500 }}>{upcoming.length + pending.length + waitlistedEvents.length + createdList.length + pastList.length + archivedList.length + (st.wishlistEvents?.length || 0)}</span>
+            <span style={{ fontSize: 18, color: "var(--ink-3)", fontWeight: 500 }}>{upcoming.length + pending.length + waitlistedEvents.length + createdList.length + pastList.length + (st.wishlistEvents?.length || 0)}</span>
           </h2>
           <div style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
             <div className="seg-tabs">
@@ -334,7 +339,6 @@ export function MyTickets({ st, go }) {
               <button className={tab === "wishlist" ? "on" : ""} onClick={() => setTab("wishlist")}>Wishlist · {st.wishlistEvents?.length || 0}</button>
               <button className={tab === "created" ? "on" : ""} onClick={() => setTab("created")}>Created · {createdList.length}</button>
               <button className={tab === "past" ? "on" : ""} onClick={() => setTab("past")}>Past · {pastList.length}</button>
-              <button className={tab === "archived" ? "on" : ""} onClick={() => setTab("archived")}>Archived · {archivedList.length}</button>
             </div>
             <button className="hbtn hbtn--primary hbtn--sm" onClick={() => go("create-event")}>
               <I.plus style={{ width: 14, height: 14 }} /> Create Event
@@ -348,8 +352,6 @@ export function MyTickets({ st, go }) {
           <Empty icon={<I.plus />} title="No hosted events" text="Create and share your first event to host it here." action={<button className="hbtn hbtn--primary" onClick={() => go("create-event")}>Create Event</button>} />
         ) : tab === "wishlist" && (st.wishlistEvents?.length || 0) === 0 ? (
           <Empty icon={<I.heart />} title="Your wishlist is empty" text="Save events you're interested in to easily find them later." action={<button className="hbtn hbtn--primary" onClick={() => go("discover", "events")}>Discover events</button>} />
-        ) : tab === "archived" && archivedList.length === 0 ? (
-          <Empty icon={<I.archive />} title="No archived events" text="Cancelled or removed events will appear here for your records." action={<button className="hbtn hbtn--primary" onClick={() => go("discover", "events")}>Discover events</button>} />
         ) : list.length === 0 ? (
           <Empty icon={<I.ticket />} title="No events yet" text="When you book or RSVP to an event, your activity lives here." action={<button className="hbtn hbtn--primary" onClick={() => go("discover", "events")}>Discover events</button>} />
         ) : tab === "pending" ? (
@@ -1023,6 +1025,7 @@ export function VerifyTicketPanel({ eventId, onCheckedIn }) {
             const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const code = jsQR(imgData.data, imgData.width, imgData.height);
             if (code && code.data) {
+              setResult(null);
               setScanning(false);
               setTokenInput(code.data);
               lookup(code.data);
@@ -1052,13 +1055,17 @@ export function VerifyTicketPanel({ eventId, onCheckedIn }) {
       <div style={{ display: "flex", gap: 8 }}>
         <input
           value={tokenInput}
-          onChange={ev2 => setTokenInput(ev2.target.value)}
-          onKeyDown={ev2 => { if (ev2.key === 'Enter') lookup(tokenInput); }}
+          onChange={ev2 => { setTokenInput(ev2.target.value); setResult(null); }}
+          onFocus={() => setResult(null)}
+          onKeyDown={ev2 => { if (ev2.key === 'Enter') { setResult(null); lookup(tokenInput); } }}
           placeholder="Paste or type ticket token…"
           style={{ flex: 1, padding: "9px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)", fontSize: 13 }}
         />
-        <button className="hbtn hbtn--primary hbtn--sm" disabled={busy || !tokenInput.trim()} onClick={() => lookup(tokenInput)}>Verify</button>
-        <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => setScanning(s => !s)}>{scanning ? "Stop scan" : "Scan QR"}</button>
+        <button className="hbtn hbtn--primary hbtn--sm" disabled={busy || !tokenInput.trim()} onClick={() => { setResult(null); lookup(tokenInput); }}>Verify</button>
+        <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => {
+          if (!scanning) setResult(null);
+          setScanning(s => !s);
+        }}>{scanning ? "Stop scan" : "Scan QR"}</button>
       </div>
 
       {scanning && (

@@ -650,7 +650,7 @@ export function ScreenLocation({ m }) {
     const checkFeature = async () => {
       try {
         const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:3000' : window.location.origin;
-        const res = await fetch(`${apiBase}/api/features`);
+        const res = await fetch(`${apiBase}/api/public/features`);
         const json = await res.json();
         if (json.success && json.data && json.data.location_active === false) {
           m.set({ city: null });

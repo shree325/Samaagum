@@ -38,6 +38,9 @@ export const EventCard = React.memo(function EventCard({ ev, onOpen, wishlisted,
       </div>
       <div className="body">
         <div className="ttl">{ev.title}</div>
+        {ev.hostType === 'group' && ev.hostName && (
+          <div className="meta-row" style={{ color: "var(--brand-main)", fontWeight: 500 }}><span className="ic"><I.groups/></span>{ev.hostName}</div>
+        )}
         <div className="meta-row"><span className="ic"><I.clock/></span>{dateStr} · {timeStr}</div>
         <div className="meta-row"><span className="ic">{ev.online?<I.online/>:<I.pin/>}</span>{venueStr}</div>
         <div className="foot">
@@ -88,7 +91,12 @@ export const FeatureCard = React.memo(function FeatureCard({ ev, onOpen, wishlis
           <div className="row"><span className="ico"><I.pin/></span><span><span className="k">Where</span><br/><span className="v">{venueStr}, {ev.city || ''}</span></span></div>
         </div>
         <div className="factions">
-          <button className="hbtn hbtn--primary" onClick={(e)=>{ e.stopPropagation(); onOpen(ev); }}>Get tickets · {ev.price || 'Free'}</button>
+          {(() => {
+            const isSoldOut = ev.going >= (ev.cap || 9999) || ev.id === "ev-feat";
+            const hasWaitlist = ev.waitlist !== undefined ? ev.waitlist : false;
+            if (isSoldOut && !hasWaitlist) return <button className="hbtn hbtn--soft" disabled>Sold Out</button>;
+            return <button className="hbtn hbtn--primary" onClick={(e)=>{ e.stopPropagation(); onOpen(ev); }}>Get tickets · {ev.price || 'Free'}</button>;
+          })()}
           <div className="att"><div className="going"><div className="stack" style={{ display:"flex" }}>
             {["Kabir A","Dev K","Riya T","Sam K"].map((n,i)=><Avatar key={i} name={n} size={26} style={{ marginLeft: i? -9:0, border:"2px solid var(--surface)" }}/>)}
           </div></div><span>{ev.going || 0} going</span></div>
@@ -206,7 +214,7 @@ export const PersonCard = React.memo(function PersonCard({ p, connected, onConne
   return (
     <div className="pcard rise">
       <div className="pc-cov" style={{ background: p.cover }} />
-      <Avatar name={p.name} size={64} />
+      <Avatar name={p.name} size={64} img={p.photo || p.img} />
       <div className="pn">{p.name}</div>
       <div className="ph">{p.role}</div>
       <div className="pmut"><I.users style={{ width:13, height:13 }}/>{p.mutual} mutual connections</div>
@@ -225,7 +233,7 @@ export const PersonCard = React.memo(function PersonCard({ p, connected, onConne
 export const DiscussionRow = React.memo(function DiscussionRow({ d, onOpen }: any) {
   return (
     <div className="disc" onClick={onOpen}>
-      <Avatar name={d.who} size={40} />
+      <Avatar name={d.who} size={40} img={d.photo || d.img || d.cover} />
       <div className="dmain">
         <div className="dtop">
           {d.pinned && <span className="pin"><I.bookmarkF style={{ width:12, height:12 }}/>Pinned</span>}

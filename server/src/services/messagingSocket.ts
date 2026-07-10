@@ -368,11 +368,22 @@ export async function startMessaging(io: Server): Promise<void> {
         let featureName = "";
 
         if (conversation.event_id) {
-          isFeatureAllowed = settings.allowEventChat;
+          isFeatureAllowed = settings.allowEventChat && settings.communicationPolicies?.eventChatsEnabled !== false;
           allowedRoles = settings.rolePermissions?.eventChat || [];
           featureName = "Event chat";
+
+          if (settings.communicationPolicies?.eventAutoArchive) {
+            const event = await prisma.events.findUnique({
+              where: { id: conversation.event_id },
+              select: { ends_at: true }
+            });
+            if (event?.ends_at && new Date() > new Date(event.ends_at)) {
+              if (callback) callback({ success: false, error: "This event chat has been archived and is now read-only." });
+              return;
+            }
+          }
         } else if (conversation.type === "group") {
-          isFeatureAllowed = settings.allowGroupChat;
+          isFeatureAllowed = settings.allowGroupChat && settings.communicationPolicies?.groupChatsEnabled !== false;
           allowedRoles = settings.rolePermissions?.groupChat || [];
           featureName = "Group chat";
         } else if (conversation.type === "dm") {
@@ -429,6 +440,42 @@ export async function startMessaging(io: Server): Promise<void> {
         if (!hasRolePermission) {
           if (callback) callback({ success: false, error: `Your role does not have permission to send messages in this chat type` });
           return;
+        }
+
+        // Rate Limits
+        const maxMessagesPerMin = settings.communicationPolicies?.maxMessagesPerMin;
+        if (maxMessagesPerMin && maxMessagesPerMin > 0) {
+          const oneMinuteAgo = new Date(Date.now() - 60000);
+          const messageCount = await prisma.messages.count({
+            where: {
+              sender_user_id: userId,
+              created_at: { gte: oneMinuteAgo }
+            }
+          });
+          if (messageCount >= maxMessagesPerMin) {
+            if (callback) callback({ success: false, error: "Rate limit exceeded. You are sending messages too fast." });
+            return;
+          }
+        }
+
+        if (conversation.type === "dm") {
+          const maxDmsPerDay = settings.communicationPolicies?.maxDmsPerDay;
+          if (maxDmsPerDay && maxDmsPerDay > 0) {
+            const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            const dmCount = await prisma.messages.count({
+              where: {
+                sender_user_id: userId,
+                created_at: { gte: oneDayAgo },
+                conversations: {
+                  type: "dm"
+                }
+              }
+            });
+            if (dmCount >= maxDmsPerDay) {
+              if (callback) callback({ success: false, error: "Daily direct message limit reached." });
+              return;
+            }
+          }
         }
 
         // Enforce Communication Policies
@@ -798,5 +845,25 @@ export function emitProfileUpdate(userId: string, profileData: any) {
 export function sendNotificationToUser(userId: string, event: string, payload: any) {
   if (chatNamespace) {
     chatNamespace.to(`user:${userId}`).emit(event, payload);
+  }
+}
+
+export async function disconnectUserSockets(userId: string) {
+  if (chatNamespace) {
+    try {
+      const sockets = await chatNamespace.in(`user:${userId}`).fetchSockets();
+      for (const socket of sockets) {
+        socket.disconnect(true);
+      }
+      console.log(`🔌 Forcefully disconnected sockets for suspended user: ${userId}`);
+    } catch (err) {
+      console.error(`❌ Error disconnecting sockets for user ${userId}:`, err);
+    }
+  }
+}
+
+export function broadcastWishlistUpdate(eventId: string, count: number) {
+  if (chatNamespace) {
+    chatNamespace.emit('event.wishlist.update', { eventId, count });
   }
 }

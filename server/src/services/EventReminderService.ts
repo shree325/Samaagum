@@ -12,7 +12,7 @@ import { sendNotificationToUser } from './messagingSocket';
 export class EventReminderService {
 
   /** Windows (in minutes) at which to fire reminders */
-  private static readonly REMINDER_WINDOWS = [60, 30, 10, 5, 2, 1] as const;
+  private static readonly REMINDER_WINDOWS = [60, 30, 10, 5, 2, 1, 0] as const;
 
   /**
    * Finds events starting within [windowMin - 1, windowMin + 1] minutes,
@@ -40,30 +40,58 @@ export class EventReminderService {
           title: true,
           starts_at: true,
           tenant_id: true,
+          hosted_by_entity_id: true,
         },
       });
 
       for (const event of events) {
         const templateKey = `event_reminder_${windowMin}min_${event.id}`;
 
-        // Load confirmed attendees (bookings with status confirmed/approved)
+        // 1. Attendees (bookings)
         const bookings = await prisma.bookings.findMany({
           where: {
             event_id: event.id,
             status: { in: ['confirmed', 'pending_approval'] },
           },
-          select: {
-            booker_user_id: true,
-            tenant_id: true,
+          select: { booker_user_id: true },
+        });
+        const attendees = bookings.map(b => b.booker_user_id).filter(Boolean) as string[];
+
+        // 2. Team assignments (hosts, co-hosts)
+        const team = await prisma.event_team_assignments.findMany({
+          where: {
+            event_id: event.id,
+            state: 'active'
           },
+          select: { user_id: true }
+        });
+        const teamMembers = team.map(t => t.user_id).filter(Boolean) as string[];
+
+        // 3. Group members or single user host
+        let hostMembers: string[] = [];
+        const groupHost = await prisma.groups.findFirst({
+          where: { entity_id: event.hosted_by_entity_id }
         });
 
+        if (groupHost) {
+          const memberships = await prisma.group_memberships.findMany({
+            where: { group_id: event.hosted_by_entity_id, state: 'active' },
+            select: { user_id: true }
+          });
+          hostMembers = memberships.map(m => m.user_id).filter(Boolean) as string[];
+        } else {
+          // It might be a user directly
+          const userHost = await prisma.users.findUnique({
+            where: { id: event.hosted_by_entity_id },
+            select: { id: true }
+          });
+          if (userHost) {
+            hostMembers = [userHost.id];
+          }
+        }
+
         const userIds = [
-          ...new Set(
-            bookings
-              .map(b => b.booker_user_id)
-              .filter((id): id is string => !!id)
-          ),
+          ...new Set([...attendees, ...teamMembers, ...hostMembers])
         ];
 
         if (userIds.length === 0) continue;
@@ -85,9 +113,12 @@ export class EventReminderService {
             : windowMin === 10 ? '10 minutes'
             : windowMin === 5  ? '5 minutes'
             : windowMin === 2  ? '2 minutes'
-            : '1 minute';
+            : windowMin === 1  ? '1 minute'
+            : 'now';
 
-          const text = `⏰ <b>${event.title}</b> starts in <b>${label}</b>!`;
+          const text = windowMin === 0
+            ? `🚀 <b>${event.title}</b> is starting now!`
+            : `⏰ <b>${event.title}</b> starts in <b>${label}</b>!`;
 
           // Write dedup record first (prevent double-send if the loop runs again)
           try {
@@ -114,7 +145,8 @@ export class EventReminderService {
             eventId: event.id,
             eventTitle: event.title,
             reminderMin: windowMin,
-          });
+          }
+);
 
           console.log(
             `[EventReminderService] Sent ${windowMin}min reminder for "${event.title}" → user ${userId}`
@@ -139,6 +171,6 @@ export class EventReminderService {
       this.checkUpcomingEvents().catch(console.error);
     }, 60 * 1000);
 
-    console.log('📅 Event Reminder Scheduler initialized (polls every 60s for 60/30/10/5/2/1-min reminders)');
+    console.log('📅 Event Reminder Scheduler initialized (polls every 60s for 60/30/10/5/2/1/0-min reminders)');
   }
 }
