@@ -511,8 +511,6 @@ export const adminApi = {
 
 
 
-export const ChatControlsView = window.ChatControlsView;
-
 // --- APP COMPONENT ---
 export function App() {
   const [user, setUser] = useState(() => {
