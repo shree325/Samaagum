@@ -567,6 +567,7 @@ model events {
   registration_status    String                   @default("OPEN")
   registration_opens_at  DateTime?                @db.Timestamptz(6)
   registration_closes_at DateTime?                @db.Timestamptz(6)
+  settings               Json?
   addons                 addons[]
   bookings               bookings[]
   bundles                bundles[]
@@ -2699,6 +2700,7 @@ enum booking_status {
   expired
   cancelled
   refunded
+  waitlisted
 }
 
 enum checkin_method {
@@ -2922,6 +2924,7 @@ enum ticket_status {
   checked_in
   cancelled
   refunded
+  waitlisted
 }
 
 enum ticket_visibility {
