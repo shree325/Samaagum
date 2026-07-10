@@ -3318,7 +3318,6 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                         </span>
                       </div>
                     </div>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -3547,6 +3546,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
 
         </div>
       </div>
+    </div>
 
       {tzModalOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
