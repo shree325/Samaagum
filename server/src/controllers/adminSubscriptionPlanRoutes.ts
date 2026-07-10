@@ -170,7 +170,7 @@ export const subscriptionPlanRoutes: FastifyPluginAsync = async (fastify: Fastif
                     await prisma.plans.update({
                         where: { id: corePlan.id },
                         data: {
-                            entitlements: limits !== undefined ? limits : (features !== undefined ? features : {})
+                            entitlements: limits !== undefined ? limits : (updated?.limits || {})
                         }
                     });
                 }
@@ -218,7 +218,7 @@ export const subscriptionPlanRoutes: FastifyPluginAsync = async (fastify: Fastif
                     userIds.forEach(uid => {
                         sendNotificationToUser(uid, 'entitlements.updated', {
                             planName: displayName || plan.display_name,
-                            entitlements: limits !== undefined ? limits : (features !== undefined ? features : {})
+                            entitlements: limits !== undefined ? limits : (updated?.limits || {})
                         });
                     });
                 } catch (socketErr) {

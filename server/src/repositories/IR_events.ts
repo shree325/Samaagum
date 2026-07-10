@@ -23,6 +23,7 @@ export interface IEvent {
   registration_status?: 'OPEN' | 'CLOSED' | 'SCHEDULED';
   registration_opens_at?: Date | null;
   registration_closes_at?: Date | null;
+  settings?: Record<string, unknown> | null;
   created_at?: Date;
   updated_at?: Date;
 }

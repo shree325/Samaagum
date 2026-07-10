@@ -51,7 +51,7 @@ class LocationService {
     }
   }
 
-  public search(query: string, limit: number = 10): CityLocation[] {
+  public async search(query: string, limit: number = 10): Promise<(CityLocation & { is_active: boolean })[]> {
     if (!this.isLoaded) {
       return [];
     }
@@ -76,13 +76,27 @@ class LocationService {
     if (results.length < limit) {
       for (const city of this.cities) {
         if (!city.name.toLowerCase().startsWith(lowerQuery) && city.name.toLowerCase().includes(lowerQuery)) {
-          results.push(city);
+          if (!results.some(r => r.id === city.id)) {
+            results.push(city);
+          }
         }
         if (results.length >= limit) break;
       }
     }
 
-    return results;
+    const cityNames = results.map(r => r.name);
+    const controls = await prisma.city_controls.findMany({
+      where: { city_name: { in: cityNames } },
+      select: { city_name: true, is_active: true }
+    });
+
+    return results.map(r => {
+      const ctrl = controls.find(c => c.city_name.toLowerCase() === r.name.toLowerCase());
+      return {
+        ...r,
+        is_active: ctrl ? ctrl.is_active : true
+      };
+    });
   }
   
   public getCityById(id: string): CityLocation | undefined {

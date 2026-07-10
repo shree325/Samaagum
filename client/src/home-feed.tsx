@@ -541,6 +541,8 @@ export function HomeFeed({ st, go }: any) {
             toggleWishlist={toggleWishlist}
           />
         )}
+        {/* Featured */}
+        <FeatureCard ev={FEATURED} onOpen={(e) => go("event", e)} wishlisted={wishlisted.has(FEATURED.id)} wishlistCount={wishlistCounts[FEATURED.id] !== undefined ? wishlistCounts[FEATURED.id] : (FEATURED.wishlistCount || 0)} onWishlist={() => toggleWishlist(FEATURED.id)} />
 
         {/* Recommended rail */}
         <div className="section">
@@ -563,6 +565,9 @@ export function HomeFeed({ st, go }: any) {
                   onWishlist={() => toggleWishlist(ev.id)}
                   registered={registered.has(ev.id)}
                 />
+              {filtered.map(ev => (
+                <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)}
+                  wishlisted={wishlisted.has(ev.id)} wishlistCount={wishlistCounts[ev.id] !== undefined ? wishlistCounts[ev.id] : (ev.wishlistCount || 0)} onWishlist={() => toggleWishlist(ev.id)} registered={registered.has(ev.id)} />
               ))}
             </div>
           ) : (
@@ -623,6 +628,13 @@ export function HomeFeed({ st, go }: any) {
                 action={<button className="hbtn hbtn--soft hbtn--sm" onClick={() => go("discover", "events")}>Explore Events</button>}
               />
             )}
+        <div className="section">
+          <SectionBar title="Your upcoming events" count={UPCOMING.length} onMore={() => go("events")} />
+          <div className="ev-grid">
+            {UPCOMING.map(ev => (
+              <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)}
+                wishlisted={wishlisted.has(ev.id)} wishlistCount={wishlistCounts[ev.id] !== undefined ? wishlistCounts[ev.id] : (ev.wishlistCount || 0)} onWishlist={() => toggleWishlist(ev.id)} registered={true} />
+            ))}
           </div>
         )}
 
@@ -858,9 +870,13 @@ export function Discover({ st, go, param }) {
     fetchCategories();
   }, [apiBase]);
 
-  const fetchEvents = React.useCallback(async () => {
+  const fetchEvents = React.useCallback(async (currentCity?: string) => {
     try {
-      const res = await fetch(`${apiBase}/api/events`);
+      const token = localStorage.getItem('token');
+      const cityQuery = currentCity && currentCity !== "Global" ? `?city=${encodeURIComponent(currentCity)}` : '';
+      const res = await fetch(`${apiBase}/api/events${cityQuery}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
       const data = await res.json();
       if (data.success) {
         setDbEvents(data.data || []);
@@ -871,7 +887,7 @@ export function Discover({ st, go, param }) {
   }, [apiBase]);
 
   React.useEffect(() => {
-    fetchEvents();
+    fetchEvents(city);
     fetchGroups(city);
   }, [city, fetchEvents, fetchGroups]);
 
@@ -880,7 +896,7 @@ export function Discover({ st, go, param }) {
       const socketUrl = apiBase ? `${apiBase}/groups` : "/groups";
       const socket = window.io(socketUrl, { transports: ['websocket'] });
       socket.on('groups_updated', () => fetchGroups(city));
-      socket.on('events_updated', () => fetchEvents());
+      socket.on('events_updated', () => fetchEvents(city));
       return () => socket.disconnect();
     }
   }, [apiBase, city, fetchGroups, fetchEvents]);
@@ -926,7 +942,11 @@ export function Discover({ st, go, param }) {
       attendees: [],
       status: e.status,
       starts_at: e.starts_at,
-      ends_at: e.ends_at
+      ends_at: e.ends_at,
+      hostName: e.hostName,
+      hostType: e.hostType,
+      hostId: e.hostId,
+      city: e.location_type === 'online' ? null : (venueObj.city || venueObj.address || venueObj.meta?.city || null)
     };
   }).filter(e => {
     if (e.status !== "published") return false;
@@ -991,7 +1011,7 @@ export function Discover({ st, go, param }) {
             <Empty icon={<I.ticket />} title="No events found" text="There are no events scheduled in this category." />
           ) : (
             <div className="ev-grid">
-              {evs.map(ev => <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)} wishlisted={wishlisted.has(ev.id)} wishlistCount={wishlistCounts[ev.id] || 0} onWishlist={() => toggleWishlist(ev.id)} registered={registered.has(ev.id)} />)}
+              {evs.map(ev => <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)} wishlisted={wishlisted.has(ev.id)} wishlistCount={wishlistCounts[ev.id] !== undefined ? wishlistCounts[ev.id] : (ev.wishlistCount || 0)} onWishlist={() => toggleWishlist(ev.id)} registered={registered.has(ev.id)} />)}
             </div>
           )
         ) : (

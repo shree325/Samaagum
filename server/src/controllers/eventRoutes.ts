@@ -148,7 +148,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const bookings = await prisma.bookings.findMany({
                 where: {
                     booker_user_id: userId,
-                    status: { in: ['confirmed', 'pending_approval', 'cancelled'] }
+                    status: { in: ['confirmed', 'pending_approval', 'cancelled', 'waitlisted'] as any }
+                    status: { in: ['confirmed', 'pending_approval', 'pending_payment', 'cancelled'] }
                 },
                 include: {
                     events: true
@@ -181,7 +182,9 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
 
                 const tickets = ticketsRaw.map((t: any) => ({
                     ...t,
+                    price_minor: t.price_amount_minor !== null && t.price_amount_minor !== undefined ? Number(t.price_amount_minor) : 0,
                     price_amount_minor: t.price_amount_minor !== null && t.price_amount_minor !== undefined ? Number(t.price_amount_minor) : null,
+                    early_bird_price_minor: t.early_bird_price_amount_minor !== null && t.early_bird_price_amount_minor !== undefined ? Number(t.early_bird_price_amount_minor) : null,
                     early_bird_price_amount_minor: t.early_bird_price_amount_minor !== null && t.early_bird_price_amount_minor !== undefined ? Number(t.early_bird_price_amount_minor) : null
                 }));
 
@@ -216,11 +219,11 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             };
 
             for (const booking of bookings) {
-                await processEvent(booking.event_id, booking.events, booking.status, booking.id);
+                await processEvent(booking.event_id, (booking as any).events, booking.status, booking.id);
             }
 
             for (const assignment of assignments) {
-                await processEvent(assignment.event_id, assignment.events, 'confirmed', null);
+                await processEvent(assignment.event_id, (assignment as any).events, 'confirmed', null);
             }
 
             return reply.send({ success: true, data: results });
@@ -235,7 +238,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
         try {
             const tenantId = request.headers['x-tenant-id'] || '00000000-0000-0000-0000-000000000000';
             const userId = tryDecodeUserId(fastify, request);
-            const data = await EventService.getPublicEvents(tenantId as string, userId);
+            const cityQuery = (request.query as any)?.city as string | undefined;
+            const data = await EventService.getPublicEvents(tenantId as string, userId, cityQuery);
             return reply.send({ success: true, data });
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });
@@ -271,6 +275,10 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
 
             let bookingStatus = null;
             let bookingId = null;
+            let attendeeId = null;
+            let ticketId = null;
+            let qrToken = null;
+            let checkinStatus = null;
             if (userId) {
                 const booking = await prisma.bookings.findFirst({
                     where: {
@@ -282,11 +290,21 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 if (booking) {
                     bookingStatus = booking.status;
                     bookingId = booking.id;
+                    const myAttendee = await prisma.attendees.findFirst({
+                        where: { booking_id: booking.id, user_id: userId },
+                        include: { tickets: true }
+                    });
+                    if (myAttendee) {
+                        attendeeId = myAttendee.id;
+                        ticketId = myAttendee.ticket_id;
+                        qrToken = myAttendee.tickets?.qr_token || null;
+                        checkinStatus = myAttendee.checkin_status;
+                    }
                 }
             }
 
             const confirmedAttendees = await prisma.attendees.findMany({
-                where: { bookings: { event_id: id, status: 'confirmed' } }
+                where: { bookings: { event_id: id, status: { in: ['confirmed', 'pending_payment'] } } }
             });
             const attendeeNames = confirmedAttendees.map(a => a.name);
 
@@ -310,6 +328,10 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                     },
                     bookingStatus,
                     bookingId,
+                    attendeeId,
+                    ticketId,
+                    qrToken,
+                    checkinStatus,
                     attendees: attendeeNames
                 }
             });
@@ -710,8 +732,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
 
             // Confirmed attendees
             const confirmedAttendees = await prisma.attendees.findMany({
-                where: { bookings: { event_id: id, status: 'confirmed' } },
-                include: { tickets: true }
+                where: { bookings: { event_id: id, status: { in: ['confirmed', 'pending_payment'] } } },
+                include: { tickets: true, bookings: true }
             });
 
             // Pending join requests
@@ -752,6 +774,9 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                             checkinStatus: a.checkin_status,
                             ticketId: a.ticket_id,
                             qrToken: (a as any).tickets?.qr_token || null,
+                            bookingStatus: (a as any).bookings?.status || 'confirmed',
+                            isCashPayment: (a as any).bookings?.payment_method === 'cash',
+                            amountMinor: (a as any).bookings?.total_amount_minor ? Number((a as any).bookings.total_amount_minor) : 0,
                             answers: parsedAnswers
                         };
                     }),
@@ -795,8 +820,13 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 return reply.status(404).send({ success: false, message: 'Booking not found' });
             }
 
-            const nextStatus = action === 'accept' ? 'confirmed' : 'cancelled';
-            const nextTicketStatus = action === 'accept' ? 'confirmed' : 'cancelled';
+            const isCash = booking.payment_method === 'cash';
+            const nextStatus = action === 'accept'
+                ? (isCash ? 'pending_payment' : 'confirmed')
+                : 'cancelled';
+            const nextTicketStatus = action === 'accept'
+                ? (isCash ? 'reserved' : 'confirmed')
+                : 'cancelled';
 
             await prisma.$transaction(async (tx) => {
                 await tx.bookings.update({
@@ -899,8 +929,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                                 attendeeName: guestName,
                                 dateString: dateStr,
                                 venueString: venueStr,
-                                paidAmount: booking.payment_method === 'free' ? 'Free' : `₹${Number(booking.total_amount_minor || 0) / 100}`,
-                                status: 'Confirmed'
+                                paidAmount: booking.payment_method === 'free' ? 'Free' : (booking.payment_method === 'cash' ? `₹${Number(booking.total_amount_minor || 0) / 100} (Pay in Cash at Venue)` : `₹${Number(booking.total_amount_minor || 0) / 100}`),
+                                status: booking.payment_method === 'cash' ? 'Pending Payment (Cash)' : 'Confirmed'
                             });
                             await sendEmail({
                                 to: guestUser.primary_email,
@@ -933,38 +963,105 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             }
 
             const attendee = await prisma.attendees.findFirst({
-                where: { id: attendeeId, bookings: { event_id: id } }
+                where: { id: attendeeId, bookings: { event_id: id } },
+                include: { bookings: true }
             });
             if (!attendee) {
                 return reply.status(404).send({ success: false, message: 'Attendee not found' });
             }
 
-            const updated = await prisma.attendees.update({
-                where: { id: attendeeId },
-                data: { checkin_status: 'checked_in' }
-            });
+            const booking = attendee.bookings;
+            const isCashPayment = booking?.payment_method === 'cash';
+            const isPaymentPending = booking?.status === 'pending_payment';
+            const paymentReceived = (request.body as any)?.paymentReceived === true;
 
-            if (attendee.ticket_id) {
-                await prisma.tickets.update({
-                    where: { id: attendee.ticket_id },
-                    data: { status: 'checked_in' }
-                }).catch(() => {});
-                await prisma.checkins.create({
-                    data: {
-                        tenant_id: attendee.tenant_id,
-                        ticket_id: attendee.ticket_id,
-                        method: 'attendee_search',
-                        staff_user_id: request.user.id
-                    }
-                }).catch(() => {});
+            if (isCashPayment && isPaymentPending && !paymentReceived) {
+                return reply.status(400).send({ success: false, message: 'Payment collection confirmation is required for cash ticket.' });
             }
+
+            let updatedAttendee;
+            await prisma.$transaction(async (tx) => {
+                updatedAttendee = await tx.attendees.update({
+                    where: { id: attendeeId },
+                    data: { checkin_status: 'checked_in' }
+                });
+
+                if (attendee.ticket_id) {
+                    await tx.tickets.update({
+                        where: { id: attendee.ticket_id },
+                        data: { status: 'checked_in' }
+                    }).catch(() => {});
+                }
+
+                if (isCashPayment && isPaymentPending && paymentReceived) {
+                    await tx.bookings.update({
+                        where: { id: booking.id },
+                        data: { status: 'confirmed' }
+                    });
+                }
+
+                if (attendee.ticket_id) {
+                    await tx.checkins.create({
+                        data: {
+                            tenant_id: attendee.tenant_id,
+                            ticket_id: attendee.ticket_id,
+                            method: 'attendee_search',
+                            staff_user_id: request.user.id
+                        }
+                    }).catch(() => {});
+                }
+            });
 
             const groupsNamespace = (fastify as any).io?.of('/groups');
             if (groupsNamespace) {
                 groupsNamespace.to(`event_${id}`).emit('dashboard_updated', { action: 'checkin', eventId: id });
             }
 
-            return reply.send({ success: true, data: updated, message: 'Attendee checked in successfully.' });
+            // Send "Confirmed" ticket email after check-in
+            (async () => {
+                try {
+                    const bookerUserId = booking?.booker_user_id;
+                    if (bookerUserId) {
+                        const guestUser = await prisma.users.findUnique({ where: { id: bookerUserId } });
+                        if (guestUser?.primary_email && attendee.ticket_id) {
+                            const tk = await prisma.tickets.findUnique({ where: { id: attendee.ticket_id } });
+                            if (tk) {
+                                const eventForEmail = await prisma.events.findUnique({ where: { id } });
+                                const guestProfile = await prisma.profiles.findUnique({ where: { user_id: bookerUserId } });
+                                const guestName = guestProfile?.display_name ||
+                                    [guestUser.first_name, guestUser.last_name].filter(Boolean).join(' ') ||
+                                    guestUser.primary_email.split('@')[0];
+                                const vObj = (eventForEmail?.venue as any) || {};
+                                const dateStr = eventForEmail?.starts_at
+                                    ? new Date(eventForEmail.starts_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                                    : 'TBD';
+                                const venueStr = vObj.address || vObj.name || eventForEmail?.location_type || 'TBD';
+                                const amtMinor = Number(booking?.total_amount_minor || 0);
+                                const paidStr = booking?.payment_method === 'free' ? 'Free' : `₹${amtMinor / 100}`;
+                                const htmlContent = generateTicketHtml({
+                                    qrToken: tk.qr_token,
+                                    ticketCode: tk.ticket_code || tk.id,
+                                    attendeeName: guestName,
+                                    dateString: dateStr,
+                                    venueString: venueStr,
+                                    paidAmount: paidStr,
+                                    status: 'Confirmed'
+                                });
+                                await sendEmail({
+                                    to: guestUser.primary_email,
+                                    subject: `✅ Check-in Confirmed — ${eventForEmail?.title || 'Your Event'}`,
+                                    html: htmlContent
+                                });
+                                console.log(`[eventRoutes] Check-in confirmation email sent to ${guestUser.primary_email}`);
+                            }
+                        }
+                    }
+                } catch (emailErr: any) {
+                    console.error('[eventRoutes] Failed to send check-in confirmation email:', emailErr.message);
+                }
+            })();
+
+            return reply.send({ success: true, data: updatedAttendee, message: 'Attendee checked in successfully.' });
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });
         }
@@ -995,6 +1092,10 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
 
             const attendee = ticket.attendees?.[0] || null;
             const alreadyCheckedIn = ticket.status === 'checked_in' || attendee?.checkin_status === 'checked_in';
+            const booking = ticket.booking_line_items?.bookings || null;
+            const isCashPayment = booking?.payment_method === 'cash';
+            const isPaymentPending = booking?.status === 'pending_payment';
+            const amountMinor = booking?.total_amount_minor ? Number(booking.total_amount_minor) : 0;
 
             return reply.send({
                 success: true,
@@ -1006,7 +1107,10 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                     attendeeId: attendee?.id || null,
                     name: attendee?.name || ticket.attendee_name || 'Guest',
                     email: attendee?.email || ticket.attendee_email || null,
-                    status: ticket.status
+                    status: ticket.status,
+                    isCashPayment,
+                    isPaymentPending,
+                    amountMinor
                 }
             });
         } catch (e: any) {
@@ -1042,6 +1146,14 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 return reply.status(409).send({ success: false, message: 'This ticket has already been checked in.' });
             }
 
+            const booking = ticket.booking_line_items?.bookings || null;
+            const isCashPayment = booking?.payment_method === 'cash';
+            const isPaymentPending = booking?.status === 'pending_payment';
+            const paymentReceived = (request.body as any)?.paymentReceived === true;
+            if (isCashPayment && isPaymentPending && !paymentReceived) {
+                return reply.status(400).send({ success: false, message: 'Payment collection confirmation is required for cash ticket.' });
+            }
+
             await prisma.$transaction(async (tx) => {
                 await tx.tickets.update({
                     where: { id: ticket.id },
@@ -1051,6 +1163,12 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                     await tx.attendees.update({
                         where: { id: attendee.id },
                         data: { checkin_status: 'checked_in' }
+                    });
+                }
+                if (isCashPayment && isPaymentPending && paymentReceived) {
+                    await tx.bookings.update({
+                        where: { id: booking.id },
+                        data: { status: 'confirmed' }
                     });
                 }
                 await tx.checkins.create({
@@ -1067,6 +1185,48 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             if (groupsNamespace) {
                 groupsNamespace.to(`event_${id}`).emit('dashboard_updated', { action: 'checkin', eventId: id });
             }
+
+            // Send "Confirmed" ticket email after QR scanner check-in
+            (async () => {
+                try {
+                    const bookerUserId = booking?.booker_user_id;
+                    if (bookerUserId) {
+                        const guestUser = await prisma.users.findUnique({ where: { id: bookerUserId } });
+                        if (guestUser?.primary_email) {
+                            const eventForEmail = await prisma.events.findUnique({ where: { id } });
+                            const guestProfile = await prisma.profiles.findUnique({ where: { user_id: bookerUserId } });
+                            const guestName = attendee?.name ||
+                                guestProfile?.display_name ||
+                                [guestUser.first_name, guestUser.last_name].filter(Boolean).join(' ') ||
+                                guestUser.primary_email.split('@')[0];
+                            const vObj = (eventForEmail?.venue as any) || {};
+                            const dateStr = eventForEmail?.starts_at
+                                ? new Date(eventForEmail.starts_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                                : 'TBD';
+                            const venueStr = vObj.address || vObj.name || eventForEmail?.location_type || 'TBD';
+                            const amtMinor = Number(booking?.total_amount_minor || 0);
+                            const paidStr = booking?.payment_method === 'free' ? 'Free' : `₹${amtMinor / 100}`;
+                            const htmlContent = generateTicketHtml({
+                                qrToken: ticket.qr_token,
+                                ticketCode: ticket.ticket_code || ticket.id,
+                                attendeeName: guestName,
+                                dateString: dateStr,
+                                venueString: venueStr,
+                                paidAmount: paidStr,
+                                status: 'Confirmed'
+                            });
+                            await sendEmail({
+                                to: guestUser.primary_email,
+                                subject: `✅ Check-in Confirmed — ${eventForEmail?.title || 'Your Event'}`,
+                                html: htmlContent
+                            });
+                            console.log(`[eventRoutes] QR check-in confirmation email sent to ${guestUser.primary_email}`);
+                        }
+                    }
+                } catch (emailErr: any) {
+                    console.error('[eventRoutes] Failed to send QR check-in confirmation email:', emailErr.message);
+                }
+            })();
 
             return reply.send({ success: true, message: `${attendee?.name || 'Attendee'} checked in successfully.` });
         } catch (e: any) {
@@ -1199,7 +1359,9 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             });
             const data = rows.map((r: any) => ({
                 ...r,
+                price_minor: r.price_amount_minor !== null ? Number(r.price_amount_minor) : 0,
                 price_amount_minor: r.price_amount_minor !== null ? Number(r.price_amount_minor) : null,
+                early_bird_price_minor: r.early_bird_price_amount_minor !== null ? Number(r.early_bird_price_amount_minor) : null,
                 early_bird_price_amount_minor: r.early_bird_price_amount_minor !== null ? Number(r.early_bird_price_amount_minor) : null
             }));
             return reply.send({ success: true, data });
@@ -1236,7 +1398,7 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                     eligibility: {}
                 }
             });
-            return reply.status(201).send({ success: true, data: { ...created, price_amount_minor: created.price_amount_minor !== null ? Number(created.price_amount_minor) : null, early_bird_price_amount_minor: created.early_bird_price_amount_minor !== null ? Number(created.early_bird_price_amount_minor) : null } });
+            return reply.status(201).send({ success: true, data: { ...created, price_minor: created.price_amount_minor !== null ? Number(created.price_amount_minor) : 0, price_amount_minor: created.price_amount_minor !== null ? Number(created.price_amount_minor) : null, early_bird_price_minor: created.early_bird_price_amount_minor !== null ? Number(created.early_bird_price_amount_minor) : null, early_bird_price_amount_minor: created.early_bird_price_amount_minor !== null ? Number(created.early_bird_price_amount_minor) : null } });
         } catch (e: any) {
             const status = e.message?.startsWith('Forbidden') ? 403 : 500;
             return reply.status(status).send({ success: false, message: e.message });
@@ -1268,7 +1430,7 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                     updated_at: new Date()
                 }
             });
-            return reply.send({ success: true, data: { ...updated, price_amount_minor: updated.price_amount_minor !== null ? Number(updated.price_amount_minor) : null, early_bird_price_amount_minor: updated.early_bird_price_amount_minor !== null ? Number(updated.early_bird_price_amount_minor) : null } });
+            return reply.send({ success: true, data: { ...updated, price_minor: updated.price_amount_minor !== null ? Number(updated.price_amount_minor) : 0, price_amount_minor: updated.price_amount_minor !== null ? Number(updated.price_amount_minor) : null, early_bird_price_minor: updated.early_bird_price_amount_minor !== null ? Number(updated.early_bird_price_amount_minor) : null, early_bird_price_amount_minor: updated.early_bird_price_amount_minor !== null ? Number(updated.early_bird_price_amount_minor) : null } });
         } catch (e: any) {
             const status = e.message?.startsWith('Forbidden') ? 403 : 500;
             return reply.status(status).send({ success: false, message: e.message });

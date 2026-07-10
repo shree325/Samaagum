@@ -150,7 +150,7 @@ export class PlanEntitlementService {
         const { sendNotificationToUser } = require('./messagingSocket');
         sendNotificationToUser(userId, 'entitlements.updated', {
           planName: defaultAdminPlan.display_name,
-          entitlements: defaultAdminPlan.limits || defaultAdminPlan.features || {}
+          entitlements: defaultAdminPlan.limits || {}
         });
         sendNotificationToUser(userId, 'subscription.activated', {
           status: 'expired',
@@ -210,7 +210,7 @@ export class PlanEntitlementService {
           where: { name: 'free', is_active: true }
         });
         if (defaultAdminPlan) {
-          dbEntitlements = defaultAdminPlan.limits || defaultAdminPlan.features;
+          dbEntitlements = defaultAdminPlan.limits || {};
         }
       }
 
@@ -224,6 +224,7 @@ export class PlanEntitlementService {
           group_can_restricted_access: typeof entObj.group_can_restricted_access === 'boolean' ? entObj.group_can_restricted_access : DEFAULT_FREE_ENTITLEMENTS.group_can_restricted_access,
           event_allowed_registration_modes: Array.isArray(entObj.event_allowed_registration_modes) ? entObj.event_allowed_registration_modes : DEFAULT_FREE_ENTITLEMENTS.event_allowed_registration_modes,
           event_allowed_visibility: Array.isArray(entObj.event_allowed_visibility) ? entObj.event_allowed_visibility : DEFAULT_FREE_ENTITLEMENTS.event_allowed_visibility,
+          event_allowed_join_modes: Array.isArray(entObj.event_allowed_join_modes) ? entObj.event_allowed_join_modes : DEFAULT_FREE_ENTITLEMENTS.event_allowed_join_modes,
           event_max_participants: typeof entObj.event_max_participants === 'number' ? entObj.event_max_participants : DEFAULT_FREE_ENTITLEMENTS.event_max_participants,
           event_checkin_methods: Array.isArray(entObj.event_checkin_methods) ? entObj.event_checkin_methods : DEFAULT_FREE_ENTITLEMENTS.event_checkin_methods,
           event_can_create_paid_tickets: typeof entObj.event_can_create_paid_tickets === 'boolean' ? entObj.event_can_create_paid_tickets : DEFAULT_FREE_ENTITLEMENTS.event_can_create_paid_tickets,
@@ -243,8 +244,8 @@ export class PlanEntitlementService {
         const defaultAdminPlan = await prisma.admin_subscription_plans.findFirst({
           where: { is_default: true, is_active: true }
         });
-        if (defaultAdminPlan && (defaultAdminPlan.limits || defaultAdminPlan.features)) {
-          return (defaultAdminPlan.limits || defaultAdminPlan.features) as any;
+        if (defaultAdminPlan && defaultAdminPlan.limits) {
+          return defaultAdminPlan.limits as any;
         }
       } catch (innerErr) {}
       return DEFAULT_FREE_ENTITLEMENTS;

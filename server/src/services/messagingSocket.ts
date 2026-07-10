@@ -862,3 +862,8 @@ export async function disconnectUserSockets(userId: string) {
   }
 }
 
+export function broadcastWishlistUpdate(eventId: string, count: number) {
+  if (chatNamespace) {
+    chatNamespace.emit('event.wishlist.update', { eventId, count });
+  }
+}

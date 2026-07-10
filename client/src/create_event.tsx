@@ -1496,6 +1496,25 @@ export const RECENT_LOCATIONS = [
 export function LocationSection({ venue, setVenue, locType, setLocType }) {
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState(venue);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const apiBase = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? "http://localhost:3000" : "";
+
+  useEffect(() => {
+    if (!draft || draft.length < 2 || draft.startsWith("http")) {
+      setSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      fetch(`${apiBase}/api/public/locations/search?q=${encodeURIComponent(draft)}`)
+        .then(r => r.json())
+        .then(res => {
+          if (res.success) {
+            setSearchResults(res.data);
+          }
+        });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [draft]);
 
   const commit = (value, type) => {
     setVenue(value);
@@ -1558,6 +1577,37 @@ export function LocationSection({ venue, setVenue, locType, setLocType }) {
               style={{ width: "100%", background: "var(--field)", border: "1px solid var(--border)" }}
             />
           </div>
+
+          {/* Search Results */}
+          {searchResults.length > 0 && (
+            <div style={{ maxHeight: 200, overflowY: "auto", border: "1px solid var(--border)", borderRadius: "var(--r-md)", marginTop: 8, marginBottom: 16 }}>
+              {searchResults.map((loc, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => {
+                    if (!loc.is_active) {
+                      alert(`The location '${loc.name}' is currently inactive and cannot be selected for events.`);
+                      return;
+                    }
+                    commit(loc.name, "physical");
+                    setSearchResults([]);
+                  }}
+                  className="loc-sec-btn"
+                  style={{ opacity: loc.is_active ? 1 : 0.5, cursor: loc.is_active ? 'pointer' : 'not-allowed', width: '100%', textAlign: 'left', background: 'var(--surface)', border: 'none', borderBottom: '1px solid var(--border)', padding: '10px 12px' }}
+                >
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                    <I.pin style={{ width: 15, height: 15, color: "var(--ink-3)", marginTop: 2, flexShrink: 0 }} />
+                    <div className="loc-sec-btn-content">
+                      <p style={{ margin: 0, fontSize: "13px", fontWeight: 600, color: "var(--ink)", lineHeight: "1.2" }}>
+                        {loc.name} {loc.is_active ? "" : <span style={{ color: "var(--red)", fontSize: "11px", marginLeft: 4 }}>(Inactive)</span>}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Recent Locations */}
           {RECENT_LOCATIONS.length > 0 && (
@@ -1636,7 +1686,8 @@ export const DEFAULT_FREE_ENTITLEMENTS = {
   group_max_capacity: 25,
   group_can_restricted_access: false,
   event_allowed_registration_modes: ['free', 'cash'],
-  event_allowed_visibility: ['unlisted', 'invite_only'],
+  event_allowed_visibility: ['unlisted', 'custom'],
+  event_allowed_join_modes: ['restricted', 'invite'],
   event_max_participants: 100,
   event_checkin_methods: ['scanner', 'manual', 'gate'],
   event_can_create_paid_tickets: false
@@ -1694,9 +1745,12 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
   // Plan entitlements gate what a *new* event can default to / offer; an event already saved
   // keeps its existing values regardless of the current plan (handled per-field below).
   const entitlements = st?.entitlements || DEFAULT_FREE_ENTITLEMENTS;
-  const allowedVisibilities = entitlements.event_allowed_visibility || ['unlisted', 'invite_only'];
+  const allowedVisibilities = entitlements.event_allowed_visibility || ['unlisted', 'custom'];
+  const allowedJoinModes = entitlements.event_allowed_join_modes || ['restricted', 'invite'];
   const eventMaxParticipants = entitlements.event_max_participants ?? 100;
   const canCreatePaidTickets = entitlements.event_can_create_paid_tickets ?? false;
+  const allowedRegistrationModes = entitlements.event_allowed_registration_modes || ["free"];
+  const canUseCash = allowedRegistrationModes.includes("cash");
 
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [upgradeFeature, setUpgradeFeature] = useState("");
@@ -1761,7 +1815,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
     draft?.visibility
     ?? editEv?.venue_raw?.visibility
     ?? editEv?.venue?.visibility
-    ?? (allowedVisibilities.includes("public") ? "public" : (allowedVisibilities[0] || "unlisted"))
+    ?? (allowedVisibilities.includes("public") ? "public" : (allowedVisibilities.includes("unlisted") ? "unlisted" : (allowedVisibilities[0] || "unlisted")))
   );
   const [calendar, setCalendar] = useState(draft?.calendar ?? "Main Calendar");
   const initDT = useMemo(() => {
@@ -1886,9 +1940,11 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
 
   const [type, setType] = useState(
     draft?.type
-    ?? (editEv?.registration_mode
-        ? ((editEv.registration_mode === 'free_rsvp' || editEv.registration_mode === 'free') ? 'free' : 'paid')
-        : (canCreatePaidTickets ? 'paid' : 'free'))
+    ?? (editEv?.cash_enabled
+        ? 'cash'
+        : (editEv?.registration_mode
+           ? ((editEv.registration_mode === 'free_rsvp' || editEv.registration_mode === 'free') ? 'free' : 'paid')
+           : (canCreatePaidTickets ? 'paid' : 'free')))
   );
   const [approval, setApproval] = useState(draft?.approval ?? editEv?.approval_required ?? false);
   const [capacityEnabled, setCapacityEnabled] = useState(
@@ -1900,7 +1956,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
         ? (entitlements.event_max_participants !== -1 ? String(entitlements.event_max_participants) : "")
         : (editEv?.capacity_total ?? ""))
   );
-  const [waitlist, setWaitlist] = useState(draft?.waitlist ?? editEv?.waitlist ?? false);
+  const [waitlist, setWaitlist] = useState(draft?.waitlist ?? (editEv?.settings?.capacity?.waitlist ?? editEv?.waitlist ?? false));
 
   const [registrationStatus, setRegistrationStatus] = useState(
     draft?.registrationStatus ?? editEv?.registration_status ?? "OPEN"
@@ -1926,6 +1982,12 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
     ? editEv.tickets.map((t: any) => ({ n: t.name, cap: String(t.capacity || ""), price: String((t.price_minor || 0) / 100) }))
     : [{ n: "Early Bird", cap: "50", price: "499" }];
   const [tickets, setTickets] = useState(draft?.tickets ?? initialTickets);
+
+  useEffect(() => {
+    if (locType === "online" && type === "cash") {
+      setType("free");
+    }
+  }, [locType, type]);
 
   const [tags, setTags] = useState(draft?.tags ?? editEv?.venue_raw?.meta?.tags ?? editEv?.venue?.meta?.tags ?? ["Startup", "Technology"]);
   const [tagInput, setTagInput] = useState("");
@@ -2181,11 +2243,11 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
   const setTk = (i, key, v) => setTickets(ts => ts.map((t, j) => j === i ? { ...t, [key]: v } : t));
 
   const previewEv = {
-    cover, cat, type: type === "free" ? "Free" : "Paid", online: locType === "online",
+    cover, cat, type: type === "free" ? "Free" : (type === "cash" ? "Cash" : "Paid"), online: locType === "online",
     month: "JUN", day: "18", title: title || "Your event title",
     date: startDate || "Date TBD", time: startTime ? format24to12(startTime) : "Time TBD",
     venue: locType === "online" ? "Online" : (venue || "Venue TBD"),
-    going: 0, price: type === "paid" ? `₹${tickets[0]?.price || "—"}` : "Free", attendees: [],
+    going: 0, price: (type === "paid" || type === "cash") ? `₹${tickets[0]?.price || "—"}` : "Free", attendees: [],
   };
 
   // Full snapshot of every editable field, restored via `editEv.__draft` when returning from Preview.
@@ -2442,14 +2504,15 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
         }
       },
       online_link: locType === 'online' ? venue : null,
-      registration_mode: type === 'free' ? 'free_rsvp' : 'paid',
+      registration_mode: (type === 'paid' || type === 'cash') ? 'paid' : 'free_rsvp',
+      cash_enabled: type === 'cash',
       registration_status: registrationStatus,
       registration_opens_at: registrationStatus === 'SCHEDULED' && regStartDate && regStartTime ? new Date(`${regStartDate}T${regStartTime}`).toISOString() : null,
       registration_closes_at: registrationStatus === 'SCHEDULED' && regEndDate && regEndTime ? new Date(`${regEndDate}T${regEndTime}`).toISOString() : null,
       approval_required: approval,
       capacity_total: capacityEnabled && capacity ? parseInt(capacity) : null,
       waitlist,
-      tickets: type === 'paid'
+      tickets: (type === 'paid' || type === 'cash')
         ? tickets.map((t, i) => ({ name: t.n, capacity: parseInt(t.cap) || null, price_minor: parseInt(t.price) * 100, sort_order: i }))
         : [{ name: 'Free Admission', price_minor: 0, capacity: capacityEnabled && capacity ? parseInt(capacity) : null, sort_order: 0 }]
     };
@@ -2866,6 +2929,14 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                           triggerUpgrade("Public Event Visibility");
                           return;
                         }
+                        if (val === "unlisted" && !allowedVisibilities.includes("unlisted")) {
+                          triggerUpgrade("Unlisted Event Visibility");
+                          return;
+                        }
+                        if (val === "custom" && !allowedVisibilities.includes("custom")) {
+                          triggerUpgrade("Custom Access Event Visibility");
+                          return;
+                        }
                         setVisibility(val);
                         if (val === "custom") {
                           setAccessModalOpen(true);
@@ -2874,8 +2945,8 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                       style={{ background: "var(--field)", border: "1px solid var(--border)", height: 42 }}
                     >
                       <option value="public">{!allowedVisibilities.includes("public") && "🔒 "}Public</option>
-                      <option value="unlisted">Unlisted</option>
-                      <option value="custom">Custom Access</option>
+                      <option value="unlisted">{!allowedVisibilities.includes("unlisted") && "🔒 "}Unlisted</option>
+                      <option value="custom">{!allowedVisibilities.includes("custom") && "🔒 "}Custom Access</option>
                     </select>
                   </div>
 
@@ -3049,7 +3120,13 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                   <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr 1fr", gap: 12, marginTop: 8 }}>
                     <button
                       type="button"
-                      onClick={() => setJoinEligibility("public")}
+                      onClick={() => {
+                        if (!allowedJoinModes.includes("public")) {
+                          triggerUpgrade("Public Event Join Eligibility");
+                          return;
+                        }
+                        setJoinEligibility("public");
+                      }}
                       style={{
                         padding: "12px",
                         borderRadius: "var(--r-md)",
@@ -3063,12 +3140,16 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                         fontFamily: "inherit"
                       }}
                     >
-                      🌐 Public Event
+                      {!allowedJoinModes.includes("public") && "🔒 "}🌐 Public Event
                       <div style={{ fontSize: 11, fontWeight: 400, color: "var(--ink-3)", marginTop: 4 }}>Anyone can view and register for this event.</div>
                     </button>
                     <button
                       type="button"
                       onClick={() => {
+                        if (!allowedJoinModes.includes("restricted")) {
+                          triggerUpgrade("Restricted Access Event Join Eligibility");
+                          return;
+                        }
                         setJoinEligibility("restricted");
                         setAccessModalOpen(true);
                       }}
@@ -3085,12 +3166,18 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                         fontFamily: "inherit"
                       }}
                     >
-                      👥 Restricted Access
+                      {!allowedJoinModes.includes("restricted") && "🔒 "}👥 Restricted Access
                       <div style={{ fontSize: 11, fontWeight: 400, color: "var(--ink-3)", marginTop: 4 }}>Only members of selected groups can join.</div>
                     </button>
                     <button
                       type="button"
-                      onClick={() => setJoinEligibility("invite")}
+                      onClick={() => {
+                        if (!allowedJoinModes.includes("invite")) {
+                          triggerUpgrade("Invite Only Event Join Eligibility");
+                          return;
+                        }
+                        setJoinEligibility("invite");
+                      }}
                       style={{
                         padding: "12px",
                         borderRadius: "var(--r-md)",
@@ -3104,7 +3191,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                         fontFamily: "inherit"
                       }}
                     >
-                      ✉️ Invite Only
+                      {!allowedJoinModes.includes("invite") && "🔒 "}✉️ Invite Only
                       <div style={{ fontSize: 11, fontWeight: 400, color: "var(--ink-3)", marginTop: 4 }}>Only invited guests can register for this event.</div>
                     </button>
                   </div>
@@ -3164,12 +3251,34 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                   >
                     <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Ticket Price</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 4, justifyContent: "center", minHeight: 36 }}>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
-                        {type === "paid" ? "Paid" : "Free"}
-                      </span>
-                      <span style={{ fontSize: 11, color: "var(--ink-3)" }}>
-                        {type === "paid" ? "Click to view tiers & pricing" : "Click to change settings"}
-                      </span>
+                      <select
+                        className="cselect"
+                        value={type}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val === "paid" && !canCreatePaidTickets) {
+                            triggerUpgrade("Paid Events / Tickets");
+                            return;
+                          }
+                          if (val === "cash" && !canUseCash) {
+                            triggerUpgrade("Cash Payment Events");
+                            return;
+                          }
+                          setType(val);
+                        }}
+                        style={{ background: "var(--surface)", height: 36, padding: "6px" }}
+                      >
+                        <option value="free">Free</option>
+                        {locType !== 'online' && (
+                          <option value="cash">{!canUseCash && "🔒 "}Cash</option>
+                        )}
+                        <option value="paid">{!canCreatePaidTickets && "🔒 "}Paid</option>
+                      </select>
+                      {(type === "paid" || type === "cash") && (
+                        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                          Click to customize tiers &amp; pricing
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div style={{ padding: 12, background: "var(--field)", borderRadius: "var(--r-md)", border: "1px solid var(--border)" }}>
@@ -3184,13 +3293,31 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                     onClick={() => setCapacityModalOpen(true)}
                   >
                     <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Capacity Limit</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4, justifyContent: "center", minHeight: 36 }}>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
-                        {capacityEnabled ? `${capacity || "0"} Limited` : "Unlimited"}
-                      </span>
-                      <span style={{ fontSize: 11, color: "var(--ink-3)" }}>
-                        {waitlist ? "Waitlist Enabled" : "Waitlist Disabled"}
-                      </span>
+<div style={{ display: "flex", alignItems: "center", gap: 12, height: 36 }}>
+                      <Toggle
+                        on={capacityEnabled}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const next = !capacityEnabled;
+                          if (!next && eventMaxParticipants !== -1) {
+                            triggerUpgrade("Unlimited Event Capacity");
+                            return;
+                          }
+                          setCapacityEnabled(next);
+                          if (next) {
+                            setCapacityModalOpen(true);
+                          }
+                        }}
+                      />
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4, justifyContent: "center" }}>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
+                          {capacityEnabled ? `${capacity || "—"} Limit` : "Unlimited"}
+                        </span>
+                        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                          {waitlist ? "Waitlist Enabled" : "Waitlist Disabled"}
+                        </span>
+                      </div>
+                    </div>
                     </div>
                   </div>
                 </div>
@@ -3833,6 +3960,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
         waitlist={waitlist}
         setWaitlist={setWaitlist}
         eventMaxParticipants={eventMaxParticipants}
+        triggerUpgrade={triggerUpgrade}
       />
 
       <AccessControlModal
@@ -3858,6 +3986,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
         setUpgradeFeature={setUpgradeFeature}
         st={st}
         go={go}
+        locType={locType}
       />
 
       <QuestionnaireModal
@@ -3874,7 +4003,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
   );
 }
 
-function CapacitySettingsModal({ open, onClose, capacityEnabled, setCapacityEnabled, capacity, setCapacity, waitlist, setWaitlist, eventMaxParticipants }: any) {
+function CapacitySettingsModal({ open, onClose, capacityEnabled, setCapacityEnabled, capacity, setCapacity, waitlist, setWaitlist, eventMaxParticipants, triggerUpgrade }: any) {
   const [tempEnabled, setTempEnabled] = useState(capacityEnabled);
   const [tempCapacity, setTempCapacity] = useState(capacity);
   const [tempWaitlist, setTempWaitlist] = useState(waitlist);
@@ -3894,9 +4023,13 @@ function CapacitySettingsModal({ open, onClose, capacityEnabled, setCapacityEnab
       alert("Please enter a valid capacity (at least 1).");
       return;
     }
+    if (tempEnabled && eventMaxParticipants !== -1 && parseInt(tempCapacity) > eventMaxParticipants) {
+      alert(`Your plan limits capacity to a maximum of ${eventMaxParticipants}.`);
+      return;
+    }
     setCapacityEnabled(tempEnabled);
     setCapacity(tempEnabled ? tempCapacity : "");
-    setWaitlist(tempWaitlist);
+    setWaitlist(tempEnabled ? tempWaitlist : false);
     onClose();
   };
 
@@ -4318,8 +4451,18 @@ function QuestionnaireModal({ open, onClose, formFields, setFormFields, enableRe
   );
 }
 
-function TicketSettingsModal({ open, onClose, type, setType, tickets, setTickets, setTk, mobile, upgradeModalOpen, setUpgradeModalOpen, upgradeFeature, setUpgradeFeature, st, go }) {
+function TicketSettingsModal({ open, onClose, type, setType, tickets, setTickets, setTk, mobile, upgradeModalOpen, setUpgradeModalOpen, upgradeFeature, setUpgradeFeature, st, go, locType }) {
   if (!open) return null;
+  const entitlements = st?.entitlements || DEFAULT_FREE_ENTITLEMENTS;
+  const allowedRegistrationModes = entitlements.event_allowed_registration_modes || ["free"];
+  const canUseCash = allowedRegistrationModes.includes("cash");
+  const canUsePaid = allowedRegistrationModes.includes("paid");
+  
+  const triggerUpgrade = (feat: string) => {
+    setUpgradeFeature(feat);
+    setUpgradeModalOpen(true);
+  };
+
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
       <div style={{ background: "var(--surface)", width: 480, maxHeight: "85vh", borderRadius: "20px", display: "flex", flexDirection: "column", boxShadow: "var(--sh-xl)", overflow: "hidden" }}>
@@ -4338,7 +4481,7 @@ function TicketSettingsModal({ open, onClose, type, setType, tickets, setTickets
         <div style={{ flex: 1, overflowY: "auto", padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
           <div className="cfield" style={{ marginBottom: 0 }}>
             <label style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)", marginBottom: 8, display: "block" }}>Registration Mode</label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: locType !== 'online' ? "1fr 1fr 1fr" : "1fr 1fr", gap: 12 }}>
               <button
                 type="button"
                 onClick={() => setType("free")}
@@ -4357,9 +4500,41 @@ function TicketSettingsModal({ open, onClose, type, setType, tickets, setTickets
               >
                 🎟️ Free RSVP
               </button>
+              {locType !== 'online' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!canUseCash) {
+                      triggerUpgrade("Cash Payment Events");
+                      return;
+                    }
+                    setType("cash");
+                  }}
+                  style={{
+                    padding: "14px",
+                    borderRadius: "12px",
+                    border: type === "cash" ? "1.5px solid var(--accent-2)" : "1px solid var(--border)",
+                    background: type === "cash" ? "var(--accent-soft)" : "var(--field)",
+                    color: type === "cash" ? "var(--accent-2)" : "var(--ink-2)",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    textAlign: "center",
+                    outline: "none",
+                    fontFamily: "inherit"
+                  }}
+                >
+                  {!canUseCash && "🔒 "}💵 Cash Payment
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => setType("paid")}
+                onClick={() => {
+                  if (!canUsePaid) {
+                    triggerUpgrade("Paid Events / Tickets");
+                    return;
+                  }
+                  setType("paid");
+                }}
                 style={{
                   padding: "14px",
                   borderRadius: "12px",
@@ -4373,11 +4548,11 @@ function TicketSettingsModal({ open, onClose, type, setType, tickets, setTickets
                   fontFamily: "inherit"
                 }}
               >
-                💳 Paid Tickets
+                {!canUsePaid && "🔒 "}💳 Paid Tickets
               </button>
             </div>
           </div>
-          {type === "paid" && (
+          {(type === "paid" || type === "cash") && (
             <div className="cfield" style={{ marginBottom: 0, display: "flex", flexDirection: "column", gap: 12 }}>
               <label style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)", display: "block" }}>Ticket Tiers</label>
               <div style={{ display: "flex", gap: 8, paddingLeft: 2 }}>
