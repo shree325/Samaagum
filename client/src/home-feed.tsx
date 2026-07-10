@@ -561,13 +561,10 @@ export function HomeFeed({ st, go }: any) {
                   ev={ev}
                   onOpen={(e: any) => go("event", e)}
                   wishlisted={wishlisted.has(ev.id)}
-                  wishlistCount={wishlistCounts[ev.id] || 0}
+                  wishlistCount={wishlistCounts[ev.id] !== undefined ? wishlistCounts[ev.id] : (ev.wishlistCount || 0)}
                   onWishlist={() => toggleWishlist(ev.id)}
                   registered={registered.has(ev.id)}
                 />
-              {filtered.map(ev => (
-                <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)}
-                  wishlisted={wishlisted.has(ev.id)} wishlistCount={wishlistCounts[ev.id] !== undefined ? wishlistCounts[ev.id] : (ev.wishlistCount || 0)} onWishlist={() => toggleWishlist(ev.id)} registered={registered.has(ev.id)} />
               ))}
             </div>
           ) : (
@@ -628,13 +625,6 @@ export function HomeFeed({ st, go }: any) {
                 action={<button className="hbtn hbtn--soft hbtn--sm" onClick={() => go("discover", "events")}>Explore Events</button>}
               />
             )}
-        <div className="section">
-          <SectionBar title="Your upcoming events" count={UPCOMING.length} onMore={() => go("events")} />
-          <div className="ev-grid">
-            {UPCOMING.map(ev => (
-              <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)}
-                wishlisted={wishlisted.has(ev.id)} wishlistCount={wishlistCounts[ev.id] !== undefined ? wishlistCounts[ev.id] : (ev.wishlistCount || 0)} onWishlist={() => toggleWishlist(ev.id)} registered={true} />
-            ))}
           </div>
         )}
 

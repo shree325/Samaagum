@@ -1545,7 +1545,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           }
         });
         if (activeCount >= event.capacity_total) {
-          const capacity = (event.settings as any)?.capacity || {};
+          const capacity = ((event as any).settings)?.capacity || {};
           if (capacity.waitlist === true) {
             isWaitlisted = true;
           } else {
@@ -1676,15 +1676,13 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       }
 
       const answers = request.body || {};
-      const initialStatus = isWaitlisted ? 'waitlisted' : (approvalRequired ? 'pending_approval' : 'confirmed');
-      const initialTicketStatus = isWaitlisted ? 'waitlisted' : (approvalRequired ? 'reserved' : 'confirmed');
       const isCash = event.cash_enabled === true;
-      const initialStatus = approvalRequired
-        ? 'pending_approval'
-        : (isCash ? 'pending_payment' : 'confirmed');
-      const initialTicketStatus = (approvalRequired || isCash)
-        ? 'reserved'
-        : 'confirmed';
+      const initialStatus = isWaitlisted 
+        ? 'waitlisted' 
+        : (approvalRequired ? 'pending_approval' : (isCash ? 'pending_payment' : 'confirmed'));
+      const initialTicketStatus = isWaitlisted 
+        ? 'waitlisted' 
+        : ((approvalRequired || isCash) ? 'reserved' : 'confirmed');
       const paymentMethod = isCash ? 'cash' : 'free';
       const ticketPriceMinor = ticketType?.price_amount_minor ? Number(ticketType.price_amount_minor) : 0;
 
@@ -1698,7 +1696,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             tenant_id: event.tenant_id,
             event_id: eventId,
             booker_user_id: userId,
-            status: initialStatus,
+            status: initialStatus as any,
             payment_method: paymentMethod,
             total_amount_minor: ticketPriceMinor,
             total_currency: 'INR'
@@ -1723,7 +1721,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             attendee_name: requesterName,
             attendee_email: requesterEmail,
             qr_token: require('crypto').randomUUID(),
-            status: initialTicketStatus,
+            status: initialTicketStatus as any,
             claimed_by_user_id: userId
           }
         });

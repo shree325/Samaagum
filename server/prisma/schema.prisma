@@ -564,7 +564,6 @@ model events {
   updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
   instruction            String?
   eligibility_rules      Json                     @default("{}")
-  settings               Json?
   registration_status    String                   @default("OPEN")
   registration_opens_at  DateTime?                @db.Timestamptz(6)
   registration_closes_at DateTime?                @db.Timestamptz(6)
@@ -710,8 +709,8 @@ model forum_comments {
   status               content_status   @default(active)
   created_at           DateTime         @default(now()) @db.Timestamptz(6)
   updated_at           DateTime         @default(now()) @db.Timestamptz(6)
-  parent_id            String?          @db.Uuid
   deleted_at           DateTime?        @db.Timestamptz(6)
+  parent_id            String?          @db.Uuid
   users                users            @relation(fields: [author_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   forum_comments       forum_comments?  @relation("forum_commentsToforum_comments", fields: [parent_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   other_forum_comments forum_comments[] @relation("forum_commentsToforum_comments")
@@ -736,11 +735,11 @@ model forum_posts {
   status          content_status    @default(active)
   created_at      DateTime          @default(now()) @db.Timestamptz(6)
   updated_at      DateTime          @default(now()) @db.Timestamptz(6)
+  archived        Boolean           @default(false)
+  deleted_at      DateTime?         @db.Timestamptz(6)
   locked          Boolean           @default(false)
   solved          Boolean           @default(false)
-  archived        Boolean           @default(false)
   view_count      Int               @default(0)
-  deleted_at      DateTime?         @db.Timestamptz(6)
   forum_comments  forum_comments[]
   forum_post_tags forum_post_tags[]
   users           users             @relation(fields: [author_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -808,14 +807,14 @@ model groups {
   join_mode         join_mode           @default(open)
   join_form_id      String?             @db.Uuid
   listed            listed_state        @default(unlisted)
-  description       String?
-  category          String?
-  icon              String?
-  cover             String?
   banner            String?
-  settings          Json?               @default("{}")
   banner_data       Bytes?
+  category          String?
+  cover             String?
+  description       String?
+  icon              String?
   icon_data         Bytes?
+  settings          Json?               @default("{}")
   group_invitations group_invitations[]
   forms             forms?              @relation(fields: [join_form_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_groups_join_form")
   entities          entities            @relation(fields: [entity_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -1034,11 +1033,11 @@ model messages {
   is_edited            Boolean?               @default(false)
   is_deleted           Boolean?               @default(false)
   updated_at           DateTime?              @default(now()) @db.Timestamptz(6)
-  edited_at            DateTime?              @db.Timestamptz(6)
-  deleted_at           DateTime?              @db.Timestamptz(6)
-  reply_to_message_id  String?                @db.Uuid
   attachments_count    Int?                   @default(0)
+  deleted_at           DateTime?              @db.Timestamptz(6)
   deleted_for_everyone Boolean                @default(false)
+  edited_at            DateTime?              @db.Timestamptz(6)
+  reply_to_message_id  String?                @db.Uuid
   status               MessageStatus          @default(ACTIVE)
   type                 MessageType            @default(TEXT)
   version              Int                    @default(1)
@@ -1231,8 +1230,8 @@ model profiles {
   phone_number                                       String?       @db.VarChar(20)
   user_name                                          String?
   headline                                           String?
-  privacy_prefs                                      Json?         @default("{}")
   messaging_restriction                              String?       @default("anyone") @db.VarChar(50)
+  privacy_prefs                                      Json?         @default("{}")
   media_assets_profiles_cover_asset_idTomedia_assets media_assets? @relation("profiles_cover_asset_idTomedia_assets", fields: [cover_asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_profiles_cover")
   media_assets_profiles_photo_asset_idTomedia_assets media_assets? @relation("profiles_photo_asset_idTomedia_assets", fields: [photo_asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_profiles_photo")
   tenants                                            tenants       @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -2331,8 +2330,8 @@ model message_receipts {
   user_id      String    @db.Uuid
   delivered_at DateTime? @db.Timestamptz(6)
   seen_at      DateTime? @db.Timestamptz(6)
-  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   failed_at    DateTime? @db.Timestamptz(6)
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   messages     messages  @relation(fields: [message_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   users        users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
@@ -2697,7 +2696,6 @@ enum booking_status {
   pending_payment
   pending_approval
   confirmed
-  waitlisted
   expired
   cancelled
   refunded
@@ -2921,7 +2919,6 @@ enum takeover_state {
 enum ticket_status {
   reserved
   confirmed
-  waitlisted
   checked_in
   cancelled
   refunded

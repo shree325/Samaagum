@@ -148,8 +148,7 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const bookings = await prisma.bookings.findMany({
                 where: {
                     booker_user_id: userId,
-                    status: { in: ['confirmed', 'pending_approval', 'cancelled', 'waitlisted'] as any }
-                    status: { in: ['confirmed', 'pending_approval', 'pending_payment', 'cancelled'] }
+                    status: { in: ['confirmed', 'pending_approval', 'pending_payment', 'cancelled', 'waitlisted'] as any }
                 },
                 include: {
                     events: true

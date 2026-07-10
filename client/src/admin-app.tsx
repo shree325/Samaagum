@@ -511,11 +511,7 @@ export const adminApi = {
 
 
 
-
-import { GeoLocationsView } from './admin/pages/GeoLocations/GeoLocationsView';
 export const ChatControlsView = window.ChatControlsView;
-import { GeoIpv4View } from './admin/pages/GeoIpv4/GeoIpv4View';
-import { GeoIpv6View } from './admin/pages/GeoIpv6/GeoIpv6View';
 
 // --- APP COMPONENT ---
 export function App() {
