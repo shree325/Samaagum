@@ -854,6 +854,17 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         bookingStatusMap.set(`${b.event_id}:${b.booker_user_id}`, b.status);
       }
 
+      // Pre-fetch events for event reminders
+      const reminderEventIds = logs
+        .filter(l => l.template_key.startsWith('event_reminder_') && l.provider_ref)
+        .map(l => l.provider_ref) as string[];
+      
+      const reminderEvents = reminderEventIds.length > 0 ? await prisma.events.findMany({
+        where: { id: { in: reminderEventIds } },
+        select: { id: true, title: true }
+      }) : [];
+      const eventReminderMap = new Map<string, string>(reminderEvents.map(e => [e.id, e.title]));
+
       // Pre-fetch group memberships for group join requests
       const groupJoinLogs = logs.filter(l => l.template_key === 'group_join_request' && l.provider_ref);
       const membershipQueries = groupJoinLogs.map(l => {
@@ -1154,6 +1165,65 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             action: "view",
             groupId: l.provider_ref
           };
+        }
+
+        if (l.template_key.startsWith('event_reminder_')) {
+          const eventId = l.provider_ref || "";
+          const eventTitle = eventId ? (eventReminderMap.get(eventId) || "Your event") : "Your event";
+          
+          let windowMin = l.template_key.split('_')[2] || '0min';
+          let label = windowMin === '60min' ? '1 hour'
+            : windowMin === '30min' ? '30 minutes'
+            : windowMin === '10min' ? '10 minutes'
+            : windowMin === '5min' ? '5 minutes'
+            : windowMin === '2min' ? '2 minutes'
+            : windowMin === '1min' ? '1 minute'
+            : 'now';
+            
+          let text = label === 'now' 
+            ? `🚀 <b>${eventTitle}</b> is starting now!`
+            : `⏰ <b>${eventTitle}</b> starts in <b>${label}</b>!`;
+
+          return {
+            id: l.id,
+            who: eventTitle,
+            type: "event",
+            unread: l.status !== 'read',
+            day: dayLabel,
+            time: timeStr,
+            text,
+            action: eventId ? "view_event" : null,
+            eventId: eventId || undefined
+          };
+        }
+
+        if (l.template_key === 'group_event_created' && l.provider_ref) {
+          try {
+            const data = JSON.parse(l.provider_ref);
+            return {
+              id: l.id,
+              who: data.groupName || "Groups",
+              type: "group_event_created",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `A new event <b>"${data.eventTitle}"</b> was created in <b>${data.groupName}</b>!`,
+              action: "view_event",
+              eventId: data.eventId,
+              groupId: data.groupId
+            };
+          } catch (e) {
+            return {
+              id: l.id,
+              who: "Groups",
+              type: "group_event_created",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `A new event was created in your group.`,
+              action: "view"
+            };
+          }
         }
 
         if (l.template_key === 'group_new_post') {
@@ -1464,6 +1534,26 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           status: { in: ['confirmed', 'pending_approval'] }
         }
       });
+
+      // Check event capacity if this is a new booking request
+      let isWaitlisted = false;
+      if (!existingBooking && event.capacity_total && event.capacity_total > 0) {
+        const activeCount = await prisma.bookings.count({
+          where: {
+            event_id: eventId,
+            status: { in: ['confirmed', 'pending_approval'] }
+          }
+        });
+        if (activeCount >= event.capacity_total) {
+          const capacity = (event.settings as any)?.capacity || {};
+          if (capacity.waitlist === true) {
+            isWaitlisted = true;
+          } else {
+            return reply.status(400).send({ success: false, message: 'Event is at full capacity.' });
+          }
+        }
+      }
+
       if (existingBooking) {
         if (existingBooking.status === 'pending_approval' && !approvalRequired) {
           await prisma.$transaction(async (tx) => {
@@ -1533,17 +1623,34 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       if (bookingsToDelete.length > 0) {
         const deleteIds = bookingsToDelete.map(b => b.id);
         
-        // Delete related child records to avoid FK violations
-        await prisma.checkins.deleteMany({
-          where: { tickets: { booking_line_items: { booking_id: { in: deleteIds } } } }
+        const lineItems = await prisma.booking_line_items.findMany({
+          where: { booking_id: { in: deleteIds } },
+          select: { id: true }
         });
+        const liIds = lineItems.map(l => l.id);
+        
+        const tickets = await prisma.tickets.findMany({
+          where: { line_item_id: { in: liIds } },
+          select: { id: true }
+        });
+        const tIds = tickets.map(t => t.id);
+
+        if (tIds.length > 0) {
+          await prisma.checkins.deleteMany({
+            where: { ticket_id: { in: tIds } }
+          });
+          await prisma.tickets.deleteMany({
+            where: { id: { in: tIds } }
+          });
+        }
+        
+        if (liIds.length > 0) {
+          await prisma.booking_line_items.deleteMany({
+            where: { id: { in: liIds } }
+          });
+        }
+        
         await prisma.attendees.deleteMany({
-          where: { booking_id: { in: deleteIds } }
-        });
-        await prisma.tickets.deleteMany({
-          where: { booking_line_items: { booking_id: { in: deleteIds } } }
-        });
-        await prisma.booking_line_items.deleteMany({
           where: { booking_id: { in: deleteIds } }
         });
         await prisma.bookings.deleteMany({
@@ -1569,8 +1676,8 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       }
 
       const answers = request.body || {};
-      const initialStatus = approvalRequired ? 'pending_approval' : 'confirmed';
-      const initialTicketStatus = approvalRequired ? 'reserved' : 'confirmed';
+      const initialStatus = isWaitlisted ? 'waitlisted' : (approvalRequired ? 'pending_approval' : 'confirmed');
+      const initialTicketStatus = isWaitlisted ? 'waitlisted' : (approvalRequired ? 'reserved' : 'confirmed');
 
       // Remove from wishlist if they join
       await EventService.removeWishlist(eventId, userId).catch(err => console.error('Failed to auto-remove from wishlist', err));
@@ -1821,6 +1928,11 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             data: { status: nextTicketStatus }
           });
         });
+        
+        if (action === 'decline') {
+          const { EventService } = require('../services/EventService');
+          await EventService.promoteFromWaitlist(eventId, 1);
+        }
       }
 
       if (action === 'accept') {

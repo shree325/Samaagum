@@ -21,7 +21,7 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
       if (!q || typeof q !== 'string') {
         return { success: true, data: [] };
       }
-      const data = locationService.search(q, 10);
+      const data = await locationService.search(q, 10);
       return { success: true, data };
     } catch (error: any) {
       return reply.status(500).send({ success: false, message: error.message || 'Search failed' });

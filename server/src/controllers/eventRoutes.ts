@@ -148,7 +148,7 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const bookings = await prisma.bookings.findMany({
                 where: {
                     booker_user_id: userId,
-                    status: { in: ['confirmed', 'pending_approval', 'cancelled'] }
+                    status: { in: ['confirmed', 'pending_approval', 'cancelled', 'waitlisted'] as any }
                 },
                 include: {
                     events: true
@@ -216,11 +216,11 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             };
 
             for (const booking of bookings) {
-                await processEvent(booking.event_id, booking.events, booking.status, booking.id);
+                await processEvent(booking.event_id, (booking as any).events, booking.status, booking.id);
             }
 
             for (const assignment of assignments) {
-                await processEvent(assignment.event_id, assignment.events, 'confirmed', null);
+                await processEvent(assignment.event_id, (assignment as any).events, 'confirmed', null);
             }
 
             return reply.send({ success: true, data: results });
@@ -235,7 +235,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
         try {
             const tenantId = request.headers['x-tenant-id'] || '00000000-0000-0000-0000-000000000000';
             const userId = tryDecodeUserId(fastify, request);
-            const data = await EventService.getPublicEvents(tenantId as string, userId);
+            const cityQuery = (request.query as any)?.city as string | undefined;
+            const data = await EventService.getPublicEvents(tenantId as string, userId, cityQuery);
             return reply.send({ success: true, data });
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });

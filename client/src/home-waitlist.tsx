@@ -61,7 +61,7 @@ export function Waitlist({ ev, st, go }) {
   const e = ev ? { ...base, ev: ev.title || base.ev, cover: ev.cover || base.cover, date: ev.date || base.date, time: ev.time || base.time, venue: ev.venue || base.venue } : base;
   
   // Detect if user is already waitlisted or if we start in join state
-  const isWaitlisted = st.waitlisted ? st.waitlisted.has(targetId) : false;
+  const isWaitlisted = (st.waitlisted ? st.waitlisted.has(targetId) : false) || (st.joinedEvents?.some(je => je.id === targetId && je.bookingStatus === 'waitlisted') ?? false);
   
   const [state, setState] = useState(isWaitlisted ? "QUEUED" : "JOIN"); // JOIN | QUEUED | INVITED | CONVERTED | EXPIRED
   const [refs, setRefs] = useState(0);

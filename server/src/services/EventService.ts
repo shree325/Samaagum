@@ -11,9 +11,10 @@ import { R_forum_post_tags } from '../repositories/R_forum_post_tags';
 import { R_users } from '../repositories/R_users';
 import prisma from '../config/prisma';
 import accessControlService from './AccessControlService';
-import { sendNotificationToUser } from './messagingSocket';
+import { sendNotificationToUser, broadcastWishlistUpdate } from './messagingSocket';
 import { PlanEntitlementService } from './PlanEntitlementService';
 import { GroupService } from './GroupService';
+import { R_cityControls } from '../repositories/R_cityControls';
 
 export class EventService {
   private static eventsRepo = new R_events(prisma);
@@ -26,6 +27,19 @@ export class EventService {
   private static reactionsRepo = new R_forum_reactions();
   private static usersRepo = new R_users(prisma);
   private static wishlistRepo = new R_wishlists(prisma);
+  private static cityControlsRepo = new R_cityControls();
+
+  private static getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+  }
 
   /**
    * Validates event creation and update parameters against user plan entitlements.
@@ -34,9 +48,20 @@ export class EventService {
     const ents = await PlanEntitlementService.getEntitlements(userId);
 
     // 1. Max participants limit
-    const capacity = eventData.capacity_total || eventData.capacity;
-    if (capacity !== undefined && ents.event_max_participants !== -1 && capacity > ents.event_max_participants) {
-      throw new Error(`Your plan limits event participants to a maximum of ${ents.event_max_participants}.`);
+    const settings = eventData.settings || {};
+    const capacity = settings.capacity || {};
+    let capacityTotal = eventData.capacity_total !== undefined ? eventData.capacity_total : eventData.capacity;
+    if (ents.event_max_participants !== -1) {
+      if (capacity.limit === true && capacity.max > ents.event_max_participants) {
+          throw new Error(`Your plan limits event capacity to a maximum of ${ents.event_max_participants} participants.`);
+      }
+      if (capacity.limit !== true && (!capacityTotal || capacityTotal > ents.event_max_participants)) {
+          if (!eventData.settings) eventData.settings = {};
+          if (!eventData.settings.capacity) eventData.settings.capacity = {};
+          eventData.settings.capacity.limit = true;
+          eventData.settings.capacity.max = ents.event_max_participants;
+          eventData.capacity_total = ents.event_max_participants;
+      }
     }
 
     // 2. Event type (registration mode and payment options)
@@ -61,6 +86,30 @@ export class EventService {
 
     // 5. Verify user has permission to host as the selected entity (RBAC)
     await this.validateHostPermission(userId, eventData.host_entity_id);
+  }
+
+  private static async validateEventLocation(eventData: any) {
+    if (eventData.venue) {
+      let venueStr = '';
+      if (typeof eventData.venue === 'string') {
+        venueStr = eventData.venue;
+      } else if (eventData.venue.name) {
+        venueStr = eventData.venue.name;
+      }
+      
+      if (venueStr) {
+        const venueLower = venueStr.toLowerCase();
+        const inactiveCities = await prisma.city_controls.findMany({
+          where: { is_active: false },
+          select: { city_name: true }
+        });
+        
+        const matched = inactiveCities.find(c => venueLower.includes(c.city_name.toLowerCase()));
+        if (matched) {
+          throw new Error(`The location '${matched.city_name}' is currently inactive and cannot be selected for events.`);
+        }
+      }
+    }
   }
 
   private static async validateHostPermission(userId: string, hostEntityId: string) {
@@ -127,6 +176,7 @@ export class EventService {
   static async createEvent(userId: string, tenantId: string, body: any) {
     // 0. Enforce plan entitlements before doing any writes
     await this.validateEventEntitlements(userId, body);
+    await this.validateEventLocation(body);
 
     // 1. Resolve hosted_by_entity_id (the user's own entity or chosen group)
     let hostedByEntityId = body.host_entity_id;
@@ -150,6 +200,18 @@ export class EventService {
       }
     }
 
+    // 1.5 Handle root-level waitlist flag from create_event frontend
+    let finalSettings = body.settings || {};
+    if (body.waitlist !== undefined) {
+      finalSettings = {
+        ...finalSettings,
+        capacity: {
+          ...(finalSettings.capacity || {}),
+          waitlist: body.waitlist
+        }
+      };
+    }
+
     // 2. Perform transactional event + tickets creation
     const event = await this.eventsRepo.create({
       tenant_id: tenantId,
@@ -167,6 +229,10 @@ export class EventService {
       registration_mode: body.registration_mode === 'free' ? 'free_rsvp' : (body.registration_mode || 'free_rsvp'),
       approval_required: body.approval_required || false,
       instruction: body.instruction,
+      registration_status: body.registration_status,
+      registration_opens_at: body.registration_opens_at ? new Date(body.registration_opens_at) : null,
+      registration_closes_at: body.registration_closes_at ? new Date(body.registration_closes_at) : null,
+      settings: Object.keys(finalSettings).length > 0 ? finalSettings : null,
     });
 
     const tickets = body.tickets || [];
@@ -189,6 +255,56 @@ export class EventService {
         updated_by: userId,
       });
       createdTickets.push(ticketType);
+    }
+
+    if (hostedByEntityId) {
+      const entity = await prisma.entities.findUnique({ where: { id: hostedByEntityId } });
+      if (entity && entity.entity_type === 'group') {
+        const group = await prisma.groups.findFirst({ where: { entity_id: hostedByEntityId } });
+        if (group) {
+          const activeMemberships = await prisma.group_memberships.findMany({
+            where: { group_id: hostedByEntityId, state: 'active' }
+          });
+          
+          const userIds = new Set<string>();
+          if (entity.user_id) userIds.add(entity.user_id);
+          activeMemberships.forEach(m => userIds.add(m.user_id));
+          // Notify everyone including the creator, as per user requirement
+
+          if (userIds.size > 0) {
+            for (const memberId of userIds) {
+              try {
+                sendNotificationToUser(memberId, 'group.notification', {
+                  type: 'group_event_created',
+                  title: 'New Group Event',
+                  text: `A new event '${event.title}' was created in ${group.name}`,
+                  link: `/event/${event.id}`
+                });
+                
+                await prisma.notification_log.create({
+                  data: {
+                    user_id: memberId,
+                    tenant_id: tenantId,
+                    channel: 'in-app',
+                    template_key: 'group_event_created',
+                    status: 'unread',
+                    message: `A new event '${event.title}' was created in ${group.name}`,
+                    actor_id: userId,
+                    provider_ref: JSON.stringify({
+                      eventId: event.id,
+                      groupId: group.id,
+                      groupName: group.name,
+                      eventTitle: event.title
+                    })
+                  }
+                });
+              } catch (err) {
+                console.error(`Failed to notify member ${memberId} of new event in group ${group.id}:`, err);
+              }
+            }
+          }
+        }
+      }
     }
 
     return { event, tickets: createdTickets };
@@ -260,7 +376,7 @@ export class EventService {
     return false;
   }
 
-  static async getPublicEvents(tenantId: string, userId?: string) {
+  static async getPublicEvents(tenantId: string, userId?: string, cityQuery?: string) {
     const list = await this.eventsRepo.getByStatus(tenantId, 'published');
     const enrichedList = [];
     for (const ev of list) {
@@ -293,7 +409,82 @@ export class EventService {
         registrationClosesAt: ev.registration_closes_at
       });
     }
-    return enrichedList;
+
+    let refCityName = "";
+    let refStateName = "";
+    let refLat: number | null = null;
+    let refLon: number | null = null;
+
+    if (cityQuery && cityQuery !== 'Global') {
+        const queryName = cityQuery.split(',')[0].trim();
+        const matchedCities = await this.cityControlsRepo.findByCityName(queryName);
+        const refLoc = matchedCities.find(c => c.is_active) || matchedCities[0];
+        if (refLoc) {
+            refCityName = refLoc.city_name;
+            refStateName = refLoc.state_name || "";
+            refLat = Number(refLoc.latitude);
+            refLon = Number(refLoc.longitude);
+        }
+    }
+
+    const mappedEvents = enrichedList.map(ev => {
+        let isSameCity = false;
+        let isSameState = false;
+        let distance: number | null = null;
+        let hasLocation = false;
+
+        const loc = ev.venue as any;
+        if (loc) {
+            const city = loc.city || loc.address || loc.meta?.city;
+            const state = loc.state || loc.meta?.state;
+            const lat = loc.lat || loc.meta?.lat;
+            const lon = loc.lon || loc.meta?.lon;
+
+            if (city) {
+                hasLocation = true;
+                if (refCityName && city.toLowerCase().includes(refCityName.toLowerCase())) {
+                    isSameCity = true;
+                }
+                if (refStateName && state && state.toLowerCase().includes(refStateName.toLowerCase())) {
+                    isSameState = true;
+                }
+                if (refLat !== null && refLon !== null && lat !== undefined && lon !== undefined) {
+                    distance = this.getDistance(refLat, refLon, Number(lat), Number(lon));
+                }
+            }
+        }
+        
+        return { ...ev, _isSameCity: isSameCity, _isSameState: isSameState, _distance: distance, _hasLocation: hasLocation, _createdAt: ev.created_at?.getTime() || 0 };
+    });
+
+    if (refCityName) {
+        mappedEvents.sort((a, b) => {
+            // 1. Same City
+            if (a._isSameCity && !b._isSameCity) return -1;
+            if (!a._isSameCity && b._isSameCity) return 1;
+
+            // 2. Nearby Cities (by distance)
+            if (a._distance !== null && b._distance !== null) return a._distance - b._distance;
+            if (a._distance !== null) return -1;
+            if (b._distance !== null) return 1;
+
+            // 3. Same State
+            if (a._isSameState && !b._isSameState) return -1;
+            if (!a._isSameState && b._isSameState) return 1;
+
+            // 4. Remaining Locations
+            if (a._hasLocation && !b._hasLocation) return -1;
+            if (!a._hasLocation && b._hasLocation) return 1;
+
+            // 5. Fallback: Newest first
+            return b._createdAt - a._createdAt;
+        });
+    }
+
+    return mappedEvents.map(e => {
+        const { _isSameCity, _isSameState, _distance, _hasLocation, _createdAt, ...rest } = e;
+        return rest;
+    });
   }
 
   static async getUserEvents(userId: string) {
@@ -361,6 +552,19 @@ export class EventService {
     const tickets = await this.ticketTypesRepo.getByEventId(id);
     const hostInfo = await this.resolveHostInfo(event.hosted_by_entity_id);
     
+    let isFull = false;
+    let hasWaitlist = false;
+    const capacity = (event.settings as any)?.capacity || {};
+    if (capacity.limit === true && capacity.max > 0) {
+        const activeCount = await prisma.attendees.count({
+            where: { bookings: { event_id: id, status: { in: ['confirmed', 'pending_approval'] } } }
+        });
+        if (activeCount >= capacity.max) {
+            isFull = true;
+            if (capacity.waitlist === true) hasWaitlist = true;
+        }
+    }
+
     const wishlistCount = await this.wishlistRepo.getCountByEventId(id);
     const isWishlisted = userId ? await this.wishlistRepo.isWishlisted(id, userId) : false;
 
@@ -368,6 +572,8 @@ export class EventService {
       event: { 
         ...event, 
         ...hostInfo,
+        isFull,
+        hasWaitlist,
         wishlistCount,
         isWishlisted,
         registrationStatus: event.registration_status,
@@ -483,6 +689,7 @@ export class EventService {
 
     // Enforce plan entitlements against the incoming field values before writing.
     await this.validateEventEntitlements(userId, body);
+    await this.validateEventLocation(body);
 
     const isFullyAuthorized = await this.verifyEventHostOrCoHost(userId, id);
     // Co-Hosts/managers who only hold event.configure_tickets (not event.manage) may still push
@@ -510,6 +717,19 @@ export class EventService {
       }
     }
 
+    // Extract waitlist from root payload if provided
+    let finalSettings = body.settings;
+    if (body.waitlist !== undefined) {
+      let baseSettings = finalSettings || (event.settings ? (typeof event.settings === 'string' ? JSON.parse(event.settings as string) : event.settings) : {});
+      finalSettings = {
+        ...baseSettings,
+        capacity: {
+          ...(baseSettings.capacity || {}),
+          waitlist: body.waitlist
+        }
+      };
+    }
+
     // The client always submits the full event snapshot (saveEventSettings in event.tsx), so a
     // ticket-manager-only editor's request still arrives with title/dates/etc. populated. Rather
     // than reject the whole request, silently drop the restricted fields (left undefined ->
@@ -528,6 +748,10 @@ export class EventService {
       online_link: body.online_link,
       instruction: body.instruction,
       hosted_by_entity_id: hostedByEntityId,
+      registration_status: body.registration_status,
+      registration_opens_at: body.registration_opens_at ? new Date(body.registration_opens_at) : undefined,
+      registration_closes_at: body.registration_closes_at ? new Date(body.registration_closes_at) : undefined,
+      settings: finalSettings,
     } : {
       venue: body.venue,
     });
@@ -589,6 +813,15 @@ export class EventService {
             console.error('Error auto-resolving event notifications on update:', e);
           }
         }
+      }
+
+      if (body.registration_status) {
+        await this.eventsRepo.updateRegistrationStatus(
+          id,
+          body.registration_status,
+          body.registration_opens_at ? new Date(body.registration_opens_at) : null,
+          body.registration_closes_at ? new Date(body.registration_closes_at) : null
+        );
       }
     }
 
@@ -658,11 +891,16 @@ export class EventService {
   }
 
   static async toggleWishlist(eventId: string, userId: string) {
-    return await this.wishlistRepo.toggle(eventId, userId);
+    const result = await this.wishlistRepo.toggle(eventId, userId);
+    broadcastWishlistUpdate(eventId, result.count);
+    return result;
   }
 
   static async removeWishlist(eventId: string, userId: string) {
-    return await this.wishlistRepo.removeByEventAndUser(eventId, userId);
+    const result = await this.wishlistRepo.removeByEventAndUser(eventId, userId);
+    const count = await this.wishlistRepo.getCountByEventId(eventId);
+    broadcastWishlistUpdate(eventId, count);
+    return result;
   }
 
   static async updateRegistrationSettings(
@@ -1663,6 +1901,51 @@ export class EventService {
     });
   }
 
+  static async promoteFromWaitlist(eventId: string, count: number) {
+    if (count <= 0) return;
+    
+    const event = await prisma.events.findUnique({ where: { id: eventId } });
+    if (!event) return;
+    
+    const capacity = (event.settings as any)?.capacity || {};
+    if (capacity.waitlist !== true) return;
+    
+    const waitlistedBookings = await prisma.bookings.findMany({
+      where: { event_id: eventId, status: 'waitlisted' },
+      orderBy: { created_at: 'asc' },
+      take: count
+    });
+    
+    for (const wb of waitlistedBookings) {
+      const newStatus = event.approval_required ? 'pending_approval' : 'confirmed';
+      const newTicketStatus = event.approval_required ? 'reserved' : 'confirmed';
+      
+      await prisma.$transaction(async (tx) => {
+        await tx.bookings.update({
+          where: { id: wb.id },
+          data: { status: newStatus }
+        });
+        const lineItems = await tx.booking_line_items.findMany({
+          where: { booking_id: wb.id }
+        });
+        const liIds = lineItems.map(li => li.id);
+        await tx.tickets.updateMany({
+          where: { line_item_id: { in: liIds } },
+          data: { status: newTicketStatus }
+        });
+      });
+      
+      try {
+        const { sendNotificationToUser } = require('./messagingSocket');
+        sendNotificationToUser(wb.booker_user_id, 'notification.general', {
+          title: 'Waitlist Update',
+          body: `You are now ${newStatus === 'confirmed' ? 'confirmed' : 'pending approval'} for ${event.title}.`,
+          link: `/events/${event.id}`
+        });
+      } catch(e) {}
+    }
+  }
+
   static async leaveEvent(eventId: string, userId: string) {
     const event = await prisma.events.findUnique({ where: { id: eventId } });
     if (!event) throw new Error('Event not found');
@@ -1701,7 +1984,11 @@ export class EventService {
     const bookings = await prisma.bookings.findMany({
       where: { event_id: eventId, booker_user_id: userId }
     });
+    let canceledConfirmedCount = 0;
     for (const b of bookings) {
+      if (b.status === 'confirmed' || b.status === 'pending_approval') {
+        canceledConfirmedCount++;
+      }
       await prisma.$transaction(async (tx) => {
         await tx.bookings.update({
           where: { id: b.id },
@@ -1716,6 +2003,10 @@ export class EventService {
           data: { status: 'cancelled' }
         });
       });
+    }
+
+    if (canceledConfirmedCount > 0) {
+      await EventService.promoteFromWaitlist(eventId, canceledConfirmedCount);
     }
   }
 
