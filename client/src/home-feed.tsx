@@ -497,12 +497,7 @@ export function HomeFeed({ st, go }: any) {
         <Greeting city={city} />
         
         {/* Dynamic Category chip filters */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 26 }}>
-          <div className="filterbar">
-            {categoriesList.map(c => (
-              <FilterChip key={c.id} active={cat === c.name} onClick={() => setCat(c.name)}>{c.name}</FilterChip>
-            ))}
-          </div>
+        <div style={{ marginBottom: 26 }}>
           <div className="filterbar">
             {[
               { k: "trending", ic: <I.fire />, label: "Trending" },
@@ -541,8 +536,6 @@ export function HomeFeed({ st, go }: any) {
             toggleWishlist={toggleWishlist}
           />
         )}
-        {/* Featured */}
-        <FeatureCard ev={FEATURED} onOpen={(e) => go("event", e)} wishlisted={wishlisted.has(FEATURED.id)} wishlistCount={wishlistCounts[FEATURED.id] !== undefined ? wishlistCounts[FEATURED.id] : (FEATURED.wishlistCount || 0)} onWishlist={() => toggleWishlist(FEATURED.id)} />
 
         {/* Recommended rail */}
         <div className="section">
@@ -683,7 +676,7 @@ export function HomeFeed({ st, go }: any) {
               <ErrorBlock message={sections.trending.error} onRetry={refetch} />
             ) : sections.trending.data.length ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {sections.trending.data.map((g: any, i: number) => (
+                {sections.trending.data.slice(0, 5).map((g: any, i: number) => (
                   <GroupRow
                     key={g.id}
                     g={{
@@ -762,7 +755,7 @@ export function HomeFeed({ st, go }: any) {
               <ErrorBlock message={sections.people.error} onRetry={refetch} />
             ) : sections.people.data.length ? (
               <div className="people-grid">
-                {sections.people.data.map((p: any) => {
+                {sections.people.data.slice(0, 6).map((p: any) => {
                   const mapped = {
                     id: p.id,
                     name: p.name,

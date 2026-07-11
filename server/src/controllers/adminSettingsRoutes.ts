@@ -717,10 +717,30 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
         })).toString('base64url');
         const token = `${header}.${tokenPayload}.mocksignature`;
 
+        // For Login, tell the client whether onboarding is still needed
+        let profileCompleted = true;
+        let onboardingStep = 'done';
+        if (purpose === 'Login') {
+          profileCompleted = !!(dbUser as any).profile_completed;
+          if (!profileCompleted) {
+            // Determine which step to resume at
+            const profileRow = await prisma.profiles.findUnique({ where: { user_id: dbUser.id } });
+            if (!profileRow?.first_name && !dbUser.first_name) {
+              onboardingStep = 'profile';
+            } else if (!profileRow?.skills || (profileRow.skills as any[]).length === 0) {
+              onboardingStep = 'interests';
+            } else {
+              onboardingStep = 'location';
+            }
+          }
+        }
+
         return {
           success: true,
           message: 'OTP verified successfully!',
           token,
+          profileCompleted,
+          onboardingStep,
           user: {
             id: dbUser.id,
             email: dbUser.primary_email,
@@ -811,6 +831,42 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
       };
     } catch (error: any) {
       return reply.status(500).send({ success: false, message: error.message || 'Failed to fetch profile.' });
+    }
+  });
+
+  // GET onboarding status — tells the home page whether the user needs to complete onboarding
+  fastify.get('/onboarding-status', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+    try {
+      if (!request.user || !request.user.id) {
+        return reply.status(401).send({ success: false, message: 'Unauthorized' });
+      }
+      const dbUser = await prisma.users.findUnique({
+        where: { id: request.user.id },
+        include: { profiles: true }
+      });
+      if (!dbUser) {
+        return reply.status(404).send({ success: false, message: 'User not found' });
+      }
+
+      const profileCompleted = !!(dbUser as any).profile_completed;
+      if (profileCompleted) {
+        return { success: true, profileCompleted: true, onboardingStep: 'done' };
+      }
+
+      // Determine which step to resume at
+      const profileRow = (dbUser as any).profiles;
+      let onboardingStep = 'profile';
+      if (profileRow?.first_name || dbUser.first_name) {
+        if (!profileRow?.skills || (profileRow.skills as any[]).length === 0) {
+          onboardingStep = 'interests';
+        } else {
+          onboardingStep = 'location';
+        }
+      }
+
+      return { success: true, profileCompleted: false, onboardingStep };
+    } catch (error: any) {
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to fetch onboarding status.' });
     }
   });
 
@@ -1044,6 +1100,11 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
 
       // Store image bytes directly on the users row
       if (profilePhotoBuffer !== undefined) userUpdateData.profile_image_data = profilePhotoBuffer;
+
+      // Mark onboarding complete when the location step is saved (location = final step)
+      if (finalLocation) {
+        userUpdateData.profile_completed = true;
+      }
 
       if (Object.keys(userUpdateData).length > 0) {
         userUpdateData.updated_at = new Date();

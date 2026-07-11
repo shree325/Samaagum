@@ -3251,34 +3251,12 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                   >
                     <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Ticket Price</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 4, justifyContent: "center", minHeight: 36 }}>
-                      <select
-                        className="cselect"
-                        value={type}
-                        onChange={e => {
-                          const val = e.target.value;
-                          if (val === "paid" && !canCreatePaidTickets) {
-                            triggerUpgrade("Paid Events / Tickets");
-                            return;
-                          }
-                          if (val === "cash" && !canUseCash) {
-                            triggerUpgrade("Cash Payment Events");
-                            return;
-                          }
-                          setType(val);
-                        }}
-                        style={{ background: "var(--surface)", height: 36, padding: "6px" }}
-                      >
-                        <option value="free">Free</option>
-                        {locType !== 'online' && (
-                          <option value="cash">{!canUseCash && "🔒 "}Cash</option>
-                        )}
-                        <option value="paid">{!canCreatePaidTickets && "🔒 "}Paid</option>
-                      </select>
-                      {(type === "paid" || type === "cash") && (
-                        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
-                          Click to customize tiers &amp; pricing
-                        </span>
-                      )}
+                      <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
+                        {type === "free" ? "Free" : type === "paid" ? "Paid" : type === "cash" ? "Cash" : type}
+                      </span>
+                      <span style={{ fontSize: 11, color: "var(--ink-3)" }}>
+                        Click to customize tiers &amp; pricing
+                      </span>
                     </div>
                   </div>
                   <div style={{ padding: 12, background: "var(--field)", borderRadius: "var(--r-md)", border: "1px solid var(--border)" }}>
@@ -3293,30 +3271,13 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                     onClick={() => setCapacityModalOpen(true)}
                   >
                     <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Capacity Limit</div>
-<div style={{ display: "flex", alignItems: "center", gap: 12, height: 36 }}>
-                      <Toggle
-                        on={capacityEnabled}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const next = !capacityEnabled;
-                          if (!next && eventMaxParticipants !== -1) {
-                            triggerUpgrade("Unlimited Event Capacity");
-                            return;
-                          }
-                          setCapacityEnabled(next);
-                          if (next) {
-                            setCapacityModalOpen(true);
-                          }
-                        }}
-                      />
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4, justifyContent: "center" }}>
-                        <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
-                          {capacityEnabled ? `${capacity || "—"} Limit` : "Unlimited"}
-                        </span>
-                        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
-                          {waitlist ? "Waitlist Enabled" : "Waitlist Disabled"}
-                        </span>
-                      </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4, justifyContent: "center", minHeight: 36 }}>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>
+                        {capacityEnabled ? `${capacity || "—"} Limited` : "Unlimited"}
+                      </span>
+                      <span style={{ fontSize: 11, color: "var(--ink-3)" }}>
+                        {waitlist ? "Waitlist Enabled" : "Waitlist Disabled"}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -3360,40 +3321,27 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                   )}
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: "16px", marginBottom: 16 }}>
-                  {/* Sponsors section */}
-                  <div style={{ border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: 16, background: "var(--field)", display: "flex", flexDirection: "column", justifyContent: "center", minHeight: 80 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>Enable Sponsors</div>
-                        <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Promote organizations and display logos.</div>
-                      </div>
-                      <Toggle on={enableSponsors} onClick={() => setEnableSponsors(v => !v)} />
+                {/* Registration Form Builder Toggle & Embed */}
+                <div 
+                  style={{ border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: 16, background: "var(--field)", display: "flex", flexDirection: "column", justifyContent: "center", minHeight: 80, cursor: "pointer", marginBottom: 16 }}
+                  onClick={() => setQuestModalOpen(true)}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>Registration Questionnaire</div>
+                      <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Customize form questions and fields.</div>
                     </div>
-                  </div>
-
-                  {/* Registration Form Builder Toggle & Embed */}
-                  <div 
-                    style={{ border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: 16, background: "var(--field)", display: "flex", flexDirection: "column", justifyContent: "center", minHeight: 80, cursor: "pointer" }}
-                    onClick={() => setQuestModalOpen(true)}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>Registration Questionnaire</div>
-                        <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Customize form questions and fields.</div>
-                      </div>
-                      <Toggle
-                        on={enableRegForm}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const next = !enableRegForm;
-                          setEnableRegForm(next);
-                          if (next) {
-                            setQuestModalOpen(true);
-                          }
-                        }}
-                      />
-                    </div>
+                    <Toggle
+                      on={enableRegForm}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const next = !enableRegForm;
+                        setEnableRegForm(next);
+                        if (next) {
+                          setQuestModalOpen(true);
+                        }
+                      }}
+                    />
                   </div>
                 </div>
 

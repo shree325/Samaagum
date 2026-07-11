@@ -30,22 +30,61 @@ export function getModeFromUrl() {
 }
 
 export function useAuth() {
-  const [mode, setMode] = useState(getModeFromUrl);
-  const [idx, setIdx] = useState(0);
-  const [dir, setDir] = useState("f");
-  const [data, setData] = useState({ email: "", otp: "", name: "", role: "", interests: [], city: null, avatar: false, google: false });
+  const getInitialIdx = () => {
+    if (typeof window === 'undefined') return 0;
+    const h = window.location.hash.replace('#', '');
+    const order = ORDER[getModeFromUrl()];
+    const index = order.indexOf(h);
+    return index !== -1 ? index : 0;
+  };
 
-  // Re-sync mode from the URL whenever the page becomes visible again
-  // (covers back/forward-cache navigations where the component stays
-  // mounted and the initial useState value would otherwise go stale).
+  const [mode, setMode] = useState(getModeFromUrl);
+  const [idx, setIdx] = useState(getInitialIdx);
+  const [dir, setDir] = useState("f");
+  const [data, setData] = useState(() => {
+    let email = "";
+    let name = "";
+    let firstName = "";
+    let lastName = "";
+    let profilePhoto = "";
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+          email = payload.email || "";
+          name = payload.name || "";
+          firstName = payload.firstName || name.split(' ')[0] || "";
+          lastName = payload.lastName || name.split(' ').slice(1).join(' ') || "";
+          profilePhoto = payload.picture || "";
+        }
+      }
+    } catch (e) {}
+    
+    return { email, otp: "", name, firstName, lastName, profilePhoto, role: "", interests: [], city: null, avatar: false, google: false };
+  });
+
+  // Re-sync mode and idx from the URL whenever the page becomes visible again
   useEffect(() => {
-    const syncFromUrl = () => setMode(getModeFromUrl());
+    const syncFromUrl = () => {
+      const currentMode = getModeFromUrl();
+      setMode(currentMode);
+      const h = window.location.hash.replace('#', '');
+      const order = ORDER[currentMode];
+      const index = order.indexOf(h);
+      if (index !== -1) {
+        setIdx(index);
+      }
+    };
     syncFromUrl();
     window.addEventListener('pageshow', syncFromUrl);
     window.addEventListener('popstate', syncFromUrl);
+    window.addEventListener('hashchange', syncFromUrl);
     return () => {
       window.removeEventListener('pageshow', syncFromUrl);
       window.removeEventListener('popstate', syncFromUrl);
+      window.removeEventListener('hashchange', syncFromUrl);
     };
   }, []);
 
@@ -110,31 +149,15 @@ export function useOAuthProviders(mode) {
 }
 
 export function ScreenSignup({ m }) {
-  const [formData, setFormData] = useState({
-    firstName: m.data.name?.split(' ')[0] || '',
-    lastName: m.data.name?.split(' ').slice(1).join(' ') || '',
-    gender: '',
-    dob: '',
-    phoneNumber: m.data.phoneNumber || '',
-    email: m.data.email || ''
-  });
+  const [email, setEmail] = useState(m.data.email || '');
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const { providers, loadingKeys, handleProviderLogin } = useOAuthProviders(m.mode);
   const hasOauth = providers.length > 0;
 
-  const handleChange = (e) => setFormData(d => ({ ...d, [e.target.name]: e.target.value }));
-
   const cont = async () => {
-    let newErrors = {};
-    if (!formData.firstName) newErrors.firstName = "First name is required";
-    if (!formData.lastName) newErrors.lastName = "Last name is required";
-    if (!formData.gender) newErrors.gender = "Gender is required";
-    if (!formData.dob) newErrors.dob = "Date of birth is required";
-    if (formData.phoneNumber && !/^\+?[0-9]{10,15}$/.test(formData.phoneNumber)) newErrors.phoneNumber = "Phone number must be numeric (10-15 digits)";
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) newErrors.email = "Invalid email";
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setErrors({ email: "Invalid email address" });
       return;
     }
     setErrors({});
@@ -147,27 +170,19 @@ export function ScreenSignup({ m }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: formData.email,
-          name: `${formData.firstName} ${formData.lastName}`.trim(),
+          email: email,
           purpose: 'Signup'
         })
       });
       const data = await res.json();
       if (data.success) {
         m.set({
-          email: formData.email,
-          name: `${formData.firstName} ${formData.lastName}`.trim(),
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          gender: formData.gender,
-          dob: formData.dob,
-          phoneNumber: formData.phoneNumber,
-          // saving other data to pass along if needed
+          email: email,
           otp: data.code || ''
         });
         m.next();
       } else {
-        setErrors({ general: data.message || "Failed to send code" });
+        setErrors({ general: data.message || "Failed to send verification code" });
       }
     } catch (e) {
       setErrors({ general: "Failed to connect to authentication service" });
@@ -179,7 +194,7 @@ export function ScreenSignup({ m }) {
   return (
     <div>
       <h2 className="auth-h">Create Account</h2>
-      {/* <p className="auth-p">Join Samaagum to discover events and meet your people.</p> */}
+      <p className="auth-p">Join Samaagum to discover events and meet your people.</p>
 
       {hasOauth && (
         <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -204,57 +219,15 @@ export function ScreenSignup({ m }) {
       {hasOauth && <div className="divider">or continue with email</div>}
 
       <div style={{ marginTop: hasOauth ? 0 : 24, display: "flex", flexDirection: "column", gap: 16 }}>
-        <div style={{ display: "flex", gap: 12 }}>
-          <div style={{ flex: 1 }}>
-            <Field label="First Name" value={formData.firstName} onChange={e => setFormData(d => ({ ...d, firstName: e.target.value }))} placeholder="John" />
-            {errors.firstName && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 4 }}>{errors.firstName}</div>}
-          </div>
-          <div style={{ flex: 1 }}>
-            <Field label="Last Name" value={formData.lastName} onChange={e => setFormData(d => ({ ...d, lastName: e.target.value }))} placeholder="Doe" />
-            {errors.lastName && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 4 }}>{errors.lastName}</div>}
-          </div>
-        </div>
-
-        <div style={{ display: "flex", gap: 12 }}>
-          <div style={{ flex: 1 }}>
-            <div className="sfield">
-              <label>Gender</label>
-              <div className="sfield-wrap">
-                <select className="focusable no-icon" value={formData.gender} onChange={e => setFormData(d => ({ ...d, gender: e.target.value }))}>
-                  <option value="" disabled hidden>Select gender</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-            </div>
-            {errors.gender && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 4 }}>{errors.gender}</div>}
-          </div>
-          <div style={{ flex: 1 }}>
-            <Field type="date" label="Date of Birth" value={formData.dob} onChange={e => setFormData(d => ({ ...d, dob: e.target.value }))} />
-            {errors.dob && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 4 }}>{errors.dob}</div>}
-          </div>
-        </div>
-
-        {/* Removed location field */}
-
         <div>
-          <Field label="Phone Number (Optional)" value={formData.phoneNumber} onChange={e => {
-            const val = e.target.value.replace(/[^\d+]/g, '');
-            setFormData(d => ({ ...d, phoneNumber: val }));
-          }} placeholder="+919876543210" />
-          {errors.phoneNumber && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 4 }}>{errors.phoneNumber}</div>}
-        </div>
-
-        <div>
-          <Field label="Email Address" value={formData.email} onChange={e => setFormData(d => ({ ...d, email: e.target.value }))} onKeyDown={e => e.key === 'Enter' && cont()} placeholder="you@example.com" />
+          <Field label="Email Address" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && cont()} placeholder="you@example.com" />
           {errors.email && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 4 }}>{errors.email}</div>}
         </div>
 
         {errors.general && <div style={{ padding: "12px", background: "#fee2e2", color: "#dc2626", borderRadius: "var(--r)", fontSize: "14px", textAlign: "center" }}>{errors.general}</div>}
 
         <div style={{ marginTop: 22 }}>
-          <SBtn variant="primary" block disabled={loading} loading={loading} onClick={cont} rightIcon={<Ic.arrowR />}>Create Account</SBtn>
+          <SBtn variant="primary" block disabled={loading} loading={loading} onClick={cont} rightIcon={<Ic.arrowR />}>Send Verification Code</SBtn>
         </div>
       </div>
 
@@ -434,7 +407,14 @@ export function ScreenOtp({ m }) {
             }
             setTimeout(() => {
               m.set({ otp: code });
-              m.next();
+              // If user hasn't completed onboarding, redirect to the correct step
+              if (data.profileCompleted === false && data.onboardingStep && data.onboardingStep !== 'done') {
+                const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                const base = isLocalhost ? 'http://localhost:8080' : window.location.origin;
+                window.location.replace(`${base}/pages/Samaagum%20Auth.html?mode=signup#${data.onboardingStep}`);
+              } else {
+                m.next();
+              }
             }, 650);
           } else {
             setStatus("error");
@@ -494,19 +474,27 @@ export function ScreenOtp({ m }) {
 }
 
 export function ScreenProfile({ m }) {
-  const [name, setName] = useState(m.data.name);
-  const [role, setRole] = useState(m.data.role);
+  const [firstName, setFirstName] = useState(m.data.firstName || "");
+  const [lastName, setLastName] = useState(m.data.lastName || "");
+  const [gender, setGender] = useState(m.data.gender || "");
+  const [dob, setDob] = useState(m.data.dob || "");
+  const [phoneNumber, setPhoneNumber] = useState(m.data.phoneNumber || "");
+  const [role, setRole] = useState(m.data.role || "");
   const [profilePhoto, setProfilePhoto] = useState(m.data.profilePhoto || '');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [loading, setLoading] = useState(false);
-  const ok = name.trim().length >= 2 && role;
-  const cont = () => { setLoading(true); setTimeout(() => { m.set({ name, role, profilePhoto }); m.next(); }, 700); };
+  const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    if (m.data.firstName && !firstName) setFirstName(m.data.firstName);
+    if (m.data.lastName && !lastName) setLastName(m.data.lastName);
+    if (m.data.profilePhoto && !profilePhoto) setProfilePhoto(m.data.profilePhoto);
+  }, [m.data.firstName, m.data.lastName, m.data.profilePhoto]);
 
   const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate type
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (!validTypes.includes(file.type)) {
       alert("Invalid image format. Please upload JPG, PNG or WEBP.");
@@ -542,12 +530,77 @@ export function ScreenProfile({ m }) {
     }
   };
 
+  const cont = () => {
+    let newErrors = {};
+    if (!firstName.trim()) newErrors.firstName = "First name is required";
+    if (!lastName.trim()) newErrors.lastName = "Last name is required";
+    if (!gender) newErrors.gender = "Gender is required";
+    if (!dob) {
+      newErrors.dob = "Date of birth is required";
+    } else {
+      const todayStr = new Date().toISOString().split("T")[0];
+      if (dob > todayStr) {
+        newErrors.dob = "Date of birth cannot be in the future";
+      }
+    }
+    if (phoneNumber && !/^\+?[0-9]{10,15}$/.test(phoneNumber)) newErrors.phoneNumber = "Phone number must be numeric (10-15 digits)";
+    if (!role) newErrors.role = "Role selection is required";
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setErrors({});
+    setLoading(true);
+
+    // Save profile step data immediately to DB so we don't re-ask if user exits
+    const saveProfileStep = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (token) {
+          const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+          const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+          await fetch(`${apiBase}/api/admin/user/profile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({
+              firstName,
+              lastName,
+              displayName: `${firstName} ${lastName}`.trim(),
+              gender,
+              dob,
+              phoneNumber: phoneNumber || '',
+              bio: role || ''
+            })
+          });
+        }
+      } catch (e) {
+        console.error('Failed to save profile step:', e);
+      }
+    };
+
+    saveProfileStep().then(() => {
+      m.set({
+        firstName,
+        lastName,
+        name: `${firstName} ${lastName}`.trim(),
+        gender,
+        dob,
+        phoneNumber,
+        role,
+        profilePhoto
+      });
+      m.next();
+    });
+  };
+
   return (
     <div>
       <h2 className="auth-h">Set up your profile</h2>
       <p className="auth-p">This is how the community will see you.</p>
 
-      <div className="avatar-up" style={{ position: "relative" }}>
+      <div className="avatar-up" style={{ position: "relative", marginBottom: 20 }}>
         <input
           type="file"
           accept="image/jpeg,image/jpg,image/png,image/webp"
@@ -556,13 +609,13 @@ export function ScreenProfile({ m }) {
           disabled={uploadingImage}
         />
         <div className="avatar-ring">
-          <div className="inner" style={!profilePhoto ? { background: gradFor(name || "Aanya") } : {}}>
+          <div className="inner" style={!profilePhoto ? { background: gradFor(firstName || "Aanya") } : {}}>
             {uploadingImage ? (
               <span style={{ color: "#fff", fontSize: 14 }}>...</span>
             ) : profilePhoto ? (
               <img src={profilePhoto.startsWith('http') || profilePhoto.startsWith('data:') ? profilePhoto : ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:3000' : '') + profilePhoto)} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="Profile" />
             ) : (
-              <span style={{ color: "#fff", fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 26 }}>{initials(name || "You")}</span>
+              <span style={{ color: "#fff", fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 26 }}>{initials(firstName || "You")}</span>
             )}
           </div>
           <span className="cam"><Ic.cam /></span>
@@ -573,22 +626,62 @@ export function ScreenProfile({ m }) {
         </div>
       </div>
 
-      <Field label="Full name" placeholder="e.g. Aanya Rao" value={name}
-        onChange={(e) => setName(e.target.value)} />
-
-      <div className="sfield">
-        <label>I'm here as a…</label>
-        <div className="role-grid">
-          {ROLES.map(([r, ic]) => (
-            <div key={r} className={`role ${role === r ? "on" : ""}`} onClick={() => setRole(r)}>
-              <span className="ic">{Ic[ic]()}</span>{r}
-            </div>
-          ))}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <Field label="First Name" value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="John" />
+            {errors.firstName && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 4 }}>{errors.firstName}</div>}
+          </div>
+          <div style={{ flex: 1 }}>
+            <Field label="Last Name" value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Doe" />
+            {errors.lastName && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 4 }}>{errors.lastName}</div>}
+          </div>
         </div>
-      </div>
 
-      <div style={{ marginTop: 22 }}>
-        <SBtn variant="primary" block disabled={!ok} loading={loading} onClick={cont} rightIcon={<Ic.arrowR />}>Continue</SBtn>
+        <div style={{ display: "flex", gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div className="sfield">
+              <label>Gender</label>
+              <div className="sfield-wrap">
+                <select className="focusable no-icon" value={gender} onChange={e => setGender(e.target.value)}>
+                  <option value="" disabled hidden>Select gender</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
+            {errors.gender && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 4 }}>{errors.gender}</div>}
+          </div>
+          <div style={{ flex: 1 }}>
+            <Field type="date" label="Date of Birth" value={dob} onChange={e => setDob(e.target.value)} max={new Date().toISOString().split("T")[0]} />
+            {errors.dob && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 4 }}>{errors.dob}</div>}
+          </div>
+        </div>
+
+        <div>
+          <Field label="Phone Number (Optional)" value={phoneNumber} onChange={e => {
+            const val = e.target.value.replace(/[^\d+]/g, '');
+            setPhoneNumber(val);
+          }} placeholder="+919876543210" />
+          {errors.phoneNumber && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 4 }}>{errors.phoneNumber}</div>}
+        </div>
+
+        <div className="sfield">
+          <label>I'm here as a…</label>
+          <div className="role-grid">
+            {ROLES.map(([r, ic]) => (
+              <div key={r} className={`role ${role === r ? "on" : ""}`} onClick={() => setRole(r)}>
+                <span className="ic">{Ic[ic]()}</span>{r}
+              </div>
+            ))}
+          </div>
+          {errors.role && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 4 }}>{errors.role}</div>}
+        </div>
+
+        <div style={{ marginTop: 22 }}>
+          <SBtn variant="primary" block onClick={cont} rightIcon={<Ic.arrowR />}>Continue</SBtn>
+        </div>
       </div>
     </div>
   );
@@ -613,7 +706,32 @@ export function ScreenInterests({ m }) {
 
   const toggle = (name) => setSel(s => s.includes(name) ? s.filter(x => x !== name) : [...s, name]);
   const ok = sel.length >= 3;
-  const cont = () => { setLoading(true); setTimeout(() => { m.set({ interests: sel }); m.next(); }, 600); };
+  const cont = () => {
+    setLoading(true);
+
+    // Save interests step immediately to DB so we don't re-ask if user exits
+    const saveInterestsStep = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (token) {
+          const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+          const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+          await fetch(`${apiBase}/api/admin/user/profile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ interests: sel })
+          });
+        }
+      } catch (e) {
+        console.error('Failed to save interests step:', e);
+      }
+    };
+
+    saveInterestsStep().then(() => {
+      m.set({ interests: sel });
+      m.next();
+    });
+  };
 
   const displayInterests = categories.length > 0 ? categories : INTERESTS;
 

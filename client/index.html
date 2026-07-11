@@ -8,13 +8,14 @@
 <link rel="stylesheet" href="css/landing.css" />
 </head>
 <body class="landing">
-  <!-- Handle Google OAuth redirect: ?token=...&auth=google → save token → go to home -->
+  <!-- Handle Google OAuth redirect: ?token=...&auth=google → save token → go to home (or profile setup if new user) -->
   <script>
     (function() {
       var params = new URLSearchParams(window.location.search);
       var token = params.get('token');
       var auth  = params.get('auth');
       var err   = params.get('auth_error');
+      var isNewUser = params.get('isNewUser') === 'true';
       if (err) {
         // Strip error param and stay on landing so user sees the page
         window.history.replaceState({}, '', '/');
@@ -23,8 +24,13 @@
       if (token && auth) {
         localStorage.setItem('token', decodeURIComponent(token));
         localStorage.setItem('samaagum_admin_token', decodeURIComponent(token));
-        // Redirect to home app
-        window.location.replace('pages/Samaagum Home.html');
+        if (isNewUser) {
+          // New signup via OAuth — go to profile setup onboarding
+          window.location.replace('pages/Samaagum Auth.html?mode=signup#profile');
+        } else {
+          // Returning user — go to home
+          window.location.replace('pages/Samaagum Home.html');
+        }
       }
     })();
   </script>

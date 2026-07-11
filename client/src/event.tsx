@@ -73,6 +73,7 @@ export function EventPage({ ev, st, go }) {
       host: typeof e.host === 'object' && e.host !== null ? (e.host.name || "Organizer") : (e.hostName || e.host || ME.name || "Organizer"),
       hostBy: typeof e.host === 'object' && e.host !== null ? (e.host.name || "Organizer") : (e.hostName || e.hostBy || ME.name || "Organizer"),
       hostPhoto: typeof e.host === 'object' && e.host !== null ? (e.host.photo || "") : (e.hostPhoto || ""),
+      hostBanner: typeof e.host === 'object' && e.host !== null ? (e.host.banner || "") : (e.hostBanner || ""),
       hostType: e.hostType || null,
       attendees: e.attendees || [],
       instructions: e.instruction || e.instructions || meta.instructions || "",
@@ -280,6 +281,7 @@ export function EventPage({ ev, st, go }) {
           host: typeof ev.host === 'object' && ev.host !== null ? (ev.host.name || "Organizer") : (ev.hostName || ev.host || ME.name || "Organizer"),
           hostBy: typeof ev.host === 'object' && ev.host !== null ? (ev.host.name || "Organizer") : (ev.hostName || ev.hostBy || ME.name || "Organizer"),
           hostPhoto: typeof ev.host === 'object' && ev.host !== null ? (ev.host.photo || "") : (ev.hostPhoto || ""),
+          hostBanner: typeof ev.host === 'object' && ev.host !== null ? (ev.host.banner || "") : (ev.hostBanner || ""),
           hostType: ev.hostType || null,
           attendees: data.data.attendees || [],
           instructions: ev.instruction || ev.instructions || meta.instructions || "",
@@ -355,6 +357,7 @@ export function EventPage({ ev, st, go }) {
       if (data.success) {
         fetchHostStats();
         fetchEventDetails();
+        fetchEventMembers();
         if (window.toast) {
           const msg = action === 'accept' ? "Request approved! 🎉" : "Request declined.";
           window.toast(msg, action === 'accept' ? "success" : "warning");
@@ -1671,6 +1674,8 @@ export function EventPage({ ev, st, go }) {
                 // ── Helper: submit ticket ──
                 const handleTicketSubmit = async () => {
                   if (!ticketForm.name.trim()) { if (window.toast) window.toast("Ticket name is required", "warning"); return; }
+                  if (!ticketForm.description.trim()) { if (window.toast) window.toast("Description is required", "warning"); return; }
+                  if (!ticketForm.price || String(ticketForm.price).trim() === "") { if (window.toast) window.toast("Price is required", "warning"); return; }
                   try {
                     const url = editingTicket
                       ? `${apiBase}/api/events/${e.id}/ticket-types/${editingTicket.id}`
@@ -1940,9 +1945,9 @@ export function EventPage({ ev, st, go }) {
                           </div>
                           <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
                             <div style={fieldStyle}><label style={labelStyle}>Ticket Name *</label><input className="cinput" value={ticketForm.name} onChange={ev => setTicketForm(f => ({...f, name: ev.target.value}))} placeholder="e.g. General Admission" /></div>
-                            <div style={fieldStyle}><label style={labelStyle}>Description</label><textarea className="cinput" value={ticketForm.description} onChange={ev => setTicketForm(f => ({...f, description: ev.target.value}))} placeholder="What's included..." rows={2} style={{ resize: "vertical" }} /></div>
+                            <div style={fieldStyle}><label style={labelStyle}>Description *</label><textarea className="cinput" value={ticketForm.description} onChange={ev => setTicketForm(f => ({...f, description: ev.target.value}))} placeholder="What's included..." rows={2} style={{ resize: "vertical" }} /></div>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                              <div style={fieldStyle}><label style={labelStyle}>Price</label><input className="cinput" type="number" min="0" step="0.01" value={ticketForm.price} onChange={ev => setTicketForm(f => ({...f, price: ev.target.value}))} placeholder="0.00" /></div>
+                              <div style={fieldStyle}><label style={labelStyle}>Price *</label><input className="cinput" type="number" min="0" step="0.01" value={ticketForm.price} onChange={ev => setTicketForm(f => ({...f, price: ev.target.value}))} placeholder="0.00" /></div>
                               <div style={fieldStyle}><label style={labelStyle}>Currency</label><input className="cinput" value={ticketForm.currency} onChange={ev => setTicketForm(f => ({...f, currency: ev.target.value}))} placeholder="INR" /></div>
                             </div>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
