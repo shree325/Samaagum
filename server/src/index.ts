@@ -93,9 +93,18 @@ fastify.decorate('authenticate', async (request: any, reply: any) => {
                     payload.tenantId = '00000000-0000-0000-0000-000000000000';
                 }
 
+                const uid = payload?.id;
+                const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                if (!uid || !UUID_REGEX.test(uid)) {
+                    return reply.status(401).send({
+                        success: false,
+                        message: 'Unauthorized: Invalid credentials.'
+                    });
+                }
+
                 // Check if user is suspended in the database
                 const dbUser = await prisma.users.findUnique({
-                    where: { id: payload.id },
+                    where: { id: uid },
                     select: { state: true }
                 });
                 if (dbUser && dbUser.state === 'suspended') {
@@ -222,8 +231,14 @@ const start = async () => {
         // Start event reminder scheduler (60 / 30 / 10 min before start)
         EventReminderService.startScheduler();
 
-        await fastify.listen({ port: PORT, host: '0.0.0.0' });
-        console.log(`🚀 Server is running on port ${PORT}`);
+        try {
+            await fastify.listen({ port: PORT, host: '::' });
+            console.log(`🚀 Server is running on port ${PORT} (IPv6/IPv4 dual-stack)`);
+        } catch (listenErr) {
+            console.warn('⚠️ Warning: Failed to bind to ::, falling back to 0.0.0.0');
+            await fastify.listen({ port: PORT, host: '0.0.0.0' });
+            console.log(`🚀 Server is running on port ${PORT} (IPv4-only)`);
+        }
         console.log(`🔗 Health check available at http://localhost:${PORT}/health`);
         // Trigger reload comment - restart 3
     } catch (err) {

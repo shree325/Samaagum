@@ -12,7 +12,12 @@ function tryDecodeUserId(request: any): string | undefined {
         const parts = token.split('.');
         if (parts.length !== 3) return undefined;
         const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
-        return payload?.id;
+        const uid = payload?.id;
+        const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (uid && UUID_REGEX.test(uid)) {
+            return uid;
+        }
+        return undefined;
     } catch {
         return undefined;
     }

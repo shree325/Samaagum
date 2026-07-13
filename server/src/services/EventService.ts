@@ -10,6 +10,8 @@ import { R_forum_tags } from '../repositories/R_forum_tags';
 import { R_forum_post_tags } from '../repositories/R_forum_post_tags';
 import { R_users } from '../repositories/R_users';
 import prisma from '../config/prisma';
+import { RealtimeGateway } from './realtimeGateway';
+import { TicketRealtimeService } from './TicketRealtimeService';
 import accessControlService from './AccessControlService';
 import { sendNotificationToUser, broadcastWishlistUpdate } from './messagingSocket';
 import { PlanEntitlementService } from './PlanEntitlementService';
@@ -30,15 +32,15 @@ export class EventService {
   private static cityControlsRepo = new R_cityControls();
 
   private static getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-      const R = 6371;
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a =
-          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-          Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
   }
 
   /**
@@ -53,14 +55,14 @@ export class EventService {
     let capacityTotal = eventData.capacity_total !== undefined ? eventData.capacity_total : eventData.capacity;
     if (ents.event_max_participants !== -1) {
       if (capacity.limit === true && capacity.max > ents.event_max_participants) {
-          throw new Error(`Your plan limits event capacity to a maximum of ${ents.event_max_participants} participants.`);
+        throw new Error(`Your plan limits event capacity to a maximum of ${ents.event_max_participants} participants.`);
       }
       if (capacity.limit !== true && (!capacityTotal || capacityTotal > ents.event_max_participants)) {
-          if (!eventData.settings) eventData.settings = {};
-          if (!eventData.settings.capacity) eventData.settings.capacity = {};
-          eventData.settings.capacity.limit = true;
-          eventData.settings.capacity.max = ents.event_max_participants;
-          eventData.capacity_total = ents.event_max_participants;
+        if (!eventData.settings) eventData.settings = {};
+        if (!eventData.settings.capacity) eventData.settings.capacity = {};
+        eventData.settings.capacity.limit = true;
+        eventData.settings.capacity.max = ents.event_max_participants;
+        eventData.capacity_total = ents.event_max_participants;
       }
     }
 
@@ -116,6 +118,13 @@ export class EventService {
   }
 
   private static async validateEventLocation(eventData: any) {
+    if (eventData.status === 'draft') return;
+    // Ensure location is provided for all events
+    const hasVenue = eventData.venue && (typeof eventData.venue === 'string' ? eventData.venue.trim() !== '' : true);
+    if (!hasVenue) {
+      throw new Error('Location is required');
+    }
+
     if (eventData.venue) {
       let venueStr = '';
       if (typeof eventData.venue === 'string') {
@@ -123,14 +132,14 @@ export class EventService {
       } else if (eventData.venue.name) {
         venueStr = eventData.venue.name;
       }
-      
+
       if (venueStr) {
         const venueLower = venueStr.toLowerCase();
         const inactiveCities = await prisma.city_controls.findMany({
           where: { is_active: false },
           select: { city_name: true }
         });
-        
+
         const matched = inactiveCities.find(c => venueLower.includes(c.city_name.toLowerCase()));
         if (matched) {
           throw new Error(`The location '${matched.city_name}' is currently inactive and cannot be selected for events.`);
@@ -239,6 +248,19 @@ export class EventService {
       };
     }
 
+    // Mirror capacity_total into settings.capacity.{limit,max} so reconcileWaitlist
+    // and promoteFromWaitlist can read the limit without needing body.settings.capacity
+    if (body.capacity_total !== undefined && body.capacity_total !== null && body.capacity_total > 0) {
+      finalSettings = {
+        ...finalSettings,
+        capacity: {
+          ...(finalSettings.capacity || {}),
+          limit: true,
+          max: body.capacity_total
+        }
+      };
+    }
+
     // 2. Perform transactional event + tickets creation
     const event = await this.eventsRepo.create({
       tenant_id: tenantId,
@@ -293,7 +315,7 @@ export class EventService {
           const activeMemberships = await prisma.group_memberships.findMany({
             where: { group_id: hostedByEntityId, state: 'active' }
           });
-          
+
           const userIds = new Set<string>();
           if (entity.user_id) userIds.add(entity.user_id);
           activeMemberships.forEach(m => userIds.add(m.user_id));
@@ -308,7 +330,7 @@ export class EventService {
                   text: `A new event '${event.title}' was created in ${group.name}`,
                   link: `/event/${event.id}`
                 });
-                
+
                 await prisma.notification_log.create({
                   data: {
                     user_id: memberId,
@@ -354,7 +376,7 @@ export class EventService {
     );
     const row = rows[0];
     if (!row) return { hostType: null, hostName: null, hostUserId: null, hostPhoto: null };
-    
+
     let hostPhoto: string | null = null;
     if (row.entity_type === 'group' && row.group_icon) {
       hostPhoto = `data:image/jpeg;base64,${Buffer.from(row.group_icon).toString('base64')}`;
@@ -409,7 +431,7 @@ export class EventService {
     const enrichedList = [];
     for (const ev of list) {
       const visibility = (ev.venue as any)?.visibility;
-      
+
       let hasAccess = false;
       if (!visibility || visibility === 'public') {
         hasAccess = true;
@@ -422,16 +444,18 @@ export class EventService {
 
       const tickets = await this.ticketTypesRepo.getByEventId(ev.id!);
       const hostInfo = await this.resolveHostInfo(ev.hosted_by_entity_id);
-      
+
       const wishlistCount = await this.wishlistRepo.getCountByEventId(ev.id!);
       const isWishlisted = userId ? await this.wishlistRepo.isWishlisted(ev.id!, userId) : false;
+      const waitlistCount = await prisma.bookings.count({ where: { event_id: ev.id!, status: 'waitlisted' } });
 
-      enrichedList.push({ 
-        ...ev, 
-        tickets, 
+      enrichedList.push({
+        ...ev,
+        tickets,
         ...hostInfo,
         wishlistCount,
         isWishlisted,
+        waitlistCount,
         registrationStatus: ev.registration_status,
         registrationOpensAt: ev.registration_opens_at,
         registrationClosesAt: ev.registration_closes_at
@@ -444,74 +468,74 @@ export class EventService {
     let refLon: number | null = null;
 
     if (cityQuery && cityQuery !== 'Global') {
-        const queryName = cityQuery.split(',')[0].trim();
-        const matchedCities = await this.cityControlsRepo.findByCityName(queryName);
-        const refLoc = matchedCities.find(c => c.is_active) || matchedCities[0];
-        if (refLoc) {
-            refCityName = refLoc.city_name;
-            refStateName = refLoc.state_name || "";
-            refLat = Number(refLoc.latitude);
-            refLon = Number(refLoc.longitude);
-        }
+      const queryName = cityQuery.split(',')[0].trim();
+      const matchedCities = await this.cityControlsRepo.findByCityName(queryName);
+      const refLoc = matchedCities.find(c => c.is_active) || matchedCities[0];
+      if (refLoc) {
+        refCityName = refLoc.city_name;
+        refStateName = refLoc.state_name || "";
+        refLat = Number(refLoc.latitude);
+        refLon = Number(refLoc.longitude);
+      }
     }
 
     const mappedEvents = enrichedList.map(ev => {
-        let isSameCity = false;
-        let isSameState = false;
-        let distance: number | null = null;
-        let hasLocation = false;
+      let isSameCity = false;
+      let isSameState = false;
+      let distance: number | null = null;
+      let hasLocation = false;
 
-        const loc = ev.venue as any;
-        if (loc) {
-            const city = loc.city || loc.address || loc.meta?.city;
-            const state = loc.state || loc.meta?.state;
-            const lat = loc.lat || loc.meta?.lat;
-            const lon = loc.lon || loc.meta?.lon;
+      const loc = ev.venue as any;
+      if (loc) {
+        const city = loc.city || loc.address || loc.meta?.city;
+        const state = loc.state || loc.meta?.state;
+        const lat = loc.lat || loc.meta?.lat;
+        const lon = loc.lon || loc.meta?.lon;
 
-            if (city) {
-                hasLocation = true;
-                if (refCityName && city.toLowerCase().includes(refCityName.toLowerCase())) {
-                    isSameCity = true;
-                }
-                if (refStateName && state && state.toLowerCase().includes(refStateName.toLowerCase())) {
-                    isSameState = true;
-                }
-                if (refLat !== null && refLon !== null && lat !== undefined && lon !== undefined) {
-                    distance = this.getDistance(refLat, refLon, Number(lat), Number(lon));
-                }
-            }
+        if (city) {
+          hasLocation = true;
+          if (refCityName && city.toLowerCase().includes(refCityName.toLowerCase())) {
+            isSameCity = true;
+          }
+          if (refStateName && state && state.toLowerCase().includes(refStateName.toLowerCase())) {
+            isSameState = true;
+          }
+          if (refLat !== null && refLon !== null && lat !== undefined && lon !== undefined) {
+            distance = this.getDistance(refLat, refLon, Number(lat), Number(lon));
+          }
         }
-        
-        return { ...ev, _isSameCity: isSameCity, _isSameState: isSameState, _distance: distance, _hasLocation: hasLocation, _createdAt: ev.created_at?.getTime() || 0 };
+      }
+
+      return { ...ev, _isSameCity: isSameCity, _isSameState: isSameState, _distance: distance, _hasLocation: hasLocation, _createdAt: ev.created_at?.getTime() || 0 };
     });
 
     if (refCityName) {
-        mappedEvents.sort((a, b) => {
-            // 1. Same City
-            if (a._isSameCity && !b._isSameCity) return -1;
-            if (!a._isSameCity && b._isSameCity) return 1;
+      mappedEvents.sort((a, b) => {
+        // 1. Same City
+        if (a._isSameCity && !b._isSameCity) return -1;
+        if (!a._isSameCity && b._isSameCity) return 1;
 
-            // 2. Nearby Cities (by distance)
-            if (a._distance !== null && b._distance !== null) return a._distance - b._distance;
-            if (a._distance !== null) return -1;
-            if (b._distance !== null) return 1;
+        // 2. Nearby Cities (by distance)
+        if (a._distance !== null && b._distance !== null) return a._distance - b._distance;
+        if (a._distance !== null) return -1;
+        if (b._distance !== null) return 1;
 
-            // 3. Same State
-            if (a._isSameState && !b._isSameState) return -1;
-            if (!a._isSameState && b._isSameState) return 1;
+        // 3. Same State
+        if (a._isSameState && !b._isSameState) return -1;
+        if (!a._isSameState && b._isSameState) return 1;
 
-            // 4. Remaining Locations
-            if (a._hasLocation && !b._hasLocation) return -1;
-            if (!a._hasLocation && b._hasLocation) return 1;
+        // 4. Remaining Locations
+        if (a._hasLocation && !b._hasLocation) return -1;
+        if (!a._hasLocation && b._hasLocation) return 1;
 
-            // 5. Fallback: Newest first
-            return b._createdAt - a._createdAt;
-        });
+        // 5. Fallback: Newest first
+        return b._createdAt - a._createdAt;
+      });
     }
 
     return mappedEvents.map(e => {
-        const { _isSameCity, _isSameState, _distance, _hasLocation, _createdAt, ...rest } = e;
-        return rest;
+      const { _isSameCity, _isSameState, _distance, _hasLocation, _createdAt, ...rest } = e;
+      return rest;
     });
   }
 
@@ -551,13 +575,31 @@ export class EventService {
 
       const wishlistCount = await this.wishlistRepo.getCountByEventId(ev.id);
       const isWishlisted = await this.wishlistRepo.isWishlisted(ev.id, userId);
+      const waitlistCount = await prisma.bookings.count({ where: { event_id: ev.id, status: 'waitlisted' } });
+      
+      let userWaitlistPosition: number | null = null;
+      const userBooking = await prisma.bookings.findFirst({
+        where: { event_id: ev.id, booker_user_id: userId, status: 'waitlisted' },
+        select: { created_at: true }
+      });
+      if (userBooking) {
+        userWaitlistPosition = 1 + await prisma.bookings.count({
+          where: {
+            event_id: ev.id,
+            status: 'waitlisted',
+            created_at: { lt: userBooking.created_at }
+          }
+        });
+      }
 
-      enrichedList.push({ 
-        ...ev, 
-        tickets, 
+      enrichedList.push({
+        ...ev,
+        tickets,
         ...hostInfo,
         wishlistCount,
         isWishlisted,
+        waitlistCount,
+        userWaitlistPosition,
         registrationStatus: ev.registration_status,
         registrationOpensAt: ev.registration_opens_at,
         registrationClosesAt: ev.registration_closes_at
@@ -577,38 +619,75 @@ export class EventService {
       return { restricted: true as const };
     }
 
-    const tickets = await this.ticketTypesRepo.getByEventId(id);
+    const ticketsRaw = await this.ticketTypesRepo.getByEventId(id);
+    const tickets = await Promise.all(ticketsRaw.map(async (t) => {
+      let tIsFull = false;
+      if (t.capacity !== null && t.capacity > 0) {
+        const aggr = await prisma.booking_line_items.aggregate({
+          _sum: { quantity: true },
+          where: {
+            ticket_type_id: t.id,
+            bookings: { status: { in: ['confirmed', 'pending_payment'] } }
+          }
+        });
+        const activeCount = aggr._sum.quantity || 0;
+        if (activeCount >= t.capacity) {
+          tIsFull = true;
+        }
+      }
+      return { ...t, isFull: tIsFull };
+    }));
     const hostInfo = await this.resolveHostInfo(event.hosted_by_entity_id);
-    
+
     let isFull = false;
     let hasWaitlist = false;
     const capacity = (event.settings as any)?.capacity || {};
     if (capacity.limit === true && capacity.max > 0) {
-        const activeCount = await prisma.attendees.count({
-            where: { bookings: { event_id: id, status: { in: ['confirmed', 'pending_approval'] } } }
-        });
-        if (activeCount >= capacity.max) {
-            isFull = true;
-            if (capacity.waitlist === true) hasWaitlist = true;
-        }
+      const activeCount = await prisma.attendees.count({
+        where: { bookings: { event_id: id, status: { in: ['confirmed', 'pending_payment'] } } }
+      });
+      if (activeCount >= capacity.max) {
+        isFull = true;
+        if (capacity.waitlist === true) hasWaitlist = true;
+      }
     }
 
     const wishlistCount = await this.wishlistRepo.getCountByEventId(id);
     const isWishlisted = userId ? await this.wishlistRepo.isWishlisted(id, userId) : false;
+    const waitlistCount = await prisma.bookings.count({ where: { event_id: id, status: 'waitlisted' } });
+    
+    let userWaitlistPosition: number | null = null;
+    if (userId) {
+      const userBooking = await prisma.bookings.findFirst({
+        where: { event_id: id, booker_user_id: userId, status: 'waitlisted' },
+        select: { created_at: true }
+      });
+      if (userBooking) {
+        userWaitlistPosition = 1 + await prisma.bookings.count({
+          where: {
+            event_id: id,
+            status: 'waitlisted',
+            created_at: { lt: userBooking.created_at }
+          }
+        });
+      }
+    }
 
-    return { 
-      event: { 
-        ...event, 
+    return {
+      event: {
+        ...event,
         ...hostInfo,
         isFull,
         hasWaitlist,
         wishlistCount,
         isWishlisted,
+        waitlistCount,
+        userWaitlistPosition,
         registrationStatus: event.registration_status,
         registrationOpensAt: event.registration_opens_at,
         registrationClosesAt: event.registration_closes_at
-      }, 
-      tickets 
+      },
+      tickets
     };
   }
 
@@ -697,7 +776,7 @@ export class EventService {
     for (const a of assignments) {
       if (a.roles?.key !== 'ticket_scanner') continue;
       const ev = a.events;
-      if (!ev || seen.has(ev.id) || ev.status === 'cancelled') continue;
+      if (!ev || seen.has(ev.id) || ev.status !== 'published') continue;
       seen.add(ev.id);
       results.push({
         id: ev.id,
@@ -714,6 +793,13 @@ export class EventService {
   static async updateEvent(id: string, userId: string, body: any) {
     const event = await this.eventsRepo.getById(id);
     if (!event) throw new Error('Event not found');
+
+    // If existing event lacks a venue, require a venue in the update payload
+    const existingHasVenue = event.venue && (typeof event.venue === 'string' ? event.venue.trim() !== '' : true);
+    const newHasVenue = body.venue && (typeof body.venue === 'string' ? body.venue.trim() !== '' : true);
+    if (!existingHasVenue && !newHasVenue) {
+      throw new Error('Location is required: please add a venue when editing this event');
+    }
 
     // Enforce plan entitlements against the incoming field values before writing.
     await this.validateEventEntitlements(userId, body);
@@ -758,6 +844,46 @@ export class EventService {
       };
     }
 
+    // ── CRITICAL FIX ──────────────────────────────────────────────────────────
+    // The client (create_event.tsx) sends capacity_total as a flat integer and
+    // NEVER sends settings.capacity.{limit,max}.  Without syncing them here:
+    //   - capacityIncreased is always false  (newMax === undefined)
+    //   - reconcileWaitlist bails out early  (capacity.limit !== true)
+    //   - promoteFromWaitlist also bails     (capacity.max === undefined)
+    // We mirror capacity_total into settings so all downstream logic works.
+    if (body.capacity_total !== undefined) {
+      const baseSettings = finalSettings || (event.settings
+        ? (typeof event.settings === 'string' ? JSON.parse(event.settings as string) : { ...(event.settings as any) })
+        : {}) as any;
+      finalSettings = {
+        ...baseSettings,
+        capacity: {
+          ...(baseSettings.capacity || {}),
+          limit: body.capacity_total !== null && body.capacity_total > 0,
+          max: body.capacity_total !== null && body.capacity_total > 0 ? body.capacity_total : undefined
+        }
+      };
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    const oldSettings = event.settings as any || {};
+    const oldMax = oldSettings.capacity?.max;
+    const oldLimitEnabled = oldSettings.capacity?.limit === true;
+    const oldWaitlistEnabled = oldSettings.capacity?.waitlist === true;
+
+    const newSettings = finalSettings || {};
+    const newMax = newSettings.capacity?.max;
+    const newLimitEnabled = newSettings.capacity?.limit === true;
+    const newWaitlistEnabled = newSettings.capacity?.waitlist === true;
+
+    const capacityIncreased = (newLimitEnabled && newMax > (oldMax || 0))
+      || (!oldLimitEnabled && newLimitEnabled);
+      
+    // If waitlist was toggled off, or approval required toggled off, we should also reconcile
+    const waitlistToggledOn = !oldWaitlistEnabled && newWaitlistEnabled;
+    const waitlistToggledOff = oldWaitlistEnabled && !newWaitlistEnabled;
+    const approvalToggledOff = event.approval_required === true && body.approval_required === false;
+
     // The client always submits the full event snapshot (saveEventSettings in event.tsx), so a
     // ticket-manager-only editor's request still arrives with title/dates/etc. populated. Rather
     // than reject the whole request, silently drop the restricted fields (left undefined ->
@@ -784,6 +910,14 @@ export class EventService {
     } : {
       venue: body.venue,
     });
+
+    if (waitlistToggledOff) {
+      // Waitlist was disabled — cancel all existing waitlisted bookings and notify users
+      await EventService.clearWaitlist(id);
+    } else if (capacityIncreased || waitlistToggledOn || approvalToggledOff) {
+      await EventService.reconcileWaitlist(id);
+    }
+
 
     if (isFullyAuthorized) {
       const venueObj = body.venue || {};
@@ -836,7 +970,7 @@ export class EventService {
                     action: 'accepted'
                   });
                 }
-              } catch {}
+              } catch { }
             }
           } catch (e) {
             console.error('Error auto-resolving event notifications on update:', e);
@@ -851,6 +985,60 @@ export class EventService {
           body.registration_opens_at ? new Date(body.registration_opens_at) : null,
           body.registration_closes_at ? new Date(body.registration_closes_at) : null
         );
+      }
+
+      // Notify all active event members about the update (excluding the user making the edit)
+      try {
+        const members = await this.getEventMembers(id);
+        const memberUserIds = members
+          .filter(m => m.state === 'active' && m.id !== userId)
+          .map(m => m.id);
+
+        if (memberUserIds.length > 0) {
+          const changedFields: string[] = [];
+          if (isFullyAuthorized) {
+            if (body.title && body.title !== event.title) changedFields.push('Title');
+            if (body.description !== undefined && body.description !== event.description) changedFields.push('Description');
+            if (body.starts_at && new Date(body.starts_at).getTime() !== event.starts_at?.getTime()) changedFields.push('Time');
+            if (body.capacity_total !== undefined && body.capacity_total !== event.capacity_total) changedFields.push('Capacity');
+            if (body.online_link !== undefined && body.online_link !== event.online_link) changedFields.push('Location');
+          }
+          if (JSON.stringify(body.venue || {}) !== JSON.stringify(event.venue || {})) {
+            if (!changedFields.includes('Location')) changedFields.push('Location');
+          }
+          const changedFieldsStr = changedFields.length > 0 ? changedFields.join(', ') : 'Settings';
+
+
+          const notificationsData = memberUserIds.map(uid => ({
+            tenant_id: event.tenant_id || '00000000-0000-0000-0000-000000000000',
+            user_id: uid,
+            channel: 'socket',
+            template_key: 'event_updated',
+            status: 'sent',
+            provider_ref: JSON.stringify({ 
+              eventId: id, 
+              eventTitle: body.title || event.title,
+              changedFields: changedFieldsStr 
+            })
+          }));
+
+          await prisma.notification_log.createMany({
+            data: notificationsData,
+            skipDuplicates: true
+          });
+
+          for (const uid of memberUserIds) {
+            sendNotificationToUser(uid, 'group.notification', {
+              type: 'event_updated',
+              eventId: id,
+              eventTitle: body.title || event.title,
+              changedFields: changedFieldsStr,
+              text: `The event <b>${body.title || event.title}</b> has been updated.${changedFieldsStr ? ` Changes: ${changedFieldsStr}` : ''}`
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to send event update notifications:', err);
       }
     }
 
@@ -900,14 +1088,28 @@ export class EventService {
     });
 
     const enrichedList = [];
+    const now = new Date();
+    
     for (const ev of list) {
+      const endTime = ev.ends_at || ev.starts_at;
+      const isPast = endTime && endTime < now;
+      const isCancelled = ev.status === 'cancelled';
+      
+      if (isPast || isCancelled) {
+        // Remove from wishlist upon event completion or cancellation
+        await prisma.event_wishlist.deleteMany({
+          where: { event_id: ev.id, user_id: userId }
+        });
+        continue;
+      }
+
       const tickets = await this.ticketTypesRepo.getByEventId(ev.id);
       const hostInfo = await this.resolveHostInfo(ev.hosted_by_entity_id);
       const wishlistCount = await this.wishlistRepo.getCountByEventId(ev.id);
 
-      enrichedList.push({ 
-        ...ev, 
-        tickets, 
+      enrichedList.push({
+        ...ev,
+        tickets,
         ...hostInfo,
         wishlistCount,
         isWishlisted: true,
@@ -1596,20 +1798,20 @@ export class EventService {
 
     const event = await prisma.events.findUnique({ where: { id: eventId } });
     if (event) {
-        const entity = await prisma.entities.findUnique({ where: { id: event.hosted_by_entity_id }, include: { users: { select: { id: true, first_name: true, last_name: true, primary_email: true, profile_image_data: true, profiles: { select: { display_name: true } } } } }});
-        if (entity && entity.entity_type === 'user' && !memberMap.has(entity.user_id) && entity.users) {
-            const u = entity.users;
-            const picture = u.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
-            memberMap.set(entity.user_id, {
-                id: u.id,
-                name: u.first_name ? `${u.first_name} ${u.last_name || ''}`.trim() : 'Unknown',
-                display_name: u.profiles?.display_name || u.first_name,
-                picture,
-                email: u.primary_email,
-                role: topRoleKey || 'member',
-                state: 'active'
-            });
-        }
+      const entity = await prisma.entities.findUnique({ where: { id: event.hosted_by_entity_id }, include: { users: { select: { id: true, first_name: true, last_name: true, primary_email: true, profile_image_data: true, profiles: { select: { display_name: true } } } } } });
+      if (entity && entity.entity_type === 'user' && !memberMap.has(entity.user_id) && entity.users) {
+        const u = entity.users;
+        const picture = u.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
+        memberMap.set(entity.user_id, {
+          id: u.id,
+          name: u.first_name ? `${u.first_name} ${u.last_name || ''}`.trim() : 'Unknown',
+          display_name: u.profiles?.display_name || u.first_name,
+          picture,
+          email: u.primary_email,
+          role: topRoleKey || 'member',
+          state: 'active'
+        });
+      }
     }
 
     return Array.from(memberMap.values());
@@ -1723,6 +1925,27 @@ export class EventService {
         }
       }
     });
+
+    await EventService.reconcileWaitlist(eventId);
+
+    // Notify the user they were removed and sync their ticket and event state in real-time
+    try {
+      const chatNamespace = (global as any).fastify?.io?.of('/chat');
+      if (chatNamespace) {
+        chatNamespace.to(`user:${targetUserId}`).emit('group.notification', {
+          type: 'system',
+          text: `You have been removed from the event <b>${event.title}</b>`,
+          eventId: eventId
+        });
+      }
+      const { TicketRealtimeService } = require('./TicketRealtimeService');
+      const { MyEventsRealtimeService } = require('./MyEventsRealtimeService');
+      TicketRealtimeService.syncUser(targetUserId, eventId).catch(() => {});
+      TicketRealtimeService.syncScanner(eventId).catch(() => {});
+      MyEventsRealtimeService.syncUser(targetUserId).catch(() => {});
+    } catch (e) {
+      console.error('Failed to notify and sync removed event member', e);
+    }
   }
 
   static async getEventUserRole(userId: string, eventId: string): Promise<string> {
@@ -1932,24 +2155,46 @@ export class EventService {
 
   static async promoteFromWaitlist(eventId: string, count: number) {
     if (count <= 0) return;
-    
+
     const event = await prisma.events.findUnique({ where: { id: eventId } });
     if (!event) return;
-    
+
     const capacity = (event.settings as any)?.capacity || {};
     if (capacity.waitlist !== true) return;
-    
+
     const waitlistedBookings = await prisma.bookings.findMany({
       where: { event_id: eventId, status: 'waitlisted' },
       orderBy: { created_at: 'asc' },
       take: count
     });
-    
+
+    const { sendNotificationToUser } = (() => {
+      try { return require('./messagingSocket'); } catch { return { sendNotificationToUser: () => {} }; }
+    })();
+
+    // Resolve host/owner once
+    let ownerUserId: string | null = null;
+    try {
+      const entityRow = await prisma.entities.findUnique({ where: { id: event.hosted_by_entity_id } });
+      ownerUserId = entityRow?.user_id ?? null;
+    } catch {}
+
     for (const wb of waitlistedBookings) {
       const newStatus = event.approval_required ? 'pending_approval' : 'confirmed';
       const newTicketStatus = event.approval_required ? 'reserved' : 'confirmed';
-      
+
+      let promoted = false;
       await prisma.$transaction(async (tx) => {
+        if (capacity.limit === true) {
+          // Count both confirmed AND pending_approval as capacity-consuming
+          const currentOccupied = await tx.bookings.count({
+            where: { event_id: eventId, status: { in: ['confirmed', 'pending_payment'] } }
+          });
+          if (currentOccupied >= capacity.max) {
+            return; // Abort this promotion if we just hit max capacity
+          }
+        }
+
         await tx.bookings.update({
           where: { id: wb.id },
           data: { status: newStatus }
@@ -1962,18 +2207,214 @@ export class EventService {
           where: { line_item_id: { in: liIds } },
           data: { status: newTicketStatus }
         });
+        promoted = true;
       });
-      
-      try {
-        const { sendNotificationToUser } = require('./messagingSocket');
-        sendNotificationToUser(wb.booker_user_id, 'notification.general', {
-          title: 'Waitlist Update',
-          body: `You are now ${newStatus === 'confirmed' ? 'confirmed' : 'pending approval'} for ${event.title}.`,
-          link: `/events/${event.id}`
-        });
-      } catch(e) {}
+
+      if (promoted) {
+        try {
+          // Notify the waitlisted user of their promotion
+          if (newStatus === 'confirmed') {
+            sendNotificationToUser(wb.booker_user_id, 'group.notification', {
+              type: 'event',
+              text: `You have been moved from the waitlist. Your ticket has been confirmed for <b>${event.title}</b>! 🎉`,
+              eventId: event.id
+            });
+            await prisma.notification_log.create({
+              data: {
+                user_id: wb.booker_user_id,
+                tenant_id: event.tenant_id,
+                channel: 'app',
+                template_key: 'event_waitlist_promoted',
+                status: 'queued',
+                provider_ref: JSON.stringify({ eventId: event.id, eventTitle: event.title })
+              }
+            }).catch(() => {});
+          } else {
+            // pending_approval — notify user
+            sendNotificationToUser(wb.booker_user_id, 'group.notification', {
+              type: 'registration',
+              text: `A seat opened up for <b>${event.title}</b>. Your join request is now pending host approval.`,
+              eventId: event.id
+            });
+            await prisma.notification_log.create({
+              data: {
+                user_id: wb.booker_user_id,
+                tenant_id: event.tenant_id,
+                channel: 'app',
+                template_key: 'event_waitlist_to_pending',
+                status: 'queued',
+                provider_ref: JSON.stringify({ eventId: event.id, eventTitle: event.title })
+              }
+            }).catch(() => {});
+
+            // Notify host in real-time with group.notification (triggers toast + notification badge)
+            if (ownerUserId) {
+              sendNotificationToUser(ownerUserId, 'group.notification', {
+                type: 'registration',
+                text: `A waitlisted user now has a spot for <b>${event.title}</b>. Review pending requests.`,
+                eventId: event.id,
+                action: 'view_event'
+              });
+              await prisma.notification_log.create({
+                data: {
+                  user_id: ownerUserId,
+                  tenant_id: event.tenant_id,
+                  channel: 'app',
+                  template_key: 'event_waitlist_needs_approval',
+                  status: 'queued',
+                  provider_ref: JSON.stringify({ eventId: event.id, eventTitle: event.title })
+                }
+              }).catch(() => {});
+
+              // Also emit dashboard_updated so the host's event page refreshes attendance list live
+              const groupsNamespace = (global as any).fastify?.io?.of('/groups');
+              if (groupsNamespace) {
+                groupsNamespace.to(`event_${eventId}`).emit('dashboard_updated', {
+                  action: 'waitlist_promoted_to_pending',
+                  eventId
+                });
+              }
+            }
+          }
+        } catch (e) { }
+      }
     }
   }
+
+
+  static async broadcastWaitlistPositions(eventId: string) {
+    const waitlistedBookings = await prisma.bookings.findMany({
+      where: { event_id: eventId, status: 'waitlisted' },
+      orderBy: { created_at: 'asc' },
+      select: { booker_user_id: true }
+    });
+    
+    const positions = waitlistedBookings.map((wb, index) => ({
+      userId: wb.booker_user_id,
+      position: index + 1
+    }));
+    
+    const totalWaiting = positions.length;
+
+    const groupsNamespace = (global as any).fastify?.io?.of('/groups');
+    if (groupsNamespace) {
+      groupsNamespace.to(`event_${eventId}`).emit('waitlist_positions_updated', {
+        eventId,
+        totalWaiting,
+        positions
+      });
+      groupsNamespace.to(`event_${eventId}`).emit('waitlist_updated', { eventId });
+    }
+  }
+
+  static async clearWaitlist(eventId: string) {
+    const event = await prisma.events.findUnique({ where: { id: eventId } });
+    if (!event) return;
+
+    // Find all waitlisted bookings
+    const waitlistedBookings = await prisma.bookings.findMany({
+      where: { event_id: eventId, status: 'waitlisted' }
+    });
+
+    if (waitlistedBookings.length === 0) {
+      // Still broadcast the empty state so host dashboard refreshes
+      const groupsNs = (global as any).fastify?.io?.of('/groups');
+      if (groupsNs) {
+        groupsNs.to(`event_${eventId}`).emit('waitlist_closed', { eventId });
+        groupsNs.to(`event_${eventId}`).emit('waitlist_positions_updated', { eventId, totalWaiting: 0, positions: [] });
+        groupsNs.to(`event_${eventId}`).emit('waitlist_updated', { eventId });
+        groupsNs.to(`event_${eventId}`).emit('dashboard_updated', { action: 'waitlist_cleared', eventId });
+      }
+      return;
+    }
+
+    // Cancel all waitlisted bookings and their tickets in a transaction
+    await prisma.$transaction(async (tx) => {
+      for (const b of waitlistedBookings) {
+        await tx.bookings.update({ where: { id: b.id }, data: { status: 'cancelled' } });
+        const lineItems = await tx.booking_line_items.findMany({ where: { booking_id: b.id } });
+        const liIds = lineItems.map(li => li.id);
+        if (liIds.length > 0) {
+          await tx.tickets.updateMany({ where: { line_item_id: { in: liIds } }, data: { status: 'cancelled' } });
+        }
+      }
+    });
+
+    // Notify each affected user in real-time
+    const { sendNotificationToUser } = (() => {
+      try { return require('./messagingSocket'); } catch { return { sendNotificationToUser: () => {} }; }
+    })();
+
+    for (const b of waitlistedBookings) {
+      try {
+        sendNotificationToUser(b.booker_user_id, 'group.notification', {
+          type: 'waitlist_closed',
+          text: `The waitlist for <b>${event.title}</b> has been closed by the host. You have been removed from the waitlist.`,
+          eventId: event.id
+        });
+        await prisma.notification_log.create({
+          data: {
+            user_id: b.booker_user_id,
+            tenant_id: event.tenant_id,
+            channel: 'app',
+            template_key: 'event_waitlist_closed',
+            status: 'queued',
+            provider_ref: JSON.stringify({ eventId: event.id, eventTitle: event.title })
+          }
+        }).catch(() => {});
+      } catch {}
+    }
+
+    // Broadcast socket events to all connected clients for live UI update
+    const groupsNamespace = (global as any).fastify?.io?.of('/groups');
+    if (groupsNamespace) {
+      // waitlist_closed: tells home-waitlist.tsx to switch to CLOSED state
+      groupsNamespace.to(`event_${eventId}`).emit('waitlist_closed', { eventId });
+      // Clear positions so My Events → Waitlist tab updates live
+      groupsNamespace.to(`event_${eventId}`).emit('waitlist_positions_updated', { eventId, totalWaiting: 0, positions: [] });
+      groupsNamespace.to(`event_${eventId}`).emit('waitlist_updated', { eventId });
+      // Host dashboard refresh
+      groupsNamespace.to(`event_${eventId}`).emit('dashboard_updated', { action: 'waitlist_cleared', eventId });
+    }
+  }
+
+  static async reconcileWaitlist(eventId: string) {
+    const event = await prisma.events.findUnique({ where: { id: eventId } });
+    if (!event) return;
+
+    const capacity = (event.settings as any)?.capacity || {};
+    if (capacity.waitlist !== true || capacity.limit !== true) {
+      await this.broadcastWaitlistPositions(eventId);
+      return;
+    }
+
+    // Count confirmed + pending_approval as both "occupying" a slot
+    const occupiedCount = await prisma.bookings.count({
+      where: { event_id: eventId, status: { in: ['confirmed', 'pending_payment'] } }
+    });
+
+    const availableSeats = capacity.max - occupiedCount;
+    if (availableSeats <= 0) {
+      await this.broadcastWaitlistPositions(eventId);
+      return;
+    }
+
+    const waitlistCount = await prisma.bookings.count({
+      where: { event_id: eventId, status: 'waitlisted' }
+    });
+    
+    if (waitlistCount === 0) {
+      await this.broadcastWaitlistPositions(eventId);
+      return;
+    }
+
+    // Always promote from waitlist — if approval_required, promoteFromWaitlist
+    // will set them to pending_approval and notify the host in real-time
+    await this.promoteFromWaitlist(eventId, availableSeats);
+
+    await this.broadcastWaitlistPositions(eventId);
+  }
+
 
   static async leaveEvent(eventId: string, userId: string) {
     const event = await prisma.events.findUnique({ where: { id: eventId } });
@@ -2035,9 +2476,150 @@ export class EventService {
     }
 
     if (canceledConfirmedCount > 0) {
-      await EventService.promoteFromWaitlist(eventId, canceledConfirmedCount);
+      await EventService.reconcileWaitlist(eventId);
     }
   }
 
+  static async getWaitlistStatus(eventId: string, userId: string) {
+    const totalWaiting = await prisma.bookings.count({ where: { event_id: eventId, status: 'waitlisted' } });
+    const userBooking = await prisma.bookings.findFirst({
+      where: { event_id: eventId, booker_user_id: userId, status: 'waitlisted' },
+      select: { created_at: true }
+    });
+    let position = null;
+    if (userBooking) {
+      position = 1 + await prisma.bookings.count({
+        where: {
+          event_id: eventId,
+          status: 'waitlisted',
+          created_at: { lt: userBooking.created_at }
+        }
+      });
+    }
+    return {
+      position,
+      totalWaiting,
+      isWaitlisted: position !== null
+    };
+  }
 
+  static async leaveWaitlist(eventId: string, userId: string) {
+    const booking = await prisma.bookings.findFirst({
+      where: { event_id: eventId, booker_user_id: userId, status: 'waitlisted' }
+    });
+    if (!booking) return false;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.bookings.update({
+        where: { id: booking.id },
+        data: { status: 'cancelled' }
+      });
+      const lineItems = await tx.booking_line_items.findMany({
+        where: { booking_id: booking.id }
+      });
+      const liIds = lineItems.map(li => li.id);
+      await tx.tickets.updateMany({
+        where: { line_item_id: { in: liIds } },
+        data: { status: 'cancelled' }
+      });
+    });
+
+    await EventService.broadcastWaitlistPositions(eventId);
+
+    return true;
+  }
+
+  static async getWaitlist(eventId: string) {
+    const bookings = await prisma.bookings.findMany({
+      where: { event_id: eventId, status: 'waitlisted' },
+      include: {
+        users_bookings_booker_user_idTousers: {
+          select: {
+            id: true,
+            display_name: true,
+            username: true,
+            avatar_url: true,
+            email: true
+          }
+        },
+        booking_line_items: {
+          include: {
+            ticket_types: {
+              select: { title: true, price: true }
+            }
+          }
+        }
+      },
+      orderBy: { created_at: 'asc' }
+    });
+
+    return bookings.map(b => ({
+      id: b.id,
+      created_at: b.created_at,
+      user: b.users_bookings_booker_user_idTousers,
+      ticket_type: b.booking_line_items?.[0]?.ticket_types?.title || 'General',
+      price: b.booking_line_items?.[0]?.ticket_types?.price || 0
+    }));
+  }
+
+  static async approveWaitlistedUser(eventId: string, targetUserId: string, approverUserId: string) {
+    const event = await prisma.events.findUnique({ where: { id: eventId } });
+    if (!event) throw new Error('Event not found');
+
+    const booking = await prisma.bookings.findFirst({
+      where: { event_id: eventId, booker_user_id: targetUserId, status: 'waitlisted' }
+    });
+    if (!booking) throw new Error('Waitlisted booking not found for this user');
+
+    const capacity = (event.settings as any)?.capacity || {};
+    if (capacity.limit === true) {
+      const confirmedCount = await prisma.bookings.count({
+        where: { event_id: eventId, status: 'confirmed' }
+      });
+      if (confirmedCount >= capacity.max) {
+        throw new Error('Capacity reached. Increase capacity or wait for someone to leave before approving more users.');
+      }
+    }
+
+    const nextStatus = 'confirmed';
+    const nextTicketStatus = 'confirmed';
+
+    await prisma.$transaction(async (tx) => {
+      await tx.bookings.update({
+        where: { id: booking.id },
+        data: { status: nextStatus }
+      });
+      const lineItems = await tx.booking_line_items.findMany({
+        where: { booking_id: booking.id }
+      });
+      const liIds = lineItems.map(li => li.id);
+      await tx.tickets.updateMany({
+        where: { line_item_id: { in: liIds } },
+        data: { status: nextTicketStatus }
+      });
+    });
+
+    try {
+      const { sendNotificationToUser } = require('./messagingSocket');
+      sendNotificationToUser(targetUserId, 'notification.general', {
+        title: 'Waitlist Approved',
+        body: `Your waitlist request for ${event.title} was approved!`,
+        link: `/events/${event.id}`
+      });
+
+      const groupsNamespace = (global as any).fastify?.io?.of('/groups');
+      if (groupsNamespace) {
+        groupsNamespace.to(`event_${eventId}`).emit('waitlist_updated', { eventId });
+        groupsNamespace.to(`event_${eventId}`).emit('dashboard_updated', { action: 'approve-waitlist', eventId });
+      }
+      TicketRealtimeService.syncUser(targetUserId, eventId).catch(() => {});
+      TicketRealtimeService.syncScanner(eventId).catch(() => {});
+      const { MyEventsRealtimeService } = require('./MyEventsRealtimeService');
+      MyEventsRealtimeService.syncUser(targetUserId).catch(() => {});
+    } catch (e) { }
+
+    await EventService.broadcastWaitlistPositions(eventId);
+
+    return { success: true };
+  }
 }

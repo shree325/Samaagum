@@ -1846,7 +1846,7 @@ export function GroupDetail({ group, st, go }) {
 
                       {gEvents.length > 0 ? (
                         <div className="ev-grid">
-                          {gEvents.map(ev => <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)} wishlisted={st.wishlisted?.has(ev.id)} wishlistCount={st.wishlistCounts?.[ev.id] || 0} onWishlist={() => st.toggleWishlist(ev.id)} registered={st.registered.has(ev.id)} />)}
+                          {gEvents.map(ev => <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)} wishlisted={st.wishlisted?.has(ev.id)} wishlistCount={st.wishlistCounts?.[ev.id] !== undefined ? st.wishlistCounts[ev.id] : (ev.wishlistCount || 0)} onWishlist={() => st.toggleWishlist(ev.id, ev.wishlistCount)} registered={st.registered.has(ev.id)} />)}
                         </div>
                       ) : (
                         <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--ink-3)", background: "var(--surface)", borderRadius: "var(--r-md)", border: "1px dashed var(--border)" }}>

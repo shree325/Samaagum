@@ -120,7 +120,7 @@ function ErrorBlock({ message, onRetry }: { message: string, onRetry: () => void
 }
 
 /* Hero Carousel */
-export function HeroCarousel({ events, go, wishlisted, wishlistCounts, toggleWishlist }: any) {
+export function HeroCarousel({ events, go, wishlisted, wishlistCounts, toggleWishlist, registered }: any) {
   const [index, setIndex] = useState(0);
   const [hover, setHover] = useState(false);
   const touchStart = useRef(0);
@@ -179,7 +179,18 @@ export function HeroCarousel({ events, go, wishlisted, wishlistCounts, toggleWis
           const timeStr = ev.starts_at ? new Date(ev.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Time TBD';
           const venueStr = ev.online ? 'Online' : ev.venue || 'Venue TBD';
           const isWish = wishlisted.has(ev.id);
-          const wishCount = wishlistCounts[ev.id] || 0;
+          const wishCount = wishlistCounts[ev.id] !== undefined ? wishlistCounts[ev.id] : (ev.wishlistCount || 0);
+
+          let regStatus = ev.registrationStatus || ev.registration_status || "OPEN";
+          if (regStatus === "SCHEDULED" && (ev.registrationOpensAt || ev.registration_opens_at)) {
+            const o = new Date(ev.registrationOpensAt || ev.registration_opens_at);
+            if (new Date() >= o) regStatus = "OPEN";
+          }
+          if (regStatus !== "CLOSED" && (ev.registrationClosesAt || ev.registration_closes_at)) {
+            const c = new Date(ev.registrationClosesAt || ev.registration_closes_at);
+            if (new Date() >= c) regStatus = "CLOSED";
+          }
+          const isRegistrationOpen = regStatus === "OPEN";
 
           return (
             <div
@@ -194,7 +205,7 @@ export function HeroCarousel({ events, go, wishlisted, wishlistCounts, toggleWis
                   <Grain />
                   <span className="ftag">{ev.online ? "Online" : "Featured"}</span>
                   <div style={{ position: 'absolute', top: 16, right: 16 }}>
-                    <WishlistBtn wishlisted={isWish} count={wishCount} onClick={() => toggleWishlist(ev.id)} Cls="save dark" />
+                    {!registered?.has(ev.id) && !isRegistrationOpen && <WishlistBtn wishlisted={isWish} count={wishCount} onClick={() => toggleWishlist(ev.id, ev.wishlistCount)} Cls="save dark" />}
                   </div>
                 </div>
                 <div className="fbody">
@@ -539,10 +550,11 @@ export function HomeFeed({ st, go }: any) {
             wishlisted={wishlisted}
             wishlistCounts={wishlistCounts}
             toggleWishlist={toggleWishlist}
+            registered={registered}
           />
         )}
         {/* Featured */}
-        <FeatureCard ev={FEATURED} onOpen={(e) => go("event", e)} wishlisted={wishlisted.has(FEATURED.id)} wishlistCount={wishlistCounts[FEATURED.id] !== undefined ? wishlistCounts[FEATURED.id] : (FEATURED.wishlistCount || 0)} onWishlist={() => toggleWishlist(FEATURED.id)} />
+        <FeatureCard ev={FEATURED} onOpen={(e) => go("event", e)} wishlisted={wishlisted.has(FEATURED.id)} wishlistCount={wishlistCounts[FEATURED.id] !== undefined ? wishlistCounts[FEATURED.id] : (FEATURED.wishlistCount || 0)} onWishlist={() => toggleWishlist(FEATURED.id, FEATURED.wishlistCount)} registered={registered.has(FEATURED.id)} />
 
         {/* Recommended rail */}
         <div className="section">
@@ -562,7 +574,7 @@ export function HomeFeed({ st, go }: any) {
                   onOpen={(e: any) => go("event", e)}
                   wishlisted={wishlisted.has(ev.id)}
                   wishlistCount={wishlistCounts[ev.id] !== undefined ? wishlistCounts[ev.id] : (ev.wishlistCount || 0)}
-                  onWishlist={() => toggleWishlist(ev.id)}
+                  onWishlist={() => toggleWishlist(ev.id, ev.wishlistCount)}
                   registered={registered.has(ev.id)}
                 />
               ))}
@@ -605,8 +617,8 @@ export function HomeFeed({ st, go }: any) {
                       ev={ev}
                       onOpen={(e: any) => go("event", e)}
                       wishlisted={wishlisted.has(ev.id)}
-                      wishlistCount={wishlistCounts[ev.id] || 0}
-                      onWishlist={() => toggleWishlist(ev.id)}
+                      wishlistCount={wishlistCounts[ev.id] !== undefined ? wishlistCounts[ev.id] : (ev.wishlistCount || 0)}
+                      onWishlist={() => toggleWishlist(ev.id, ev.wishlistCount)}
                       registered={true}
                     />
                     {ev.countdown_ms > 0 && ev.countdown_ms < 86400000 && (
@@ -885,8 +897,18 @@ export function Discover({ st, go, param }) {
     if (window.io) {
       const socketUrl = apiBase ? `${apiBase}/groups` : "/groups";
       const socket = window.io(socketUrl, { transports: ['websocket'] });
+      
+      socket.on('connect', () => {
+        socket.emit('join_discover');
+      });
+      
       socket.on('groups_updated', () => fetchGroups(city));
       socket.on('events_updated', () => fetchEvents(city));
+      
+      socket.on('discover_event_removed', (payload: any) => {
+        setDbEvents(prev => prev.filter(e => e.id !== payload.eventId));
+      });
+
       return () => socket.disconnect();
     }
   }, [apiBase, city, fetchGroups, fetchEvents]);
@@ -906,7 +928,19 @@ export function Discover({ st, go, param }) {
     const venueObj = e.venue || {};
     const meta = venueObj.meta || {};
     const startsAt = e.starts_at ? new Date(e.starts_at) : null;
-    const priceVal = e.tickets?.[0] ? `₹${(e.tickets[0].price_minor / 100).toFixed(0)}` : (e.registration_mode === 'free' ? 'Free' : '—');
+    let priceVal = '—';
+    if (e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') {
+        priceVal = 'Free';
+    } else if (e.tickets && e.tickets.length > 0) {
+        const prices = e.tickets.map(t => t.price_minor ? t.price_minor / 100 : (t.price_amount_minor ? t.price_amount_minor / 100 : 0));
+        const minPrice = Math.min(...prices);
+        const maxPrice = Math.max(...prices);
+        if (minPrice === maxPrice) {
+            priceVal = minPrice === 0 ? 'Free' : `₹${minPrice.toFixed(0)}`;
+        } else {
+            priceVal = `₹${minPrice.toFixed(0)} - ₹${maxPrice.toFixed(0)}`;
+        }
+    }
 
     const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
     const month = startsAt ? months[startsAt.getMonth()] : "TBD";
@@ -936,7 +970,9 @@ export function Discover({ st, go, param }) {
       hostName: e.hostName,
       hostType: e.hostType,
       hostId: e.hostId,
-      city: e.location_type === 'online' ? null : (venueObj.city || venueObj.address || venueObj.meta?.city || null)
+      city: e.location_type === 'online' ? null : (venueObj.city || venueObj.address || venueObj.meta?.city || null),
+      wishlistCount: e.wishlistCount,
+      isWishlisted: e.isWishlisted
     };
   }).filter(e => {
     if (e.status !== "published") return false;
@@ -1001,7 +1037,7 @@ export function Discover({ st, go, param }) {
             <Empty icon={<I.ticket />} title="No events found" text="There are no events scheduled in this category." />
           ) : (
             <div className="ev-grid">
-              {evs.map(ev => <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)} wishlisted={wishlisted.has(ev.id)} wishlistCount={wishlistCounts[ev.id] !== undefined ? wishlistCounts[ev.id] : (ev.wishlistCount || 0)} onWishlist={() => toggleWishlist(ev.id)} registered={registered.has(ev.id)} />)}
+              {evs.map(ev => <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)} wishlisted={wishlisted.has(ev.id)} wishlistCount={wishlistCounts[ev.id] !== undefined ? wishlistCounts[ev.id] : (ev.wishlistCount || 0)} onWishlist={() => toggleWishlist(ev.id, ev.wishlistCount)} registered={registered.has(ev.id)} />)}
             </div>
           )
         ) : (

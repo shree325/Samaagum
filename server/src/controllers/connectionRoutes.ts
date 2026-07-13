@@ -41,7 +41,12 @@ function getUserFromRequest(request: any): { userId: string; tenantId: string } 
     if (!header.startsWith('Bearer ')) return null;
     const token = header.slice(7);
     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
-    return { userId: payload.sub || payload.userId || payload.id, tenantId: payload.tenantId || payload.tenant_id };
+    const uid = payload.sub || payload.userId || payload.id;
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (uid && UUID_REGEX.test(uid)) {
+      return { userId: uid, tenantId: payload.tenantId || payload.tenant_id };
+    }
+    return null;
   } catch {
     return null;
   }

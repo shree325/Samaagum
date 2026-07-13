@@ -208,7 +208,7 @@ export function NotifRow({ n, st, go, onRead }) {
                 <div style={{ fontSize: 10, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   Questionnaire Answers
                 </div>
-                {Object.entries(n.answers).map(([key, val]) => {
+                {Object.entries(n.answers).filter(([k]) => !['ticketName', 'isQuestionnaireSubmit'].includes(k)).map(([key, val]) => {
                   const label = (n.questionLabels && n.questionLabels[key]) || key;
                   return (
                     <div key={key} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -220,7 +220,7 @@ export function NotifRow({ n, st, go, onRead }) {
               </div>
             )}
             
-            {!acted && (
+            {!acted ? (
               <div className="nacts" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button
                   className="hbtn hbtn--primary hbtn--sm"
@@ -239,6 +239,10 @@ export function NotifRow({ n, st, go, onRead }) {
                 >
                   {loading === "decline" ? "Declining…" : "Decline"}
                 </button>
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, color: acted === 'accepted' ? 'var(--green)' : 'var(--red)', fontWeight: 600 }}>
+                {acted === 'accepted' ? "Request accepted" : "Request declined"}
               </div>
             )}
           </div>
@@ -262,7 +266,7 @@ export function NotifRow({ n, st, go, onRead }) {
                 <div style={{ fontSize: 10, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   Questionnaire Answers
                 </div>
-                {Object.entries(n.answers).map(([key, val]) => {
+                {Object.entries(n.answers).filter(([k]) => !['ticketName', 'isQuestionnaireSubmit'].includes(k)).map(([key, val]) => {
                   const label = (n.questionLabels && n.questionLabels[key]) || key;
                   return (
                     <div key={key} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -274,7 +278,7 @@ export function NotifRow({ n, st, go, onRead }) {
               </div>
             )}
             
-            {!acted && (
+            {!acted ? (
               <div className="nacts" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button
                   className="hbtn hbtn--primary hbtn--sm"
@@ -293,6 +297,10 @@ export function NotifRow({ n, st, go, onRead }) {
                 >
                   {loading === "decline" ? "Declining…" : "Decline"}
                 </button>
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, color: acted === 'accepted' ? 'var(--green)' : 'var(--red)', fontWeight: 600 }}>
+                {acted === 'accepted' ? "Request accepted" : "Request declined"}
               </div>
             )}
           </div>
@@ -525,7 +533,9 @@ export function Notifications({ st, go, socket }) {
           ? (payload.text?.split(' ')[0] || 'Attendee') 
           : (payload.type === 'join' 
               ? (payload.text?.split(' ')[0] || 'Member')
-              : (payload.type === 'group_created' ? 'Groups' : (payload.type === 'group_gallery' ? 'Gallery' : 'Forums'))),
+              : (payload.type === 'event_updated'
+                  ? (payload.eventTitle || 'Event')
+                  : (payload.type === 'group_created' ? 'Groups' : (payload.type === 'group_gallery' ? 'Gallery' : 'Forums')))),
         unread: true,
         day: "Today",
         time: "Just now",
@@ -534,7 +544,7 @@ export function Notifications({ st, go, socket }) {
           ? 'event_request' 
           : (payload.type === 'join' 
               ? 'group_request'
-              : (payload.type === 'event' ? 'view_event' : 'view')),
+              : ((payload.type === 'event' || payload.type === 'event_updated') ? 'view_event' : 'view')),
         eventId: payload.eventId,
         answers: payload.answers || {},
         questionLabels: payload.questionLabels || {},
