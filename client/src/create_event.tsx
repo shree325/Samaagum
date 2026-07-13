@@ -449,7 +449,8 @@ export function TimePicker({ label = undefined, value, onChange, mobile, compact
             padding: "16px",
             fontSize: "14px",
             fontFamily: "inherit",
-            outline: "none"
+            outline: "none",
+            color: "var(--ink)"
           } : {
             width: "100%",
             cursor: "pointer",
@@ -695,7 +696,8 @@ function DatePicker({ label = undefined, value, onChange, mobile, compact }) {
             padding: "16px",
             fontSize: "14px",
             fontFamily: "inherit",
-            outline: "none"
+            outline: "none",
+            color: "var(--ink)"
           } : {
             width: "100%",
             cursor: "pointer",

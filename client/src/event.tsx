@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { I, Avatar, Grain } from './home-icons';
+import { EventDashboard } from './event-dashboard';
 import DiscussionPanel from './discussion-panel';
 
 function Toggle({ on, onClick }) { return <button className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
@@ -1135,71 +1136,10 @@ export function EventPage({ ev, st, go }) {
                 </div>
               )}
 
-              {/* Tab: Dashboard — quick-glance stats for the event (members, attendees, posts, ...) */}
-              {tab === "dashboard" && (() => {
-                const memberCount = eventMembers ? eventMembers.filter(m => m.state === 'active').length : attendees.length;
-                const revenueDisplay = !hostStats ? null : (hostStats.revenue === 0 ? "Free" : `₹${hostStats.revenue.toLocaleString()}`);
-
-                const StatCard = ({ label, value, sub, color }: { label: any; value: any; sub?: any; color?: any }) => (
-                  <div style={{ background: "var(--field)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
-                    <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{label}</div>
-                    <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: color || "var(--ink)" }}>
-                      {value}{sub && <span style={{ fontSize: 13, fontWeight: 400, color: "var(--ink-3)" }}> {sub}</span>}
-                    </div>
-                  </div>
-                );
-
-                return (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                    <div className="ev-block">
-                      <h3>Event Dashboard</h3>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginTop: 12 }}>
-                        <StatCard label="Total Members" value={memberCount} />
-                        <StatCard label="Confirmed Attendees" value={confirmedCount} />
-                        <StatCard label="Gallery Posts" value={galleryItems.length} />
-                        {discussionEnabled && (
-                          <StatCard label="Discussion" value={discussionEnabled ? "Enabled" : "Off"} />
-                        )}
-                        {(isHostOrCoHost || isAdmin || isModerator) && (
-                          <StatCard label="Pending Requests" value={pendingCount} color={pendingCount > 0 ? "var(--accent-2)" : undefined} />
-                        )}
-                        {hostStats && (
-                          <StatCard label="Checked In" value={hostStats.checkedInCount || 0} sub={`/ ${hostStats.totalAttendees || 0}`} color="var(--accent-2)" />
-                        )}
-                        {hostStats && isPaidEvent && (
-                          <StatCard label="Estimated Revenue" value={revenueDisplay} color={hostStats.revenue === 0 ? "var(--ink-3)" : "#1f9d57"} />
-                        )}
-                      </div>
-                    </div>
-
-                    {(isHostOrCoHost || isAdmin || isModerator) && (
-                      <div className="ev-block">
-                        <h3>Recent Members</h3>
-                        {!eventMembers ? (
-                          <div style={{ color: "var(--ink-3)", fontSize: 13.5, padding: "8px 0" }}>Loading…</div>
-                        ) : memberCount === 0 ? (
-                          <div style={{ color: "var(--ink-3)", fontSize: 13.5, padding: "8px 0" }}>No members yet.</div>
-                        ) : (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
-                            {eventMembers.filter(m => m.state === 'active').slice(0, 6).map(m => (
-                              <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8 }}>
-                                <Avatar name={m.name} userId={m.id} img={m.picture} size={30} />
-                                <div style={{ minWidth: 0 }}>
-                                  <div style={{ fontSize: 13.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</div>
-                                  <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{m.role === 'event_host' ? 'Host' : m.role === 'event_cohost' ? 'Co-host' : 'Member'}</div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {memberCount > 6 && (
-                          <button className="hbtn hbtn--ghost hbtn--sm" style={{ marginTop: 10 }} onClick={() => setTab("members")}>View all {memberCount} members</button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
+              {/* Tab: Dashboard — Premium Event Control Center */}
+              {tab === "dashboard" && (
+                <EventDashboard ev={currentEvent || e} st={st} go={go} embedded={true} />
+              )}
 
               {/* Tab 2: Members — consolidated (pending requests + confirmed list) */}
               {tab === "members" && (() => {
