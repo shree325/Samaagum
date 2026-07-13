@@ -141,8 +141,10 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const tenantId = tenant?.id || '00000000-0000-0000-0000-000000000000';
 
             let dbUser = await prisma.users.findFirst({ where: { primary_email: email } });
+            let isNewUser = false;
 
             if (!dbUser) {
+                isNewUser = true;
                 dbUser = await prisma.users.create({
                     data: {
                         tenant_id: tenantId,
@@ -165,7 +167,11 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 // Auto-assign the default plan to new users
                 const { SubscriptionActivationService } = await import('../services/SubscriptionActivationService');
                 SubscriptionActivationService.assignDefaultPlanToUser(dbUser.id, tenantId).catch(console.error);
+            } else if (!(dbUser as any).profile_completed) {
+                // Existing user who never finished onboarding — send them back through it
+                isNewUser = true;
             }
+
 
             // Issue JWT token
             const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
@@ -174,6 +180,9 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 tenantId: dbUser.tenant_id,
                 email: dbUser.primary_email,
                 name,
+                firstName: googleUser.given_name || name.split(' ')[0] || '',
+                lastName: googleUser.family_name || name.split(' ').slice(1).join(' ') || '',
+                picture: googleUser.picture || '',
                 role: 'user',
                 provider: 'google'
             })).toString('base64url');
@@ -182,7 +191,7 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             console.log(`✅ Google OAuth login: ${email} → ${frontendBase}`);
 
             // Redirect back to frontend — the inline script in index.html saves the token and goes to home
-            return reply.redirect(`${frontendBase}/?token=${encodeURIComponent(token)}&auth=google`);
+            return reply.redirect(`${frontendBase}/?token=${encodeURIComponent(token)}&auth=google${isNewUser ? '&isNewUser=true' : ''}`);
 
         } catch (err: any) {
             console.error('Google OAuth callback error:', err);
@@ -295,11 +304,13 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
     // GET /auth/linkedin/callback — Handle LinkedIn OAuth callback
     fastify.get('/linkedin/callback', async (request: any, reply) => {
         let frontendBase = 'http://localhost:8080';
+        let mode = 'login';
         try {
             const rawState = (request.query as any).state;
             if (rawState) {
                 const stateData = JSON.parse(Buffer.from(rawState, 'base64url').toString('utf8'));
                 if (stateData.frontendOrigin) frontendBase = stateData.frontendOrigin;
+                if (stateData.mode) mode = stateData.mode;
             }
         } catch {}
 
@@ -357,8 +368,10 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const tenantId = tenant?.id || '00000000-0000-0000-0000-000000000000';
 
             let dbUser = await prisma.users.findFirst({ where: { primary_email: email } });
+            let isNewUser = false;
 
             if (!dbUser) {
+                isNewUser = true;
                 dbUser = await prisma.users.create({
                     data: {
                         tenant_id: tenantId,
@@ -389,6 +402,9 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 tenantId: dbUser.tenant_id,
                 email: dbUser.primary_email,
                 name,
+                firstName: linkedinUser.given_name || name.split(' ')[0] || '',
+                lastName: linkedinUser.family_name || name.split(' ').slice(1).join(' ') || '',
+                picture: linkedinUser.picture || '',
                 role: 'user',
                 provider: 'linkedin'
             })).toString('base64url');
@@ -396,7 +412,7 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
 
             console.log(`✅ LinkedIn OAuth login: ${email} → ${frontendBase}`);
 
-            return reply.redirect(`${frontendBase}/?token=${encodeURIComponent(token)}&auth=linkedin`);
+            return reply.redirect(`${frontendBase}/?token=${encodeURIComponent(token)}&auth=linkedin${isNewUser ? '&isNewUser=true' : ''}`);
 
         } catch (err: any) {
             console.error('LinkedIn OAuth callback error:', err);
@@ -462,11 +478,13 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
     fastify.get('/custom/:providerKey/callback', async (request: any, reply) => {
         const { providerKey } = request.params as any;
         let frontendBase = 'http://localhost:8080';
+        let mode = 'login';
         try {
             const rawState = (request.query as any).state;
             if (rawState) {
                 const stateData = JSON.parse(Buffer.from(rawState, 'base64url').toString('utf8'));
                 if (stateData.frontendOrigin) frontendBase = stateData.frontendOrigin;
+                if (stateData.mode) mode = stateData.mode;
             }
         } catch {}
 
@@ -573,8 +591,10 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const tenantId = tenant?.id || '00000000-0000-0000-0000-000000000000';
 
             let dbUser = await prisma.users.findFirst({ where: { primary_email: email } });
+            let isNewUser = false;
 
             if (!dbUser) {
+                isNewUser = true;
                 dbUser = await prisma.users.create({
                     data: {
                         tenant_id: tenantId,
@@ -605,6 +625,9 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 tenantId: dbUser.tenant_id,
                 email: dbUser.primary_email,
                 name,
+                firstName: userProfile.given_name || name.split(' ')[0] || '',
+                lastName: userProfile.family_name || name.split(' ').slice(1).join(' ') || '',
+                picture: userProfile.picture || userProfile.avatar_url || '',
                 role: 'user',
                 provider: providerKey
             })).toString('base64url');
@@ -612,7 +635,7 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
 
             console.log(`✅ Custom OAuth login (${providerKey}): ${email} → ${frontendBase}`);
 
-            return reply.redirect(`${frontendBase}/?token=${encodeURIComponent(token)}&auth=${providerKey}`);
+            return reply.redirect(`${frontendBase}/?token=${encodeURIComponent(token)}&auth=${providerKey}${isNewUser ? '&isNewUser=true' : ''}`);
 
         } catch (err: any) {
             console.error(`Custom OAuth callback error for ${providerKey}:`, err);

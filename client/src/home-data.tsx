@@ -205,36 +205,7 @@ export const DISCUSSIONS = [
   },
 ];
 
-export const NOTIFS = [
-  {
-    id: "n1", type: "join", who: "BLR Founders Collective", unread: true, day: "Today", time: "12 min ago",
-    text: "<b>Your request to join</b> BLR Founders Collective was <b>approved</b>. Welcome aboard!", action: "view"
-  },
-  {
-    id: "n2", type: "connect", who: "Vivek Rao", unread: true, day: "Today", time: "40 min ago",
-    text: "<b>Vivek Rao</b> wants to connect with you.", action: "connect"
-  },
-  {
-    id: "n3", type: "event", who: "Design Systems Night #12", unread: true, day: "Today", time: "1 hour ago",
-    text: "Reminder: <b>Design Systems Night #12</b> starts in 3 days. Your ticket is ready.", action: "ticket"
-  },
-  {
-    id: "n4", type: "message", who: "Mira Shah", unread: false, day: "Today", time: "3 hours ago",
-    text: "<b>Mira Shah</b> sent you a message: \u201cLoved your talk — can we collab on…\u201d", action: "reply"
-  },
-  {
-    id: "n5", type: "forum", who: "Dev Kapoor", unread: false, day: "Yesterday", time: "Tue 4:20 PM",
-    text: "<b>Dev Kapoor</b> replied to your post in <b>BLR Founders Collective</b>.", action: "view"
-  },
-  {
-    id: "n6", type: "registration", who: "Founders & Funders Mixer", unread: false, day: "Yesterday", time: "Tue 11:02 AM",
-    text: "Registration confirmed for <b>Founders & Funders Mixer</b>. ₹499 paid · Ticket #BL-2291.", action: "ticket"
-  },
-  {
-    id: "n7", type: "connect", who: "Riya Thomas", unread: false, day: "Yesterday", time: "Tue 9:15 AM",
-    text: "You and <b>Riya Thomas</b> are now connected.", action: null
-  },
-];
+export const NOTIFS = [];
 
 export const THREADS = [
   {

@@ -737,7 +737,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
 
             // Pending join requests
             const pendingRequests = await prisma.attendees.findMany({
-                where: { bookings: { event_id: id, status: 'pending_approval' } }
+                where: { bookings: { event_id: id, status: 'pending_approval' } },
+                include: { users_attendees_user_idTousers: { select: { profile_image_data: true } } }
             });
 
             const totalRevenueMinor = bookings
@@ -784,12 +785,15 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                         try {
                             parsedAnswers = JSON.parse(r.notes || '{}');
                         } catch (e) {}
+                        const userPic = (r as any).users_attendees_user_idTousers?.profile_image_data;
+                        const picture = userPic ? `data:image/jpeg;base64,${Buffer.from(userPic).toString('base64')}` : null;
                         return {
                             id: r.id,
                             userId: r.user_id,
                             bookingId: r.booking_id,
                             name: r.name,
                             email: r.email,
+                            picture,
                             answers: parsedAnswers
                         };
                     })

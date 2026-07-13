@@ -36,6 +36,10 @@ import { dashboardRoutes } from './controllers/dashboardRoutes';
 
 dotenv.config();
 
+(BigInt.prototype as any).toJSON = function () {
+    return Number(this);
+};
+
 // Auto-seed if tables are empty
 prisma.admin_roles.count()
     .then((count) => {

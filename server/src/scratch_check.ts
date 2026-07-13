@@ -2,12 +2,10 @@ import prisma from './config/prisma';
 
 async function main() {
     try {
-        const cols = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT column_name, data_type 
-             FROM information_schema.columns 
-             WHERE table_name = 'entities'`
-        );
-        console.log('Columns of entities table:', cols);
+        const settings = await prisma.platform_settings.findFirst({
+            where: { scope_tenant_id: null, key: 'auth_settings' }
+        });
+        console.log('auth_settings:', JSON.stringify(settings, null, 2));
     } catch (e: any) {
         console.error('Error:', e.message || e);
     } finally {

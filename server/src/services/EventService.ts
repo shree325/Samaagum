@@ -340,10 +340,11 @@ export class EventService {
 
   // Resolves an entity_id (from events.hosted_by_entity_id) into a display name/type so the
   // client can render "Hosted by <name>" instead of only having the raw UUID.
-  static async resolveHostInfo(hostedByEntityId: string | null | undefined): Promise<{ hostType: string | null; hostName: string | null; hostUserId: string | null; hostPhoto: string | null }> {
-    if (!hostedByEntityId) return { hostType: null, hostName: null, hostUserId: null, hostPhoto: null };
-    const rows = await prisma.$queryRawUnsafe<{ entity_type: string; user_id: string | null; group_name: string | null; user_display_name: string | null; user_profile_image: any | null; group_icon: any | null }[]>(
-      `SELECT e.entity_type, e.user_id, g.name as group_name, p.display_name as user_display_name, u.profile_image_data as user_profile_image, g.icon_data as group_icon
+  static async resolveHostInfo(hostedByEntityId: string | null | undefined): Promise<{ hostType: string | null; hostName: string | null; hostUserId: string | null; hostPhoto: string | null; hostBanner: string | null }> {
+    if (!hostedByEntityId) return { hostType: null, hostName: null, hostUserId: null, hostPhoto: null, hostBanner: null };
+    const rows = await prisma.$queryRawUnsafe<{ entity_type: string; user_id: string | null; group_name: string | null; user_display_name: string | null; first_name: string | null; last_name: string | null; primary_email: string | null; user_profile_image: any | null; profile_profile_image: any | null; group_icon: any | null; group_icon_string: string | null; group_banner: any | null; group_banner_string: string | null; user_cover: any | null }[]>(
+      `SELECT e.entity_type, e.user_id, g.name as group_name, p.display_name as user_display_name, p.first_name, p.last_name, u.primary_email, 
+              u.profile_image_data as user_profile_image, p.profile_image_data as profile_profile_image, g.icon_data as group_icon, g.icon as group_icon_string, g.banner_data as group_banner, g.banner as group_banner_string, p.cover_image_data as user_cover
        FROM entities e
        LEFT JOIN groups g ON g.entity_id = e.id
        LEFT JOIN users u ON u.id = e.user_id
@@ -353,20 +354,49 @@ export class EventService {
       hostedByEntityId
     );
     const row = rows[0];
-    if (!row) return { hostType: null, hostName: null, hostUserId: null, hostPhoto: null };
+    if (!row) return { hostType: null, hostName: null, hostUserId: null, hostPhoto: null, hostBanner: null };
     
     let hostPhoto: string | null = null;
-    if (row.entity_type === 'group' && row.group_icon) {
-      hostPhoto = `data:image/jpeg;base64,${Buffer.from(row.group_icon).toString('base64')}`;
-    } else if (row.entity_type === 'user' && row.user_profile_image) {
-      hostPhoto = `data:image/jpeg;base64,${Buffer.from(row.user_profile_image).toString('base64')}`;
+    if (row.entity_type === 'group') {
+      if (row.group_banner) {
+        hostPhoto = `data:image/jpeg;base64,${Buffer.from(row.group_banner).toString('base64')}`;
+      } else if (row.group_banner_string) {
+        hostPhoto = row.group_banner_string;
+      } else if (row.group_icon) {
+        hostPhoto = `data:image/jpeg;base64,${Buffer.from(row.group_icon).toString('base64')}`;
+      } else {
+        hostPhoto = row.group_icon_string;
+      }
+    } else if (row.entity_type === 'user') {
+      const imgData = row.user_profile_image || row.profile_profile_image;
+      if (imgData) {
+        hostPhoto = `data:image/jpeg;base64,${Buffer.from(imgData).toString('base64')}`;
+      }
+    }
+
+    let hostBanner: string | null = null;
+    if (row.entity_type === 'group' && row.group_banner) {
+      hostBanner = `data:image/jpeg;base64,${Buffer.from(row.group_banner).toString('base64')}`;
+    } else if (row.entity_type === 'user' && row.user_cover) {
+      hostBanner = `data:image/jpeg;base64,${Buffer.from(row.user_cover).toString('base64')}`;
+    }
+
+    let hostName: string | null = null;
+    if (row.entity_type === 'group') {
+      hostName = row.group_name;
+    } else {
+      hostName = row.user_display_name || 
+                 (row.first_name && row.last_name ? `${row.first_name} ${row.last_name}` : row.first_name) || 
+                 (row.primary_email ? row.primary_email.split('@')[0] : null) || 
+                 "Organizer";
     }
 
     return {
       hostType: row.entity_type,
-      hostName: row.entity_type === 'group' ? row.group_name : row.user_display_name,
+      hostName,
       hostUserId: row.user_id,
-      hostPhoto
+      hostPhoto,
+      hostBanner
     };
   }
 
@@ -421,6 +451,22 @@ export class EventService {
       if (visibility === 'custom' && !hasAccess) continue;
 
       const tickets = await this.ticketTypesRepo.getByEventId(ev.id!);
+      const ticketsWithRemaining = await Promise.all(tickets.map(async (t) => {
+        const sold = await prisma.tickets.count({
+          where: {
+            booking_line_items: {
+              ticket_type_id: t.id,
+              bookings: {
+                status: { in: ['confirmed', 'pending_approval', 'pending_payment'] }
+              }
+            }
+          }
+        });
+        return {
+          ...t,
+          remaining: t.capacity !== null && t.capacity !== undefined ? Math.max(0, t.capacity - sold) : null
+        };
+      }));
       const hostInfo = await this.resolveHostInfo(ev.hosted_by_entity_id);
       
       const wishlistCount = await this.wishlistRepo.getCountByEventId(ev.id!);
@@ -428,7 +474,7 @@ export class EventService {
 
       enrichedList.push({ 
         ...ev, 
-        tickets, 
+        tickets: ticketsWithRemaining, 
         ...hostInfo,
         wishlistCount,
         isWishlisted,
@@ -578,6 +624,22 @@ export class EventService {
     }
 
     const tickets = await this.ticketTypesRepo.getByEventId(id);
+    const ticketsWithRemaining = await Promise.all(tickets.map(async (t) => {
+      const sold = await prisma.tickets.count({
+        where: {
+          booking_line_items: {
+            ticket_type_id: t.id,
+            bookings: {
+              status: { in: ['confirmed', 'pending_approval', 'pending_payment'] }
+            }
+          }
+        }
+      });
+      return {
+        ...t,
+        remaining: t.capacity !== null && t.capacity !== undefined ? Math.max(0, t.capacity - sold) : null
+      };
+    }));
     const hostInfo = await this.resolveHostInfo(event.hosted_by_entity_id);
     
     let isFull = false;
@@ -608,7 +670,7 @@ export class EventService {
         registrationOpensAt: event.registration_opens_at,
         registrationClosesAt: event.registration_closes_at
       }, 
-      tickets 
+      tickets: ticketsWithRemaining
     };
   }
 

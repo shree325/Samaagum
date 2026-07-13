@@ -170,8 +170,7 @@ export const GroupCard = React.memo(function GroupCard({ g, onOpen, joined, onJo
 export const GroupRow = React.memo(function GroupRow({ g, rank, onOpen, joined, onJoin }: any) {
   const _apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
   const _resolveImg = (url) => url && !url.startsWith('blob:') ? (url.startsWith('/api/') ? _apiBase + url : url) : null;
-  const iconSrc = _resolveImg(g.icon);
-  const isCustomIcon = iconSrc && (iconSrc.startsWith("http") || iconSrc.startsWith("data:") || iconSrc.includes("/"));
+  const bannerSrc = _resolveImg(g.banner);
   
   let displayLocation = null;
   const loc = g.settings?.location;
@@ -188,8 +187,12 @@ export const GroupRow = React.memo(function GroupRow({ g, rank, onOpen, joined, 
   return (
     <div className="grow" onClick={()=>onOpen(g)}>
       {rank!=null && <span className="rank">{rank}</span>}
-      <div className="gicon2" style={{ background: g.cover, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-        {isCustomIcon ? <img src={iconSrc} alt="icon" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }} /> : g.icon}
+      <div className="gicon2" style={{ background: g.cover || "var(--field)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+        {bannerSrc ? (
+          <img src={bannerSrc} alt="banner" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }} />
+        ) : (
+          <I.image style={{ width: 28, height: 28, color: "var(--ink-3)" }} />
+        )}
       </div>
       <div className="gi">
         <div className="n" style={{ display: "flex", alignItems: "center", gap: 6 }}>
