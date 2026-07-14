@@ -44,6 +44,15 @@ export const startGroupsSocket = async (io: Server) => {
         socket.on('join_event', (eventId: string) => {
             socket.join(`event_${eventId}`);
         });
+
+        socket.on('join_user', (userId: string) => {
+            if (userId) socket.join(`user_${userId}`);
+        });
+
+        socket.on('join_discover', () => {
+            socket.join('discover');
+        });
+
         socket.on('leave_event', (eventId: string) => {
             socket.leave(`event_${eventId}`);
         });

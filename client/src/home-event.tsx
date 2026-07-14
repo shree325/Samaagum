@@ -57,7 +57,8 @@ function EventDetail({ ev, st, go }) {
     }
   }
 
-  const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+  const [liveEvent, setLiveEvent] = useState(e);
+  e = liveEvent; // Override local 'e' so the rest of the component is reactive
   const UUID_RE_H = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   useEffect(() => {
     if (!e.id || !UUID_RE_H.test(e.id)) return;
@@ -83,6 +84,34 @@ function EventDetail({ ev, st, go }) {
   const isWaitlisted = (waitlisted ? waitlisted.has(e.id) : false) || (st.joinedEvents?.some(je => je.id === e.id && je.bookingStatus === 'waitlisted') ?? false);
   const isSoldOut = e.going >= (e.cap || 9999) || e.id === "ev-feat";
 
+  const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+  const fetchEventData = () => {
+    if (!liveEvent.id || liveEvent.id === "ev-feat") return;
+    const tok = localStorage.getItem('token');
+    fetch(`${apiBase}/api/events/${liveEvent.id}`, {
+      headers: tok ? { 'Authorization': `Bearer ${tok}` } : {}
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.data?.event) {
+          const srv = data.data.event;
+          setLiveEvent(prev => ({
+            ...prev,
+            going: srv.going ?? prev.going,
+            cap: srv.cap ?? prev.cap,
+            title: srv.title ?? prev.title,
+            description: srv.description ?? prev.description,
+            venue: srv.location_type === 'online' ? 'Online' : (typeof srv.venue === 'object' && srv.venue !== null ? (srv.venue.name || srv.venue.address) : 'Venue TBD')
+          }));
+        }
+      })
+      .catch(() => {});
+  };
+
+  React.useEffect(() => {
+    fetchEventData();
+  }, [e.id]);
+
   const chatSettings = st.chatSettings || {
     allowSiteMessaging: true,
     allowDirectMessaging: true,
@@ -105,11 +134,45 @@ function EventDetail({ ev, st, go }) {
   const [tier, setTier] = useState(tiers[0].id);
   const [qty, setQty] = useState(1);
   const sel = tiers.find(t => t.id === tier);
-  const pct = Math.round((e.going / (e.cap || e.going)) * 100);
+  const evtCap = liveEvent.cap || e.cap;
+  const evtGoing = liveEvent.going || e.going;
+  const pct = evtCap ? Math.min(100, Math.round((evtGoing / evtCap) * 100)) : 0;
 
-  const attendees = e.attendees || ["Dev K", "Mira S", "Leo P", "Zoya N", "Sam K", "Riya T"];
+  const attendees = liveEvent.attendees || ["Dev K", "Mira S", "Leo P", "Zoya N", "Sam K", "Riya T"];
 
   const [showShareSheet, setShowShareSheet] = useState(false);
+  const [localStatus, setLocalStatus] = useState(e.status || "published");
+
+  React.useEffect(() => {
+    if (window.io && liveEvent.id && liveEvent.id !== "ev-feat") {
+      const socketUrl = apiBase ? `${apiBase}/groups` : "/groups";
+      const socket = window.io(socketUrl, { transports: ['websocket'] });
+      
+      socket.emit('join_event', liveEvent.id);
+      
+      socket.on('event_completed', (payload) => {
+        if (payload.eventId !== liveEvent.id) return;
+        setLocalStatus('completed');
+      });
+
+      socket.on('capacity_updated', (payload) => {
+        if (payload.eventId === liveEvent.id) fetchEventData();
+      });
+
+      socket.on('events_updated', (payload) => {
+        if (payload.eventId === liveEvent.id) fetchEventData();
+      });
+
+      socket.on('dashboard_updated', (payload) => {
+        if (payload.eventId === liveEvent.id) fetchEventData();
+      });
+
+      return () => {
+        socket.emit('leave_event', liveEvent.id);
+        socket.disconnect();
+      };
+    }
+  }, [liveEvent.id]);
   
   if (e.id === "ev-feat") {
     // If it's the featured placeholder and doesn't have an ID, sharing might not work well
@@ -122,7 +185,7 @@ function EventDetail({ ev, st, go }) {
           <Grain /><div className="scrim" />
           <button className="detail-back" onClick={() => { if (e.id === "new") { go("create-event"); } else { go("back"); } }}><I.arrowL />Back</button>
           <div className="detail-actions-top">
-            <button className={`cbtn ${isSaved ? "on" : ""}`} onClick={() => toggleWishlist(e.id)}>{isSaved ? <I.bookmarkF /> : <I.bookmark />}</button>
+            <button className={`cbtn ${isSaved ? "on" : ""}`} onClick={() => toggleWishlist(e.id, e.wishlistCount)}>{isSaved ? <I.bookmarkF /> : <I.bookmark />}</button>
             <div style={{ position: "relative" }}>
               <button className="hbtn hbtn--ghost hbtn--sm" style={{ background: "rgba(0,0,0,0.3)", backdropFilter: "blur(10px)", color: "#fff", border: "1px solid rgba(255,255,255,0.2)" }} onClick={() => setShowShareSheet(!showShareSheet)}><I.share /> Share</button>
               {showShareSheet && (
@@ -318,6 +381,11 @@ function EventDetail({ ev, st, go }) {
                   <div className="att" style={{ paddingRight: 14 }}><div className="av" style={{ width: 28, height: 28, fontSize: 11, background: "var(--surface-2)", color: "var(--ink-2)" }}>+{Math.max(0, e.going - attendees.length)}</div><span className="nm">more</span></div>
                 </div>
               </div>
+              {isWaitlisted && localStatus !== 'completed' && (
+                <div style={{ marginTop: 20 }}>
+                  <Waitlist ev={e} st={st} go={go} />
+                </div>
+              )}
             </div>
 
             {/* Ticket sidebar */}
@@ -352,29 +420,36 @@ function EventDetail({ ev, st, go }) {
                       <button onClick={() => setQty(q => Math.min(6, q + 1))}>+</button>
                     </div>
                   </div>
-                   {isReg || e.bookingStatus === 'confirmed' || e.bookingStatus === 'pending_payment' ? (
-                    <button className="hbtn hbtn--ghost hbtn--block" style={{ color: "var(--accent-2)" }} onClick={() => go("events")}>
-                      <I.check />You're registered (View Ticket)
+                   {localStatus === 'completed' && (
+                <div style={{ padding: 12, background: "rgba(34, 197, 94, 0.1)", color: "var(--accent-1)", border: "1px solid rgba(34, 197, 94, 0.2)", borderRadius: 8, marginTop: 16, textAlign: "center", fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  <I.cal /> EVENT COMPLETED
+                </div>
+              )}
+              {localStatus !== 'completed' && (
+                isReg || e.bookingStatus === 'confirmed' || e.bookingStatus === 'pending_payment' ? (
+                  <button className="hbtn hbtn--ghost hbtn--block" style={{ color: "var(--accent-2)" }} onClick={() => go("events")}>
+                    <I.check />You're registered (View Ticket)
+                  </button>
+                ) : e.bookingStatus === 'pending_approval' ? (
+                  <button className="hbtn hbtn--soft hbtn--block" disabled>
+                    Pending Approval
+                  </button>
+                ) : isSoldOut ? (
+                  isWaitlisted ? (
+                    <button className="hbtn hbtn--soft hbtn--block" style={{ color: "var(--accent-2)" }} onClick={() => go("waitlist", e)}>
+                      <I.users /> View Waitlist Status
                     </button>
-                  ) : e.bookingStatus === 'pending_approval' ? (
-                    <button className="hbtn hbtn--soft hbtn--block" disabled>
-                      Pending Approval
-                    </button>
-                  ) : isSoldOut ? (
-                    isWaitlisted ? (
-                      <button className="hbtn hbtn--soft hbtn--block" style={{ color: "var(--accent-2)" }} onClick={() => go("waitlist", e)}>
-                        <I.users /> View Waitlist Status
-                      </button>
-                    ) : (
-                      <button className="hbtn hbtn--primary hbtn--block" onClick={() => { st.toggleWaitlist(e.id); go("waitlist", e); }}>
-                        Join Waitlist
-                      </button>
-                    )
                   ) : (
-                    <button className="hbtn hbtn--primary hbtn--block" onClick={() => { register(e.id); go("events"); }}>
-                      {e.type === "Free" ? "Request to join" : `Get ${qty > 1 ? qty + " tickets" : "ticket"}`}
+                    <button className="hbtn hbtn--primary hbtn--block" onClick={() => { st.toggleWaitlist(e.id); go("waitlist", e); }}>
+                      Join Waitlist
                     </button>
-                  )}
+                  )
+                ) : (
+                  <button className="hbtn hbtn--primary hbtn--block" onClick={() => { register(e.id); go("events"); }}>
+                    {e.type === "Free" ? "Request to join" : `Get ${qty > 1 ? qty + " tickets" : "ticket"}`}
+                  </button>
+                )
+              )}
                   <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center", marginTop: 11, fontSize: 12, color: "var(--ink-3)" }}>
                     <I.check style={{ width: 13, height: 13, color: "#1f9d57" }} /> {isSoldOut ? "Waitlist claim window: 15 mins" : e.type === "Free" ? "Approval-based · free" : "Secure checkout · instant ticket"}
                   </div>

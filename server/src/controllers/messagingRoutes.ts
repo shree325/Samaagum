@@ -1001,7 +1001,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             const data = JSON.parse(l.provider_ref);
             const bStatus = bookingStatusMap.get(`${data.eventId}:${data.requesterId}`);
             let actedVal: string | null = null;
-            if (bStatus === 'confirmed') actedVal = 'accepted';
+            if (bStatus === 'confirmed' || bStatus === 'pending_payment') actedVal = 'accepted';
             else if (bStatus === 'cancelled') actedVal = 'declined';
 
             return {
@@ -1122,6 +1122,34 @@ export async function messagingRoutes(fastify: FastifyInstance) {
               time: timeStr,
               text: `Your request to join the event was declined`,
               action: null
+            };
+          }
+        }
+
+        if (l.template_key === 'event_updated' && l.provider_ref) {
+          try {
+            const data = JSON.parse(l.provider_ref);
+            return {
+              id: l.id,
+              who: data.eventTitle || "Event",
+              type: "event",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `The event <b>${data.eventTitle}</b> has been updated.${data.changedFields ? ` Changes: ${data.changedFields}` : ''}`,
+              action: "view_event",
+              eventId: data.eventId
+            };
+          } catch (e) {
+            return {
+              id: l.id,
+              who: "Event",
+              type: "event",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `An event you are attending has been updated.`,
+              action: "view_event"
             };
           }
         }
@@ -1354,6 +1382,111 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           }
         }
 
+        if (l.template_key === 'event_waitlist_join' && l.provider_ref) {
+          try {
+            const data = JSON.parse(l.provider_ref);
+            return {
+              id: l.id,
+              who: data.requesterName || "A user",
+              type: "registration",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `<b>${data.requesterName || "A user"}</b> joined the waitlist for <b>${data.eventTitle || "your event"}</b>`,
+              action: "view_event",
+              eventId: data.eventId
+            };
+          } catch (e) {
+            return {
+              id: l.id,
+              who: "Someone",
+              type: "registration",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `A user joined the waitlist for your event`,
+              action: null
+            };
+          }
+        }
+
+        if (l.template_key === 'event_waitlist_promoted' && l.provider_ref) {
+          try {
+            const data = JSON.parse(l.provider_ref);
+            return {
+              id: l.id,
+              who: data.eventTitle || "Event",
+              type: "event",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `You have been moved from the waitlist! Your ticket for <b>${data.eventTitle || "the event"}</b> is now confirmed. 🎉`,
+              action: "view_event",
+              eventId: data.eventId
+            };
+          } catch (e) {
+            return { id: l.id, who: "Event", type: "event", unread: l.status !== 'read', day: dayLabel, time: timeStr, text: `Your waitlist spot has been confirmed!`, action: null };
+          }
+        }
+
+        if (l.template_key === 'event_waitlist_to_pending' && l.provider_ref) {
+          try {
+            const data = JSON.parse(l.provider_ref);
+            return {
+              id: l.id,
+              who: data.eventTitle || "Event",
+              type: "registration",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `A seat opened up for <b>${data.eventTitle || "an event"}</b>. Your join request is now pending host approval.`,
+              action: "view_event",
+              eventId: data.eventId
+            };
+          } catch (e) {
+            return { id: l.id, who: "Event", type: "registration", unread: l.status !== 'read', day: dayLabel, time: timeStr, text: `A seat opened up — your request is now pending host approval.`, action: null };
+          }
+        }
+
+        if (l.template_key === 'event_waitlist_needs_approval' && l.provider_ref) {
+          try {
+            const data = JSON.parse(l.provider_ref);
+            return {
+              id: l.id,
+              who: data.eventTitle || "Event",
+              type: "registration",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `A waitlisted user now has a spot for <b>${data.eventTitle || "your event"}</b>. Review pending requests.`,
+              action: "view_event",
+              eventId: data.eventId
+            };
+          } catch (e) {
+            return { id: l.id, who: "Event", type: "registration", unread: l.status !== 'read', day: dayLabel, time: timeStr, text: `A waitlisted user now needs your approval.`, action: null };
+          }
+        }
+
+
+        if (l.template_key === 'event_waitlist_closed' && l.provider_ref) {
+          try {
+            const data = JSON.parse(l.provider_ref);
+            return {
+              id: l.id,
+              who: data.eventTitle || "Event",
+              type: "system",
+              unread: l.status !== 'read',
+              day: dayLabel,
+              time: timeStr,
+              text: `The waitlist for <b>${data.eventTitle || "an event"}</b> has been closed by the host. You have been removed from the waitlist.`,
+              action: "view_event",
+              eventId: data.eventId
+            };
+          } catch (e) {
+            return { id: l.id, who: "Event", type: "system", unread: l.status !== 'read', day: dayLabel, time: timeStr, text: `A waitlist you were on has been closed.`, action: null };
+          }
+        }
+
         return {
           id: l.id,
           type: "system",
@@ -1482,8 +1615,12 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       const isHostOrCoHost = await EventService.verifyEventHostOrCoHost(userId, eventId);
 
       // Check registration status
-      const isActuallyOpen = event.registration_status === 'OPEN' || 
+      let isActuallyOpen = event.registration_status === 'OPEN' || 
         (event.registration_status === 'SCHEDULED' && event.registration_opens_at && new Date() >= event.registration_opens_at);
+
+      if (isActuallyOpen && event.registration_closes_at && new Date() >= event.registration_closes_at) {
+        isActuallyOpen = false;
+      }
 
       if (!isActuallyOpen && !isHostOrCoHost) {
         return reply.status(403).send({ success: false, message: 'Registration is currently closed for this event.' });
@@ -1532,17 +1669,18 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         where: {
           event_id: eventId,
           booker_user_id: userId,
-          status: { in: ['confirmed', 'pending_approval', 'pending_payment'] }
+          status: { in: ['confirmed', 'pending_approval', 'pending_payment', 'waitlisted'] }
         }
       });
 
       // Check event capacity if this is a new booking request
       let isWaitlisted = false;
       if (!existingBooking && event.capacity_total && event.capacity_total > 0) {
+        // Count both confirmed AND pending_approval as occupying a capacity slot
         const activeCount = await prisma.bookings.count({
           where: {
             event_id: eventId,
-            status: { in: ['confirmed', 'pending_approval'] }
+            status: { in: ['confirmed', 'pending_payment'] }
           }
         });
         if (activeCount >= event.capacity_total) {
@@ -1554,6 +1692,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           }
         }
       }
+
 
       if (existingBooking) {
         if (existingBooking.status === 'pending_approval' && !approvalRequired) {
@@ -1608,7 +1747,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         }
         return reply.status(400).send({
           success: false,
-          message: existingBooking.status === 'confirmed' ? 'Already registered for this event.' : 'Join request is already pending approval.'
+          message: existingBooking.status === 'confirmed' ? 'Already registered for this event.' : (existingBooking.status === 'waitlisted' ? 'Already on the waitlist for this event.' : 'Join request is already pending approval.')
         });
       }
 
@@ -1659,15 +1798,24 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Get or create a ticket type
-      const { ticketTypeId } = (request.body as any) || {};
-      let ticketType = null;
-      if (ticketTypeId) {
-        ticketType = await prisma.ticket_types.findFirst({
-          where: { id: ticketTypeId, event_id: eventId }
-        });
-      }
-      if (!ticketType) {
+const answers: any = request.body || {};
+
+let ticketType: any = null;
+
+if (answers.ticketTypeId) {
+  ticketType = await prisma.ticket_types.findUnique({
+    where: { id: answers.ticketTypeId }
+  });
+
+  if (!ticketType || ticketType.event_id !== eventId) {
+    return reply.status(400).send({
+      success: false,
+      message: 'Invalid ticket type'
+    });
+  }
+} else {
+  // create new ticket type
+}
         ticketType = await prisma.ticket_types.findFirst({
           where: { event_id: eventId }
         });
@@ -1685,7 +1833,21 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const answers = request.body || {};
+      if (ticketType && ticketType.capacity !== null && ticketType.capacity > 0 && !isWaitlisted) {
+        const aggr = await prisma.booking_line_items.aggregate({
+          _sum: { quantity: true },
+          where: {
+            ticket_type_id: ticketType.id,
+            bookings: { status: { in: ['confirmed', 'pending_payment'] } }
+          }
+        });
+        const activeCount = aggr._sum.quantity || 0;
+        const requestedQty = answers.qty ? Number(answers.qty) : 1;
+        if (activeCount + requestedQty > ticketType.capacity) {
+          return reply.status(400).send({ success: false, message: 'This ticket type is sold out or does not have enough capacity' });
+        }
+      }
+
       const isCash = event.cash_enabled === true;
       const initialStatus = isWaitlisted 
         ? 'waitlisted' 
@@ -1695,6 +1857,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         : ((approvalRequired || isCash) ? 'reserved' : 'confirmed');
       const paymentMethod = isCash ? 'cash' : 'free';
       const ticketPriceMinor = ticketType?.price_amount_minor ? Number(ticketType.price_amount_minor) : 0;
+      const requestedQty = answers.qty ? Number(answers.qty) : 1;
 
       // Remove from wishlist if they join
       await EventService.removeWishlist(eventId, userId).catch(err => console.error('Failed to auto-remove from wishlist', err));
@@ -1729,7 +1892,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             booker_user_id: userId,
             status: initialStatus as any,
             payment_method: paymentMethod,
-            total_amount_minor: ticketPriceMinor,
+            total_amount_minor: ticketPriceMinor * requestedQty,
             total_currency: 'INR'
           }
         });
@@ -1739,7 +1902,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             tenant_id: event.tenant_id,
             booking_id: bk.id,
             ticket_type_id: ticketType.id,
-            quantity: 1,
+            quantity: requestedQty,
             unit_price_amount_minor: ticketPriceMinor,
             unit_price_currency: 'INR'
           }
@@ -1794,7 +1957,65 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         await EventInvitationService.consumeToken(inviteToken, userId, 'join');
       }
 
-      if (initialStatus === 'pending_approval') {
+      if (initialStatus === 'waitlisted') {
+        const { EventService } = require('../services/EventService');
+        const ws = await EventService.getWaitlistStatus(eventId, userId);
+
+        let ownerUserId = null;
+        const entityRow = await prisma.entities.findUnique({
+          where: { id: event.hosted_by_entity_id }
+        });
+        if (entityRow) ownerUserId = entityRow.user_id;
+        if (!ownerUserId) {
+          const ownerRole = await prisma.roles.findFirst({ where: { key: 'group_owner' } });
+          if (ownerRole) {
+            const assignment = await prisma.role_assignments.findFirst({
+              where: { scope_entity_id: event.hosted_by_entity_id, role_id: ownerRole.id }
+            });
+            if (assignment) ownerUserId = assignment.user_id;
+          }
+        }
+        if (!ownerUserId) ownerUserId = userId;
+
+        const notif = await prisma.notification_log.create({
+          data: {
+            tenant_id: event.tenant_id,
+            user_id: ownerUserId,
+            channel: 'app',
+            template_key: 'event_waitlist_join',
+            status: 'queued',
+            provider_ref: JSON.stringify({
+              eventId,
+              eventTitle: event.title,
+              requesterId: userId,
+              requesterName
+            })
+          }
+        });
+
+        const chatNamespace = (fastify as any).io?.of('/chat');
+        if (chatNamespace) {
+          chatNamespace.to(`user:${ownerUserId}`).emit('group.notification', {
+            id: notif.id,
+            type: 'registration',
+            text: `<b>${requesterName}</b> joined the waitlist for <b>${event.title}</b>`,
+            eventId: eventId
+          });
+        }
+
+        const groupsNamespace = (fastify as any).io?.of('/groups');
+        if (groupsNamespace) {
+          groupsNamespace.to(`event_${eventId}`).emit('waitlist_updated', { eventId });
+        }
+
+        return reply.send({ 
+          success: true, 
+          status: 'waitlisted', 
+          position: ws.position, 
+          totalWaiting: ws.totalWaiting, 
+          message: 'Joined waitlist successfully.' 
+        });
+      } else if (initialStatus === 'pending_approval') {
         let ownerUserId = null;
         const entityRow = await prisma.entities.findUnique({
           where: { id: event.hosted_by_entity_id }
@@ -2018,6 +2239,10 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         const groupsNamespace = (fastify as any).io?.of('/groups');
         if (groupsNamespace) {
           groupsNamespace.to(`event_${eventId}`).emit('dashboard_updated', { action: 'accept', eventId });
+          const { TicketRealtimeService } = require('../services/TicketRealtimeService');
+          const { MyEventsRealtimeService } = require('../services/MyEventsRealtimeService');
+          TicketRealtimeService.syncUser(requesterId, eventId).catch(() => {});
+          MyEventsRealtimeService.syncUser(requesterId).catch(() => {});
         }
 
         try {
@@ -2094,6 +2319,10 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         const groupsNamespace = (fastify as any).io?.of('/groups');
         if (groupsNamespace) {
           groupsNamespace.to(`event_${eventId}`).emit('dashboard_updated', { action: 'decline', eventId });
+          const { TicketRealtimeService } = require('../services/TicketRealtimeService');
+          const { MyEventsRealtimeService } = require('../services/MyEventsRealtimeService');
+          TicketRealtimeService.syncUser(requesterId, eventId).catch(() => {});
+          MyEventsRealtimeService.syncUser(requesterId).catch(() => {});
         }
 
         return reply.send({ success: true, action: 'declined' });

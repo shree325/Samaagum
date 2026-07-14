@@ -40,7 +40,7 @@ export function Mark({ size = 28 }) {
     </svg>
   );
 }
-export function Wordmark({ size = 20, color, mark = true }) {
+export function Wordmark({ size = 20, color, mark = true }: { size?: number; color?: string; mark?: boolean } = {}) {
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
       {mark && <Mark size={size * 1.35} />}

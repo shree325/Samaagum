@@ -1319,6 +1319,59 @@ export class GroupService {
         });
 
         await this.groupMembershipsRepo.deleteMembership(groupId, memberId);
+
+        // Cancel bookings and tickets for all events hosted by this group for the removed member
+        try {
+            const groupEvents = await prisma.events.findMany({
+                where: { hosted_by_entity_id: groupId }
+            });
+            const eventIds = groupEvents.map(e => e.id);
+
+            if (eventIds.length > 0) {
+                // Remove targetUserId from all event team assignments for these events
+                await prisma.event_team_assignments.deleteMany({
+                    where: { event_id: { in: eventIds }, user_id: memberId }
+                });
+
+                // Find bookings for these events
+                const bookings = await prisma.bookings.findMany({
+                    where: { event_id: { in: eventIds }, booker_user_id: memberId }
+                });
+
+                const { TicketRealtimeService } = require('./TicketRealtimeService');
+                for (const b of bookings) {
+                    await prisma.bookings.update({
+                        where: { id: b.id },
+                        data: { status: 'cancelled' }
+                    });
+                    const lineItems = await prisma.booking_line_items.findMany({ where: { booking_id: b.id } });
+                    const liIds = lineItems.map(li => li.id);
+                    if (liIds.length > 0) {
+                        await prisma.tickets.updateMany({ where: { line_item_id: { in: liIds } }, data: { status: 'cancelled' } });
+                    }
+                    // Sync tickets for this event
+                    TicketRealtimeService.syncUser(memberId, b.event_id).catch(() => {});
+                    TicketRealtimeService.syncScanner(b.event_id).catch(() => {});
+                }
+            }
+
+            // Sync user's global events list
+            const { MyEventsRealtimeService } = require('./MyEventsRealtimeService');
+            MyEventsRealtimeService.syncUser(memberId).catch(() => {});
+
+            // Send push notification/toast
+            const group = await prisma.entities.findUnique({ where: { id: groupId } });
+            const chatNamespace = (global as any).fastify?.io?.of('/chat');
+            if (chatNamespace) {
+                chatNamespace.to(`user:${memberId}`).emit('group.notification', {
+                    type: 'system',
+                    text: `You have been removed from the group <b>${group?.name || 'group'}</b>`,
+                    groupId: groupId
+                });
+            }
+        } catch (syncErr) {
+            console.error('Error synchronizing events/tickets after group membership removal:', syncErr);
+        }
     }
 
     static async leaveGroup(groupId: string, userId: string) {

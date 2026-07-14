@@ -28,12 +28,23 @@ export const EventCard = React.memo(function EventCard({ ev, onOpen, wishlisted,
   const venueStr = ev.online ? 'Online' : (typeof ev.venue === 'object' && ev.venue !== null ? (ev.venue.name || ev.venue.address || 'Venue TBD') : (ev.venue || 'Venue TBD'));
   const coverBg = ev.cover && (ev.cover.startsWith("linear-gradient") || ev.cover.startsWith("radial-gradient") || ev.cover.startsWith("var(")) ? ev.cover : (ev.cover ? `url(${ev.cover}) center/cover no-repeat` : 'var(--dusk)');
 
+  let regStatus = ev.registrationStatus || ev.registration_status || "OPEN";
+  if (regStatus === "SCHEDULED" && (ev.registrationOpensAt || ev.registration_opens_at)) {
+    const o = new Date(ev.registrationOpensAt || ev.registration_opens_at);
+    if (new Date() >= o) regStatus = "OPEN";
+  }
+  if (regStatus !== "CLOSED" && (ev.registrationClosesAt || ev.registration_closes_at)) {
+    const c = new Date(ev.registrationClosesAt || ev.registration_closes_at);
+    if (new Date() >= c) regStatus = "CLOSED";
+  }
+  const isRegistrationOpen = regStatus === "OPEN";
+
   return (
     <div className="ecard rise" onClick={()=>onOpen(ev)}>
       <div className="cover" style={{ background: coverBg }}>
         <Grain/>
         <DateBadge month={month} day={day} />
-        <WishlistBtn wishlisted={wishlisted} count={wishlistCount} onClick={onWishlist} />
+        {!registered && !isRegistrationOpen && <WishlistBtn wishlisted={wishlisted} count={wishlistCount} onClick={onWishlist} />}
         <span className="cat">{ev.online ? "Online" : ev.cat}</span>
       </div>
       <div className="body">
@@ -60,15 +71,45 @@ export const EventCard = React.memo(function EventCard({ ev, onOpen, wishlisted,
 });
 
 /* ---------------- Featured (hero) ---------------- */
-export const FeatureCard = React.memo(function FeatureCard({ ev, onOpen, wishlisted, wishlistCount, onWishlist }: any) {
+export const FeatureCard = React.memo(function FeatureCard({ ev, onOpen, wishlisted, wishlistCount, onWishlist, registered }: any) {
   const dateStr = ev.date || (ev.starts_at ? new Date(ev.starts_at).toLocaleDateString() : 'Date TBD');
   const timeStr = ev.time || (ev.starts_at ? new Date(ev.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Time TBD');
   const venueStr = ev.online ? 'Online' : (typeof ev.venue === 'object' && ev.venue !== null ? (ev.venue.name || ev.venue.address || 'Venue TBD') : (ev.venue || 'Venue TBD'));
   const coverBg = ev.cover && (ev.cover.startsWith("linear-gradient") || ev.cover.startsWith("radial-gradient") || ev.cover.startsWith("var(")) ? ev.cover : (ev.cover ? `url(${ev.cover}) center/cover no-repeat` : 'var(--sunset)');
 
-  const regStatus = ev.registrationStatus || ev.registration_status || "OPEN";
+  let regStatus = ev.registrationStatus || ev.registration_status || "OPEN";
+  const [refreshTrigger, setRefreshTrigger] = React.useState(0);
+  
+  React.useEffect(() => {
+    if (regStatus === "SCHEDULED" && (ev.registrationOpensAt || ev.registration_opens_at)) {
+      const o = new Date(ev.registrationOpensAt || ev.registration_opens_at).getTime();
+      const ms = o - Date.now();
+      if (ms > 0 && ms <= 2147483647) {
+        const timer = setTimeout(() => setRefreshTrigger(prev => prev + 1), ms);
+        return () => clearTimeout(timer);
+      }
+    } else if (regStatus === "OPEN" && (ev.registrationClosesAt || ev.registration_closes_at)) {
+      const c = new Date(ev.registrationClosesAt || ev.registration_closes_at).getTime();
+      const ms = c - Date.now();
+      if (ms > 0 && ms <= 2147483647) {
+        const timer = setTimeout(() => setRefreshTrigger(prev => prev + 1), ms);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [regStatus, ev.registrationOpensAt, ev.registration_opens_at, ev.registrationClosesAt, ev.registration_closes_at]);
+
+  if (regStatus === "SCHEDULED" && (ev.registrationOpensAt || ev.registration_opens_at)) {
+    const o = new Date(ev.registrationOpensAt || ev.registration_opens_at);
+    if (new Date() >= o) regStatus = "OPEN";
+  }
+  if (regStatus !== "CLOSED" && (ev.registrationClosesAt || ev.registration_closes_at)) {
+    const c = new Date(ev.registrationClosesAt || ev.registration_closes_at);
+    if (new Date() >= c) regStatus = "CLOSED";
+  }
   const isClosed = regStatus === "CLOSED";
   const isScheduled = regStatus === "SCHEDULED";
+
+  const isRegistrationOpen = regStatus === "OPEN";
 
   return (
     <div className="feature rise" onClick={()=>onOpen(ev)}>
@@ -79,7 +120,7 @@ export const FeatureCard = React.memo(function FeatureCard({ ev, onOpen, wishlis
          ev.live ? <span className="live"><span className="pulse"/>Selling fast</span> : null}
         <span className="ftag">{ev.cat}</span>
         <div style={{ position: 'absolute', top: 16, right: 16 }}>
-          <WishlistBtn wishlisted={wishlisted} count={wishlistCount} onClick={onWishlist} Cls="save dark" />
+          {!registered && !isRegistrationOpen && <WishlistBtn wishlisted={wishlisted} count={wishlistCount} onClick={onWishlist} Cls="save dark" />}
         </div>
       </div>
       <div className="fbody">

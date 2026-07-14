@@ -257,7 +257,7 @@ export function IOSKeyboard({ dark = false }) {
     ret: <svg width="20" height="14" viewBox="0 0 20 14"><path d="M18 1v6H4m0 0l4-4M4 7l4 4" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   };
 
-  const key = (content, { w, flex, ret, fs = 25, k } = {}) => (
+  const key = (content: any, { w, flex, ret, fs = 25, k }: { w?: number | string; flex?: boolean; ret?: boolean; fs?: number; k?: string } = {}) => (
     <div key={k} style={{
       height: 42, borderRadius: 8.5,
       flex: flex ? 1 : undefined, width: w, minWidth: 0,

@@ -64,7 +64,7 @@ function normalizeJoinedEvent(e) {
     ...e,
     ev: e.title || e.ev,
     cover: e.cover || meta.cover || "",
-    tier: firstTicket?.name || "General",
+    tier: e.bookedTicketName || firstTicket?.name || "General",
     paid: (e.registration_mode === 'free' || e.registration_mode === 'free_rsvp')
       ? 'Free'
       : (firstTicket?.price_amount_minor != null ? `₹${(firstTicket.price_amount_minor / 100).toFixed(0)}` : '—'),
@@ -126,6 +126,7 @@ function dropSupersededLocalTickets(tickets, joinedEvents) {
 
 export function MyTickets({ st, go }) {
   const [tab, setTab] = useState("upcoming");
+  const [waitlistPositions, setWaitlistPositions] = useState({});
   const joinedEvents = st.joinedEvents || [];
   const tickets = dropSupersededLocalTickets(st.myTickets || [], joinedEvents);
   const getVenueStr = (v) => {
@@ -134,6 +135,109 @@ export function MyTickets({ st, go }) {
     }
     return v || 'Venue TBD';
   };
+
+  useEffect(() => {
+    const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    // Fetch positions for waitlisted events
+    const waitlistIds = Array.from(st.waitlisted || []);
+    for (const e of joinedEvents) {
+      if (e.bookingStatus === 'waitlisted' && !waitlistIds.includes(e.id)) {
+        waitlistIds.push(e.id);
+      }
+    }
+
+    waitlistIds.forEach(id => {
+      fetch(`${apiBase}/api/events/${id}/waitlist/status`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      .then(r => r.json())
+      .then(res => {
+        if (res.success && res.data) {
+          setWaitlistPositions(prev => ({
+            ...prev,
+            [id]: res.data
+          }));
+        }
+      })
+      .catch(() => {});
+    });
+
+    if (window.io) {
+      const socketUrl = apiBase ? `${apiBase}/groups` : "/groups";
+      const socket = window.io(socketUrl, { transports: ['websocket'] });
+      
+      waitlistIds.forEach(id => {
+        socket.emit('join_event', id);
+      });
+
+      let userId = null;
+      const token = localStorage.getItem('token');
+      if (token) {
+          try {
+              const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+              userId = payload.id;
+          } catch (err) {}
+      }
+      if (userId) {
+          socket.emit('join_user', userId);
+      }
+
+      socket.on('ticket_updated', () => {
+        if (st.fetchJoinedEvents) st.fetchJoinedEvents();
+      });
+
+      socket.on('my_events_updated', () => {
+        if (st.fetchJoinedEvents) st.fetchJoinedEvents();
+      });
+
+      socket.on('events_updated', () => {
+        if (st.fetchJoinedEvents) st.fetchJoinedEvents();
+      });
+
+      socket.on('waitlist_positions_updated', (payload) => {
+        const myUserId = window.ME?.id;
+        if (myUserId && payload.positions) {
+          const myPos = payload.positions.find(p => p.userId === myUserId);
+          if (myPos) {
+            setWaitlistPositions(prev => ({
+              ...prev,
+              [payload.eventId]: {
+                position: myPos.position,
+                totalWaiting: payload.totalWaiting,
+                isWaitlisted: true
+              }
+            }));
+          } else if (payload.totalWaiting === 0) {
+            // No one left — remove this event's position entry
+            setWaitlistPositions(prev => {
+              const next = { ...prev };
+              delete next[payload.eventId];
+              return next;
+            });
+          }
+        }
+      });
+
+      socket.on('waitlist_closed', (payload) => {
+        // Remove the closed event from waitlist positions immediately
+        setWaitlistPositions(prev => {
+          const next = { ...prev };
+          delete next[payload.eventId];
+          return next;
+        });
+        // Trigger a joinedEvents refetch globally so the waitlist tab empties live
+        window.dispatchEvent(new CustomEvent('samaagum:refreshJoinedEvents'));
+      });
+
+      return () => {
+        waitlistIds.forEach(id => socket.emit('leave_event', id));
+        socket.disconnect();
+      };
+    }
+  }, [st.waitlisted, joinedEvents.length]);
 
   const normalizeJoinedEvent = (e) => {
     const startsAt = e.starts_at ? new Date(e.starts_at) : null;
@@ -269,7 +373,13 @@ export function MyTickets({ st, go }) {
   }
   const usedTicketEvents = (st.myTickets || []).filter((t) => t.status === 'used');
   for (const t of usedTicketEvents) {
-    const alreadyIn = pastList.some((p) => p.eventId === t.eventId || p.id === t.eventId);
+    const allProcessed = [...archivedList, ...pastList];
+    const alreadyIn = allProcessed.some((u) => 
+      (t.eventId && u.eventId === t.eventId) || 
+      (t.eventId && u.id === t.eventId) || 
+      (t.id && u.id === t.id) ||
+      (t.ev && u.ev === t.ev)
+    );
     if (!alreadyIn) pastList.push(t);
   }
 
@@ -303,7 +413,13 @@ export function MyTickets({ st, go }) {
     }
   }
   for (const t of (st.myTickets || []).filter((t) => t.status !== 'used' && t.status !== 'voided')) {
-    const alreadyIn = upcoming.some((u) => u.eventId === t.eventId || u.id === t.eventId || u.id === t.id);
+    const allProcessed = [...archivedList, ...pastList, ...pending, ...waitlistedEvents, ...upcoming];
+    const alreadyIn = allProcessed.some((u) => 
+      (t.eventId && u.eventId === t.eventId) || 
+      (t.eventId && u.id === t.eventId) || 
+      (t.id && u.id === t.id) ||
+      (t.ev && u.ev === t.ev)
+    );
     if (!alreadyIn) upcoming.push(t);
   }
 
@@ -428,7 +544,9 @@ export function MyTickets({ st, go }) {
           </div>
         ) : tab === "waitlist" ? (
           <div className="wallet-grid">
-            {waitlistedEvents.map(e => (
+            {waitlistedEvents.map(e => {
+              const wPos = waitlistPositions[e.id];
+              return (
               <div key={e.id} className="tkt" onClick={() => go("waitlist", e)}>
                 <div className="tkt-cov" style={{ background: e.cover && (e.cover.startsWith("linear-gradient") || e.cover.startsWith("radial-gradient") || e.cover.startsWith("var(")) ? e.cover : `url(${e.cover}) center/cover no-repeat` }}>
                   <Grain />
@@ -437,20 +555,27 @@ export function MyTickets({ st, go }) {
                 </div>
                 <span className="perf l" /><span className="perf r" />
                 <div className="tkt-body">
-                  <div className="tkt-ttl">{e.title}</div>
+                  <div className="tkt-ttl">{e.title || e.ev}</div>
                   <div className="tkt-meta">
                     <span><I.cal style={{ width: 14, height: 14 }} /> {e.date} · {e.time}</span>
                     <span>{e.online ? <I.online style={{ width: 14, height: 14 }} /> : <I.pin style={{ width: 14, height: 14 }} />} {e.venue}</span>
                   </div>
                   <div className="tkt-foot">
-                    <span className="tkt-id">#{e.id}</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-2)", display: "flex", alignItems: "center", gap: 4 }}>
-                      View Queue <I.arrowR style={{ width: 14, height: 14 }} />
+                    <span className="tkt-id">#{e.id?.slice(0, 8)}</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {wPos && (
+                        <span style={{ fontSize: 12, fontWeight: 600, background: 'var(--surface-3)', padding: '2px 8px', borderRadius: 12, color: 'var(--text-2)' }}>
+                          Pos {wPos.position} / {wPos.totalWaiting}
+                        </span>
+                      )}
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-2)", display: "flex", alignItems: "center", gap: 4 }}>
+                        View Queue <I.arrowR style={{ width: 14, height: 14 }} />
+                      </span>
                     </span>
                   </div>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         ) : tab === "created" ? (
           <div className="wallet-grid">
