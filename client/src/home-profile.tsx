@@ -297,6 +297,19 @@ export function Profile({ st, go }) {
     return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
   });
 
+  useEffect(() => {
+    const handleTweakChange = (e: any) => {
+      if (e.detail && e.detail.dark !== undefined) {
+        setTheme(e.detail.dark ? 'dark' : 'light');
+      }
+    };
+    window.addEventListener('tweakchange', handleTweakChange);
+    setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+    return () => {
+      window.removeEventListener('tweakchange', handleTweakChange);
+    };
+  }, []);
+
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(nextTheme);
@@ -571,10 +584,7 @@ export function Profile({ st, go }) {
         <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", minHeight: "100vh" }}>
 
           {/* Top Navbar */}
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "16px 20px" }}>
-            <button onClick={toggleTheme} style={{ width: 44, height: 44, borderRadius: "50%", background: colors.navBg, backdropFilter: "blur(4px)", color: colors.textMain, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(0,0,0,0.05)", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
-              {isDark ? <I.sun style={{ width: 20, height: 20 }} /> : <I.moon style={{ width: 20, height: 20 }} />}
-            </button>
+          <div style={{ display: "flex", justifyContent: "flex-end", padding: "16px 20px" }}>
             <div style={{ display: "flex", gap: 12 }}>
               <button onClick={() => setIsEditing(true)} style={{ width: 44, height: 44, borderRadius: "50%", background: colors.navBg, backdropFilter: "blur(4px)", color: colors.textMain, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(0,0,0,0.05)", cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
                 <I.edit style={{ width: 18, height: 18 }} />

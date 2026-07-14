@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FEATURED, ME } from './home-data';
 import { Avatar, Grain } from './home-icons';
 import { Waitlist } from './home-waitlist';
@@ -9,7 +9,8 @@ import { I } from './home-icons';
    ============================================================ */
 
 function EventDetail({ ev, st, go }) {
-  let e = ev || FEATURED;
+  const [fetchedEvent, setFetchedEvent] = useState<any>(null);
+  let e = fetchedEvent || ev || FEATURED;
 
   // Normalize if it's a database event
   if (e && (e.starts_at || typeof e.venue === 'object')) {
@@ -40,9 +41,10 @@ function EventDetail({ ev, st, go }) {
       going: e.going || 0,
       cap: e.capacity_total || e.cap || 9999,
       price: priceVal,
-      host: typeof e.host === 'object' && e.host !== null ? (e.host.name || "Organizer") : (e.host || ME.name || "Organizer"),
-      hostBy: typeof e.host === 'object' && e.host !== null ? (e.host.name || "Organizer") : (e.hostBy || ME.name || "Organizer"),
+      host: typeof e.host === 'object' && e.host !== null ? (e.host.name || "Organizer") : (e.hostName || e.host || ME.name || "Organizer"),
+      hostBy: typeof e.host === 'object' && e.host !== null ? (e.host.name || "Organizer") : (e.hostName || e.hostBy || ME.name || "Organizer"),
       hostPhoto: typeof e.host === 'object' && e.host !== null ? (e.host.photo || "") : (e.hostPhoto || ""),
+      hostBanner: typeof e.host === 'object' && e.host !== null ? (e.host.banner || "") : (e.hostBanner || ""),
       attendees: e.attendees || []
     };
   } else if (e) {
@@ -57,6 +59,26 @@ function EventDetail({ ev, st, go }) {
 
   const [liveEvent, setLiveEvent] = useState(e);
   e = liveEvent; // Override local 'e' so the rest of the component is reactive
+  const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+  const UUID_RE_H = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  useEffect(() => {
+    if (!e.id || !UUID_RE_H.test(e.id)) return;
+    const tok = localStorage.getItem('token');
+    fetch(`${apiBase}/api/events/${e.id}`, {
+      headers: tok ? { 'Authorization': `Bearer ${tok}` } : {}
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.data?.event) {
+          setFetchedEvent({
+            ...data.data.event,
+            tickets: data.data.tickets || []
+          });
+        }
+      })
+      .catch(() => {});
+  }, [e.id]);
+
   const { wishlisted, toggleWishlist, registered, register, city, waitlisted } = st;
   const isSaved = wishlisted ? wishlisted.has(e.id) : false;
   const isReg = registered.has(e.id);
@@ -221,9 +243,19 @@ function EventDetail({ ev, st, go }) {
                 <span className="fchip" style={{ pointerEvents: "none" }}>{e.type}</span>
               </div>
               <div className="ttl">{e.title}</div>
-              <div className="ev-host">
+              <div 
+                className="ev-host"
+                style={{ cursor: e.hostUserId || e.hosted_by_entity_id || e.host_entity_id ? 'pointer' : 'default' }}
+                onClick={() => {
+                  if (e.hostType === 'group' && (e.hosted_by_entity_id || e.host_entity_id)) {
+                    go("group", { id: e.hosted_by_entity_id || e.host_entity_id });
+                  } else if (e.hostUserId) {
+                    go("public-profile", { id: e.hostUserId });
+                  }
+                }}
+              >
                 <Avatar name={e.hostBy || e.host} userId={e.hostUserId} img={e.hostPhoto} size={34} />
-                Hosted by <b>{e.host}</b>
+                Hosted by <b className="host-link">{e.host}</b>
               </div>
             </div>
           </div>
@@ -293,17 +325,42 @@ function EventDetail({ ev, st, go }) {
                 </div>
               </div>
 
-              {!e.online && (
+              {!e.online && e.venue && (
                 <div className="ev-block">
                   <h3>Location</h3>
                   <div className="ev-map">
-                    <div className="grid" />
-                    <div style={{ position: "absolute", left: "18%", top: 0, bottom: 0, width: 6, background: "var(--border)" }} />
-                    <div style={{ position: "absolute", top: "62%", left: 0, right: 0, height: 6, background: "var(--border)" }} />
-                    <div className="pin"><span className="ring" /><span className="dot" /></div>
+                    <iframe
+                      title="Event location map"
+                      width="100%"
+                      height="100%"
+                      style={{ border: 0, display: "block" }}
+                      src={`https://maps.google.com/maps?q=${encodeURIComponent(
+                        e.venue && e.city && e.venue.toLowerCase().includes(e.city.toLowerCase())
+                          ? e.venue
+                          : `${e.venue}${e.city ? ", " + e.city : ""}`
+                      )}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                      allowFullScreen
+                    />
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 13.5, color: "var(--ink-2)" }}>
-                    <I.pin style={{ color: "var(--accent-2)" }} /> {e.venue}, {e.city} <button className="hbtn hbtn--ghost hbtn--sm" style={{ marginLeft: "auto" }}>Get directions</button>
+                    <I.pin style={{ color: "var(--accent-2)" }} /> {
+                      e.venue && e.city && e.venue.toLowerCase().includes(e.city.toLowerCase())
+                        ? e.venue
+                        : `${e.venue}${e.city ? ", " + e.city : ""}`
+                    }
+                    <a 
+                      className="hbtn hbtn--ghost hbtn--sm" 
+                      style={{ marginLeft: "auto", textDecoration: "none" }}
+                      href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+                        e.venue && e.city && e.venue.toLowerCase().includes(e.city.toLowerCase())
+                          ? e.venue
+                          : `${e.venue}${e.city ? ", " + e.city : ""}`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Get directions
+                    </a>
                   </div>
                 </div>
               )}

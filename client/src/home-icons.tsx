@@ -148,12 +148,19 @@ Object.assign(I, { useProfileSync, Avatar });
 
 export function Avatar({ userId, name, size = 40, img, className = "", style = {} }: any) {
   const p = useProfileSync(userId, { name, img });
+  const isImage = p.img && (p.img.startsWith('data:') || p.img.startsWith('http') || p.img.startsWith('/') || p.img.startsWith('blob:'));
   
   return (
     <div className={`avatar av ${className}`} style={{
-      width: size, height: size, fontSize: size * 0.36,
-      background: p.img ? `url("${p.img}") center / cover no-repeat` : gradFor(p.name), ...style,
-    }}>{!p.img && initials(p.name)}</div>
+      width: size, height: size, fontSize: isImage ? undefined : size * 0.5,
+      background: isImage ? `url("${p.img}") center / cover no-repeat` : gradFor(p.name),
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      ...style,
+    }}>
+      {isImage ? null : (p.img ? p.img : initials(p.name))}
+    </div>
   );
 }
 

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { I, Avatar, Grain } from './home-icons';
+import { EventDashboard } from './event-dashboard';
 import DiscussionPanel from './discussion-panel';
 
 function Toggle({ on, onClick }) { return <button className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
@@ -87,6 +88,7 @@ export function EventPage({ ev, st, go }) {
       host: typeof e.host === 'object' && e.host !== null ? (e.host.name || "Organizer") : (e.hostName || e.host || ME.name || "Organizer"),
       hostBy: typeof e.host === 'object' && e.host !== null ? (e.host.name || "Organizer") : (e.hostName || e.hostBy || ME.name || "Organizer"),
       hostPhoto: typeof e.host === 'object' && e.host !== null ? (e.host.photo || "") : (e.hostPhoto || ""),
+      hostBanner: typeof e.host === 'object' && e.host !== null ? (e.host.banner || "") : (e.hostBanner || ""),
       hostType: e.hostType || null,
       attendees: e.attendees || [],
       instructions: e.instruction || e.instructions || meta.instructions || "",
@@ -322,6 +324,7 @@ export function EventPage({ ev, st, go }) {
           host: typeof ev.host === 'object' && ev.host !== null ? (ev.host.name || "Organizer") : (ev.hostName || ev.host || ME.name || "Organizer"),
           hostBy: typeof ev.host === 'object' && ev.host !== null ? (ev.host.name || "Organizer") : (ev.hostName || ev.hostBy || ME.name || "Organizer"),
           hostPhoto: typeof ev.host === 'object' && ev.host !== null ? (ev.host.photo || "") : (ev.hostPhoto || ""),
+          hostBanner: typeof ev.host === 'object' && ev.host !== null ? (ev.host.banner || "") : (ev.hostBanner || ""),
           hostType: ev.hostType || null,
           attendees: data.data.attendees || [],
           instructions: ev.instruction || ev.instructions || meta.instructions || "",
@@ -397,6 +400,7 @@ export function EventPage({ ev, st, go }) {
       if (data.success) {
         fetchHostStats();
         fetchEventDetails();
+        fetchEventMembers();
         if (window.toast) {
           const msg = action === 'accept' ? "Request approved! 🎉" : "Request declined.";
           window.toast(msg, action === 'accept' ? "success" : "warning");
@@ -1201,71 +1205,10 @@ export function EventPage({ ev, st, go }) {
                 </div>
               )}
 
-              {/* Tab: Dashboard — quick-glance stats for the event (members, attendees, posts, ...) */}
-              {tab === "dashboard" && (() => {
-                const memberCount = eventMembers ? eventMembers.filter(m => m.state === 'active').length : attendees.length;
-                const revenueDisplay = !hostStats ? null : (hostStats.revenue === 0 ? "Free" : `₹${hostStats.revenue.toLocaleString()}`);
-
-                const StatCard = ({ label, value, sub, color }: { label: any; value: any; sub?: any; color?: any }) => (
-                  <div style={{ background: "var(--field)", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
-                    <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{label}</div>
-                    <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4, color: color || "var(--ink)" }}>
-                      {value}{sub && <span style={{ fontSize: 13, fontWeight: 400, color: "var(--ink-3)" }}> {sub}</span>}
-                    </div>
-                  </div>
-                );
-
-                return (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                    <div className="ev-block">
-                      <h3>Event Dashboard</h3>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginTop: 12 }}>
-                        <StatCard label="Total Members" value={memberCount} />
-                        <StatCard label="Confirmed Attendees" value={confirmedCount} />
-                        <StatCard label="Gallery Posts" value={galleryItems.length} />
-                        {discussionEnabled && (
-                          <StatCard label="Discussion" value={discussionEnabled ? "Enabled" : "Off"} />
-                        )}
-                        {(isHostOrCoHost || isAdmin || isModerator) && (
-                          <StatCard label="Pending Requests" value={pendingCount} color={pendingCount > 0 ? "var(--accent-2)" : undefined} />
-                        )}
-                        {hostStats && (
-                          <StatCard label="Checked In" value={hostStats.checkedInCount || 0} sub={`/ ${hostStats.totalAttendees || 0}`} color="var(--accent-2)" />
-                        )}
-                        {hostStats && isPaidEvent && (
-                          <StatCard label="Estimated Revenue" value={revenueDisplay} color={hostStats.revenue === 0 ? "var(--ink-3)" : "#1f9d57"} />
-                        )}
-                      </div>
-                    </div>
-
-                    {(isHostOrCoHost || isAdmin || isModerator) && (
-                      <div className="ev-block">
-                        <h3>Recent Members</h3>
-                        {!eventMembers ? (
-                          <div style={{ color: "var(--ink-3)", fontSize: 13.5, padding: "8px 0" }}>Loading…</div>
-                        ) : memberCount === 0 ? (
-                          <div style={{ color: "var(--ink-3)", fontSize: 13.5, padding: "8px 0" }}>No members yet.</div>
-                        ) : (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
-                            {eventMembers.filter(m => m.state === 'active').slice(0, 6).map(m => (
-                              <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8 }}>
-                                <Avatar name={m.name} userId={m.id} img={m.picture} size={30} />
-                                <div style={{ minWidth: 0 }}>
-                                  <div style={{ fontSize: 13.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</div>
-                                  <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{m.role === 'event_host' ? 'Host' : m.role === 'event_cohost' ? 'Co-host' : 'Member'}</div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {memberCount > 6 && (
-                          <button className="hbtn hbtn--ghost hbtn--sm" style={{ marginTop: 10 }} onClick={() => setTab("members")}>View all {memberCount} members</button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
+              {/* Tab: Dashboard — Premium Event Control Center */}
+              {tab === "dashboard" && (
+                <EventDashboard ev={currentEvent || e} st={st} go={go} embedded={true} />
+              )}
 
               {/* Tab 2: Members — consolidated (pending requests + confirmed list) */}
               {tab === "members" && (() => {
@@ -1740,6 +1683,8 @@ export function EventPage({ ev, st, go }) {
                 // ── Helper: submit ticket ──
                 const handleTicketSubmit = async () => {
                   if (!ticketForm.name.trim()) { if (window.toast) window.toast("Ticket name is required", "warning"); return; }
+                  if (!ticketForm.description.trim()) { if (window.toast) window.toast("Description is required", "warning"); return; }
+                  if (!ticketForm.price || String(ticketForm.price).trim() === "") { if (window.toast) window.toast("Price is required", "warning"); return; }
                   try {
                     const url = editingTicket
                       ? `${apiBase}/api/events/${e.id}/ticket-types/${editingTicket.id}`
@@ -2009,9 +1954,9 @@ export function EventPage({ ev, st, go }) {
                           </div>
                           <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
                             <div style={fieldStyle}><label style={labelStyle}>Ticket Name *</label><input className="cinput" value={ticketForm.name} onChange={ev => setTicketForm(f => ({...f, name: ev.target.value}))} placeholder="e.g. General Admission" /></div>
-                            <div style={fieldStyle}><label style={labelStyle}>Description</label><textarea className="cinput" value={ticketForm.description} onChange={ev => setTicketForm(f => ({...f, description: ev.target.value}))} placeholder="What's included..." rows={2} style={{ resize: "vertical" }} /></div>
+                            <div style={fieldStyle}><label style={labelStyle}>Description *</label><textarea className="cinput" value={ticketForm.description} onChange={ev => setTicketForm(f => ({...f, description: ev.target.value}))} placeholder="What's included..." rows={2} style={{ resize: "vertical" }} /></div>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                              <div style={fieldStyle}><label style={labelStyle}>Price</label><input className="cinput" type="number" min="0" step="0.01" value={ticketForm.price} onChange={ev => setTicketForm(f => ({...f, price: ev.target.value}))} placeholder="0.00" /></div>
+                              <div style={fieldStyle}><label style={labelStyle}>Price *</label><input className="cinput" type="number" min="0" step="0.01" value={ticketForm.price} onChange={ev => setTicketForm(f => ({...f, price: ev.target.value}))} placeholder="0.00" /></div>
                               <div style={fieldStyle}><label style={labelStyle}>Currency</label><input className="cinput" value={ticketForm.currency} onChange={ev => setTicketForm(f => ({...f, currency: ev.target.value}))} placeholder="INR" /></div>
                             </div>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>

@@ -526,7 +526,7 @@ export function CityPicker({ open, onClose, city, onPick }) {
       <div 
         style={{
           position: "absolute", top: "72px", left: "50%", transform: "translateX(-50%)",
-          width: "90%", maxWidth: "360px", background: "var(--bg-1, #ffffff)", borderRadius: "24px",
+          width: "90%", maxWidth: "360px", background: "var(--surface)", borderRadius: "24px",
           boxShadow: "0 16px 48px rgba(0,0,0,0.2)", border: "1px solid var(--border)", display: "flex", flexDirection: "column"
         }} 
         onClick={e=>e.stopPropagation()}

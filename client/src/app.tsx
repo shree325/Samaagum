@@ -12,8 +12,9 @@ import { useTweaks } from './tweaks-panel';
 
 
 // ── Handle Google OAuth redirect ─────────────────────────────────────────────
-// After Google login, the backend redirects back here with ?token=...&auth=google
-// Read the token, save it, clean the URL, and go straight to the home page.
+// Note: OAuth redirects land on index.html (root), which handles isNewUser routing.
+// This file (app.tsx / auth page) only needs to handle the case if somehow loaded
+// with token params — save the token and go home. Real new-user routing is in index.html.
 (function handleOAuthRedirect() {
   const params = new URLSearchParams(window.location.search);
   const token = params.get('token');
@@ -22,16 +23,13 @@ import { useTweaks } from './tweaks-panel';
 
   if (authError) {
     console.error('OAuth error:', authError);
-    // Strip the param so the user sees the login page cleanly
-    window.history.replaceState({}, '', '/');
+    window.history.replaceState({}, '', window.location.pathname);
     return;
   }
 
   if (token && auth) {
-    // Save the real JWT token from OAuth login
     localStorage.setItem('token', decodeURIComponent(token));
-    // Navigate to the home app — same path as "Enter Samaagum" button
-    window.location.replace('pages/Samaagum Home.html');
+    window.history.replaceState({}, '', window.location.pathname + window.location.hash);
   }
 })();
 
@@ -59,7 +57,7 @@ export function Scene({ m }) {
 /* ---------------- Desktop split-screen ---------------- */
 export function DesktopAuth({ gradient }) {
   const m = useAuth();
-  const showBack = m.idx > 0 && m.step !== "done";
+  const showBack = m.idx > 0 && m.step !== "done" && m.step !== "profile";
   return (
     <div className="desk-window">
       <LeftPanel gradient={gradient} phase={m.step === "done" ? "done" : "default"} />
@@ -79,7 +77,7 @@ export function DesktopAuth({ gradient }) {
 /* ---------------- Mobile (iOS) ---------------- */
 export function MobileAuth({ gradient }) {
   const m = useAuth();
-  const showBack = m.idx > 0 && m.step !== "done";
+  const showBack = m.idx > 0 && m.step !== "done" && m.step !== "profile";
   const tall = m.step === "method";
   return (
     <div className="mob">

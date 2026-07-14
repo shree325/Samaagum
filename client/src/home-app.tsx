@@ -19,7 +19,8 @@ import { Profile } from './home-profile';
 import { SettingsPage } from './home-settings';
 import { CityPicker, Sidebar, Topbar } from './home-shell';
 import { apiBase, UpgradePage, CheckoutPage, CheckoutSuccessPage } from './home-subscription';
-import { ClaimFlow, EventDashboard, MyTickets, AllTickets, TicketDetail, ScanHub, ScanEventPage } from './home-tickets';
+import { ClaimFlow, MyTickets, AllTickets, TicketDetail, ScanHub, ScanEventPage } from './home-tickets';
+import { EventDashboard } from './event-dashboard';
 import { Waitlist } from './home-waitlist';
 import { I, tick } from './home-icons';
 import { PublicProfile } from './public-profile';
@@ -107,13 +108,39 @@ export const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 
 export function DashboardApp() {
   const token = localStorage.getItem('token');
-  if (!token) {
-    window.location.replace('/');
-    return null;
-  }
 
+  const [onboardingChecked, setOnboardingChecked] = useState(!token); // skip check if no token (will redirect anyway)
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  
+
+  // ── Onboarding gate ──────────────────────────────────────────────────────────
+  // On every home-page load, verify the user has completed onboarding.
+  // If not, redirect back to the auth page at the step they left off at.
+  useEffect(() => {
+    if (!token) {
+      window.location.replace('/');
+      return;
+    }
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const base = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+    fetch(`${base}/api/admin/onboarding-status`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.profileCompleted === false && data.onboardingStep) {
+          // User hasn't finished onboarding — send them back
+          window.location.replace(`/pages/Samaagum%20Auth.html?mode=signup#${data.onboardingStep}`);
+        } else {
+          setOnboardingChecked(true);
+        }
+      })
+      .catch(() => {
+        // On network error, let the user through (fail-open)
+        setOnboardingChecked(true);
+      });
+  }, []);
+
+
   useEffect(() => {
     const originalFetch = window.fetch;
     window.fetch = async (...args) => {
@@ -1263,8 +1290,11 @@ useEffect(() => {
       const isModerator = ME.role && ME.role.toLowerCase().includes("moderator");
       
       // Check if user has a confirmed or pending booking/membership for this event
+      const UUID_RE_H = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const isRealEventId = typeof e.id === "string" && UUID_RE_H.test(e.id);
       const joinedEntry = st.joinedEvents && st.joinedEvents.find(je => je.id === e.id);
       const bookingStatus = joinedEntry?.bookingStatus || e.bookingStatus || null;
+      const bookingStatus = isRealEventId ? (joinedEntry?.bookingStatus || null) : (e.bookingStatus || joinedEntry?.bookingStatus || null);
       const hasConfirmedBooking = bookingStatus === 'confirmed' || bookingStatus === 'pending_payment';
       const hasPendingBooking = bookingStatus === 'pending_approval';
       
@@ -1334,6 +1364,9 @@ useEffect(() => {
       : ["scan", "scan-event"].includes(cur.view) ? "scan"
         : ["create-event", "create-group"].includes(cur.view) ? null
           : cur.view;
+
+  // Don't render anything until we know if onboarding is complete
+  if (!onboardingChecked) return null;
 
   return (
     <div className={`app ${mobile?"mobile":""} ${sidebarCollapsed?"collapsed":""}`}>
