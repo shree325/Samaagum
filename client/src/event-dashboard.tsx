@@ -5,7 +5,7 @@ import { VerifyTicketPanel } from './home-tickets';
 
 export function EventDashboard({ ev, st, go, embedded = false }) {
   const e = ev || st.createdEvents[0] || {};
-  const [stats, setStats] = useState({ totalAttendees: 0, checkedInCount: 0, pendingRequestsCount: 0, revenue: 0, capacity: 120, wishlistCount: 0, confirmed: [], requests: [] });
+  const [stats, setStats] = useState({ totalAttendees: 0, checkedInCount: 0, pendingRequestsCount: 0, revenue: 0, capacity: 120, wishlistCount: 0, galleryPosts: 0, discussionComments: 0, confirmed: [] as any[], requests: [] as any[] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isDemoMode, setIsDemoMode] = useState(false);
@@ -205,7 +205,7 @@ export function EventDashboard({ ev, st, go, embedded = false }) {
   const checkinPercentage = activeStats.totalAttendees > 0 ? Math.round((activeStats.checkedInCount / activeStats.totalAttendees) * 100) : 0;
   
   // Custom tooltips
-  const CustomTooltip = ({ active, payload, label }) => {
+  const CustomTooltip = ({ active, payload, label }: { active?: any; payload?: any; label?: any }) => {
     if (active && payload && payload.length) {
       return (
         <div style={{ background: 'var(--surface)', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>

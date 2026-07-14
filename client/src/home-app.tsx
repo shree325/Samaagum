@@ -1293,7 +1293,6 @@ useEffect(() => {
       const UUID_RE_H = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       const isRealEventId = typeof e.id === "string" && UUID_RE_H.test(e.id);
       const joinedEntry = st.joinedEvents && st.joinedEvents.find(je => je.id === e.id);
-      const bookingStatus = joinedEntry?.bookingStatus || e.bookingStatus || null;
       const bookingStatus = isRealEventId ? (joinedEntry?.bookingStatus || null) : (e.bookingStatus || joinedEntry?.bookingStatus || null);
       const hasConfirmedBooking = bookingStatus === 'confirmed' || bookingStatus === 'pending_payment';
       const hasPendingBooking = bookingStatus === 'pending_approval';

@@ -259,12 +259,12 @@ export function gradFor(seed) {
 export const initials = (n) => n.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 
 export const I = {
-  arrow: (p) => <svg width="17" height="17" viewBox="0 0 24 24" fill="none" {...p}><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>,
-  check: (p) => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" {...p}><path d="M5 12.5l4.5 4.5L19 7" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" /></svg>,
-  verify: (p) => <svg viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M12 1.8l2.5 1.8 3-.3 1 2.9 2.6 1.6-.9 2.9.9 2.9-2.6 1.6-1 2.9-3-.3L12 22.2 9.5 20.4l-3 .3-1-2.9L2.9 16.2l.9-2.9-.9-2.9L5.5 8.8l1-2.9 3 .3z" /><path d="M8 12l2.5 2.5L16 9" stroke="#fff" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>,
-  pin: (p) => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" {...p}><path d="M12 21c4-4.5 7-8 7-11a7 7 0 10-14 0c0 3 3 6.5 7 11z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /><circle cx="12" cy="10" r="2.3" stroke="currentColor" strokeWidth="1.8" /></svg>,
-  menu: (p) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" {...p}><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>,
-  spark: (p) => <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z" /></svg>,
+  arrow: (p = {}) => <svg width="17" height="17" viewBox="0 0 24 24" fill="none" {...p}><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>,
+  check: (p = {}) => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" {...p}><path d="M5 12.5l4.5 4.5L19 7" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" /></svg>,
+  verify: (p = {}) => <svg viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M12 1.8l2.5 1.8 3-.3 1 2.9 2.6 1.6-.9 2.9.9 2.9-2.6 1.6-1 2.9-3-.3L12 22.2 9.5 20.4l-3 .3-1-2.9L2.9 16.2l.9-2.9-.9-2.9L5.5 8.8l1-2.9 3 .3z" /><path d="M8 12l2.5 2.5L16 9" stroke="#fff" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>,
+  pin: (p = {}) => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" {...p}><path d="M12 21c4-4.5 7-8 7-11a7 7 0 10-14 0c0 3 3 6.5 7 11z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /><circle cx="12" cy="10" r="2.3" stroke="currentColor" strokeWidth="1.8" /></svg>,
+  menu: (p = {}) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" {...p}><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>,
+  spark: (p = {}) => <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" {...p}><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z" /></svg>,
 };
 
 /* ---------- Data ---------- */

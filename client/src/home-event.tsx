@@ -59,7 +59,6 @@ function EventDetail({ ev, st, go }) {
 
   const [liveEvent, setLiveEvent] = useState(e);
   e = liveEvent; // Override local 'e' so the rest of the component is reactive
-  const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
   const UUID_RE_H = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   useEffect(() => {
     if (!e.id || !UUID_RE_H.test(e.id)) return;

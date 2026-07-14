@@ -135,12 +135,11 @@ export function JoinEventPage({ ev, st, go }) {
                             s = "CLOSED";
                         }
                     }
-                    const srv = {
+                    const fetchedSrv = {
                         ...data.data.event,
                         tickets: data.data.tickets || []
                     };
-                    setFetchedEvent(srv);
-                    const s = srv.registrationStatus || srv.registration_status || "OPEN";
+                    setFetchedEvent(fetchedSrv);
                     setRegStatus(s);
                     
                     let settings = srv.settings || {};
@@ -202,32 +201,22 @@ export function JoinEventPage({ ev, st, go }) {
             d: t.description || ((t.price_minor || t.price_amount_minor) === 0 ? "Free entry" : "Standard entry"),
             p: (t.price_minor || t.price_amount_minor) === 0 ? "Free" : `₹${(t.price_minor ? t.price_minor / 100 : t.price_amount_minor / 100).toFixed(0)}`,
             free: (t.price_minor || t.price_amount_minor) === 0,
-            isFull: t.isFull
-          }))
-        : (e.type === "Free"
-            ? [{ id: "rsvp", n: "General RSVP", d: "Free entry · approval-based", p: "Free", free: true }]
-            : [{ id: "general", n: "General Admission", d: "Standard entry", p: priceStr }]);
-    const [tier, setTier] = useState(tiers[0].id);
-    const [qty, setQty] = useState(1);
-    const sel = tiers.find(t => t.id === tier);
-    const evtCap = liveEvent.cap || e.cap;
-    const evtGoing = liveEvent.going || e.going;
-    const pct = evtCap ? Math.min(100, Math.round((evtGoing / evtCap) * 100)) : 0;
-            d: t.description || (t.price_minor === 0 ? "Free entry" : "Standard entry"),
-            p: t.price_minor === 0 ? "Free" : `₹${(t.price_minor / 100).toFixed(0)}`,
-            free: t.price_minor === 0,
+            isFull: t.isFull,
             capacity: t.capacity || null,
             remaining: t.remaining !== undefined ? t.remaining : null,
             desc: t.description || ""
           }))
         : (e.type === "Free"
             ? [{ id: "rsvp", n: "General RSVP", d: "Free entry · approval-based", p: "Free", free: true, capacity: null, remaining: null, desc: "Free entry · approval-based" }]
-            : [{ id: "general", n: "General Admission", d: "Standard entry", p: priceStr, free: false, capacity: null, remaining: null, desc: "Standard entry" }]);
-    const [tier, setTier] = useState<string | null>(e.type === "Free" ? (tiers[0]?.id || null) : null);
-    const [showTicketsModal, setShowTicketsModal] = useState(false);
-    const [detailTicket, setDetailTicket] = useState<any>(null);
-    const sel = tier ? tiers.find(t => t.id === tier) : null;
-    const pct = Math.round((e.going / (e.cap || e.going)) * 100);
+            : [{ id: "general", n: "General Admission", d: "Standard entry", p: e.price || "₹500", free: false, capacity: null, remaining: null, desc: "Standard entry" }]);
+    const [tier, setTier] = React.useState<string | null>(e.type === "Free" ? (tiers[0]?.id || null) : null);
+    const [qty, setQty] = React.useState(1);
+
+    const sel = tier ? tiers.find((t: any) => t.id === tier) : null;
+    const evtCap = liveEvent.cap || e.cap;
+    const evtGoing = liveEvent.going || e.going;
+    const pct = evtCap ? Math.min(100, Math.round((evtGoing / evtCap) * 100)) : 0;
+
 
     const attendees = e.attendees || ["Dev K", "Mira S", "Leo P", "Zoya N", "Sam K", "Riya T"];
 
@@ -380,11 +369,6 @@ export function JoinEventPage({ ev, st, go }) {
                                 <span className="fchip" style={{ pointerEvents: "none" }}>{liveEvent.online ? <><I.online style={{ width: 14, height: 14 }} /> Online</> : <><I.pin style={{ width: 14, height: 14 }} /> {liveEvent.city || city}</>}</span>
                                 <span className="fchip" style={{ pointerEvents: "none" }}>{liveEvent.type}</span>
                             </div>
-                            <div className="ttl">{liveEvent.title}</div>
-                            <div className="ev-host">
-                                <Avatar name={liveEvent.hostBy || liveEvent.host} userId={liveEvent.hostUserId} img={liveEvent.hostPhoto} size={34} />
-                                Hosted by <b>{liveEvent.host}</b>
-                            </div>
                             <div className="ttl">{e.title}</div>
                              <div 
                                  className="ev-host"
@@ -427,7 +411,6 @@ export function JoinEventPage({ ev, st, go }) {
                                 </div>
                             )}
 
-                            {!liveEvent.online && (
                             {!e.online && e.venue && (
                                 <div className="ev-block">
                                     <h3>Location</h3>
@@ -559,191 +542,18 @@ export function JoinEventPage({ ev, st, go }) {
                                                 </button>
                                             ) : liveEvent.bookingStatus === 'waitlisted' ? (
                                                 <button className="hbtn hbtn--soft hbtn--block" style={{ color: "var(--accent-2)" }} onClick={() => go("waitlist", liveEvent)}>
-                                <div className="ticket-box" style={{ padding: '20px' }}>
-                                    {e.type === "Free" ? (
-                                        <div style={{ padding: "16px 0", fontWeight: 600, color: "var(--ink)", display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <span className="radio on" style={{ pointerEvents: 'none' }} />
-                                            <span>Ticket is free</span>
-                                        </div>
-                                    ) : (
-                                        <div 
-                                            className="select-ticket-box" 
-                                            onClick={() => setShowTicketsModal(true)}
-                                            style={{
-                                                cursor: 'pointer',
-                                                padding: '12px 16px',
-                                                border: '1px solid var(--border-2)',
-                                                borderRadius: '8px',
-                                                background: 'var(--surface)',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                                marginBottom: '16px',
-                                                fontWeight: 500,
-                                                color: tier ? 'var(--ink)' : 'var(--ink-3)',
-                                                transition: 'border var(--t-fast)'
-                                            }}
-                                            onMouseEnter={(evt) => evt.currentTarget.style.borderColor = 'var(--accent-1)'}
-                                            onMouseLeave={(evt) => evt.currentTarget.style.borderColor = 'var(--border-2)'}
-                                        >
-                                            <span>{sel ? sel.n : "Select your ticket"}</span>
-                                            <I.chevD />
-                                        </div>
-                                    )}
-                                    <div className="ticket-foot">
-                                        {e.bookingStatus === 'pending_approval' ? (
-                                            <button className="hbtn hbtn--soft hbtn--block" disabled>
-                                                Pending Approval
-                                            </button>
-                                        ) : isSoldOut && e.waitlist === false ? (
-                                            <button className="hbtn hbtn--soft hbtn--block" disabled>
-                                                Sold Out
-                                            </button>
-                                        ) : isSoldOut ? (
-                                            isWaitlisted ? (
-                                                <button className="hbtn hbtn--soft hbtn--block" style={{ color: "var(--accent-2)" }} onClick={() => go("waitlist", e)}>
                                                     <I.users /> View Waitlist Status
                                                 </button>
-                                            ) : liveEvent.bookingStatus === 'pending_approval' ? (
-                                                <button className="hbtn hbtn--soft hbtn--block" disabled>
-                                                    Pending Approval
-                                                </button>
-                                            ) : isSoldOut && !waitlistEnabled ? (
-                                                <button className="hbtn hbtn--soft hbtn--block" disabled style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center' }}>
-                                                    <I.lock style={{ width: 14, height: 14 }} /> Event Full
-                                                </button>
-                                            ) : isSoldOut ? (
-                                                isWaitlisted ? (
-                                                    <button className="hbtn hbtn--soft hbtn--block" style={{ color: "var(--accent-2)" }} onClick={() => go("waitlist", liveEvent)}>
-                                                        <I.users /> View Waitlist Status
-                                                    </button>
-                                                ) : (
-                                                    <button className="hbtn hbtn--primary hbtn--block" onClick={() => { st.toggleWaitlist && st.toggleWaitlist(liveEvent.id); go("waitlist", liveEvent); }}>
-                                                        Get Ticket
-                                                    </button>
-                                                )
                                             ) : (
                                                 <button className="hbtn hbtn--primary hbtn--block" onClick={() => { register(liveEvent.id, false, { ticketTypeId: tier, qty, ticketName: sel?.n }, liveEvent.inviteToken); go("events"); }}>
                                                     {liveEvent.type === "Free" ? "Request to join" : `Get ${qty > 1 ? qty + " tickets" : "ticket"}`}
                                                 </button>
                                             )
-                                        ) : (
-                                            <button 
-                                                className="hbtn hbtn--primary hbtn--block" 
-                                                disabled={e.type !== "Free" && !tier}
-                                                onClick={() => {
-                                                    if (e.type !== "Free" && !tier) {
-                                                        setShowTicketsModal(true);
-                                                    } else {
-                                                        register(e.id, false, tier, e.inviteToken);
-                                                        go("events");
-                                                    }
-                                                }}
-                                            >
-                                                {e.type === "Free" ? "Request to join" : "Get ticket"}
-                                            </button>
                                         )}
-                                        <div style={{ textAlign: "center", fontSize: 13, color: "var(--ink-3)", marginTop: 8, fontWeight: 500 }}>
-                                            Seats: {e.cap && e.cap < 9999 ? `${e.cap - e.going} left` : "Unlimited"}
-                                        </div>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center", marginTop: 11, fontSize: 12, color: "var(--ink-3)" }}>
-                                            <I.check style={{ width: 13, height: 13, color: "#1f9d57" }} /> {isSoldOut && waitlistEnabled ? "Waitlist claim window: 15 mins" : isSoldOut ? "Fully booked" : liveEvent.type === "Free" ? "Approval-based · free" : "Secure checkout · instant ticket"}
-                                        </div>
                                     </div>
-
-                                    {showTicketsModal && (
-                                        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000 }}>
-                                            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', width: '90%', maxWidth: '500px', padding: '24px', position: 'relative', boxShadow: 'var(--sh-xl)' }}>
-                                                <button 
-                                                    style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: '4px' }}
-                                                    onClick={() => setShowTicketsModal(false)}
-                                                >
-                                                    <I.x style={{ width: '20px', height: '20px' }} />
-                                                </button>
-                                                <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: 600, color: 'var(--ink)' }}>Select a Ticket</h3>
-                                                
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '300px', overflowY: 'auto', paddingRight: '4px' }}>
-                                                    {tiers.map(t => (
-                                                        <div 
-                                                            key={t.id}
-                                                            onClick={() => {
-                                                                setTier(t.id);
-                                                                setShowTicketsModal(false);
-                                                            }}
-                                                            style={{
-                                                                cursor: 'pointer',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'space-between',
-                                                                padding: '12px 16px',
-                                                                border: tier === t.id ? '2px solid var(--accent-1)' : '1px solid var(--border-2)',
-                                                                borderRadius: '8px',
-                                                                background: tier === t.id ? 'var(--accent-1-light)' : 'transparent',
-                                                                transition: 'all var(--t-fast)'
-                                                            }}
-                                                        >
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                                                <span className="radio" style={{ borderColor: tier === t.id ? 'var(--accent-1)' : 'var(--border-2)' }} />
-                                                                <span style={{ fontWeight: 600, color: 'var(--ink)' }}>{t.n}</span>
-                                                            </div>
-                                                            
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                                                                <span style={{ fontWeight: 600, color: 'var(--ink-2)' }}>{t.free ? "Free" : t.p}</span>
-                                                                {t.remaining !== null && (
-                                                                    <span style={{ fontSize: '12px', color: 'var(--ink-3)' }}>{t.remaining} left</span>
-                                                                )}
-                                                                <button
-                                                                    style={{
-                                                                        background: 'var(--border)',
-                                                                        border: 'none',
-                                                                        borderRadius: '4px',
-                                                                        padding: '4px 8px',
-                                                                        fontSize: '11px',
-                                                                        fontWeight: 600,
-                                                                        cursor: 'pointer',
-                                                                        color: 'var(--ink)'
-                                                                    }}
-                                                                    onClick={(evt) => {
-                                                                        evt.stopPropagation();
-                                                                        setDetailTicket(t);
-                                                                    }}
-                                                                >
-                                                                    More
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {detailTicket && (
-                                        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10001 }}>
-                                            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', width: '90%', maxWidth: '400px', padding: '24px', position: 'relative', boxShadow: 'var(--sh-xl)' }}>
-                                                <button 
-                                                    style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', padding: '4px' }}
-                                                    onClick={() => setDetailTicket(null)}
-                                                >
-                                                    <I.x style={{ width: '20px', height: '20px' }} />
-                                                </button>
-                                                <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: 'var(--ink)' }}>Ticket Details</h3>
-                                                
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '14px', color: 'var(--ink-2)' }}>
-                                                    <div><strong>Ticket Name:</strong> <span style={{ color: 'var(--ink)' }}>{detailTicket.n}</span></div>
-                                                    <div><strong>Price:</strong> <span style={{ color: 'var(--ink)', fontWeight: 600 }}>{detailTicket.free ? "Free" : detailTicket.p}</span></div>
-                                                    {detailTicket.desc && <div><strong>Description:</strong> <span>{detailTicket.desc}</span></div>}
-                                                    {detailTicket.remaining !== null ? (
-                                                        <div><strong>Remaining:</strong> <span>{detailTicket.remaining} ticket{detailTicket.remaining !== 1 ? 's' : ''} left</span></div>
-                                                    ) : (
-                                                        detailTicket.capacity && <div><strong>Capacity:</strong> <span>{detailTicket.capacity} seats</span></div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             )}
+
 
                             <div className="host-card">
                                 <div className="hh"><Avatar name={e.hostBy || e.host} userId={e.hostUserId} img={e.hostPhoto} size={46} /><div><div className="n">{e.host}</div><div className="r">Organizer · 24 events</div></div></div>

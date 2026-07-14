@@ -508,7 +508,14 @@ export function HomeFeed({ st, go }: any) {
         <Greeting city={city} />
         
         {/* Dynamic Category chip filters */}
-        <div style={{ marginBottom: 26 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 26 }}>
+          <div className="filterbar">
+            {categoriesList.map((c: any) => (
+              <FilterChip key={c.id} active={cat === c.name} onClick={() => setCat(c.name)}>
+                {c.name}
+              </FilterChip>
+            ))}
+          </div>
           <div className="filterbar">
             {[
               { k: "trending", ic: <I.fire />, label: "Trending" },

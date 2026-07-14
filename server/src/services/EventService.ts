@@ -497,9 +497,6 @@ export class EventService {
       const isWishlisted = userId ? await this.wishlistRepo.isWishlisted(ev.id!, userId) : false;
       const waitlistCount = await prisma.bookings.count({ where: { event_id: ev.id!, status: 'waitlisted' } });
 
-      enrichedList.push({
-        ...ev,
-        tickets,
       enrichedList.push({ 
         ...ev, 
         tickets: ticketsWithRemaining, 
@@ -687,7 +684,8 @@ export class EventService {
         }
       }
       return { ...t, isFull: tIsFull };
-    const tickets = await this.ticketTypesRepo.getByEventId(id);
+    }));
+
     const ticketsWithRemaining = await Promise.all(tickets.map(async (t) => {
       const sold = await prisma.tickets.count({
         where: {
@@ -753,8 +751,6 @@ export class EventService {
         registrationStatus: event.registration_status,
         registrationOpensAt: event.registration_opens_at,
         registrationClosesAt: event.registration_closes_at
-      },
-      tickets
       }, 
       tickets: ticketsWithRemaining
     };
