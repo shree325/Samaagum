@@ -109,14 +109,36 @@ export function JoinEventPage({ ev, st, go }) {
             .then(data => {
                 if (data.success && data.data?.event) {
                     const srv = data.data.event;
+                    
+                    const startsAt = srv.starts_at ? new Date(srv.starts_at) : null;
+                    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+                    const month = startsAt ? months[startsAt.getMonth()] : "TBD";
+                    const day = startsAt ? startsAt.getDate().toString() : "TBD";
+                    const time = startsAt ? startsAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : "Time TBD";
+                    const dateStr = startsAt ? startsAt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : "Date TBD";
+
+                    const venueObj = srv.venue || {};
+                    const cityVal = srv.city || (srv.location_type === 'online' ? 'Online' : (venueObj.address ? venueObj.address.split(',').pop().trim() : ''));
+                    const venueVal = srv.location_type === 'online' ? 'Online' : (venueObj.name || venueObj.address || 'Venue TBD');
+
                     setLiveEvent(prev => ({
                         ...prev,
-                        going: srv.going ?? prev.going,
-                        cap: srv.cap ?? prev.cap,
+                        ...srv,
+                        going: data.data.attendees ? data.data.attendees.length : (srv.going ?? prev.going),
+                        attendees: data.data.attendees || prev.attendees || [],
+                        cap: srv.capacity_total ?? srv.cap ?? prev.cap,
                         cover: srv.cover ?? prev.cover,
                         title: srv.title ?? prev.title,
                         description: srv.description ?? prev.description,
                         settings: srv.settings ?? prev.settings,
+                        month,
+                        day,
+                        date: dateStr,
+                        time,
+                        venue: venueVal,
+                        city: cityVal,
+                        online: srv.location_type === 'online',
+                        type: (srv.registration_mode === 'free' || srv.registration_mode === 'free_rsvp') ? 'Free' : 'Paid',
                         bookingStatus: data.data.bookingStatus ?? null,
                         bookingId: data.data.bookingId ?? null,
                         attendeeId: data.data.attendeeId ?? null,
@@ -195,22 +217,29 @@ export function JoinEventPage({ ev, st, go }) {
 
     const priceStr = e.price || "₹500";
     const tiers = (e.tickets && e.tickets.length > 0)
-        ? e.tickets.filter((t: any) => !t.visibility || t.visibility === 'public').map((t: any) => ({
-            id: t.id,
-            n: t.name,
-            d: t.description || ((t.price_minor || t.price_amount_minor) === 0 ? "Free entry" : "Standard entry"),
-            p: (t.price_minor || t.price_amount_minor) === 0 ? "Free" : `₹${(t.price_minor ? t.price_minor / 100 : t.price_amount_minor / 100).toFixed(0)}`,
-            free: (t.price_minor || t.price_amount_minor) === 0,
-            isFull: t.isFull,
-            capacity: t.capacity || null,
-            remaining: t.remaining !== undefined ? t.remaining : null,
-            desc: t.description || ""
-          }))
+        ? e.tickets.filter((t: any) => !t.visibility || t.visibility === 'public').map((t: any) => {
+            const isFree = t.price_minor === 0 || t.price_amount_minor === 0 || (!t.price_minor && !t.price_amount_minor);
+            const priceVal = isFree ? 0 : (t.price_minor || t.price_amount_minor || 0);
+            return {
+                id: t.id,
+                n: t.name,
+                d: t.description || (isFree ? "Free entry" : "Standard entry"),
+                p: isFree ? "Free" : `₹${(priceVal / 100).toFixed(0)}`,
+                free: isFree,
+                isFull: t.isFull,
+                capacity: t.capacity || null,
+                remaining: t.remaining !== undefined ? t.remaining : null,
+                desc: t.description || "",
+                salesEndAt: t.sales_end_at || t.salesEndAt || null
+            };
+          })
         : (e.type === "Free"
-            ? [{ id: "rsvp", n: "General RSVP", d: "Free entry · approval-based", p: "Free", free: true, capacity: null, remaining: null, desc: "Free entry · approval-based" }]
-            : [{ id: "general", n: "General Admission", d: "Standard entry", p: e.price || "₹500", free: false, capacity: null, remaining: null, desc: "Standard entry" }]);
+            ? [{ id: "rsvp", n: "General RSVP", d: "Free entry · approval-based", p: "Free", free: true, capacity: null, remaining: null, desc: "Free entry · approval-based", salesEndAt: null }]
+            : [{ id: "general", n: "General Admission", d: "Standard entry", p: e.price || "₹500", free: false, capacity: null, remaining: null, desc: "Standard entry", salesEndAt: null }]);
     const [tier, setTier] = React.useState<string | null>(e.type === "Free" ? (tiers[0]?.id || null) : null);
     const [qty, setQty] = React.useState(1);
+    const [showTicketPopup, setShowTicketPopup] = useState(false);
+    const [expandedTicketDetails, setExpandedTicketDetails] = useState<Record<string, boolean>>({});
 
     const sel = tier ? tiers.find((t: any) => t.id === tier) : null;
     const evtCap = liveEvent.cap || e.cap;
@@ -218,7 +247,7 @@ export function JoinEventPage({ ev, st, go }) {
     const pct = evtCap ? Math.min(100, Math.round((evtGoing / evtCap) * 100)) : 0;
 
 
-    const attendees = e.attendees || ["Dev K", "Mira S", "Leo P", "Zoya N", "Sam K", "Riya T"];
+    const attendees = liveEvent.attendees || e.attendees || ["Dev K", "Mira S", "Leo P", "Zoya N", "Sam K", "Riya T"];
 
   const [showShareSheet, setShowShareSheet] = useState(false);
   const [localStatus, setLocalStatus] = useState(e.status || "published");
@@ -466,7 +495,9 @@ export function JoinEventPage({ ev, st, go }) {
                                             </div>
                                         );
                                     })}
-                                    <div className="att" style={{ paddingRight: 14 }}><div className="av" style={{ width: 28, height: 28, fontSize: 11, background: "var(--surface-2)", color: "var(--ink-2)" }}>+{Math.max(0, liveEvent.going - attendees.length)}</div><span className="nm">more</span></div>
+                                    {liveEvent.going > attendees.length && (
+                                        <div className="att" style={{ paddingRight: 14 }}><div className="av" style={{ width: 28, height: 28, fontSize: 11, background: "var(--surface-2)", color: "var(--ink-2)" }}>+{liveEvent.going - attendees.length}</div><span className="nm">more</span></div>
+                                    )}
                                 </div>
                             </div>
                             {isWaitlisted && localStatus !== 'completed' && (
@@ -495,41 +526,47 @@ export function JoinEventPage({ ev, st, go }) {
                                 </div>
                             ) : (
                                 <div className="ticket-box">
-                                    <div className="tb-head">
-                                        <div className="pmeta">
-                                            <span className="price-big" style={liveEvent.type === "Free" ? { color: "#1f9d57" } : {}}>{sel?.free ? "Free" : sel?.p}</span>
-                                            {!sel?.free && <span className="price-un">onwards</span>}
-                                        </div>
-                                        {evtCap ? (
-                                            <div className="seats">
-                                                <span style={{ whiteSpace: "nowrap" }}>{Math.max(0, evtCap - evtGoing)} left</span>
-                                                <div className="bar"><i style={{ width: `${pct}%` }} /></div>
-                                                <span style={{ whiteSpace: "nowrap", color: "var(--ink-3)" }}>{pct}% full</span>
-                                            </div>
-                                        ) : null}
-                                    </div>
-                                    <div className="tier-list">
-                                        {tiers.map(t => (
-                                            <div key={t.id} className={`tier ${tier === t.id ? "on" : ""} ${t.isFull ? "full" : ""}`} style={t.isFull ? { opacity: 0.5, pointerEvents: "none" } : {}} onClick={() => !t.isFull && setTier(t.id)}>
-                                                <span className="radio" />
-                                                <div className="ti">
-                                                    <div className="n">{t.n} {t.isFull && <span style={{ color: "var(--red)", fontSize: 12, marginLeft: 8 }}>Sold Out</span>}</div>
-                                                    <div className="d">{t.d}</div>
-                                                    {t.early && <span className="early">EARLY BIRD</span>}
+                                    {liveEvent.type !== "Free" && (
+                                        <div style={{ marginBottom: 16, marginTop: 12 }}>
+                                            {!tier ? (
+                                                <button
+                                                    className="hbtn hbtn--soft hbtn--block"
+                                                    onClick={() => setShowTicketPopup(true)}
+                                                    style={{ justifyContent: 'center', fontWeight: 600, height: 46 }}
+                                                >
+                                                    🎟 Select Ticket
+                                                </button>
+                                            ) : (
+                                                <div 
+                                                    onClick={() => setShowTicketPopup(true)}
+                                                    style={{
+                                                        background: 'var(--surface-2)', padding: '12px 14px', borderRadius: 8,
+                                                        border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between',
+                                                        alignItems: 'center', cursor: 'pointer', transition: 'border-color 0.2s', height: 46
+                                                    }}
+                                                    onMouseEnter={ev => ev.currentTarget.style.borderColor = 'var(--accent)'}
+                                                    onMouseLeave={ev => ev.currentTarget.style.borderColor = 'var(--border)'}
+                                                >
+                                                    <div>
+                                                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>{sel?.n}</div>
+                                                        <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>{sel?.p}</div>
+                                                    </div>
+                                                    <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>Change</span>
                                                 </div>
-                                                <div className={`tp ${t.free ? "free" : ""}`}>{t.free ? "Free" : t.p}</div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <div className="ticket-foot">
-                                        <div className="qty">
-                                            <span className="lbl">Quantity</span>
-                                            <div className="stepper">
-                                                <button onClick={() => setQty(q => Math.max(1, q - 1))}>–</button>
-                                                <span className="n">{qty}</span>
-                                                <button onClick={() => setQty(q => Math.min(6, q + 1))}>+</button>
-                                            </div>
+                                            )}
                                         </div>
+                                    )}
+                                    <div className="ticket-foot" style={liveEvent.type === "Free" ? { paddingTop: 16 } : {}}>
+                                        {liveEvent.type !== "Free" && (
+                                            <div className="qty">
+                                                <span className="lbl">Quantity</span>
+                                                <div className="stepper">
+                                                    <button onClick={() => setQty(q => Math.max(1, q - 1))}>–</button>
+                                                    <span className="n">{qty}</span>
+                                                    <button onClick={() => setQty(q => Math.min(6, q + 1))}>+</button>
+                                                </div>
+                                            </div>
+                                        )}
                                         {localStatus === 'completed' && (
                                             <div style={{ padding: 12, background: "rgba(34, 197, 94, 0.1)", color: "var(--accent-1)", border: "1px solid rgba(34, 197, 94, 0.2)", borderRadius: 8, marginTop: 16, textAlign: "center", fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                                                 <I.cal /> EVENT COMPLETED
@@ -545,7 +582,11 @@ export function JoinEventPage({ ev, st, go }) {
                                                     <I.users /> View Waitlist Status
                                                 </button>
                                             ) : (
-                                                <button className="hbtn hbtn--primary hbtn--block" onClick={() => { register(liveEvent.id, false, { ticketTypeId: tier, qty, ticketName: sel?.n }, liveEvent.inviteToken); go("events"); }}>
+                                                <button 
+                                                    className="hbtn hbtn--primary hbtn--block" 
+                                                    disabled={liveEvent.type !== "Free" && !tier}
+                                                    onClick={() => { register(liveEvent.id, false, { ticketTypeId: tier, qty, ticketName: sel?.n }, liveEvent.inviteToken); go("events"); }}
+                                                >
                                                     {liveEvent.type === "Free" ? "Request to join" : `Get ${qty > 1 ? qty + " tickets" : "ticket"}`}
                                                 </button>
                                             )
@@ -554,25 +595,106 @@ export function JoinEventPage({ ev, st, go }) {
                                 </div>
                             )}
 
+                            {/* Ticket Selector Popup Modal */}
+                            {showTicketPopup && (
+                                <div style={{
+                                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+                                    backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center',
+                                    justifyContent: 'center', zIndex: 10000, padding: 16
+                                }}>
+                                    <div style={{
+                                        background: 'var(--surface)', border: '1px solid var(--border)',
+                                        borderRadius: 16, width: '100%', maxWidth: 460, display: 'flex',
+                                        flexDirection: 'column', maxHeight: '80vh', boxShadow: 'var(--sh-lg)'
+                                    }}>
+                                        {/* Modal Header */}
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--border-2)' }}>
+                                            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Select Ticket</h3>
+                                            <button 
+                                                onClick={() => setShowTicketPopup(false)}
+                                                style={{ background: 'transparent', border: 'none', color: 'var(--ink-3)', fontSize: 20, cursor: 'pointer' }}
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+                                        {/* Modal Body */}
+                                        <div className="scroll" style={{ padding: '16px 20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                            {tiers.map(t => (
+                                                <div 
+                                                    key={t.id} 
+                                                    onClick={() => {
+                                                        if (!t.isFull) {
+                                                            setTier(t.id);
+                                                            setShowTicketPopup(false);
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        background: 'var(--surface-2)', border: `1px solid ${tier === t.id ? 'var(--accent)' : 'var(--border)'}`,
+                                                        borderRadius: 10, padding: '12px 14px', display: 'flex', flexDirection: 'column',
+                                                        gap: 10, transition: 'all 0.2s', opacity: t.isFull ? 0.6 : 1,
+                                                        cursor: t.isFull ? 'not-allowed' : 'pointer'
+                                                    }}
+                                                >
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <div>
+                                                            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink)', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                                                                <span>{t.n}</span>
+                                                                {t.isFull && <span style={{ color: '#ef4444', fontSize: 11 }}>(Sold Out)</span>}
+                                                                {!t.isFull && t.remaining !== null && t.remaining !== undefined && t.remaining > 0 && (
+                                                                    <span style={{ 
+                                                                        color: '#f59e0b', 
+                                                                        fontSize: 11, 
+                                                                        fontWeight: 600,
+                                                                        padding: '2px 6px',
+                                                                        borderRadius: 4,
+                                                                        background: 'rgba(245, 158, 11, 0.1)',
+                                                                        border: '1px solid rgba(245, 158, 11, 0.2)',
+                                                                        display: 'inline-block'
+                                                                    }}>
+                                                                        {t.remaining} left
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div style={{ fontSize: 13, fontWeight: 600, color: '#10b981', marginTop: 2 }}>{t.p}</div>
+                                                        </div>
+                                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                                            <button 
+                                                                onClick={(ev) => {
+                                                                    ev.stopPropagation();
+                                                                    setExpandedTicketDetails(prev => ({ ...prev, [t.id]: !prev[t.id] }));
+                                                                }}
+                                                                style={{
+                                                                    background: 'transparent', border: 'none', color: 'var(--accent)',
+                                                                    fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '6px 0'
+                                                                }}
+                                                            >
+                                                                {expandedTicketDetails[t.id] ? 'Less Info' : 'More Info'}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    {expandedTicketDetails[t.id] && (
+                                                        <div style={{ borderTop: '1px solid var(--border-2)', paddingTop: 10, fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                                            <div style={{ color: 'var(--ink-2)' }}><strong style={{ color: 'var(--ink)' }}>Name:</strong> {t.n}</div>
+                                                            {t.desc && <div style={{ color: 'var(--ink-2)' }}><strong style={{ color: 'var(--ink)' }}>Description:</strong> {t.desc}</div>}
+                                                            <div style={{ color: 'var(--ink-2)' }}><strong style={{ color: 'var(--ink)' }}>Price:</strong> {t.p}</div>
+                                                            {t.salesEndAt && (
+                                                                <div style={{ color: 'var(--ink-2)' }}>
+                                                                    <strong style={{ color: 'var(--ink)' }}>End Date:</strong> {new Date(t.salesEndAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
 
                             <div className="host-card">
                                 <div className="hh"><Avatar name={e.hostBy || e.host} userId={e.hostUserId} img={e.hostPhoto} size={46} /><div><div className="n">{e.host}</div><div className="r">Organizer · 24 events</div></div></div>
                                 <div className="hb">Curating the best gatherings in {e.city || city}. Follow to never miss a drop.</div>
-                                <div style={{ display: "flex", gap: 8 }}>
-                                    <button className="hbtn hbtn--ghost hbtn--sm hbtn--block"><I.plus />Follow</button>
-                                    {showChatButton && (e.hostBy || e.host) && (e.hostBy || e.host) !== ME.name && (
-                                        <button
-                                            className="hbtn hbtn--ghost hbtn--sm hbtn--block"
-                                            onClick={() => {
-                                                if ((window as any).initiateChatWithName) {
-                                                    (window as any).initiateChatWithName(e.hostBy || e.host);
-                                                }
-                                            }}
-                                        >
-                                            <I.msg />Message
-                                        </button>
-                                    )}
-                                </div>
                             </div>
                         </div>
                     </div>

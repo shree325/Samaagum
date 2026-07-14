@@ -3,7 +3,7 @@ import { I, Avatar, Grain } from './home-icons';
 import { EventDashboard } from './event-dashboard';
 import DiscussionPanel from './discussion-panel';
 
-function Toggle({ on, onClick }) { return <button className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
+function Toggle({ on, onClick }) { return <button type="button" className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
 
 // Demo/placeholder events (e.g. FEATURED, id "ev-feat") aren't real DB rows —
 // their id isn't a UUID, so backend calls with it 500. Treat any non-UUID id
@@ -963,7 +963,7 @@ export function EventPage({ ev, st, go }) {
             {(availableRoles || []).map(r => (
               <div key={r.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", opacity: current.public ? 0.5 : 1 }}>
                 <span style={{ fontSize: 14, fontWeight: 600 }}>{r.display_name}</span>
-                <Toggle on={current.roles.includes(r.key)} onClick={() => toggleRole(r.key)} />
+                <Toggle on={current.public ? true : current.roles.includes(r.key)} onClick={() => { if (!current.public) toggleRole(r.key); }} />
               </div>
             ))}
           </div>
@@ -1741,6 +1741,7 @@ export function EventPage({ ev, st, go }) {
                 // ── Helper: submit coupon ──
                 const handleCouponSubmit = async () => {
                   if (!couponForm.code.trim()) { if (window.toast) window.toast("Coupon code is required", "warning"); return; }
+                  if (!couponForm.discount_value || String(couponForm.discount_value).trim() === "") { if (window.toast) window.toast("Discount value is required", "warning"); return; }
                   try {
                     const url = editingCoupon
                       ? `${apiBase}/api/events/${e.id}/coupons/${editingCoupon.id}`
@@ -2424,17 +2425,22 @@ export function EventPage({ ev, st, go }) {
                 <div className="ev-block" style={{ marginTop: 16 }}>
                   <h3 style={{ fontSize: 14, marginTop: 0 }}>{confirmedCount} attending</h3>
                   <div className="att-grid">
-                    {(hostStats?.confirmed || attendees || []).slice(0, 8).map((a, i) => (
-                      <div
-                        key={a.id || a.userId || a.bookingId || i}
-                        className="att"
-                        style={{ cursor: a.userId ? "pointer" : "default" }}
-                        onClick={() => a.userId && go("profile", { id: a.userId })}
-                      >
-                        <Avatar name={a.name || "Guest"} userId={a.userId || a.id} img={a.picture} size={28} />
-                        <span className="nm">{a.name || "Guest"}</span>
-                      </div>
-                    ))}
+                    {(hostStats?.confirmed || attendees || []).slice(0, 8).map((a, i) => {
+                      const name = typeof a === 'object' ? (a.name || a.display_name) : a;
+                      const userId = typeof a === 'object' ? (a.userId || a.id || a.bookingId) : undefined;
+                      const picture = typeof a === 'object' ? a.picture : undefined;
+                      return (
+                        <div
+                          key={userId || i}
+                          className="att"
+                          style={{ cursor: userId ? "pointer" : "default" }}
+                          onClick={() => userId && go("profile", { id: userId })}
+                        >
+                          <Avatar name={name || "Guest"} userId={userId} img={picture} size={28} />
+                          <span className="nm">{name || "Guest"}</span>
+                        </div>
+                      );
+                    })}
                     {confirmedCount > 8 && (
                       <div className="att" style={{ paddingRight: 14 }}>
                         <div className="av" style={{ width: 28, height: 28, fontSize: 11, background: "var(--surface-2)", color: "var(--ink-2)" }}>
@@ -2458,12 +2464,30 @@ export function EventPage({ ev, st, go }) {
       </div>
 
       {/* Roles Selection Modals */}
-      {renderRolesModal(uploadRolesModalOpen, () => setUploadRolesModalOpen(false), galleryUploadRoles, setGalleryUploadRoles, "Who can upload?", (next) => {
+      {renderRolesModal(uploadRolesModalOpen, () => setUploadRolesModalOpen(false), galleryUploadRoles, (nextUpload) => {
+        const nextVal = typeof nextUpload === 'function' ? nextUpload(galleryUploadRoles) : nextUpload;
+        setGalleryUploadRoles(nextVal);
+        const currentView = Array.isArray(galleryViewRoles?.roles) 
+          ? galleryViewRoles 
+          : { public: !!galleryViewRoles?.public, roles: legacyBucketToRoleKeys(galleryViewRoles) };
+        const nextView = {
+          public: !!(currentView.public || nextVal.public),
+          roles: Array.from(new Set([...(currentView.roles || []), ...(nextVal.roles || [])]))
+        };
+        setGalleryViewRoles(nextView);
+      }, "Who can upload?", (next) => {
+        const currentView = Array.isArray(galleryViewRoles?.roles) 
+          ? galleryViewRoles 
+          : { public: !!galleryViewRoles?.public, roles: legacyBucketToRoleKeys(galleryViewRoles) };
+        const nextView = {
+          public: !!(currentView.public || next.public),
+          roles: Array.from(new Set([...(currentView.roles || []), ...(next.roles || [])]))
+        };
         saveEventSettings({
           gallery: {
             enabled: galleryEnabled,
             uploadRoles: next,
-            viewRoles: galleryViewRoles,
+            viewRoles: nextView,
             approvalRequired: galleryApprovalRequired,
             videoOnly: galleryVideoOnly,
             imageOnly: galleryImageOnly

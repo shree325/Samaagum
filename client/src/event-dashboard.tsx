@@ -117,23 +117,23 @@ function StatCard({ icon, iconBg, iconColor, value, label, onClick }: {
     <div
       onClick={onClick}
       style={{
-        background: 'var(--surface)', padding: '16px 20px', borderRadius: 16,
+        background: 'var(--surface)', padding: '12px 16px', borderRadius: 12,
         border: '1px solid var(--border)', display: 'flex', flexDirection: 'column',
-        gap: 16, cursor: onClick ? 'pointer' : 'default',
-        transition: 'box-shadow 0.2s',
+        gap: 6, cursor: onClick ? 'pointer' : 'default',
+        transition: 'all 0.2s',
       }}
     >
-      <div style={{
-        width: 40, height: 40, borderRadius: '50%',
-        background: iconBg, color: iconColor,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-      }}>
-        {icon}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: 8 }}>
+        <span style={{ fontSize: 12.5, color: 'var(--ink-3)', fontWeight: 600, letterSpacing: '-0.01em', display: 'block' }}>{label}</span>
+        <div style={{
+          width: 28, height: 28, borderRadius: '50%',
+          background: iconBg, color: iconColor,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+        }}>
+          {icon}
+        </div>
       </div>
-      <div>
-        <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--ink)', lineHeight: 1 }}>{value}</div>
-        <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 6 }}>{label}</div>
-      </div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--ink)', lineHeight: 1, letterSpacing: '-0.02em' }}>{value}</div>
     </div>
   );
 }
@@ -248,6 +248,7 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
 
   // Pending actions state
   const [selectedRequests, setSelectedRequests] = useState<string[]>([]);
+  const [expandedAnswers, setExpandedAnswers] = useState<Record<string, boolean>>({});
   const [confirmModal, setConfirmModal] = useState<{
     title: string; message?: string; confirmLabel: string;
     confirmDanger?: boolean; onConfirm: () => void;
@@ -324,6 +325,12 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
   // isDemoMode represents a sample paid event, so Revenue tab always shows in demo
   const isPaidEvent = isDemoMode || e.registration_mode === 'paid' || e.type === 'Paid';
 
+  useEffect(() => {
+    if (!isPaidEvent && activeTab === 'revenue') {
+      setActiveTab('registered');
+    }
+  }, [isPaidEvent, activeTab]);
+
   /* -------- Derived metrics (useMemo) -------- */
   const checkinPercentage = useMemo(() =>
     activeStats.totalAttendees > 0
@@ -349,6 +356,22 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
       ? (activeStats.revenue / paidBookings.length).toLocaleString('en-IN', { maximumFractionDigits: 2 })
       : '—',
   [paidBookings.length, activeStats.revenue]);
+
+  const ticketSoldDistribution = useMemo(() => {
+    if (isDemoMode) {
+      return [
+        { name: 'VIP Ticket', value: 34 },
+        { name: 'General Admission', value: 124 },
+        { name: 'Student Ticket', value: 46 }
+      ];
+    }
+    const counts: Record<string, number> = {};
+    confirmed.forEach(u => {
+      const name = u.ticketTypeName || 'General RSVP';
+      counts[name] = (counts[name] || 0) + 1;
+    });
+    return Object.entries(counts).map(([name, value]) => ({ name, value }));
+  }, [confirmed, isDemoMode]);
 
   const revenueByTicketType = useMemo(() => {
     const grouped: Record<string, number> = {};
@@ -1125,24 +1148,66 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
           ? demoLocations
           : (activeStats.locations || { totalMapped: 0, totalUnknown: 0, cities: [] });
 
-        if (locations.cities.length === 0) {
-          return (
-            <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--border)', padding: 24 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--ink)' }}>Registration Locations</h3>
-                <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>0 / {activeStats.totalAttendees || confirmed.length} mapped</span>
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--ink-3)', marginBottom: 20 }}>See where registered attendees are joining from</div>
-              <EmptyState
-                title="No location data available"
-                message="Location data will appear here once attendees register with profile locations or complete checkout."
-                icon={<I.pin style={{ width: 28, height: 28, opacity: 0.35 }} />}
-              />
-            </div>
-          );
+        let venueObj: any = {};
+        if (typeof e.venue === 'string') {
+          try {
+            if (e.venue.trim().startsWith('{')) {
+              venueObj = JSON.parse(e.venue);
+            }
+          } catch {}
+        } else if (typeof e.venue === 'object') {
+          venueObj = e.venue || {};
         }
 
-        const autoWorldMap = locations.cities.some((c: any) => c.countryCode !== "IN");
+        const eventCityName = e.city || venueObj?.city || (isDemoMode ? "Mumbai" : "");
+
+        const CITY_COORDS: Record<string, { lat: number; lng: number; state?: string }> = {
+          mumbai: { lat: 19.076, lng: 72.877, state: "Maharashtra" },
+          delhi: { lat: 28.613, lng: 77.209, state: "Delhi" },
+          "new delhi": { lat: 28.613, lng: 77.209, state: "Delhi" },
+          bengaluru: { lat: 12.971, lng: 77.594, state: "Karnataka" },
+          bangalore: { lat: 12.971, lng: 77.594, state: "Karnataka" },
+          pune: { lat: 18.520, lng: 73.856, state: "Maharashtra" },
+          hyderabad: { lat: 17.385, lng: 78.486, state: "Telangana" },
+          chennai: { lat: 13.082, lng: 80.270, state: "Tamil Nadu" },
+          kolkata: { lat: 22.572, lng: 88.363, state: "West Bengal" },
+          ahmedabad: { lat: 23.022, lng: 72.571, state: "Gujarat" },
+          jaipur: { lat: 26.912, lng: 75.787, state: "Rajasthan" },
+          lucknow: { lat: 26.846, lng: 80.946, state: "Uttar Pradesh" },
+        };
+
+        const rawCities = locations.cities || [];
+        const hasEventCity = eventCityName && rawCities.some((c: any) => c.city.toLowerCase() === eventCityName.toLowerCase());
+        const citiesList = [...rawCities];
+
+        if (eventCityName && !hasEventCity) {
+          const key = eventCityName.toLowerCase().trim();
+          let lat = parseFloat(venueObj?.latitude || venueObj?.lat);
+          let lng = parseFloat(venueObj?.longitude || venueObj?.lng);
+          if (isNaN(lat) || isNaN(lng)) {
+            const lookup = CITY_COORDS[key];
+            if (lookup) {
+              lat = lookup.lat;
+              lng = lookup.lng;
+            }
+          }
+          if (!isNaN(lat) && !isNaN(lng)) {
+            citiesList.push({
+              city: eventCityName,
+              state: venueObj?.state || CITY_COORDS[key]?.state || "",
+              countryCode: "IN",
+              count: 0,
+              lat,
+              lng
+            });
+          }
+        }
+
+        const isEventCity = (cName: string) => {
+          return eventCityName && cName.toLowerCase() === eventCityName.toLowerCase();
+        };
+
+        const autoWorldMap = citiesList.some((c: any) => c.countryCode !== "IN");
         const useWorldMap  = mapViewMode === 'auto' ? autoWorldMap : (mapViewMode === 'world');
 
         // GeoJSON sources
@@ -1150,19 +1215,22 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
         // State/province boundaries — Natural Earth admin-1 at 50m resolution
         const STATES_GEO_URL       = "https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_1_states_provinces_lines.geojson";
         // Indian state polygons (for the dedicated India highlight layer)
-        const INDIA_STATES_URL     = "https://cdn.jsdelivr.net/gh/geohacker/india@master/state/india_state.geojson";
+        const INDIA_STATES_URL     = "https://raw.githubusercontent.com/india-in-data/india-states-2019/master/india_states.geojson";
         // Indian district/city boundaries (simplified and stored locally due to huge original size)
-        const INDIA_DISTRICTS_URL  = "/india_district_simplified.geojson";
+        const INDIA_DISTRICTS_URL  = `${apiBase}/api/public/maps/india-districts`;
 
         // Projection center and zoom for each view
         const mapConfig = useWorldMap
           ? { center: [0, 20] as [number, number],   zoom: 1,   scale: 147, label: 'Global' }
           : { center: [83, 22] as [number, number],  zoom: 1,   scale: 900, label: 'India' };
 
-        const maxCount = Math.max(...locations.cities.map((c: any) => c.count), 1);
+        const maxCount = Math.max(...citiesList.map((c: any) => c.count), 1);
 
-        // Color scale: pale purple → deep violet based on count
-        const bubbleColor = (count: number) => {
+        // Color scale: pale purple → deep violet based on count, green for host city
+        const bubbleColor = (cName: string, count: number) => {
+          if (isEventCity(cName)) {
+            return '#10b981'; // Host city color
+          }
           const t = count / maxCount;
           const alpha = 0.5 + t * 0.5;
           const r = Math.round(139 - t * 20);
@@ -1172,11 +1240,12 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
         };
 
         // Bubble radius proportional to count (sqrt scale)
-        const bubbleRadius = (count: number) => {
+        const bubbleRadius = (cName: string, count: number) => {
+          if (isEventCity(cName)) return 9; // Visible host marker
           return 4 + Math.sqrt(count / maxCount) * 18;
         };
 
-        const sortedCities = [...locations.cities].sort((a: any, b: any) => b.count - a.count);
+        const sortedCities = [...citiesList].sort((a: any, b: any) => b.count - a.count);
 
         // When the view mode toggles, reset map position to default for that view
         const baseCenter: [number, number] = useWorldMap ? [0, 20] : [83, 22];
@@ -1340,14 +1409,13 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
                       <Geographies geography={WORLD_GEO_URL}>
                         {({ geographies }: any) =>
                           geographies.map((geo: any) => {
-                            const isIndia = geo.properties?.name === 'India' || geo.id === '356';
                             return (
                               <Geography
                                 key={geo.rsmKey}
                                 geography={geo}
-                                fill={isIndia ? 'var(--map-india-fill)' : 'var(--map-world-fill)'}
-                                stroke={isIndia ? 'var(--map-india-stroke)' : 'var(--map-world-stroke)'}
-                                strokeWidth={isIndia ? 1.5 / mapZoom : 0.5 / mapZoom}
+                                fill="var(--map-world-fill)"
+                                stroke="var(--map-world-stroke)"
+                                strokeWidth={0.5 / mapZoom}
                                 style={{ default: { outline: 'none' }, hover: { outline: 'none' }, pressed: { outline: 'none' } }}
                               />
                             );
@@ -1404,10 +1472,10 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
                       </Geographies>
 
                       {/* City Bubbles — radius divided by mapZoom so screen size stays constant */}
-                      {locations.cities.map((city: any, idx: number) => {
+                      {citiesList.map((city: any, idx: number) => {
                         const isSelected = selectedCity?.city === city.city;
                         // Raw radius at zoom=1; divide by mapZoom to cancel ZoomableGroup scaling
-                        const r  = bubbleRadius(city.count) / mapZoom;
+                        const r  = bubbleRadius(city.city, city.count) / mapZoom;
                         const sw = 1 / mapZoom; // stroke width also scaled down
                         return (
                           <Marker
@@ -1421,24 +1489,24 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
                               <circle r={r + 10 / mapZoom} fill="none" stroke="#f59e0b" strokeWidth={2 / mapZoom} opacity={0.8} />
                             )}
                             {/* Glow ring */}
-                            <circle r={r + 5 / mapZoom} fill="none" stroke={bubbleColor(city.count)} strokeWidth={sw} opacity={0.4} />
+                            <circle r={r + 5 / mapZoom} fill="none" stroke={bubbleColor(city.city, city.count)} strokeWidth={sw} opacity={0.4} />
                             {/* Main bubble */}
                             <circle
                               r={r}
-                              fill={isSelected ? '#f59e0b' : bubbleColor(city.count)}
+                              fill={isSelected ? '#f59e0b' : bubbleColor(city.city, city.count)}
                               stroke="#fff"
                               strokeWidth={isSelected ? 2 / mapZoom : sw}
                               style={{ cursor: 'pointer', transition: 'fill 0.2s' }}
                             />
                             {/* City label — font size also scaled so text stays readable */}
-                            {(city.count >= 2 || isSelected) && (
+                            {(city.count >= 2 || isSelected || isEventCity(city.city)) && (
                               <text
                                 textAnchor="middle"
                                 y={-(r + 8 / mapZoom)}
                                 style={{
                                   fontFamily: 'inherit',
                                   fontSize: `${10 / mapZoom}px`,
-                                  fill: isSelected ? '#f59e0b' : '#e2d9f3',
+                                  fill: isSelected ? '#f59e0b' : (isEventCity(city.city) ? '#10b981' : '#e2d9f3'),
                                   fontWeight: 600,
                                   pointerEvents: 'none'
                                 }}
@@ -1528,16 +1596,17 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
                         <span style={{ color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{
                             display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
-                            background: isSelected ? '#f59e0b' : bubbleColor(c.count), flexShrink: 0,
+                            background: isSelected ? '#f59e0b' : bubbleColor(c.city, c.count), flexShrink: 0,
                             transition: 'background 0.2s'
                           }} />
                           {c.city}
+                          {isEventCity(c.city) && <span style={{ fontSize: 11, color: '#10b981', fontWeight: 700, marginLeft: 4 }}>🟢 Host City</span>}
                           {c.state && <span style={{ fontSize: 11, color: 'var(--ink-3)', fontWeight: 400 }}>({c.state})</span>}
                         </span>
                         <span style={{ color: 'var(--ink-2)', marginLeft: 8 }}>{c.count}</span>
                       </div>
                       <div style={{ height: 6, background: 'var(--border-2)', borderRadius: 999, overflow: 'hidden' }}>
-                        <div style={{ width: `${pct}%`, height: '100%', background: isSelected ? '#f59e0b' : bubbleColor(c.count), borderRadius: 999, transition: 'all 0.4s ease' }} />
+                        <div style={{ width: `${pct}%`, height: '100%', background: isSelected ? '#f59e0b' : bubbleColor(c.city, c.count), borderRadius: 999, transition: 'all 0.4s ease' }} />
                       </div>
                     </div>
                   );
@@ -1551,7 +1620,15 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
 
                 {/* Color legend */}
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-                  <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 6 }}>Registrations (bubble size)</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>Registrations (bubble size)</div>
+                    {eventCityName && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#10b981', fontWeight: 700 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+                        Host City ({eventCityName})
+                      </div>
+                    )}
+                  </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'rgba(139,92,246,0.5)', display: 'inline-block' }} />
                     <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>Few</span>
@@ -1780,30 +1857,71 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {requests.map((u) => (
-              <div key={u.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: 'var(--field)', borderRadius: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <input type="checkbox" checked={selectedRequests.includes(u.bookingId)}
-                    onChange={ev => setSelectedRequests(prev => ev.target.checked ? [...prev, u.bookingId] : prev.filter(id => id !== u.bookingId))}
-                  />
-                  <Avatar name={u.name} size={38} img={u.picture ?? undefined} />
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{u.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>
-                      {u.email}
-                      {isDemoMode && u.time && ` · ${u.time}`}
+              <div key={u.id} style={{ display: 'flex', flexDirection: 'column', background: 'var(--field)', borderRadius: 10, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <input type="checkbox" checked={selectedRequests.includes(u.bookingId)}
+                      onChange={ev => setSelectedRequests(prev => ev.target.checked ? [...prev, u.bookingId] : prev.filter(id => id !== u.bookingId))}
+                    />
+                    <Avatar name={u.name} size={38} img={u.picture ?? undefined} />
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{u.name}</div>
+                      <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>
+                        {u.email}
+                        {isDemoMode && u.time && ` · ${u.time}`}
+                      </div>
                     </div>
                   </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="hbtn hbtn--soft hbtn--sm" style={{ color: '#ef4444' }}
+                      onClick={() => executeAction(u.bookingId, 'reject', u.name)} disabled={actionLoading}>
+                      Reject
+                    </button>
+                    <button className="hbtn hbtn--primary hbtn--sm"
+                      onClick={() => executeAction(u.bookingId, 'accept', u.name)} disabled={actionLoading}>
+                      Approve
+                    </button>
+                    <button className="hbtn hbtn--soft hbtn--sm"
+                      onClick={() => setExpandedAnswers(prev => ({ ...prev, [u.id]: !prev[u.id] }))}>
+                      {expandedAnswers[u.id] ? 'Hide Responses' : 'Responses'}
+                    </button>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="hbtn hbtn--soft hbtn--sm" style={{ color: '#ef4444' }}
-                    onClick={() => executeAction(u.bookingId, 'reject', u.name)} disabled={actionLoading}>
-                    Reject
-                  </button>
-                  <button className="hbtn hbtn--primary hbtn--sm"
-                    onClick={() => executeAction(u.bookingId, 'accept', u.name)} disabled={actionLoading}>
-                    Approve
-                  </button>
-                </div>
+                {expandedAnswers[u.id] && (
+                  <div style={{ padding: '0 16px 16px 66px', borderTop: '1px solid var(--border-2)', background: 'rgba(255,255,255,0.02)' }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-3)', marginTop: 12, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Registration Responses
+                    </div>
+                    {(() => {
+                      const filteredEntries = Object.entries(u.answers || {}).filter(
+                        ([key]) => !['ticketTypeId', 'qty', 'ticketName', 'registration_location'].includes(key)
+                      );
+                      if (filteredEntries.length === 0) {
+                        return (
+                          <div style={{ fontSize: 13, color: 'var(--ink-3)', fontStyle: 'italic' }}>
+                            No responses provided (questions may not have been required).
+                          </div>
+                        );
+                      }
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {filteredEntries.map(([key, val]: [string, any]) => {
+                            const field = (e.formFields || []).find((f: any) => f.id === key);
+                            const questionText = field?.question || field?.label || key;
+                            return (
+                              <div key={key} style={{ fontSize: 13 }}>
+                                <div style={{ color: 'var(--ink-2)', fontWeight: 500, marginBottom: 2 }}>Q: {questionText}</div>
+                                <div style={{ color: 'var(--ink)', padding: '6px 10px', background: 'var(--surface-2)', borderRadius: 6, border: '1px solid var(--border)', whiteSpace: 'pre-wrap' }}>
+                                  {String(val)}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -2042,27 +2160,14 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
         </div>
       </div>
 
-      {/* Ticket Revenue Performance OR Revenue Summary */}
-      <div style={{ background: 'var(--surface)', padding: 24, borderRadius: 12, border: '1px solid var(--border)' }}>
-        {isDemoMode || hasTicketBreakdown ? (
-          <>
-            <h3 style={{ fontSize: 16, margin: '0 0 16px', fontWeight: 600 }}>Revenue by Ticket Type</h3>
-            <div style={{ height: 220 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={isDemoMode ? demoTicketRevenue : revenueByTicketType} layout="vertical" margin={{ left: 0, right: 20 }}>
-                  <XAxis type="number" hide />
-                  <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--ink-2)' }} width={90} />
-                  <RechartsTooltip cursor={{ fill: 'var(--field)' }} content={<ChartTooltip />} formatter={(v: number) => `₹${v.toLocaleString('en-IN')}`} />
-                  <Bar dataKey="value" name="Revenue (₹)" fill="#8b5cf6" radius={[0, 4, 4, 0]} barSize={22} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </>
-        ) : paidBookings.length === 0 ? (
-          <EmptyState title="No paid bookings yet" message="Revenue data will appear here once tickets are sold." icon={<I.ticket style={{ width: 28, height: 28, opacity: 0.35 }} />} />
-        ) : (
-          <>
-            <h3 style={{ fontSize: 16, margin: '0 0 20px', fontWeight: 600 }}>Revenue Summary</h3>
+      {/* Revenue Summary and Ticket Types Sold Distribution */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+        {/* Left Column: Revenue Summary */}
+        <div style={{ background: 'var(--surface)', padding: 24, borderRadius: 12, border: '1px solid var(--border)' }}>
+          <h3 style={{ fontSize: 16, margin: '0 0 20px', fontWeight: 600 }}>Revenue Summary</h3>
+          {paidBookings.length === 0 && !isDemoMode ? (
+            <EmptyState title="No paid bookings yet" message="Revenue summary will appear here once tickets are sold." icon={<I.ticket style={{ width: 28, height: 28, opacity: 0.35 }} />} />
+          ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
               {[
                 { label: 'Total Revenue', value: `₹${activeStats.revenue.toLocaleString('en-IN')}` },
@@ -2079,8 +2184,55 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
                 </div>
               ))}
             </div>
-          </>
-        )}
+          )}
+        </div>
+
+        {/* Right Column: Ticket Type Sales Distribution (Pie Chart) */}
+        <div style={{ background: 'var(--surface)', padding: 24, borderRadius: 12, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+          <h3 style={{ fontSize: 16, margin: '0 0 16px', fontWeight: 600 }}>Tickets Sold by Type</h3>
+          {ticketSoldDistribution.length === 0 ? (
+            <EmptyState title="No tickets sold" message="Ticket type breakdown will appear here once bookings are confirmed." icon={<I.ticket style={{ width: 28, height: 28, opacity: 0.35 }} />} />
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, height: '100%', minHeight: 180 }}>
+              <div style={{ width: 160, height: 160, position: 'relative', flexShrink: 0 }}>
+                <PieChart width={160} height={160}>
+                  <Pie
+                    data={ticketSoldDistribution}
+                    innerRadius={45}
+                    outerRadius={65}
+                    paddingAngle={3}
+                    dataKey="value"
+                    stroke="none"
+                    cx="50%"
+                    cy="50%"
+                  >
+                    {ticketSoldDistribution.map((entry, idx) => (
+                      <Cell key={`cell-${idx}`} fill={COLORS[idx % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip content={<ChartTooltip />} />
+                </PieChart>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                  <div style={{ fontSize: 20, fontWeight: 800 }}>
+                    {ticketSoldDistribution.reduce((sum, item) => sum + item.value, 0).toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--ink-3)', fontWeight: 600, textTransform: 'uppercase' }}>Sold</div>
+                </div>
+              </div>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10, paddingLeft: 8 }}>
+                {ticketSoldDistribution.map((t, idx) => (
+                  <div key={t.name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ink-2)', minWidth: 0 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: COLORS[idx % COLORS.length], flexShrink: 0 }} />
+                      <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{t.name}</span>
+                    </div>
+                    <span style={{ fontWeight: 600, color: 'var(--ink)', marginLeft: 8 }}>{t.value.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Recent Transactions */}
@@ -2125,12 +2277,47 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
      TAB NAVIGATION CARDS
      ================================================================ */
   const tabs = [
-    { id: 'registered', label: 'Registered Members', val: activeStats.totalAttendees.toLocaleString(), sub: isDemoMode ? '↑ 12% this week' : `of ${activeStats.capacity} capacity` },
-    { id: 'pending', label: 'Pending Requests', val: activeStats.pendingRequestsCount, sub: isDemoMode ? '8 new today' : 'awaiting review' },
-    { id: 'checkedIn', label: 'Checked In', val: `${activeStats.checkedInCount} / ${activeStats.totalAttendees}`, sub: `${checkinPercentage}% attendance` },
+    { 
+      id: 'registered', 
+      label: 'Registered Members', 
+      val: activeStats.totalAttendees.toLocaleString(), 
+      sub: isDemoMode ? '↑ 12% this week' : `of ${activeStats.capacity} capacity`,
+      icon: <I.users style={{ width: 20, height: 20 }} />,
+      iconBg: 'rgba(139,92,246,0.12)',
+      iconColor: '#8b5cf6'
+    },
+    { 
+      id: 'pending', 
+      label: 'Pending Requests', 
+      val: activeStats.pendingRequestsCount, 
+      sub: isDemoMode ? '8 new today' : 'awaiting review',
+      icon: <I.clock style={{ width: 20, height: 20 }} />,
+      iconBg: 'rgba(245,158,11,0.12)',
+      iconColor: '#f59e0b'
+    },
+    { 
+      id: 'checkedIn', 
+      label: 'Checked In', 
+      val: `${activeStats.checkedInCount} / ${activeStats.totalAttendees}`, 
+      sub: `${checkinPercentage}% attendance`,
+      icon: <I.check style={{ width: 20, height: 20 }} />,
+      iconBg: 'rgba(16,185,129,0.12)',
+      iconColor: '#10b981'
+    },
   ] as const;
   const allTabs = isPaidEvent
-    ? [...tabs, { id: 'revenue', label: 'Revenue', val: `₹${activeStats.revenue.toLocaleString('en-IN')}`, sub: isDemoMode ? '↑ 18.4%' : 'total collected' } as const]
+    ? [
+        ...tabs,
+        { 
+          id: 'revenue', 
+          label: 'Revenue', 
+          val: `₹${activeStats.revenue.toLocaleString('en-IN')}`, 
+          sub: isDemoMode ? '↑ 18.4%' : 'total collected',
+          icon: <I.wallet style={{ width: 20, height: 20 }} />,
+          iconBg: 'rgba(59,130,246,0.12)',
+          iconColor: '#3b82f6'
+        } as const
+      ]
     : [...tabs];
 
   if (loading) return <div style={{ padding: 60, textAlign: 'center', color: 'var(--ink-3)' }}>Loading dashboard…</div>;
@@ -2194,10 +2381,24 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
                 border: activeTab === t.id ? '2px solid #8b5cf6' : '1px solid var(--border)',
                 boxShadow: activeTab === t.id ? '0 4px 16px rgba(139,92,246,0.15)' : '0 2px 8px rgba(0,0,0,0.04)',
                 transform: activeTab === t.id ? 'translateY(-2px)' : 'none',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
               }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: activeTab === t.id ? '#8b5cf6' : 'var(--ink-3)', marginBottom: 8 }}>{t.label}</div>
-                <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--ink)' }}>{t.val}</div>
-                <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 8 }}>{t.sub}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: activeTab === t.id ? '#8b5cf6' : 'var(--ink-3)', marginBottom: 8 }}>{t.label}</div>
+                  <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--ink)', lineHeight: 1 }}>{t.val}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 8 }}>{t.sub}</div>
+                </div>
+                <div style={{
+                  width: 42, height: 42, borderRadius: '50%',
+                  background: activeTab === t.id ? t.iconColor : t.iconBg,
+                  color: activeTab === t.id ? '#fff' : t.iconColor,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0, transition: 'all 0.2s'
+                }}>
+                  {t.icon}
+                </div>
               </div>
             ))}
           </div>

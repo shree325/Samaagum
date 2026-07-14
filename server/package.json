@@ -10,6 +10,7 @@
     "migrate": "ts-node src/db/migrate.ts",
     "migrate:status": "ts-node src/db/migrate.ts status",
     "seed": "ts-node src/db/seed.ts",
+    "seed:map": "ts-node src/seed-india-districts.ts",
     "validate:i35": "ts-node src/i35-validation.ts",
     "import-geolite": "ts-node src/scripts/import-geolite.ts"
   },

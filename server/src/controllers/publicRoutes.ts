@@ -396,4 +396,19 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
     }
   });
 
+  // Serve India districts GeoJSON boundary data from the database
+  fastify.get('/maps/india-districts', async (request, reply) => {
+    try {
+      const row = await prisma.platform_settings.findFirst({
+        where: { key: 'india_districts_geojson' }
+      });
+      if (!row) {
+        return reply.status(404).send({ success: false, message: 'GeoJSON data not found in database. Please run the seeder script.' });
+      }
+      return row.value; // Returns the raw geojson structure directly
+    } catch (error: any) {
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to retrieve map data from database.' });
+    }
+  });
+
 };
