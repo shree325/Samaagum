@@ -1798,24 +1798,22 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         });
       }
 
-const answers: any = request.body || {};
+      const answers: any = request.body || {};
 
-let ticketType: any = null;
+      let ticketType: any = null;
 
-if (answers.ticketTypeId) {
-  ticketType = await prisma.ticket_types.findUnique({
-    where: { id: answers.ticketTypeId }
-  });
+      if (answers.ticketTypeId) {
+        ticketType = await prisma.ticket_types.findUnique({
+          where: { id: answers.ticketTypeId }
+        });
 
-  if (!ticketType || ticketType.event_id !== eventId) {
-    return reply.status(400).send({
-      success: false,
-      message: 'Invalid ticket type'
-    });
-  }
-} else {
-  // create new ticket type
-}
+        if (!ticketType || ticketType.event_id !== eventId) {
+          return reply.status(400).send({
+            success: false,
+            message: 'Invalid ticket type'
+          });
+        }
+      } else {
         ticketType = await prisma.ticket_types.findFirst({
           where: { event_id: eventId }
         });
