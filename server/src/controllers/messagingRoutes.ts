@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import prisma from '../config/prisma';
+import { locationService } from '../services/locationService';
 import { DEFAULT_CHAT_SETTINGS } from '../settings-library/settingsSeeder';
 import { conversationReadService } from '../services/ConversationReadService';
 import { GroupService } from '../services/GroupService';
@@ -1659,9 +1660,18 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       }
 
       // Get or create a ticket type
-      let ticketType = await prisma.ticket_types.findFirst({
-        where: { event_id: eventId }
-      });
+      const { ticketTypeId } = (request.body as any) || {};
+      let ticketType = null;
+      if (ticketTypeId) {
+        ticketType = await prisma.ticket_types.findFirst({
+          where: { id: ticketTypeId, event_id: eventId }
+        });
+      }
+      if (!ticketType) {
+        ticketType = await prisma.ticket_types.findFirst({
+          where: { event_id: eventId }
+        });
+      }
       if (!ticketType) {
         ticketType = await prisma.ticket_types.create({
           data: {
@@ -1688,6 +1698,27 @@ export async function messagingRoutes(fastify: FastifyInstance) {
 
       // Remove from wishlist if they join
       await EventService.removeWishlist(eventId, userId).catch(err => console.error('Failed to auto-remove from wishlist', err));
+
+      // Proxy-safe, best-effort geolocation lookup. Never blocks registration.
+      let registrationLocation: any = null;
+      try {
+        const clientIp = request.ip; // Fastify proxy-safe client IP resolver
+        if (clientIp) {
+          const detected = await locationService.detectByIp(clientIp);
+          if (detected) {
+            registrationLocation = {
+              city: detected.city_name,
+              state: detected.state_name || null,
+              countryCode: detected.country_name === 'India' ? 'IN' : (detected.country_name || null),
+              lat: detected.latitude,
+              lng: detected.longitude,
+              source: 'IP_GEOLOCATION'
+            };
+          }
+        }
+      } catch (err) {
+        request.log.warn({ err }, 'Registration location resolution failed');
+      }
 
       // Perform transaction to create booking, line item, ticket, and attendee
       const { booking, ticket } = await prisma.$transaction(async (tx) => {
@@ -1744,7 +1775,10 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             name: requesterName,
             email: requesterEmail,
             checkin_status: 'not_checked_in',
-            notes: JSON.stringify(answers)
+            notes: JSON.stringify({
+              ...(typeof answers === 'object' && answers !== null ? answers : {}),
+              registration_location: registrationLocation
+            })
           }
         });
 

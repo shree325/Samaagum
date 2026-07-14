@@ -732,7 +732,7 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             // Confirmed attendees
             const confirmedAttendees = await prisma.attendees.findMany({
                 where: { bookings: { event_id: id, status: { in: ['confirmed', 'pending_payment'] } } },
-                include: { tickets: true, bookings: true }
+                include: { tickets: true, bookings: true, users_attendees_user_idTousers: true }
             });
 
             // Pending join requests
@@ -750,6 +750,131 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const wishlistCount = await prisma.event_wishlist.count({
                 where: { event_id: id }
             });
+
+            // Resolve registration locations for confirmed attendees (city-level aggregation)
+            const activeCities = await prisma.city_controls.findMany({
+                where: { is_active: true }
+            });
+
+            const cityMap = new Map<string, Array<{ city_name: string, state_name: string | null, country_name: string | null, latitude: number, longitude: number }>>();
+            activeCities.forEach(c => {
+                if (c.latitude !== null && c.longitude !== null) {
+                    const key = c.city_name.toLowerCase();
+                    const entry = {
+                        city_name: c.city_name,
+                        state_name: c.state_name || null,
+                        country_name: c.country_name || null,
+                        latitude: Number(c.latitude),
+                        longitude: Number(c.longitude)
+                    };
+                    if (!cityMap.has(key)) {
+                        cityMap.set(key, [entry]);
+                    } else {
+                        cityMap.get(key)!.push(entry);
+                    }
+                }
+            });
+
+            const CITY_ALIASES: Record<string, string> = {
+                "bombay": "mumbai",
+                "bangalore": "bengaluru",
+                "madras": "chennai",
+                "calcutta": "kolkata",
+                "new delhi": "delhi",
+                "gurgaon": "gurugram",
+                "poona": "pune"
+            };
+
+            let totalMapped = 0;
+            let totalUnknown = 0;
+            const cityCounts = new Map<string, { city: string, state: string | null, countryCode: string, count: number, lat: number, lng: number }>();
+
+            for (const attendee of confirmedAttendees) {
+                let resolved: any = null;
+
+                // 1. Resolve via user profile location
+                const rawProfileLoc = attendee.users_attendees_user_idTousers?.location;
+                if (rawProfileLoc) {
+                    const parts = rawProfileLoc.trim().toLowerCase().split(',').map((p: string) => p.trim());
+                    const cleanLoc = parts[0];
+                    const normalizedName = CITY_ALIASES[cleanLoc] || cleanLoc;
+                    
+                    const candidates = cityMap.get(normalizedName);
+                    if (candidates && candidates.length > 0) {
+                        let matched = candidates[0]; // fallback to first
+                        
+                        // Try to find a better match using the country/state from rawProfileLoc
+                        if (parts.length > 1) {
+                            const countryOrState = parts[parts.length - 1]; // usually country
+                            const betterMatch = candidates.find(c => 
+                                (c.country_name && c.country_name.toLowerCase() === countryOrState) ||
+                                (c.state_name && c.state_name.toLowerCase() === countryOrState)
+                            );
+                            if (betterMatch) {
+                                matched = betterMatch;
+                            } else {
+                                // Default to prioritizing India if ambiguous
+                                const indiaMatch = candidates.find(c => c.country_name === 'India');
+                                if (indiaMatch) {
+                                    matched = indiaMatch;
+                                }
+                            }
+                        } else {
+                            // If no country specified in rawProfileLoc, default to prioritizing India
+                            const indiaMatch = candidates.find(c => c.country_name === 'India');
+                            if (indiaMatch) {
+                                matched = indiaMatch;
+                            }
+                        }
+                        
+                        resolved = {
+                            city: matched.city_name,
+                            state: matched.state_name,
+                            countryCode: matched.country_name === 'India' ? 'IN' : (matched.country_name || 'IN'),
+                            lat: matched.latitude,
+                            lng: matched.longitude
+                        };
+                    }
+                }
+
+                // 2. Fallback to derived geolocation stored in attendee notes JSON
+                if (!resolved) {
+                    let parsedNotes: any = {};
+                    try {
+                        parsedNotes = JSON.parse(attendee.notes || '{}');
+                    } catch (e) {}
+                    const regLoc = parsedNotes.registration_location;
+                    if (regLoc && regLoc.city && regLoc.lat && regLoc.lng) {
+                        resolved = {
+                            city: regLoc.city,
+                            state: regLoc.state || null,
+                            countryCode: regLoc.countryCode || 'IN',
+                            lat: Number(regLoc.lat),
+                            lng: Number(regLoc.lng)
+                        };
+                    }
+                }
+
+                if (resolved) {
+                    totalMapped++;
+                    const key = `${resolved.city.toLowerCase()}_${resolved.countryCode.toLowerCase()}`;
+                    const existing = cityCounts.get(key);
+                    if (existing) {
+                        existing.count++;
+                    } else {
+                        cityCounts.set(key, {
+                            city: resolved.city,
+                            state: resolved.state,
+                            countryCode: resolved.countryCode,
+                            count: 1,
+                            lat: resolved.lat,
+                            lng: resolved.lng
+                        });
+                    }
+                } else {
+                    totalUnknown++;
+                }
+            }
 
             return {
                 success: true,
@@ -777,7 +902,9 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                             bookingStatus: (a as any).bookings?.status || 'confirmed',
                             isCashPayment: (a as any).bookings?.payment_method === 'cash',
                             amountMinor: (a as any).bookings?.total_amount_minor ? Number((a as any).bookings.total_amount_minor) : 0,
-                            answers: parsedAnswers
+                            answers: parsedAnswers,
+                            createdAt: a.created_at || (a as any).bookings?.created_at || null,
+                            checkinTime: a.checkin_status === 'checked_in' ? a.updated_at : null
                         };
                     }),
                     requests: pendingRequests.map(r => {
@@ -796,7 +923,17 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                             picture,
                             answers: parsedAnswers
                         };
-                    })
+                    }),
+                    bookings: bookings.map(b => ({
+                        id: b.id,
+                        status: b.status,
+                        createdAt: b.created_at
+                    })),
+                    locations: {
+                        totalMapped,
+                        totalUnknown,
+                        cities: Array.from(cityCounts.values())
+                    }
                 }
             };
         } catch (e: any) {

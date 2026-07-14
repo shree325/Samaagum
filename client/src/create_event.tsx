@@ -2244,16 +2244,24 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
 
   const setTk = (i, key, v) => setTickets(ts => ts.map((t, j) => j === i ? { ...t, [key]: v } : t));
 
+  const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+  const parsedStartDate = startDate ? new Date(startDate) : null;
+  const isValidDate = parsedStartDate && !isNaN(parsedStartDate.getTime());
+
   const previewEv = {
     cover, cat, type: type === "free" ? "Free" : (type === "cash" ? "Cash" : "Paid"), online: locType === "online",
-    month: "JUN", day: "18", title: title || "Your event title",
-    date: startDate || "Date TBD", time: startTime ? format24to12(startTime) : "Time TBD",
-    venue: locType === "online" ? "Online" : (venue || "Venue TBD"),
-    going: 0, price: (type === "paid" || type === "cash") ? `₹${tickets[0]?.price || "—"}` : "Free", attendees: [],
+    month: isValidDate ? months[parsedStartDate.getMonth()] : "--",
+    day: isValidDate ? parsedStartDate.getDate().toString() : "--",
+    title: title || "--",
+    date: isValidDate ? parsedStartDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : "--",
+    time: startTime ? format24to12(startTime) : "--",
+    venue: locType === "online" ? "Online (🌍)" : (venue || "--"),
+    going: "--", price: (type === "paid" || type === "cash") ? `₹${tickets[0]?.price || "—"}` : "Free", attendees: [],
   };
 
   // Full snapshot of every editable field, restored via `editEv.__draft` when returning from Preview.
   const draftSnapshot = {
+    id: editEv?.id !== 'new' ? editEv?.id : undefined,
     title, slug, cover, visibility, calendar, startDate, startTime, endDate, endTime,
     timezone, locType, venue, desc, type, approval, capacityEnabled, capacity, waitlist,
     tickets, tags, cat, instructions, joinEligibility, selectedAccess, enableRegForm, formFields,
@@ -3486,7 +3494,7 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
             <button className="hbtn hbtn--ghost" onClick={() => handlePublish(true)} disabled={loading}>
               {loading ? "Saving..." : "Save draft"}
             </button>
-            <button className="hbtn hbtn--ghost" style={{ display: "flex", alignItems: "center", gap: 8 }} onClick={() => go("event", { ...previewEv, id: "new", host: ME.name, hostBy: ME.name, city: "Bengaluru", cap: capacity || 180, desc, formFields, __draft: draftSnapshot })} disabled={loading}>
+            <button className="hbtn hbtn--ghost" style={{ display: "flex", alignItems: "center", gap: 8 }} onClick={() => go("preview-event", { ...previewEv, id: "new", host: ME.name, hostBy: ME.name, cap: capacity || 180, desc, formFields, __draft: draftSnapshot })} disabled={loading}>
               <I.external /> Preview
             </button>
             <button className="hbtn hbtn--primary" onClick={() => handlePublish(false)} disabled={loading}>

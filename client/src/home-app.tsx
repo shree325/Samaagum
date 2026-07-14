@@ -27,6 +27,7 @@ import { PublicProfile } from './public-profile';
 import { useTweaks } from './tweaks-panel';
 import { usePlanEntitlements } from './usePlanEntitlements';
 import { EventPage } from './event';
+import { PreviewEventPage } from './preview_event';
 import { JoinEventPage } from './join_event';
 
 /* ============================================================
@@ -888,13 +889,24 @@ export function DashboardApp() {
       const isRestricted = meta.joinEligibility === 'restricted' || evObj.registration_mode === 'restricted' || evObj.joinEligibility === 'restricted';
 
       const token = localStorage.getItem('token');
+      const payload: any = {};
+      if (typeof answers === 'string') {
+        payload.ticketTypeId = answers;
+      } else if (typeof answers === 'object' && answers !== null) {
+        payload.ticketTypeId = (answers as any).ticketTypeId || (answers as any).ticket_type_id || (answers as any).tier;
+        Object.assign(payload, answers);
+      }
+      if (inviteToken) {
+        payload.inviteToken = inviteToken;
+      }
+
       fetch(`${apiBase}/api/messaging/events/${id}/request-join`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
-        body: JSON.stringify(inviteToken ? { ...answers, inviteToken } : answers)
+        body: JSON.stringify(payload)
       })
       .then(res => res.json())
       .then(res => {
@@ -1230,6 +1242,7 @@ useEffect(() => {
     if (v === "events") return <MyTickets st={st} go={go} />;
     if (v === "tickets") return <AllTickets st={st} go={go} />;
     if (v === "groups") return <MyGroups st={st} go={go} param={cur.param} />;
+    if (v === "preview-event") return <PreviewEventPage ev={cur.param} st={st} go={go} />;
     if (v === "event") {
       const e = cur.param || FEATURED;
       const isOwner = e.hostBy === ME.name || e.host === ME.name || e.created_by === ME.id || (st.createdEvents && st.createdEvents.some(ce => ce.id === e.id));

@@ -18,10 +18,10 @@ export function EventPage({ ev, st, go }) {
   if (e && (e.starts_at || typeof e.venue === 'object' || typeof e.venue === 'string')) {
     const startsAt = e.starts_at ? new Date(e.starts_at) : null;
     const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-    const month = startsAt ? months[startsAt.getMonth()] : "TBD";
-    const day = startsAt ? startsAt.getDate().toString() : "TBD";
-    const time = startsAt ? startsAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : "Time TBD";
-    const dateStr = startsAt ? startsAt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : "Date TBD";
+    const month = startsAt ? months[startsAt.getMonth()] : (e.month || "TBD");
+    const day = startsAt ? startsAt.getDate().toString() : (e.day || "TBD");
+    const time = startsAt ? startsAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : (e.time || "Time TBD");
+    const dateStr = startsAt ? startsAt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : (e.date || "Date TBD");
 
     let venueObj: any = {};
     if (typeof e.venue === 'string') {
@@ -193,13 +193,19 @@ export function EventPage({ ev, st, go }) {
   const fetchEventDetails = async () => {
     if (e.id === "new" || !isRealEventId(e.id)) {
       // Mock/Preview mode: populate state directly from the preview object
-      const venueObj = e.venue || {};
+      let venueObj: any = {};
+      if (typeof e.venue === 'string') {
+        try { venueObj = e.venue.trim().startsWith('{') ? JSON.parse(e.venue) : { name: e.venue, address: e.venue }; }
+        catch (err) { venueObj = { name: e.venue, address: e.venue }; }
+      } else if (typeof e.venue === 'object' && e.venue !== null) {
+        venueObj = e.venue;
+      }
       const meta = venueObj.meta || {};
       const dateObj = e.starts_at ? new Date(e.starts_at) : new Date();
-      const month = dateObj.toLocaleString("en-US", { month: "short" }).toUpperCase();
-      const day = dateObj.getDate();
-      const dateStr = dateObj.toLocaleDateString();
-      const time = dateObj.toLocaleTimeString();
+      const month = e.month || dateObj.toLocaleString("en-US", { month: "short" }).toUpperCase();
+      const day = e.day || dateObj.getDate();
+      const dateStr = e.date || dateObj.toLocaleDateString();
+      const time = e.time || dateObj.toLocaleTimeString();
 
       const priceVal = e.price || (e.tickets?.[0] ? `₹${(e.tickets[0].price_minor / 100).toFixed(0)}` : ((e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : '—'));
 
@@ -606,7 +612,13 @@ export function EventPage({ ev, st, go }) {
     checkRoleBucket(discussionReplyRoles, isTicketManager);
 
   // Tab State
-  const [tab, setTab] = useState("about"); // about | members | gallery | discussion | ticketing | invite | settings
+  const [tab, setTab] = useState(ev?.initialTab || "about"); // about | members | gallery | discussion | ticketing | invite | settings
+
+  useEffect(() => {
+    if (ev?.initialTab) {
+      setTab(ev.initialTab);
+    }
+  }, [ev?.initialTab]);
 
   useEffect(() => {
     if (tab === "dashboard" && !isOwner) {
@@ -634,6 +646,12 @@ export function EventPage({ ev, st, go }) {
 
   // Gallery items state
   const [galleryItems, setGalleryItems] = useState([]);
+  const [viewerItem, setViewerItem] = useState(null);
+  const [zoomScale, setZoomScale] = useState(1);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [handModeActive, setHandModeActive] = useState(true);
   const [inviteLinks, setInviteLinks] = useState({ view: null, join: [] });
   const [inviteLoading, setInviteLoading] = useState({ view: false, join: false });
   const [guestSearch, setGuestSearch] = useState("");
@@ -902,7 +920,7 @@ export function EventPage({ ev, st, go }) {
         }}>
           {!e.cover && <Grain />}
           <div className="scrim" />
-          <button className="detail-back" style={{ top: 20, left: 20 }} onClick={() => (e.id === "new" && e.__draft) ? go("edit-event", { __draft: e.__draft }) : go("back")}><I.arrowL />Back</button>
+          <button className="detail-back" style={{ top: 20, left: 20 }} onClick={() => (e.id === "new" && e.__draft) ? go("edit-event", { __draft: e.__draft, id: e.__draft.id }) : go("back")}><I.arrowL />Back</button>
         </div>
 
         {/* Group details header container */}
@@ -1022,7 +1040,7 @@ export function EventPage({ ev, st, go }) {
                       {regToggleLoading ? "…" : (isScheduled ? `Scheduled (${registrationOpen ? 'Open' : 'Closed'})` : (registrationOpen ? "Registration Open" : "Registration Closed"))}
                     </span>
                   </div>
-                  <button className="hbtn hbtn--soft hbtn--sm" onClick={() => go("edit-event", currentEvent || e)}>
+                  <button className="hbtn hbtn--soft hbtn--sm" onClick={() => (e.id === "new" && e.__draft) ? go("edit-event", { __draft: e.__draft, id: e.__draft.id }) : go("edit-event", currentEvent || e)}>
                     <I.edit style={{ width: 14 }} /> Edit Event
                   </button>
                 </>
@@ -1536,7 +1554,15 @@ export function EventPage({ ev, st, go }) {
                         {item.type === "video" ? (
                           <video src={item.url} style={{ width: "100%", height: "100%", objectFit: "cover" }} controls />
                         ) : (
-                          <div style={{ width: "100%", height: "100%", background: item.url && (item.url.startsWith("linear-gradient") || item.url.startsWith("radial-gradient") || item.url.startsWith("var(")) ? item.url : `url(${item.url}) center/cover no-repeat` }} />
+                          <div 
+                            onClick={() => {
+                              setViewerItem(item);
+                              setZoomScale(1);
+                              setPanOffset({ x: 0, y: 0 });
+                              setHandModeActive(true);
+                            }}
+                            style={{ cursor: "pointer", width: "100%", height: "100%", background: item.url && (item.url.startsWith("linear-gradient") || item.url.startsWith("radial-gradient") || item.url.startsWith("var(")) ? item.url : `url(${item.url}) center/cover no-repeat` }} 
+                          />
                         )}
 
                         {/* Delete button for allowed users */}
@@ -2440,6 +2466,353 @@ export function EventPage({ ev, st, go }) {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Gallery Image Popup Modal */}
+      {viewerItem && (
+        <div 
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 20000,
+            background: "rgba(0, 0, 0, 0.95)",
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#fff",
+            userSelect: "none"
+          }}
+          onClick={() => {
+            setViewerItem(null);
+            setZoomScale(1);
+            setPanOffset({ x: 0, y: 0 });
+          }}
+        >
+          {/* Header */}
+          <div 
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              padding: "16px 24px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              background: "linear-gradient(to bottom, rgba(0,0,0,0.8), transparent)",
+              zIndex: 10
+            }}
+            onClick={ev => ev.stopPropagation()}
+          >
+            <div style={{ fontSize: 14, color: "#ccc" }}>
+              {viewerItem.uploadedBy ? `Uploaded by ${viewerItem.uploadedBy}` : "Image Preview"}
+            </div>
+            <button 
+              onClick={() => {
+                setViewerItem(null);
+                setZoomScale(1);
+                setPanOffset({ x: 0, y: 0 });
+              }}
+              style={{
+                background: "rgba(255,255,255,0.1)",
+                color: "#fff",
+                border: "none",
+                borderRadius: "50%",
+                width: 36,
+                height: 36,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 16,
+                fontWeight: "bold",
+                transition: "background 0.2s"
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.2)"}
+              onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Navigation Controls */}
+          {(() => {
+            const approvedItems = galleryItems.filter(item => item.approved && item.type !== "video");
+            const currentIndex = approvedItems.findIndex(item => item.id === viewerItem.id);
+            
+            const handlePrev = (evt) => {
+              evt.stopPropagation();
+              if (currentIndex > 0) {
+                setViewerItem(approvedItems[currentIndex - 1]);
+                setZoomScale(1);
+                setPanOffset({ x: 0, y: 0 });
+              }
+            };
+            
+            const handleNext = (evt) => {
+              evt.stopPropagation();
+              if (currentIndex < approvedItems.length - 1) {
+                setViewerItem(approvedItems[currentIndex + 1]);
+                setZoomScale(1);
+                setPanOffset({ x: 0, y: 0 });
+              }
+            };
+
+            return (
+              <>
+                {currentIndex > 0 && (
+                  <button
+                    onClick={handlePrev}
+                    style={{
+                      position: "absolute",
+                      left: 24,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      background: "rgba(0,0,0,0.5)",
+                      color: "#fff",
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      borderRadius: "50%",
+                      width: 48,
+                      height: 48,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 20,
+                      zIndex: 10,
+                      transition: "background 0.2s"
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.8)"}
+                    onMouseLeave={e => e.currentTarget.style.background = "rgba(0,0,0,0.5)"}
+                  >
+                    ⟨
+                  </button>
+                )}
+                {currentIndex < approvedItems.length - 1 && (
+                  <button
+                    onClick={handleNext}
+                    style={{
+                      position: "absolute",
+                      right: 24,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      background: "rgba(0,0,0,0.5)",
+                      color: "#fff",
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      borderRadius: "50%",
+                      width: 48,
+                      height: 48,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 20,
+                      zIndex: 10,
+                      transition: "background 0.2s"
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.8)"}
+                    onMouseLeave={e => e.currentTarget.style.background = "rgba(0,0,0,0.5)"}
+                  >
+                    ⟩
+                  </button>
+                )}
+              </>
+            );
+          })()}
+
+          {/* Viewport for pan & zoom */}
+          <div 
+            style={{
+              width: "80vw",
+              height: "70vh",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              overflow: "hidden",
+              position: "relative",
+              cursor: handModeActive ? (isDragging ? "grabbing" : "grab") : "zoom-in"
+            }}
+            onClick={ev => {
+              ev.stopPropagation();
+              if (!handModeActive) {
+                // If not in hand mode, clicking zooms in or resets
+                setZoomScale(prev => prev > 1 ? 1 : 2.5);
+                setPanOffset({ x: 0, y: 0 });
+              }
+            }}
+            onMouseDown={evt => {
+              if (!handModeActive) return;
+              evt.preventDefault();
+              setIsDragging(true);
+              setDragStart({ x: evt.clientX - panOffset.x, y: evt.clientY - panOffset.y });
+            }}
+            onMouseMove={evt => {
+              if (!isDragging) return;
+              setPanOffset({
+                x: evt.clientX - dragStart.x,
+                y: evt.clientY - dragStart.y
+              });
+            }}
+            onMouseUp={() => setIsDragging(false)}
+            onMouseLeave={() => setIsDragging(false)}
+            onTouchStart={evt => {
+              if (!handModeActive || evt.touches.length !== 1) return;
+              const touch = evt.touches[0];
+              setIsDragging(true);
+              setDragStart({ x: touch.clientX - panOffset.x, y: touch.clientY - panOffset.y });
+            }}
+            onTouchMove={evt => {
+              if (!isDragging || evt.touches.length !== 1) return;
+              const touch = evt.touches[0];
+              setPanOffset({
+                x: touch.clientX - dragStart.x,
+                y: touch.clientY - dragStart.y
+              });
+            }}
+            onTouchEnd={() => setIsDragging(false)}
+          >
+            <img 
+              src={viewerItem.url} 
+              alt="Preview"
+              draggable="false"
+              style={{
+                maxWidth: "100%",
+                maxHeight: "100%",
+                objectFit: "contain",
+                transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})`,
+                transition: isDragging ? "none" : "transform 0.15s ease-out",
+                pointerEvents: "none"
+              }}
+            />
+          </div>
+
+          {/* Controls Bar at bottom */}
+          <div 
+            style={{
+              position: "absolute",
+              bottom: 24,
+              display: "flex",
+              gap: 12,
+              background: "rgba(0,0,0,0.85)",
+              border: "1px solid rgba(255,255,255,0.15)",
+              borderRadius: 30,
+              padding: "8px 20px",
+              zIndex: 10,
+              alignItems: "center"
+            }}
+            onClick={ev => ev.stopPropagation()}
+          >
+            {/* Hand tool toggle */}
+            <button
+              onClick={() => setHandModeActive(!handModeActive)}
+              title={handModeActive ? "Switch to click-to-zoom mode" : "Switch to drag-to-pan mode (Hand Tool)"}
+              style={{
+                background: handModeActive ? "var(--primary, #7c3aed)" : "transparent",
+                color: "#fff",
+                border: "none",
+                borderRadius: "50%",
+                width: 36,
+                height: 36,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 16,
+                transition: "all 0.2s"
+              }}
+            >
+              🖐️
+            </button>
+
+            <span style={{ width: 1, height: 20, background: "rgba(255,255,255,0.2)" }} />
+
+            {/* Zoom Out */}
+            <button
+              onClick={() => setZoomScale(prev => Math.max(prev - 0.5, 0.5))}
+              title="Zoom Out"
+              style={{
+                background: "transparent",
+                color: "#fff",
+                border: "none",
+                borderRadius: "50%",
+                width: 36,
+                height: 36,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 16,
+                fontWeight: "bold",
+                transition: "background 0.2s"
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >
+              ➖
+            </button>
+
+            {/* Scale Value */}
+            <span style={{ minWidth: 48, textAlign: "center", fontSize: 13, fontWeight: 600 }}>
+              {Math.round(zoomScale * 100)}%
+            </span>
+
+            {/* Zoom In */}
+            <button
+              onClick={() => setZoomScale(prev => Math.min(prev + 0.5, 6))}
+              title="Zoom In"
+              style={{
+                background: "transparent",
+                color: "#fff",
+                border: "none",
+                borderRadius: "50%",
+                width: 36,
+                height: 36,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 16,
+                fontWeight: "bold",
+                transition: "background 0.2s"
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >
+              ➕
+            </button>
+
+            <span style={{ width: 1, height: 20, background: "rgba(255,255,255,0.2)" }} />
+
+            {/* Reset */}
+            <button
+              onClick={() => {
+                setZoomScale(1);
+                setPanOffset({ x: 0, y: 0 });
+              }}
+              title="Reset View"
+              style={{
+                background: "transparent",
+                color: "#fff",
+                border: "none",
+                borderRadius: "50%",
+                width: 36,
+                height: 36,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 14,
+                transition: "background 0.2s"
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >
+              🔄
+            </button>
           </div>
         </div>
       )}
