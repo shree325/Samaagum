@@ -38,6 +38,9 @@ export const PLAN_CONFIG = {
       ME.name = localPart.replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
       ME.handle = `@${localPart}`;
     }
+    if (payload.id) {
+      (ME as any).id = payload.id;
+    }
   } catch (e) { /* ignore token parse errors */ }
 })();
 

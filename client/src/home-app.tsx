@@ -364,13 +364,13 @@ export function DashboardApp() {
 
       chatSocket.on("group.notification", (payload) => {
         fetchCounts();
-        // If this is an event acceptance/decline, refresh joined events list
-        if (payload.type === 'event' || payload.type === 'system') {
+        // If this is an event acceptance/decline/waitlist change, refresh joined events list
+        if (payload.type === 'event' || payload.type === 'system' || payload.type === 'waitlist_closed') {
           fetchJoinedEvents();
         }
         if (window.toast) {
           const cleanText = payload.text ? payload.text.replace(/<\/?[^>]+(>|$)/g, "") : "New activity";
-          window.toast(cleanText, payload.type === 'event' ? "success" : "info");
+          window.toast(cleanText, payload.type === 'event' ? "success" : (payload.type === 'waitlist_closed' ? "warning" : "info"));
         }
         window.dispatchEvent(new CustomEvent("samaagum:groupNotification", { detail: payload }));
       });
@@ -485,7 +485,10 @@ export function DashboardApp() {
         .catch(err => console.error('Error fetching features', err));
 
       const token = localStorage.getItem('token');
-      if (!token) return; // Not logged in - skip profile/subscription fetch
+      if (!token) {
+        setEventsLoading(false);
+        return; // Not logged in - skip profile/subscription fetch
+      }
 
     fetchCounts();
 
@@ -565,7 +568,7 @@ export function DashboardApp() {
       .catch(err => console.error('Error fetching user profile', err));
 
     // Fetch user's created events
-    fetch(`${apiBase}/api/events/my`, {
+    const pCreated = fetch(`${apiBase}/api/events/my`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -577,7 +580,7 @@ export function DashboardApp() {
       .catch(err => console.error('Error fetching user events', err));
 
     // Fetch events the user has joined or requested to join
-    fetch(`${apiBase}/api/events/joined`, {
+    const pJoined = fetch(`${apiBase}/api/events/joined`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -589,7 +592,7 @@ export function DashboardApp() {
       .catch(err => console.error('Error fetching joined events', err));
 
     // Fetch user's wishlist
-    fetch(`${apiBase}/api/events/my/wishlist`, {
+    const pWishlist = fetch(`${apiBase}/api/events/my/wishlist`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(res => res.json())
@@ -606,6 +609,10 @@ export function DashboardApp() {
         }
       })
       .catch(err => console.error('Error fetching wishlist', err));
+
+    Promise.all([pCreated, pJoined, pWishlist]).finally(() => {
+      setEventsLoading(false);
+    });
   }, []);
 
   const location = useLocation();
@@ -745,7 +752,7 @@ export function DashboardApp() {
     fetchWishlistEvents();
   }, [fetchWishlistEvents]);
 
-  const toggleWishlist = useCallback(async (eventId: string) => {
+  const toggleWishlist = useCallback(async (eventId: string, currentTotalCount?: number) => {
     // Optimistic update
     const wasWishlisted = wishlisted.has(eventId);
     setWishlisted(prev => {
@@ -754,10 +761,13 @@ export function DashboardApp() {
       return n;
     });
     // Adjust count optimistically
-    setWishlistCounts(prev => ({
-      ...prev,
-      [eventId]: (prev[eventId] || 0) + (wasWishlisted ? -1 : 1)
-    }));
+    setWishlistCounts(prev => {
+      const base = prev[eventId] !== undefined ? prev[eventId] : (currentTotalCount || 0);
+      return {
+        ...prev,
+        [eventId]: Math.max(0, base + (wasWishlisted ? -1 : 1))
+      };
+    });
 
     const token = localStorage.getItem('token');
     if (!token) {
@@ -767,10 +777,13 @@ export function DashboardApp() {
         wasWishlisted ? n.add(eventId) : n.delete(eventId);
         return n;
       });
-      setWishlistCounts(prev => ({
-        ...prev,
-        [eventId]: (prev[eventId] || 0) + (wasWishlisted ? 1 : -1)
-      }));
+      setWishlistCounts(prev => {
+        const base = prev[eventId] !== undefined ? prev[eventId] : (currentTotalCount || 0);
+        return {
+          ...prev,
+          [eventId]: Math.max(0, base + (wasWishlisted ? 1 : -1))
+        };
+      });
       window.samaagum_go('login');
       return;
     }
@@ -797,10 +810,13 @@ export function DashboardApp() {
         wasWishlisted ? n.add(eventId) : n.delete(eventId);
         return n;
       });
-      setWishlistCounts(prev => ({
-        ...prev,
-        [eventId]: (prev[eventId] || 0) + (wasWishlisted ? 1 : -1)
-      }));
+      setWishlistCounts(prev => {
+        const base = prev[eventId] !== undefined ? prev[eventId] : (currentTotalCount || 0);
+        return {
+          ...prev,
+          [eventId]: Math.max(0, base + (wasWishlisted ? 1 : -1))
+        };
+      });
     }
   }, [wishlisted, apiBase]);
   const [joined, toggleJoin, addJoined] = useSet(["g1", "g2", "g4"]);
@@ -862,13 +878,13 @@ export function DashboardApp() {
               id: "BL-" + Math.floor(2000 + Math.random() * 500),
               ev: evObj.title,
               cover: evObj.cover,
-              tier: evObj.type === "Free" ? "General RSVP" : "VIP · Front tables",
+              tier: answers.ticketName || (evObj.type === "Free" ? "General RSVP" : "VIP · Front tables"),
               date: evObj.date,
               time: evObj.time,
               venue: evObj.venue,
               online: !!evObj.online,
               paid: evObj.price || "Free",
-              qty: 1,
+              qty: answers.qty ? Number(answers.qty) : 1,
               attendee: window.ME?.name || ME.name,
               status: "confirmed"
             },
@@ -908,13 +924,13 @@ export function DashboardApp() {
                   id: "BL-" + Math.floor(2000 + Math.random() * 500),
                   ev: evObj.title,
                   cover: evObj.cover,
-                  tier: evObj.type === "Free" ? "General RSVP" : "VIP · Front tables",
+                  tier: answers.ticketName || (evObj.type === "Free" ? "General RSVP" : "VIP · Front tables"),
                   date: evObj.date,
                   time: evObj.time,
                   venue: evObj.venue,
                   online: !!evObj.online,
                   paid: evObj.price || "Free",
-                  qty: 1,
+                  qty: answers.qty ? Number(answers.qty) : 1,
                   attendee: window.ME?.name || ME.name,
                   status: "confirmed"
                 },
@@ -935,7 +951,7 @@ export function DashboardApp() {
                   id: "BL-" + Math.floor(2000 + Math.random() * 500),
                   ev: evObj.title,
                   cover: evObj.cover,
-                  tier: "General Admission",
+                  tier: answers?.ticketName || "General Admission",
                   date: evObj.date,
                   time: evObj.time,
                   venue: evObj.venue,
@@ -952,6 +968,22 @@ export function DashboardApp() {
             fetchJoinedEvents();
             setTimeout(() => {
               go("event", { ...evObj, bookingStatus: 'pending_payment' });
+            }, 50);
+          } else if (res.status === 'waitlisted') {
+            // Add waitlisted status locally
+            if (st?.toggleWaitlist) {
+              st.toggleWaitlist(id);
+            } else {
+              setWaitlisted(prev => {
+                const n = new Set(prev);
+                n.add(id);
+                return n;
+              });
+            }
+            if (window.toast) window.toast("Joined waitlist successfully! 🕒", "info");
+            fetchJoinedEvents();
+            setTimeout(() => {
+              go("event", { ...evObj, bookingStatus: 'waitlisted' });
             }, 50);
           } else {
             if (window.toast) window.toast("Your request to join is pending approval.", "info");
@@ -976,7 +1008,7 @@ export function DashboardApp() {
                 id: "BL-" + Math.floor(2000 + Math.random() * 500),
                 ev: evObj.title,
                 cover: evObj.cover,
-                tier: evObj.type === "Free" ? "General RSVP" : "VIP · Front tables",
+                tier: answers?.ticketName || (evObj.type === "Free" ? "General RSVP" : "VIP · Front tables"),
                 date: evObj.date,
                 time: evObj.time,
                 venue: evObj.venue,
@@ -1025,11 +1057,13 @@ export function DashboardApp() {
           };
 
            const meta = ev.venue?.meta || {};
-          if (!forceConfirm && meta.enableRegForm && Array.isArray(meta.formFields) && meta.formFields.length > 0 && !answers) {
-            setQuestEvent(normalized);
+          if (!forceConfirm && meta.enableRegForm && Array.isArray(meta.formFields) && meta.formFields.length > 0 && !answers?.isQuestionnaireSubmit) {
+            setQuestEvent({ ...normalized, initialAnswers: answers || {} });
             setQuestAnswers({});
           } else {
-            runRegistrationFlow(normalized, answers || {});
+            const finalAnswers = { ...(answers || {}) };
+            delete finalAnswers.isQuestionnaireSubmit;
+            runRegistrationFlow(normalized, finalAnswers);
           }
         }
       })
@@ -1063,6 +1097,7 @@ export function DashboardApp() {
   const [joinedEvents, setJoinedEvents] = useState([]);
   const [eventRoles, setEventRoles] = useState([]);
   const [scannerEvents, setScannerEvents] = useState([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
 
   const fetchEvents = useCallback(() => {
     const token = localStorage.getItem('token');
@@ -1151,6 +1186,14 @@ useEffect(() => {
   fetchCreatedEvents();
   fetchScannerEvents();
 }, [fetchEvents, fetchEventRoles, fetchJoinedEvents, fetchCreatedEvents, fetchScannerEvents]);
+
+// Listen for external triggers to refresh joined events (e.g., waitlist_closed from home-tickets.tsx)
+useEffect(() => {
+  const handler = () => fetchJoinedEvents();
+  window.addEventListener('samaagum:refreshJoinedEvents', handler);
+  return () => window.removeEventListener('samaagum:refreshJoinedEvents', handler);
+}, [fetchJoinedEvents]);
+
   const addCreatedEvent = useCallback((ev) => {
     setCreatedEvents(prev => {
       if (prev.some(x => x.id === ev.id)) {
@@ -1195,7 +1238,8 @@ useEffect(() => {
     subscription, setSubscription,
     fetchCounts,
     chatSettings, setChatSettings,
-    entitlements, plan, planDisplayName, refetchEntitlements
+    entitlements, plan, planDisplayName, refetchEntitlements,
+    eventsLoading
   };
 
   // sidebar collapsed state
@@ -1231,6 +1275,15 @@ useEffect(() => {
     if (v === "tickets") return <AllTickets st={st} go={go} />;
     if (v === "groups") return <MyGroups st={st} go={go} param={cur.param} />;
     if (v === "event") {
+      const token = localStorage.getItem('token');
+      if (token && eventsLoading) {
+        return (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "80vh", gap: 12, color: "var(--ink-2)" }}>
+            <span className="spinner" style={{ border: "2px solid rgba(255,255,255,0.1)", borderTop: "2px solid var(--accent-1)", borderRadius: "50%", width: 24, height: 24, animation: "spin 0.8s linear infinite" }} />
+            <div style={{ fontSize: 13, fontWeight: 500, opacity: 0.8 }}>Verifying registration status...</div>
+          </div>
+        );
+      }
       const e = cur.param || FEATURED;
       const isOwner = e.hostBy === ME.name || e.host === ME.name || e.created_by === ME.id || (st.createdEvents && st.createdEvents.some(ce => ce.id === e.id));
       const isAdmin = ME.role && ME.role.toLowerCase().includes("admin");
@@ -1240,6 +1293,7 @@ useEffect(() => {
       const UUID_RE_H = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       const isRealEventId = typeof e.id === "string" && UUID_RE_H.test(e.id);
       const joinedEntry = st.joinedEvents && st.joinedEvents.find(je => je.id === e.id);
+      const bookingStatus = joinedEntry?.bookingStatus || e.bookingStatus || null;
       const bookingStatus = isRealEventId ? (joinedEntry?.bookingStatus || null) : (e.bookingStatus || joinedEntry?.bookingStatus || null);
       const hasConfirmedBooking = bookingStatus === 'confirmed' || bookingStatus === 'pending_payment';
       const hasPendingBooking = bookingStatus === 'pending_approval';
@@ -1505,7 +1559,7 @@ useEffect(() => {
                       }
                     }
                   }
-                  const answersCopy = { ...questAnswers };
+                  const answersCopy = { ...(questEvent.initialAnswers || {}), ...questAnswers, isQuestionnaireSubmit: true };
                   setQuestEvent(null);
                   setQuestAnswers({});
                   register(questEvent.id, false, answersCopy, questEvent.inviteToken);

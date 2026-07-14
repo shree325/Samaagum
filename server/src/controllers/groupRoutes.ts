@@ -203,7 +203,12 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 try {
                     const parts = token.split('.');
                     if (parts.length === 3) {
-                        userPayload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+                        const parsed = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+                        const uid = parsed?.id;
+                        const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                        if (uid && UUID_REGEX.test(uid)) {
+                            userPayload = parsed;
+                        }
                     }
                 } catch (err) {}
             }

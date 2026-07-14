@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { EventService } from '../services/EventService';
 import { EventInvitationService } from '../services/EventInvitationService';
+import { TicketRealtimeService } from '../services/TicketRealtimeService';
 import prisma from '../config/prisma';
 import QRCode from 'qrcode';
 import { sendEmail, generateTicketHtml } from '../utils/email';
@@ -17,7 +18,12 @@ function tryDecodeUserId(fastify: any, request: any): string | undefined {
         const parts = token.split('.');
         if (parts.length !== 3) return undefined;
         const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
-        return payload?.id;
+        const uid = payload?.id;
+        const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (uid && UUID_REGEX.test(uid)) {
+            return uid;
+        }
+        return undefined;
     } catch {
         return undefined;
     }
@@ -102,6 +108,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
         try {
             if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
             const data = await EventService.toggleWishlist(request.params.id, request.user.id);
+            const { MyEventsRealtimeService } = require('../services/MyEventsRealtimeService');
+            MyEventsRealtimeService.syncUser(request.user.id).catch(() => {});
             return reply.send({ success: true, data });
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });
@@ -120,6 +128,13 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 request.user.id,
                 { status, opensAt, closesAt }
             );
+            
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`event_${request.params.id}`).emit('dashboard_updated', { action: 'update', eventId: request.params.id });
+                (fastify as any).io.of('/groups').emit('events_updated', { action: 'update', eventId: request.params.id });
+                (fastify as any).io.of('/groups').to(`event_${request.params.id}`).emit('capacity_updated', { eventId: request.params.id });
+            }
+            
             return reply.send({ success: true, data });
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });
@@ -192,6 +207,7 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 let ticketId: string | null = null;
                 let qrToken: string | null = null;
                 let checkinStatus: string | null = null;
+                let bookedTicketName: string | null = null;
                 if (bookingId) {
                     const myAttendee = await prisma.attendees.findFirst({
                         where: { booking_id: bookingId, user_id: userId },
@@ -203,6 +219,31 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                         qrToken = myAttendee.tickets?.qr_token || null;
                         checkinStatus = myAttendee.checkin_status;
                     }
+                    
+                    const lineItem = await prisma.booking_line_items.findFirst({
+                        where: { booking_id: bookingId },
+                        include: { ticket_types: true }
+                    });
+                    if (lineItem?.ticket_types) {
+                        bookedTicketName = lineItem.ticket_types.name;
+                    }
+                }
+
+                const wishlistCount = await prisma.event_wishlist.count({
+                    where: { event_id: eventId }
+                });
+                const isWishlisted = await prisma.event_wishlist.findUnique({
+                    where: { event_id_user_id: { event_id: eventId, user_id: userId } }
+                }).then(Boolean);
+
+                let waitlistPosition: number | null = null;
+                let totalWaiting: number | null = null;
+
+                if (bookingStatus === 'waitlisted') {
+                    const { EventService } = require('../services/EventService');
+                    const ws = await EventService.getWaitlistStatus(eventId, userId);
+                    waitlistPosition = ws.position;
+                    totalWaiting = ws.totalWaiting;
                 }
 
                 results.push({
@@ -213,7 +254,12 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                     attendeeId,
                     ticketId,
                     qrToken,
-                    checkinStatus
+                    checkinStatus,
+                    wishlistCount,
+                    isWishlisted,
+                    waitlistPosition,
+                    totalWaiting,
+                    bookedTicketName
                 });
             };
 
@@ -232,7 +278,65 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
         }
     });
 
-    // GET /
+    // GET /:id/waitlist
+fastify.get('/:id/waitlist', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+    try {
+        const { id } = request.params as any;
+        const data = await EventService.getWaitlist(id);
+        return reply.send({ success: true, data });
+    } catch (e: any) {
+        return reply.status(500).send({ success: false, message: e.message });
+    }
+});
+
+// GET /:id/waitlist/status
+fastify.get('/:id/waitlist/status', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+    try {
+        const { id } = request.params as any;
+        const userId = request.user.id;
+        const data = await EventService.getWaitlistStatus(id, userId);
+        return reply.send({ success: true, data });
+    } catch (e: any) {
+        return reply.status(500).send({ success: false, message: e.message });
+    }
+});
+
+// DELETE /:id/waitlist
+fastify.delete('/:id/waitlist', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+    try {
+        const { id } = request.params as any;
+        const userId = request.user.id;
+        await EventService.leaveWaitlist(id, userId);
+
+        // Sync user events and waitlist in real-time
+        const { MyEventsRealtimeService } = require('../services/MyEventsRealtimeService');
+        await MyEventsRealtimeService.syncUser(userId).catch(() => {});
+
+        const groupsNamespace = (fastify as any).io?.of('/groups');
+        if (groupsNamespace) {
+            groupsNamespace.to(`event_${id}`).emit('waitlist_updated', { eventId: id });
+        }
+
+        return reply.send({ success: true, message: 'Left waitlist' });
+    } catch (e: any) {
+        return reply.status(500).send({ success: false, message: e.message });
+    }
+});
+
+// POST /:id/waitlist/:userId/approve
+fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+    try {
+        const { id, userId: targetUserId } = request.params as any;
+        const approverUserId = request.user.id;
+        await EventService.approveWaitlistedUser(id, targetUserId, approverUserId);
+        return reply.send({ success: true, message: 'User approved from waitlist' });
+    } catch (e: any) {
+        const status = e.message?.startsWith('Forbidden') ? 403 : 500;
+        return reply.status(status).send({ success: false, message: e.message });
+    }
+});
+
+// GET /
     fastify.get('', async (request: any, reply) => {
         try {
             const tenantId = request.headers['x-tenant-id'] || '00000000-0000-0000-0000-000000000000';
@@ -348,6 +452,7 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             if ((fastify as any).io) {
                 (fastify as any).io.of('/groups').emit('events_updated', { action: 'update', eventId: id });
                 (fastify as any).io.of('/groups').to(`event_${id}`).emit('dashboard_updated', { action: 'settings_update', eventId: id });
+                (fastify as any).io.of('/groups').to(`event_${id}`).emit('capacity_updated', { eventId: id });
             }
             return reply.send({ success: true, data, message: 'Event updated' });
         } catch (e: any) {
@@ -852,8 +957,7 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             // Mark corresponding event_join_request notifications as read/acted
             const pendingNotifs = await prisma.notification_log.findMany({
                 where: {
-                    template_key: 'event_join_request',
-                    status: { not: 'read' }
+                    template_key: 'event_join_request'
                 }
             });
 
@@ -908,6 +1012,16 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             if (groupsNamespace) {
                 groupsNamespace.to(`event_${id}`).emit('dashboard_updated', { action, eventId: id });
             }
+
+            if (guestId) {
+                TicketRealtimeService.syncUser(guestId, id).catch(() => {});
+                TicketRealtimeService.syncScanner(id).catch(() => {});
+                const { MyEventsRealtimeService } = require('../services/MyEventsRealtimeService');
+                MyEventsRealtimeService.syncUser(guestId).catch(() => {});
+            }
+            
+            const { MyEventsRealtimeService } = require('../services/MyEventsRealtimeService');
+            MyEventsRealtimeService.syncUser(request.user.id).catch(() => {});
 
             // Send ticket email if request was accepted
             if (action === 'accept' && guestId) {
@@ -1303,7 +1417,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             if ((fastify as any).io) {
                 (fastify as any).io.of('/groups').to(`event_${id}`).emit('dashboard_updated', { action: 'leave_member', userId: request.user.id });
             }
-            return { success: true, message: 'Left event successfully' };
+            TicketRealtimeService.syncScanner(id).catch(() => {});
+            return reply.send({ success: true, message: 'Left event successfully' });
         } catch (e: any) {
             return reply.status(400).send({ success: false, message: e.message });
         }

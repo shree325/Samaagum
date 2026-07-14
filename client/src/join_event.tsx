@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { I, Avatar, Grain } from './home-icons';
 import { FEATURED, ME } from './home-data';
+import { Waitlist } from './home-waitlist';
 
 export function JoinEventPage({ ev, st, go }) {
     const [fetchedEvent, setFetchedEvent] = useState<any>(null);
@@ -17,7 +18,19 @@ export function JoinEventPage({ ev, st, go }) {
 
         const venueObj = e.venue || {};
         const meta = venueObj.meta || {};
-        const priceVal = e.tickets?.[0] ? `₹${(e.tickets[0].price_minor / 100).toFixed(0)}` : ((e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : '—');
+        let priceVal = '—';
+        if (e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') {
+            priceVal = 'Free';
+        } else if (e.tickets && e.tickets.length > 0) {
+            const prices = e.tickets.map(t => t.price_minor ? t.price_minor / 100 : (t.price_amount_minor ? t.price_amount_minor / 100 : 0));
+            const minPrice = Math.min(...prices);
+            const maxPrice = Math.max(...prices);
+            if (minPrice === maxPrice) {
+                priceVal = minPrice === 0 ? 'Free' : `₹${minPrice.toFixed(0)}`;
+            } else {
+                priceVal = `₹${minPrice.toFixed(0)} - ₹${maxPrice.toFixed(0)}`;
+            }
+        }
 
         e = {
             ...e,
@@ -51,12 +64,33 @@ export function JoinEventPage({ ev, st, go }) {
         }
     }
 
-    const { wishlisted, toggleWishlist, register, city, waitlisted } = st;
-    const isWishlisted = wishlisted ? wishlisted.has(e.id) : false;
-    const isWaitlisted = (waitlisted ? waitlisted.has(e.id) : false) || (st.joinedEvents?.some(je => je.id === e.id && je.bookingStatus === 'waitlisted') ?? false);
-    const isSoldOut = e.going >= (e.cap || 9999) || e.id === "ev-feat";
-    const [regStatus, setRegStatus] = useState(
-        e.registrationStatus || e.registration_status || "OPEN"
+    const [liveEvent, setLiveEvent] = useState(e);
+    const { wishlisted, toggleWishlist, register, city, waitlisted, fetchJoinedEvents } = st;
+    const isWishlisted = wishlisted ? wishlisted.has(liveEvent.id) : false;
+    const isWaitlisted = liveEvent.bookingStatus === 'waitlisted' || 
+        (liveEvent.bookingStatus !== 'cancelled' && 
+         liveEvent.bookingStatus !== 'confirmed' && 
+         liveEvent.bookingStatus !== 'pending_approval' && 
+         liveEvent.bookingStatus !== 'pending_payment' && 
+         ((waitlisted ? waitlisted.has(liveEvent.id) : false) || 
+          (st.joinedEvents?.some(je => je.id === liveEvent.id && je.bookingStatus === 'waitlisted') ?? false)));
+    const isSoldOut = liveEvent.going >= (liveEvent.cap || 9999) || liveEvent.id === "ev-feat";
+    const [regStatus, setRegStatus] = useState(() => {
+        let s = liveEvent.registrationStatus || liveEvent.registration_status || "OPEN";
+        if (s === "SCHEDULED" && liveEvent.registration_opens_at) {
+            if (new Date() >= new Date(liveEvent.registration_opens_at)) {
+                s = "OPEN";
+            }
+        }
+        if (s !== "CLOSED" && liveEvent.registration_closes_at) {
+            if (new Date() >= new Date(liveEvent.registration_closes_at)) {
+                s = "CLOSED";
+            }
+        }
+        return s;
+    });
+    const [waitlistEnabled, setWaitlistEnabled] = useState(
+        liveEvent.settings?.capacity?.waitlist ?? liveEvent.waitlist ?? true
     );
     const isClosed = regStatus === "CLOSED";
     const isScheduled = regStatus === "SCHEDULED";
@@ -65,15 +99,42 @@ export function JoinEventPage({ ev, st, go }) {
     // reflects reality even if the card navigation data was stale.
     const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
     const UUID_RE_J = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    useEffect(() => {
-        if (!e.id || !UUID_RE_J.test(e.id)) return;
+    const fetchEventData = () => {
+        if (!liveEvent.id || !UUID_RE_J.test(liveEvent.id)) return;
         const tok = localStorage.getItem('token');
-        fetch(`${apiBase}/api/events/${e.id}`, {
+        fetch(`${apiBase}/api/events/${liveEvent.id}`, {
             headers: tok ? { 'Authorization': `Bearer ${tok}` } : {}
         })
             .then(r => r.json())
             .then(data => {
                 if (data.success && data.data?.event) {
+                    const srv = data.data.event;
+                    setLiveEvent(prev => ({
+                        ...prev,
+                        going: srv.going ?? prev.going,
+                        cap: srv.cap ?? prev.cap,
+                        cover: srv.cover ?? prev.cover,
+                        title: srv.title ?? prev.title,
+                        description: srv.description ?? prev.description,
+                        settings: srv.settings ?? prev.settings,
+                        bookingStatus: data.data.bookingStatus ?? null,
+                        bookingId: data.data.bookingId ?? null,
+                        attendeeId: data.data.attendeeId ?? null,
+                        ticketId: data.data.ticketId ?? null,
+                        qrToken: data.data.qrToken ?? null,
+                        checkinStatus: data.data.checkinStatus ?? null
+                    }));
+                    let s = srv.registrationStatus || srv.registration_status || "OPEN";
+                    if (s === "SCHEDULED" && srv.registration_opens_at) {
+                        if (new Date() >= new Date(srv.registration_opens_at)) {
+                            s = "OPEN";
+                        }
+                    }
+                    if (s !== "CLOSED" && srv.registration_closes_at) {
+                        if (new Date() >= new Date(srv.registration_closes_at)) {
+                            s = "CLOSED";
+                        }
+                    }
                     const srv = {
                         ...data.data.event,
                         tickets: data.data.tickets || []
@@ -81,10 +142,46 @@ export function JoinEventPage({ ev, st, go }) {
                     setFetchedEvent(srv);
                     const s = srv.registrationStatus || srv.registration_status || "OPEN";
                     setRegStatus(s);
+                    
+                    let settings = srv.settings || {};
+                    if (typeof settings === 'string') {
+                      try { settings = JSON.parse(settings); } catch {}
+                    }
+                    if (settings?.capacity?.waitlist !== undefined) {
+                      setWaitlistEnabled(settings.capacity.waitlist);
+                    }
                 }
             })
             .catch(() => {});
-    }, [e.id]);
+    };
+
+    useEffect(() => {
+        if (regStatus === "SCHEDULED" && liveEvent.registration_opens_at) {
+            const ms = new Date(liveEvent.registration_opens_at).getTime() - Date.now();
+            if (ms > 0 && ms <= 2147483647) {
+                const timer = setTimeout(() => {
+                    setRegStatus("OPEN");
+                }, ms);
+                return () => clearTimeout(timer);
+            } else if (ms <= 0) {
+                setRegStatus("OPEN");
+            }
+        } else if (regStatus === "OPEN" && liveEvent.registration_closes_at) {
+            const ms = new Date(liveEvent.registration_closes_at).getTime() - Date.now();
+            if (ms > 0 && ms <= 2147483647) {
+                const timer = setTimeout(() => {
+                    setRegStatus("CLOSED");
+                }, ms);
+                return () => clearTimeout(timer);
+            } else if (ms <= 0) {
+                setRegStatus("CLOSED");
+            }
+        }
+    }, [regStatus, liveEvent.registration_opens_at, liveEvent.registration_closes_at]);
+
+    useEffect(() => {
+        fetchEventData();
+    }, [liveEvent.id]);
 
     const chatSettings = st.chatSettings || {
         allowSiteMessaging: true,
@@ -102,6 +199,20 @@ export function JoinEventPage({ ev, st, go }) {
         ? e.tickets.filter((t: any) => !t.visibility || t.visibility === 'public').map((t: any) => ({
             id: t.id,
             n: t.name,
+            d: t.description || ((t.price_minor || t.price_amount_minor) === 0 ? "Free entry" : "Standard entry"),
+            p: (t.price_minor || t.price_amount_minor) === 0 ? "Free" : `₹${(t.price_minor ? t.price_minor / 100 : t.price_amount_minor / 100).toFixed(0)}`,
+            free: (t.price_minor || t.price_amount_minor) === 0,
+            isFull: t.isFull
+          }))
+        : (e.type === "Free"
+            ? [{ id: "rsvp", n: "General RSVP", d: "Free entry · approval-based", p: "Free", free: true }]
+            : [{ id: "general", n: "General Admission", d: "Standard entry", p: priceStr }]);
+    const [tier, setTier] = useState(tiers[0].id);
+    const [qty, setQty] = useState(1);
+    const sel = tiers.find(t => t.id === tier);
+    const evtCap = liveEvent.cap || e.cap;
+    const evtGoing = liveEvent.going || e.going;
+    const pct = evtCap ? Math.min(100, Math.round((evtGoing / evtCap) * 100)) : 0;
             d: t.description || (t.price_minor === 0 ? "Free entry" : "Standard entry"),
             p: t.price_minor === 0 ? "Free" : `₹${(t.price_minor / 100).toFixed(0)}`,
             free: t.price_minor === 0,
@@ -121,6 +232,84 @@ export function JoinEventPage({ ev, st, go }) {
     const attendees = e.attendees || ["Dev K", "Mira S", "Leo P", "Zoya N", "Sam K", "Riya T"];
 
   const [showShareSheet, setShowShareSheet] = useState(false);
+  const [localStatus, setLocalStatus] = useState(e.status || "published");
+
+  React.useEffect(() => {
+    if (window.io && e.id && e.id !== "ev-feat") {
+      const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+      const socketUrl = apiBase ? `${apiBase}/groups` : "/groups";
+      const socket = window.io(socketUrl, { transports: ['websocket'] });
+      
+      socket.emit('join_event', e.id);
+      
+      let userId = null;
+      const token = localStorage.getItem('token');
+      if (token) {
+          try {
+              const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+              userId = payload.id;
+          } catch (err) {}
+      }
+      if (userId) {
+          socket.emit('join_user', userId);
+      }
+      
+      socket.on('ticket_updated', (payload) => {
+          if (payload.eventId === liveEvent.id) {
+              fetchEventData();
+              if (payload.counts.active > 0) {
+                  setLiveEvent((prev: any) => ({ ...prev, bookingStatus: 'confirmed' }));
+              } else if (payload.counts.pending > 0) {
+                  setLiveEvent((prev: any) => ({ ...prev, bookingStatus: 'pending_approval' }));
+              } else {
+                  setLiveEvent((prev: any) => ({ ...prev, bookingStatus: null }));
+              }
+          }
+      });
+      
+      socket.on('my_events_updated', (payload) => {
+          const data = payload?.data || payload;
+          const allEvs = [
+              ...(data?.joined || []),
+              ...(data?.pending || []),
+              ...(data?.upcoming || []),
+              ...(data?.waitlist || []),
+              ...(data?.cancelled || [])
+          ];
+          const match = allEvs.find((ev: any) => ev.id === liveEvent.id);
+          if (match) {
+              setLiveEvent((prev: any) => ({ ...prev, bookingStatus: match.bookingStatus }));
+          } else {
+              setLiveEvent((prev: any) => ({ ...prev, bookingStatus: null }));
+          }
+          if (fetchJoinedEvents) {
+              fetchJoinedEvents();
+          }
+      });
+      
+      socket.on('event_completed', (payload) => {
+        if (payload.eventId !== liveEvent.id) return;
+        setLocalStatus('completed');
+      });
+
+      socket.on('capacity_updated', (payload) => {
+        if (payload.eventId === liveEvent.id) fetchEventData();
+      });
+
+      socket.on('events_updated', (payload) => {
+        if (payload.eventId === liveEvent.id) fetchEventData();
+      });
+
+      socket.on('waitlist_updated', (payload) => {
+        if (payload.eventId === liveEvent.id) fetchEventData();
+      });
+
+      return () => {
+        socket.emit('leave_event', liveEvent.id);
+        socket.disconnect();
+      };
+    }
+  }, [liveEvent.id]);
   
   if (e.id === "ev-feat") {
     // skip
@@ -133,7 +322,9 @@ export function JoinEventPage({ ev, st, go }) {
                     <Grain /><div className="scrim" />
                     <button className="detail-back" onClick={() => { go("back"); }}><I.arrowL />Back</button>
                     <div className="detail-actions-top">
-                        <button className={`cbtn ${isWishlisted ? "on" : ""}`} onClick={() => toggleWishlist && toggleWishlist(e.id)}>{isWishlisted ? <I.heartF /> : <I.heart />}</button>
+                        {!liveEvent.bookingStatus && (
+                            <button className={`cbtn ${isWishlisted ? "on" : ""}`} onClick={() => toggleWishlist && toggleWishlist(liveEvent.id, liveEvent.wishlistCount)}>{isWishlisted ? <I.heartF /> : <I.heart />}</button>
+                        )}
                         <div style={{ position: "relative" }}>
                             <button className="hbtn hbtn--ghost hbtn--sm" style={{ background: "rgba(0,0,0,0.3)", backdropFilter: "blur(10px)", color: "#fff", border: "1px solid rgba(255,255,255,0.2)" }} onClick={() => setShowShareSheet(!showShareSheet)}><I.share /> Share</button>
                             {showShareSheet && (
@@ -142,8 +333,8 @@ export function JoinEventPage({ ev, st, go }) {
                                     <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 8, display: "flex", gap: 8, padding: 8, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "var(--sh-md)", zIndex: 9999 }}>
                                         {(() => {
                                             const link = encodeURIComponent(`${window.location.origin}${window.location.pathname}#event=${e.id}`);
-                                            const msg = encodeURIComponent(`Join me at ${e.title} on Samaagum! ${decodeURIComponent(link)}`);
-                                            const subject = encodeURIComponent(`Invitation to ${e.title}`);
+                                            const msg = encodeURIComponent(`Join me at ${liveEvent.title} on Samaagum! ${decodeURIComponent(link)}`);
+                                            const subject = encodeURIComponent(`Invitation to ${liveEvent.title}`);
                                             const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=&su=${subject}&body=${msg}`;
                                             const btnStyle = { display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: "50%", background: "var(--surface-2)", transition: "all 0.2s" };
                                             return (
@@ -185,9 +376,14 @@ export function JoinEventPage({ ev, st, go }) {
                     <div className="ev-head">
                         <div className="card-top">
                             <div className="tags">
-                                <span className="fchip on" style={{ pointerEvents: "none" }}>{e.cat}</span>
-                                <span className="fchip" style={{ pointerEvents: "none" }}>{e.online ? <><I.online style={{ width: 14, height: 14 }} /> Online</> : <><I.pin style={{ width: 14, height: 14 }} /> {e.city || city}</>}</span>
-                                <span className="fchip" style={{ pointerEvents: "none" }}>{e.type}</span>
+                                <span className="fchip on" style={{ pointerEvents: "none" }}>{liveEvent.cat}</span>
+                                <span className="fchip" style={{ pointerEvents: "none" }}>{liveEvent.online ? <><I.online style={{ width: 14, height: 14 }} /> Online</> : <><I.pin style={{ width: 14, height: 14 }} /> {liveEvent.city || city}</>}</span>
+                                <span className="fchip" style={{ pointerEvents: "none" }}>{liveEvent.type}</span>
+                            </div>
+                            <div className="ttl">{liveEvent.title}</div>
+                            <div className="ev-host">
+                                <Avatar name={liveEvent.hostBy || liveEvent.host} userId={liveEvent.hostUserId} img={liveEvent.hostPhoto} size={34} />
+                                Hosted by <b>{liveEvent.host}</b>
                             </div>
                             <div className="ttl">{e.title}</div>
                              <div 
@@ -211,26 +407,27 @@ export function JoinEventPage({ ev, st, go }) {
                         <div className="ev-main">
                             <div className="ev-block">
                                 <div className="ev-when">
-                                    <div className="ev-fact"><span className="ico"><I.cal /></span><div><div className="k">Date</div><div className="v">{e.date}</div><div className="v2">{e.time}</div></div></div>
-                                    <div className="ev-fact"><span className="ico">{e.online ? <I.online /> : <I.pin />}</span><div><div className="k">{e.online ? "Location" : "Venue"}</div><div className="v">{e.venue}</div><div className="v2">{e.online ? "Link revealed after registration" : e.city}</div></div></div>
+                                    <div className="ev-fact"><span className="ico"><I.cal /></span><div><div className="k">Date</div><div className="v">{liveEvent.date}</div><div className="v2">{liveEvent.time}</div></div></div>
+                                    <div className="ev-fact"><span className="ico">{liveEvent.online ? <I.online /> : <I.pin />}</span><div><div className="k">{liveEvent.online ? "Location" : "Venue"}</div><div className="v">{liveEvent.venue}</div><div className="v2">{liveEvent.online ? "Link revealed after registration" : liveEvent.city}</div></div></div>
                                 </div>
                             </div>
 
                             <div className="ev-block">
                                 <h3>About this event</h3>
                                 <div className="ev-about">
-                                    <p>{e.desc || "Join us for an unforgettable evening bringing together the most interesting people in the city. Whether you're here to learn, connect, or simply enjoy the atmosphere — there's a place for you."}</p>
+                                    <p>{liveEvent.desc || "Join us for an unforgettable evening bringing together the most interesting people in the city. Whether you're here to learn, connect, or simply enjoy the atmosphere — there's a place for you."}</p>
                                     <p>Expect curated conversations, a welcoming community, and the kind of serendipity that only happens in the same room. Doors open 30 minutes early — come say hi.</p>
                                 </div>
                             </div>
 
-                            {e.instructions && (
+                            {liveEvent.instructions && (
                                 <div className="ev-block" style={{ background: "var(--field)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "16px", marginBottom: "20px" }}>
                                     <h3 style={{ marginTop: 0, fontSize: 15, fontWeight: 700 }}>📢 Special Instructions</h3>
-                                    <p style={{ margin: "8px 0 0", fontSize: 13.5, lineHeight: 1.5, color: "var(--ink)" }}>{e.instructions}</p>
+                                    <p style={{ margin: "8px 0 0", fontSize: 13.5, lineHeight: 1.5, color: "var(--ink)" }}>{liveEvent.instructions}</p>
                                 </div>
                             )}
 
+                            {!liveEvent.online && (
                             {!e.online && e.venue && (
                                 <div className="ev-block">
                                     <h3>Location</h3>
@@ -249,6 +446,7 @@ export function JoinEventPage({ ev, st, go }) {
                                         />
                                     </div>
                                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 13.5, color: "var(--ink-2)" }}>
+                                        <I.pin style={{ color: "var(--accent-2)" }} /> {liveEvent.venue}, {liveEvent.city} <button className="hbtn hbtn--ghost hbtn--sm" style={{ marginLeft: "auto" }}>Get directions</button>
                                         <I.pin style={{ color: "var(--accent-2)" }} /> {
                                             e.venue && e.city && e.venue.toLowerCase().includes(e.city.toLowerCase())
                                                 ? e.venue
@@ -272,7 +470,7 @@ export function JoinEventPage({ ev, st, go }) {
                             )}
 
                             <div className="ev-block">
-                                <h3>{e.going} attending</h3>
+                                <h3>{liveEvent.going} attending</h3>
                                 <div className="att-grid">
                                     {attendees.map(n => {
                                         const name = typeof n === 'object' ? (n.name || n.display_name) : n;
@@ -285,14 +483,19 @@ export function JoinEventPage({ ev, st, go }) {
                                             </div>
                                         );
                                     })}
-                                    <div className="att" style={{ paddingRight: 14 }}><div className="av" style={{ width: 28, height: 28, fontSize: 11, background: "var(--surface-2)", color: "var(--ink-2)" }}>+{Math.max(0, e.going - attendees.length)}</div><span className="nm">more</span></div>
+                                    <div className="att" style={{ paddingRight: 14 }}><div className="av" style={{ width: 28, height: 28, fontSize: 11, background: "var(--surface-2)", color: "var(--ink-2)" }}>+{Math.max(0, liveEvent.going - attendees.length)}</div><span className="nm">more</span></div>
                                 </div>
                             </div>
+                            {isWaitlisted && localStatus !== 'completed' && (
+                                <div style={{ marginTop: 20 }}>
+                                    <Waitlist ev={liveEvent} st={st} go={go} />
+                                </div>
+                            )}
                         </div>
 
                         {/* Ticket sidebar */}
                         <div className="ev-aside">
-                            {isClosed || isScheduled ? (
+                            {(isClosed || isScheduled) && (!liveEvent.bookingStatus || liveEvent.bookingStatus === 'cancelled') ? (
                                 <div className="ticket-box" style={{ padding: "32px 24px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
                                     <div style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--surface-3)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-2)" }}>
                                         {isScheduled ? <I.clock style={{ width: 24, height: 24 }} /> : <I.lock style={{ width: 24, height: 24 }} />}
@@ -303,11 +506,59 @@ export function JoinEventPage({ ev, st, go }) {
                                             ? "Registration for this event will open soon. Save the event to be notified." 
                                             : "The host has closed registration for this event."}
                                     </p>
-                                    <button className="hbtn hbtn--primary hbtn--block" style={{ marginTop: 8 }} onClick={() => toggleWishlist && toggleWishlist(e.id)}>
-                                        {isWishlisted ? "Wishlisted" : "Add to Wishlist"}
+                                    <button className="hbtn hbtn--primary hbtn--block" style={{ marginTop: 8 }} onClick={() => toggleWishlist && toggleWishlist(liveEvent.id, liveEvent.wishlistCount)}>
+                                        {isWishlisted ? <I.heartF /> : <I.heart />} {isWishlisted ? "Wishlisted" : "Save for later"}
                                     </button>
                                 </div>
                             ) : (
+                                <div className="ticket-box">
+                                    <div className="tb-head">
+                                        <div className="pmeta">
+                                            <span className="price-big" style={liveEvent.type === "Free" ? { color: "#1f9d57" } : {}}>{sel?.free ? "Free" : sel?.p}</span>
+                                            {!sel?.free && <span className="price-un">onwards</span>}
+                                        </div>
+                                        {evtCap ? (
+                                            <div className="seats">
+                                                <span style={{ whiteSpace: "nowrap" }}>{Math.max(0, evtCap - evtGoing)} left</span>
+                                                <div className="bar"><i style={{ width: `${pct}%` }} /></div>
+                                                <span style={{ whiteSpace: "nowrap", color: "var(--ink-3)" }}>{pct}% full</span>
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                    <div className="tier-list">
+                                        {tiers.map(t => (
+                                            <div key={t.id} className={`tier ${tier === t.id ? "on" : ""} ${t.isFull ? "full" : ""}`} style={t.isFull ? { opacity: 0.5, pointerEvents: "none" } : {}} onClick={() => !t.isFull && setTier(t.id)}>
+                                                <span className="radio" />
+                                                <div className="ti">
+                                                    <div className="n">{t.n} {t.isFull && <span style={{ color: "var(--red)", fontSize: 12, marginLeft: 8 }}>Sold Out</span>}</div>
+                                                    <div className="d">{t.d}</div>
+                                                    {t.early && <span className="early">EARLY BIRD</span>}
+                                                </div>
+                                                <div className={`tp ${t.free ? "free" : ""}`}>{t.free ? "Free" : t.p}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="ticket-foot">
+                                        <div className="qty">
+                                            <span className="lbl">Quantity</span>
+                                            <div className="stepper">
+                                                <button onClick={() => setQty(q => Math.max(1, q - 1))}>–</button>
+                                                <span className="n">{qty}</span>
+                                                <button onClick={() => setQty(q => Math.min(6, q + 1))}>+</button>
+                                            </div>
+                                        </div>
+                                        {localStatus === 'completed' && (
+                                            <div style={{ padding: 12, background: "rgba(34, 197, 94, 0.1)", color: "var(--accent-1)", border: "1px solid rgba(34, 197, 94, 0.2)", borderRadius: 8, marginTop: 16, textAlign: "center", fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                                                <I.cal /> EVENT COMPLETED
+                                            </div>
+                                        )}
+                                        {localStatus !== 'completed' && (
+                                            liveEvent.bookingStatus === 'confirmed' ? (
+                                                <button className="hbtn hbtn--primary hbtn--block" onClick={() => window.location.reload()} style={{ background: "#1f9d57", color: "#fff" }}>
+                                                    <I.check style={{ marginRight: 6 }} /> Ticket Generated • Click to view
+                                                </button>
+                                            ) : liveEvent.bookingStatus === 'waitlisted' ? (
+                                                <button className="hbtn hbtn--soft hbtn--block" style={{ color: "var(--accent-2)" }} onClick={() => go("waitlist", liveEvent)}>
                                 <div className="ticket-box" style={{ padding: '20px' }}>
                                     {e.type === "Free" ? (
                                         <div style={{ padding: "16px 0", fontWeight: 600, color: "var(--ink)", display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -353,9 +604,27 @@ export function JoinEventPage({ ev, st, go }) {
                                                 <button className="hbtn hbtn--soft hbtn--block" style={{ color: "var(--accent-2)" }} onClick={() => go("waitlist", e)}>
                                                     <I.users /> View Waitlist Status
                                                 </button>
+                                            ) : liveEvent.bookingStatus === 'pending_approval' ? (
+                                                <button className="hbtn hbtn--soft hbtn--block" disabled>
+                                                    Pending Approval
+                                                </button>
+                                            ) : isSoldOut && !waitlistEnabled ? (
+                                                <button className="hbtn hbtn--soft hbtn--block" disabled style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center' }}>
+                                                    <I.lock style={{ width: 14, height: 14 }} /> Event Full
+                                                </button>
+                                            ) : isSoldOut ? (
+                                                isWaitlisted ? (
+                                                    <button className="hbtn hbtn--soft hbtn--block" style={{ color: "var(--accent-2)" }} onClick={() => go("waitlist", liveEvent)}>
+                                                        <I.users /> View Waitlist Status
+                                                    </button>
+                                                ) : (
+                                                    <button className="hbtn hbtn--primary hbtn--block" onClick={() => { st.toggleWaitlist && st.toggleWaitlist(liveEvent.id); go("waitlist", liveEvent); }}>
+                                                        Get Ticket
+                                                    </button>
+                                                )
                                             ) : (
-                                                <button className="hbtn hbtn--primary hbtn--block" onClick={() => { st.toggleWaitlist(e.id); go("waitlist", e); }}>
-                                                    Get Ticket
+                                                <button className="hbtn hbtn--primary hbtn--block" onClick={() => { register(liveEvent.id, false, { ticketTypeId: tier, qty, ticketName: sel?.n }, liveEvent.inviteToken); go("events"); }}>
+                                                    {liveEvent.type === "Free" ? "Request to join" : `Get ${qty > 1 ? qty + " tickets" : "ticket"}`}
                                                 </button>
                                             )
                                         ) : (
@@ -378,7 +647,7 @@ export function JoinEventPage({ ev, st, go }) {
                                             Seats: {e.cap && e.cap < 9999 ? `${e.cap - e.going} left` : "Unlimited"}
                                         </div>
                                         <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center", marginTop: 11, fontSize: 12, color: "var(--ink-3)" }}>
-                                            <I.check style={{ width: 13, height: 13, color: "#1f9d57" }} /> {isSoldOut && e.waitlist !== false ? "Waitlist claim window: 15 mins" : isSoldOut ? "Fully booked" : e.type === "Free" ? "Approval-based · free" : "Secure checkout · instant ticket"}
+                                            <I.check style={{ width: 13, height: 13, color: "#1f9d57" }} /> {isSoldOut && waitlistEnabled ? "Waitlist claim window: 15 mins" : isSoldOut ? "Fully booked" : liveEvent.type === "Free" ? "Approval-based · free" : "Secure checkout · instant ticket"}
                                         </div>
                                     </div>
 

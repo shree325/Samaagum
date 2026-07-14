@@ -53,7 +53,21 @@ export function EventPage({ ev, st, go }) {
       }
     }
 
-    const priceVal = e.price || (e.tickets?.[0] ? `₹${(e.tickets[0].price_minor / 100).toFixed(0)}` : ((e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : '—'));
+    let priceVal = '—';
+    if (e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') {
+        priceVal = 'Free';
+    } else if (e.tickets && e.tickets.length > 0) {
+        const prices = e.tickets.map((t: any) => t.price_minor ? t.price_minor / 100 : (t.price_amount_minor ? t.price_amount_minor / 100 : 0));
+        const minPrice = Math.min(...prices);
+        const maxPrice = Math.max(...prices);
+        if (minPrice === maxPrice) {
+            priceVal = minPrice === 0 ? 'Free' : `₹${minPrice.toFixed(0)}`;
+        } else {
+            priceVal = `₹${minPrice.toFixed(0)} - ₹${maxPrice.toFixed(0)}`;
+        }
+    } else if (e.price) {
+        priceVal = e.price;
+    }
 
     e = {
       ...e,
@@ -201,7 +215,21 @@ export function EventPage({ ev, st, go }) {
       const dateStr = dateObj.toLocaleDateString();
       const time = dateObj.toLocaleTimeString();
 
-      const priceVal = e.price || (e.tickets?.[0] ? `₹${(e.tickets[0].price_minor / 100).toFixed(0)}` : ((e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : '—'));
+      let priceVal = '—';
+      if (e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') {
+          priceVal = 'Free';
+      } else if (e.tickets && e.tickets.length > 0) {
+          const prices = e.tickets.map((t: any) => t.price_minor ? t.price_minor / 100 : (t.price_amount_minor ? t.price_amount_minor / 100 : 0));
+          const minPrice = Math.min(...prices);
+          const maxPrice = Math.max(...prices);
+          if (minPrice === maxPrice) {
+              priceVal = minPrice === 0 ? 'Free' : `₹${minPrice.toFixed(0)}`;
+          } else {
+              priceVal = `₹${minPrice.toFixed(0)} - ₹${maxPrice.toFixed(0)}`;
+          }
+      } else if (e.price) {
+          priceVal = e.price;
+      }
 
       const normalized = {
         ...e,
@@ -261,7 +289,21 @@ export function EventPage({ ev, st, go }) {
         const dateStr = dateObj.toLocaleDateString();
         const time = dateObj.toLocaleTimeString();
 
-        const priceVal = ev.price || (data.data.tickets?.[0] ? `₹${(data.data.tickets[0].price_minor / 100).toFixed(0)}` : ((ev.registration_mode === 'free' || ev.registration_mode === 'free_rsvp') ? 'Free' : '—'));
+        let priceVal = '—';
+        if (ev.registration_mode === 'free' || ev.registration_mode === 'free_rsvp') {
+            priceVal = 'Free';
+        } else if (data.data.tickets && data.data.tickets.length > 0) {
+            const prices = data.data.tickets.map((t: any) => t.price_minor ? t.price_minor / 100 : (t.price_amount_minor ? t.price_amount_minor / 100 : 0));
+            const minPrice = Math.min(...prices);
+            const maxPrice = Math.max(...prices);
+            if (minPrice === maxPrice) {
+                priceVal = minPrice === 0 ? 'Free' : `₹${minPrice.toFixed(0)}`;
+            } else {
+                priceVal = `₹${minPrice.toFixed(0)} - ₹${maxPrice.toFixed(0)}`;
+            }
+        } else if (ev.price) {
+            priceVal = ev.price;
+        }
 
         const normalized = {
           ...ev,
@@ -438,6 +480,7 @@ export function EventPage({ ev, st, go }) {
     socket.emit('join_event', e.id);
     socket.on('dashboard_updated', () => {
       fetchEventDetails();
+      fetchEventMembers();
       if (isOwner || isAdmin || isModerator) {
         fetchHostStats();
       }
@@ -489,6 +532,7 @@ export function EventPage({ ev, st, go }) {
   const [registrationOpen, setRegistrationOpen] = useState(false);
   const [isScheduled, setIsScheduled] = useState(false);
   const [regToggleLoading, setRegToggleLoading] = useState(false);
+  const [refreshRegStatus, setRefreshRegStatus] = useState(0);
 
   // Sync from server once event details are loaded
   useEffect(() => {
@@ -497,16 +541,39 @@ export function EventPage({ ev, st, go }) {
     const closesAt = currentEvent?.registrationClosesAt || currentEvent?.registration_closes_at || e.registrationClosesAt || e.registration_closes_at;
 
     let eff = s !== 'CLOSED';
+    let timer = null;
+
     if (s === 'SCHEDULED') {
       const now = new Date();
       const o = opensAt ? new Date(opensAt) : null;
       const c = closesAt ? new Date(closesAt) : null;
-      if (o && now < o) eff = false;
-      if (c && now > c) eff = false;
+      
+      if (o && now < o) {
+        eff = false;
+        const ms = o.getTime() - now.getTime();
+        if (ms <= 2147483647) timer = setTimeout(() => setRefreshRegStatus(prev => prev + 1), ms);
+      } else if (c && now < c) {
+        // Between open and close
+        const ms = c.getTime() - now.getTime();
+        if (ms <= 2147483647) timer = setTimeout(() => setRefreshRegStatus(prev => prev + 1), ms);
+      } else if (c && now >= c) {
+        eff = false;
+      }
+    } else if (s === 'OPEN') {
+      const now = new Date();
+      const c = closesAt ? new Date(closesAt) : null;
+      if (c && now < c) {
+        const ms = c.getTime() - now.getTime();
+        if (ms <= 2147483647) timer = setTimeout(() => setRefreshRegStatus(prev => prev + 1), ms);
+      } else if (c && now >= c) {
+        eff = false;
+      }
     }
+    
+    if (timer) return () => clearTimeout(timer);
     setRegistrationOpen(eff);
-    setIsScheduled(s === 'SCHEDULED');
-  }, [currentEvent, e]);
+    setIsScheduled(s === 'SCHEDULED' && eff !== false);
+  }, [currentEvent, e, refreshRegStatus]);
 
   const handleToggleRegistration = async () => {
     if (!isRealEventId(e.id) || regToggleLoading) return;
@@ -945,9 +1012,11 @@ export function EventPage({ ev, st, go }) {
             </div>
 
             <div className="gh-act">
-              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => toggleWishlist && toggleWishlist(e.id)}>
-                {isSaved ? <I.heartF /> : <I.heart />} {isSaved ? "Wishlisted" : "Wishlist"}
-              </button>
+              {!bookingStatusProp && !registrationOpen && (
+                <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => toggleWishlist && toggleWishlist(e.id, e.wishlistCount)}>
+                  {isSaved ? <I.heartF /> : <I.heart />} {isSaved ? "Wishlisted" : "Wishlist"}
+                </button>
+              )}
               <div style={{ position: "relative" }}>
                 <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => setShowShareSheet(!showShareSheet)}>
                   <I.share /> Share
@@ -1204,7 +1273,7 @@ export function EventPage({ ev, st, go }) {
                                   <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                                     Questionnaire Answers
                                   </div>
-                                  {Object.entries(r.answers).map(([key, val]) => {
+                                  {Object.entries(r.answers).filter(([k]) => !['ticketTypeId', 'qty', 'ticketName', 'isQuestionnaireSubmit'].includes(k)).map(([key, val]) => {
                                     const label = getQuestionLabel(key);
                                     return (
                                       <div key={key} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -2425,7 +2494,7 @@ export function EventPage({ ev, st, go }) {
             </div>
             <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
               {responseMember.answers && Object.keys(responseMember.answers).length > 0 ? (
-                Object.entries(responseMember.answers).map(([key, val]) => {
+                Object.entries(responseMember.answers).filter(([k]) => !['ticketTypeId', 'qty', 'ticketName', 'isQuestionnaireSubmit'].includes(k)).map(([key, val]) => {
                   const label = getQuestionLabel(key);
                   return (
                     <div key={key}>
