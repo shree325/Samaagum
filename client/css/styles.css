@@ -64,6 +64,21 @@
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-std: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Map Colors — Light Theme */
+  --map-bg: #f3f2f8;
+  --map-world-fill: rgba(139, 92, 246, 0.08);
+  --map-world-stroke: rgba(26, 25, 38, 0.12);
+  --map-india-fill: rgba(139, 92, 246, 0.16);
+  --map-india-stroke: #7c3aed;
+  --map-state-stroke: rgba(124, 58, 237, 0.45);
+  --map-district-stroke: rgba(124, 58, 237, 0.22);
+  --map-controls-bg: rgba(255, 255, 255, 0.88);
+  --map-controls-border: rgba(139, 92, 246, 0.35);
+  --map-controls-hover: rgba(139, 92, 246, 0.15);
+  --map-badge-bg: rgba(255, 255, 255, 0.82);
+  --map-badge-border: rgba(26, 25, 38, 0.15);
+  --map-badge-text: #4b5563;
 }
 
 [data-theme="dark"] {
@@ -85,6 +100,21 @@
   --sh-md: 0 4px 12px rgba(0, 0, 0, 0.5);
   --sh-lg: 0 12px 30px rgba(0, 0, 0, 0.6);
   --sh-xl: 0 24px 60px rgba(0, 0, 0, 0.7);
+
+  /* Map Colors — Dark Theme */
+  --map-bg: #0d0d1a;
+  --map-world-fill: rgba(255, 255, 255, 0.05);
+  --map-world-stroke: rgba(255, 255, 255, 0.08);
+  --map-india-fill: rgba(139, 92, 246, 0.3);
+  --map-india-stroke: #a78bfa;
+  --map-state-stroke: rgba(167, 139, 250, 0.55);
+  --map-district-stroke: rgba(167, 139, 250, 0.3);
+  --map-controls-bg: rgba(15, 10, 40, 0.85);
+  --map-controls-border: rgba(139, 92, 246, 0.4);
+  --map-controls-hover: rgba(139, 92, 246, 0.25);
+  --map-badge-bg: rgba(15, 10, 40, 0.8);
+  --map-badge-border: rgba(139, 92, 246, 0.3);
+  --map-badge-text: #a78bfa;
 }
 
 /* Base Body Styles */
