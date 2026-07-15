@@ -1864,7 +1864,7 @@ export class EventService {
     const event = await prisma.events.findUnique({ where: { id: eventId } });
     if (event) {
       const entity = await prisma.entities.findUnique({ where: { id: event.hosted_by_entity_id }, include: { users: { select: { id: true, first_name: true, last_name: true, primary_email: true, profile_image_data: true, profiles: { select: { display_name: true } } } } } });
-      if (entity && entity.entity_type === 'user' && !memberMap.has(entity.user_id) && entity.users) {
+      if (entity && (entity.entity_type === 'user' || entity.entity_type === 'group') && !memberMap.has(entity.user_id) && entity.users) {
         const u = entity.users;
         const picture = u.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
         memberMap.set(entity.user_id, {
