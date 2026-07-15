@@ -919,10 +919,21 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                 where: { event_id: id }
             });
 
-            // Confirmed attendees
             const confirmedAttendees = await prisma.attendees.findMany({
                 where: { bookings: { event_id: id, status: { in: ['confirmed', 'pending_payment'] } } },
-                include: { tickets: true, bookings: true, users_attendees_user_idTousers: true }
+                include: {
+                    tickets: true,
+                    bookings: {
+                        include: {
+                            booking_line_items: {
+                                include: {
+                                    ticket_types: true
+                                }
+                            }
+                        }
+                    },
+                    users_attendees_user_idTousers: true
+                }
             });
 
             // Pending join requests
@@ -1093,6 +1104,7 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                             isCashPayment: (a as any).bookings?.payment_method === 'cash',
                             amountMinor: (a as any).bookings?.total_amount_minor ? Number((a as any).bookings.total_amount_minor) : 0,
                             answers: parsedAnswers,
+                            ticketTypeName: (a as any).bookings?.booking_line_items?.[0]?.ticket_types?.name || null,
                             createdAt: a.created_at || (a as any).bookings?.created_at || null,
                             checkinTime: a.checkin_status === 'checked_in' ? a.updated_at : null
                         };

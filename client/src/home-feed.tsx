@@ -507,36 +507,7 @@ export function HomeFeed({ st, go }: any) {
       <div className="page wide view-enter">
         <Greeting city={city} />
         
-        {/* Dynamic Category chip filters */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 26 }}>
-          <div className="filterbar">
-            {categoriesList.map((c: any) => (
-              <FilterChip key={c.id} active={cat === c.name} onClick={() => setCat(c.name)}>
-                {c.name}
-              </FilterChip>
-            ))}
-          </div>
-          <div className="filterbar">
-            {[
-              { k: "trending", ic: <I.fire />, label: "Trending" },
-              { k: "nearby", ic: <I.pin />, label: "Nearby" },
-              { k: "upcoming", ic: <I.cal />, label: "This week" },
-              { k: "free", ic: <I.ticket />, label: "Free" },
-              { k: "online", ic: <I.online />, label: "Online" },
-            ].map(q => (
-              <FilterChip
-                key={q.k}
-                active={quick.includes(q.k)}
-                icon={q.ic}
-                onClick={() => setQuick(quick.includes(q.k) ? quick.filter(x => x !== q.k) : [...quick, q.k])}
-              >
-                {q.label}
-              </FilterChip>
-            ))}
-            <div className="fdiv" />
-            <button className="fchip" onClick={() => go("discover")}><span className="cv"><I.filter /></span>All filters</button>
-          </div>
-        </div>
+
 
         {/* Hero carousel */}
         {sections.hero.loading ? (
@@ -555,8 +526,6 @@ export function HomeFeed({ st, go }: any) {
             registered={registered}
           />
         )}
-        {/* Featured */}
-        <FeatureCard ev={FEATURED} onOpen={(e) => go("event", e)} wishlisted={wishlisted.has(FEATURED.id)} wishlistCount={wishlistCounts[FEATURED.id] !== undefined ? wishlistCounts[FEATURED.id] : (FEATURED.wishlistCount || 0)} onWishlist={() => toggleWishlist(FEATURED.id, FEATURED.wishlistCount)} registered={registered.has(FEATURED.id)} />
 
         {/* Recommended rail */}
         <div className="section">
@@ -734,7 +703,7 @@ export function HomeFeed({ st, go }: any) {
             <ErrorBlock message={sections.nearby.error} onRetry={refetch} />
           ) : sections.nearby.data.length ? (
             <div className="ev-grid">
-              {sections.nearby.data.map((g: any) => {
+              {sections.nearby.data.slice(0, 4).map((g: any) => {
                 const distanceLabel = g.distance ? ` (${Math.round(g.distance * 10) / 10} km away)` : '';
                 return (
                   <GroupCard
@@ -813,22 +782,58 @@ export function HomeFeed({ st, go }: any) {
 /* ---------------- Discover (browse) ---------------- */
 export function Discover({ st, go, param }) {
   const [tab, setTab] = useState(param === "events" ? "events" : "groups");
-  const [cat, setCat] = useState("All");
 
   useEffect(() => {
     if (param === "events" || param === "groups") {
       setTab(param);
     }
   }, [param]);
-  const [groupFilter, setGroupFilter] = useState("all");
-  const [eventFilter, setEventFilter] = useState("all");
+
   const { wishlisted, wishlistCounts, toggleWishlist, registered, city, addJoined, addPending } = st;
   const [dbEvents, setDbEvents] = useState([]);
-
   const [dbGroups, setDbGroups] = useState([]);
   const [categoriesList, setCategoriesList] = useState([]);
   const [loading, setLoading] = useState(true);
   const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+
+  // Filter popup and configurations
+  const [showFilterPopup, setShowFilterPopup] = useState(false);
+  const [showCategoryPopup, setShowCategoryPopup] = useState(false);
+  const [filterMode, setFilterMode] = useState({ free: false, paid: false });
+  const [filterFormat, setFilterFormat] = useState({ online: false, inPerson: false });
+  const [filterTime, setFilterTime] = useState({ today: false, thisWeek: false, other: false });
+  const [filterReg, setFilterReg] = useState({ joined: false, notJoined: false });
+  const [selectedCats, setSelectedCats] = useState(new Set());
+
+  const isToday = (date: Date) => {
+    const today = new Date();
+    return date.getDate() === today.getDate() &&
+      date.getMonth() === today.getMonth() &&
+      date.getFullYear() === today.getFullYear();
+  };
+
+  const isThisWeek = (date: Date) => {
+    const today = new Date();
+    const currentDay = today.getDay();
+    const firstDay = today.getDate() - currentDay;
+    
+    const first = new Date(new Date(today).setDate(firstDay));
+    first.setHours(0,0,0,0);
+    const last = new Date(new Date(today).setDate(firstDay + 6));
+    last.setHours(23,59,59,999);
+    
+    return date >= first && date <= last;
+  };
+
+  const getEventCatCount = (catName: string) => {
+    if (catName === "All") return dbEvents.filter(e => e.status === "published").length;
+    return dbEvents.filter(e => e.status === "published" && (e.category?.toLowerCase() === catName.toLowerCase() || e.venue?.meta?.category?.toLowerCase() === catName.toLowerCase())).length;
+  };
+
+  const getGroupCatCount = (catName: string) => {
+    if (catName === "All") return dbGroups.filter(g => g.visibility !== "hidden").length;
+    return dbGroups.filter(g => g.visibility !== "hidden" && (g.category?.toLowerCase() === catName.toLowerCase() || g.cat?.toLowerCase() === catName.toLowerCase())).length;
+  };
 
   const cityRef = React.useRef(city);
   React.useEffect(() => { cityRef.current = city; }, [city]);
@@ -844,7 +849,6 @@ export function Discover({ st, go, param }) {
       if (data.success) {
         const groups = data.data || [];
         setDbGroups(groups);
-        // Seed joined/pending sets from server so cards show correct state on load
         groups.forEach(g => {
           if (g.isJoined) addJoined && addJoined(g.id);
           else if (g.isPending) addPending && addPending(g.id);
@@ -917,11 +921,18 @@ export function Discover({ st, go, param }) {
 
   const grps = dbGroups.filter(g => {
     if (g.visibility === "hidden") return false;
-    if (cat !== "All" && g.category !== cat && g.cat !== cat) return false;
     
-    const isJoined = g.isJoined || st.joined?.has(g.id);
-    if (groupFilter === "joined" && !isJoined) return false;
-    if (groupFilter === "unjoined" && isJoined) return false;
+    // Category check
+    const gCat = g.category || g.cat || "General";
+    if (selectedCats.size > 0 && !selectedCats.has("All") && !selectedCats.has(gCat)) return false;
+    
+    // Joined check
+    const groupRegActive = filterReg.joined || filterReg.notJoined;
+    if (groupRegActive) {
+      const isJoined = g.isJoined || st.joined?.has(g.id);
+      if (isJoined && !filterReg.joined) return false;
+      if (!isJoined && !filterReg.notJoined) return false;
+    }
     
     return true;
   });
@@ -978,7 +989,9 @@ export function Discover({ st, go, param }) {
     };
   }).filter(e => {
     if (e.status !== "published") return false;
-    if (cat !== "All" && e.cat !== cat) return false;
+    
+    // Category check
+    if (selectedCats.size > 0 && !selectedCats.has("All") && !selectedCats.has(e.cat)) return false;
     
     // Only hide events that have already ended (or started > 24h ago if no ends_at)
     if (e.starts_at) {
@@ -986,11 +999,41 @@ export function Discover({ st, go, param }) {
       if (endTime < new Date()) return false;
     }
     
-    const isRegistered = registered?.has(e.id);
-    if (eventFilter === "joined" && !isRegistered) return false;
-    if (eventFilter === "unjoined" && isRegistered) return false;
-    if (eventFilter === "paid" && e.type !== "Paid") return false;
-    if (eventFilter === "free" && e.type !== "Free") return false;
+    // Free / Paid check
+    const costActive = filterMode.free || filterMode.paid;
+    if (costActive) {
+      if (e.type === "Free" && !filterMode.free) return false;
+      if (e.type === "Paid" && !filterMode.paid) return false;
+    }
+    
+    // Online / In-person check
+    const formatActive = filterFormat.online || filterFormat.inPerson;
+    if (formatActive) {
+      if (e.online && !filterFormat.online) return false;
+      if (!e.online && !filterFormat.inPerson) return false;
+    }
+    
+    // Timing check
+    if (e.starts_at) {
+      const d = new Date(e.starts_at);
+      const isEventToday = isToday(d);
+      const isEventThisWeek = isThisWeek(d);
+      
+      const timingActive = filterTime.today || filterTime.thisWeek || filterTime.other;
+      if (timingActive) {
+        if (isEventToday && !filterTime.today) return false;
+        if (isEventThisWeek && !isEventToday && !filterTime.thisWeek) return false;
+        if (!isEventToday && !isEventThisWeek && !filterTime.other) return false;
+      }
+    }
+    
+    // Registration check
+    const regActive = filterReg.joined || filterReg.notJoined;
+    if (regActive) {
+      const isRegistered = registered?.has(e.id);
+      if (isRegistered && !filterReg.joined) return false;
+      if (!isRegistered && !filterReg.notJoined) return false;
+    }
 
     return true;
   });
@@ -1009,34 +1052,316 @@ export function Discover({ st, go, param }) {
             <button className={tab === "events" ? "on" : ""} onClick={() => setTab("events")}>Events</button>
             <button className={tab === "groups" ? "on" : ""} onClick={() => setTab("groups")}>Groups</button>
           </div>
-          {tab === "groups" && (
-            <select className="h-input" style={{ width: "auto", padding: "6px 12px", height: "32px", fontSize: 13, background: "var(--surface)", color: "var(--ink)", border: "1px solid var(--border)", borderRadius: 8 }} value={groupFilter} onChange={e => setGroupFilter(e.target.value)}>
-              <option value="all" style={{ background: "var(--surface)", color: "var(--ink)" }}>All Groups</option>
-              <option value="joined" style={{ background: "var(--surface)", color: "var(--ink)" }}>Joined</option>
-              <option value="unjoined" style={{ background: "var(--surface)", color: "var(--ink)" }}>Not Joined</option>
-            </select>
-          )}
-          {tab === "events" && (
-            <select className="h-input" style={{ width: "auto", padding: "6px 12px", height: "32px", fontSize: 13, background: "var(--surface)", color: "var(--ink)", border: "1px solid var(--border)", borderRadius: 8 }} value={eventFilter} onChange={e => setEventFilter(e.target.value)}>
-              <option value="all" style={{ background: "var(--surface)", color: "var(--ink)" }}>All Events</option>
-              <option value="joined" style={{ background: "var(--surface)", color: "var(--ink)" }}>Registered</option>
-              <option value="unjoined" style={{ background: "var(--surface)", color: "var(--ink)" }}>Not Registered</option>
-              <option value="free" style={{ background: "var(--surface)", color: "var(--ink)" }}>Free</option>
-              <option value="paid" style={{ background: "var(--surface)", color: "var(--ink)" }}>Paid</option>
-            </select>
-          )}
+          <button 
+            className="hbtn hbtn--soft" 
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', height: 36, fontSize: 13, fontWeight: 600 }}
+            onClick={() => setShowFilterPopup(true)}
+          >
+            <I.filter style={{ width: 14, height: 14 }} /> Filter
+          </button>
         </div>
-        <div className="filterbar" style={{ marginBottom: 24 }}>
-          <FilterChip active={cat === "All"} onClick={() => setCat("All")}>All</FilterChip>
-          {categoriesList.map((c: any) => (
-            <FilterChip key={c.id} active={cat === c.name} onClick={() => setCat(c.name)}>
-              {c.icon_value ? `${c.icon_value} ` : ""}{c.name}
-            </FilterChip>
-          ))}
-        </div>
+
+        {/* Filter Popup Overlay Modal */}
+        {showFilterPopup && (
+          <div style={{
+            position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.65)',
+            backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex',
+            alignItems: 'center', justifyContent: 'center', padding: 20
+          }}>
+            <div style={{
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: 16, width: '100%', maxWidth: 480, maxHeight: '90vh',
+              display: 'flex', flexDirection: 'column', overflow: 'hidden',
+              boxShadow: 'var(--sh-lg)'
+            }}>
+              {/* Header */}
+              <div style={{
+                padding: '16px 20px', borderBottom: '1px solid var(--border-2)',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+              }}>
+                <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--ink)' }}>Filters</h2>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                  <button 
+                    className="hbtn hbtn--ghost hbtn--sm"
+                    style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 13 }}
+                    onClick={() => {
+                      setFilterMode({ free: true, paid: true });
+                      setFilterFormat({ online: true, inPerson: true });
+                      setFilterTime({ today: true, thisWeek: true, other: true });
+                      setFilterReg({ joined: true, notJoined: true });
+                      setSelectedCats(new Set(["All"]));
+                    }}
+                  >
+                    Reset All
+                  </button>
+                  <button 
+                    className="hbtn hbtn--ghost hbtn--sm" 
+                    onClick={() => setShowFilterPopup(false)}
+                    style={{ padding: '4px 8px', fontSize: 16 }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              {/* Scrollable Filters Content */}
+              <div className="scroll" style={{ padding: '20px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 20 }}>
+                
+                {/* Timing filters */}
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Timing</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {[
+                      { key: 'today', label: 'Today' },
+                      { key: 'thisWeek', label: 'This Week' },
+                      { key: 'other', label: 'Later / Other' }
+                    ].map(item => {
+                      const isChecked = filterTime[item.key as keyof typeof filterTime];
+                      return (
+                        <div 
+                          key={item.key} 
+                          onClick={() => setFilterTime(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            background: isChecked ? 'rgba(109, 94, 252, 0.15)' : 'var(--surface-2)',
+                            padding: '8px 16px', borderRadius: 8, 
+                            border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
+                            color: isChecked ? 'var(--accent)' : 'var(--ink-2)',
+                            fontWeight: isChecked ? '600' : 'normal',
+                            cursor: 'pointer', fontSize: 13, userSelect: 'none', transition: 'all 0.2s'
+                          }}
+                        >
+                          {item.label}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Cost filters */}
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cost</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {[
+                      { key: 'free', label: 'Free' },
+                      { key: 'paid', label: 'Paid' }
+                    ].map(item => {
+                      const isChecked = filterMode[item.key as keyof typeof filterMode];
+                      return (
+                        <div 
+                          key={item.key} 
+                          onClick={() => setFilterMode(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            background: isChecked ? 'rgba(109, 94, 252, 0.15)' : 'var(--surface-2)',
+                            padding: '8px 16px', borderRadius: 8, 
+                            border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
+                            color: isChecked ? 'var(--accent)' : 'var(--ink-2)',
+                            fontWeight: isChecked ? '600' : 'normal',
+                            cursor: 'pointer', fontSize: 13, userSelect: 'none', transition: 'all 0.2s'
+                          }}
+                        >
+                          {item.label}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Location Format filters */}
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Location Format</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {[
+                      { key: 'online', label: 'Online' },
+                      { key: 'inPerson', label: 'In-person' }
+                    ].map(item => {
+                      const isChecked = filterFormat[item.key as keyof typeof filterFormat];
+                      return (
+                        <div 
+                          key={item.key} 
+                          onClick={() => setFilterFormat(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            background: isChecked ? 'rgba(109, 94, 252, 0.15)' : 'var(--surface-2)',
+                            padding: '8px 16px', borderRadius: 8, 
+                            border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
+                            color: isChecked ? 'var(--accent)' : 'var(--ink-2)',
+                            fontWeight: isChecked ? '600' : 'normal',
+                            cursor: 'pointer', fontSize: 13, userSelect: 'none', transition: 'all 0.2s'
+                          }}
+                        >
+                          {item.label}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Registration / Membership Status */}
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {tab === "events" ? "Registration Status" : "Membership Status"}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {[
+                      { key: 'joined', label: tab === "events" ? 'Registered' : 'Joined' },
+                      { key: 'notJoined', label: tab === "events" ? 'Not Registered' : 'Not Joined' }
+                    ].map(item => {
+                      const isChecked = filterReg[item.key as keyof typeof filterReg];
+                      return (
+                        <div 
+                          key={item.key} 
+                          onClick={() => setFilterReg(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            background: isChecked ? 'rgba(109, 94, 252, 0.15)' : 'var(--surface-2)',
+                            padding: '8px 16px', borderRadius: 8, 
+                            border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
+                            color: isChecked ? 'var(--accent)' : 'var(--ink-2)',
+                            fontWeight: isChecked ? '600' : 'normal',
+                            cursor: 'pointer', fontSize: 13, userSelect: 'none', transition: 'all 0.2s'
+                          }}
+                        >
+                          {item.label}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Categories Selector */}
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Categories</div>
+                  <div 
+                    onClick={() => setShowCategoryPopup(true)}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      background: 'var(--surface-2)', padding: '10px 14px', borderRadius: 8,
+                      border: '1px solid var(--border)', cursor: 'pointer', fontSize: 13,
+                      transition: 'border-color 0.2s', userSelect: 'none'
+                    }}
+                    onMouseEnter={ev => ev.currentTarget.style.borderColor = 'var(--accent)'}
+                    onMouseLeave={ev => ev.currentTarget.style.borderColor = 'var(--border)'}
+                  >
+                    <span style={{ color: 'var(--ink)', maxWidth: '80%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {selectedCats.has('All') ? 'All Categories' : Array.from(selectedCats).join(', ')}
+                    </span>
+                    <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>Choose ❯</span>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Footer */}
+              <div style={{
+                padding: '16px 20px', borderTop: '1px solid var(--border-2)',
+                display: 'flex', justifyContent: 'flex-end', background: 'var(--surface-2)'
+              }}>
+                <button 
+                  className="hbtn hbtn--primary" 
+                  style={{ height: 38, padding: '0 24px', fontWeight: 600 }}
+                  onClick={() => setShowFilterPopup(false)}
+                >
+                  Apply Filters
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Categories Nested Popup */}
+        {showCategoryPopup && (
+          <div style={{
+            position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.65)',
+            backdropFilter: 'blur(8px)', zIndex: 11000, display: 'flex',
+            alignItems: 'center', justifyContent: 'center', padding: 20
+          }}>
+            <div style={{
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: 16, width: '100%', maxWidth: 400, maxHeight: '80vh',
+              display: 'flex', flexDirection: 'column', overflow: 'hidden',
+              boxShadow: 'var(--sh-lg)'
+            }}>
+              {/* Header */}
+              <div style={{
+                padding: '16px 20px', borderBottom: '1px solid var(--border-2)',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+              }}>
+                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--ink)' }}>Select Categories</h2>
+                <button 
+                  className="hbtn hbtn--ghost hbtn--sm" 
+                  onClick={() => setShowCategoryPopup(false)}
+                  style={{ padding: '4px 8px', fontSize: 15 }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Scrollable Categories List */}
+              <div className="scroll" style={{ padding: '20px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  { id: 'All', name: 'All' },
+                  ...categoriesList
+                ].map((c: any) => {
+                  const count = tab === "events" ? getEventCatCount(c.name) : getGroupCatCount(c.name);
+                  const isChecked = c.name === 'All' ? (selectedCats.size === 0 || selectedCats.has('All')) : selectedCats.has(c.name);
+                  return (
+                    <div 
+                      key={c.id} 
+                      onClick={() => {
+                        setSelectedCats(prev => {
+                          const next = new Set(prev);
+                          if (c.name === 'All') {
+                            next.clear();
+                          } else {
+                            next.delete('All');
+                            if (isChecked) {
+                              next.delete(c.name);
+                            } else {
+                              next.add(c.name);
+                            }
+                          }
+                          return next;
+                        });
+                      }}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '10px 14px', 
+                        background: isChecked ? 'rgba(109, 94, 252, 0.15)' : 'var(--surface-2)',
+                        border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
+                        color: isChecked ? 'var(--accent)' : 'var(--ink-2)',
+                        fontWeight: isChecked ? '600' : 'normal',
+                        borderRadius: 8, cursor: 'pointer', fontSize: 13.5, userSelect: 'none', transition: 'all 0.2s'
+                      }}
+                    >
+                      <span>{c.icon_value ? `${c.icon_value} ` : ""}{c.name}</span>
+                      <span style={{ fontSize: 12, color: isChecked ? 'var(--accent)' : 'var(--ink-3)', fontWeight: 500 }}>({count})</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Footer */}
+              <div style={{
+                padding: '12px 20px', borderTop: '1px solid var(--border-2)',
+                display: 'flex', justifyContent: 'flex-end', background: 'var(--surface-2)'
+              }}>
+                <button 
+                  className="hbtn hbtn--primary" 
+                  style={{ height: 36, padding: '0 20px', fontWeight: 600, fontSize: 13 }}
+                  onClick={() => setShowCategoryPopup(false)}
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {tab === "events" ? (
           evs.length === 0 ? (
-            <Empty icon={<I.ticket />} title="No events found" text="There are no events scheduled in this category." />
+            <Empty icon={<I.ticket />} title="No events found" text="There are no events scheduled in this category matching the filters." />
           ) : (
             <div className="ev-grid">
               {evs.map(ev => <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)} wishlisted={wishlisted.has(ev.id)} wishlistCount={wishlistCounts[ev.id] !== undefined ? wishlistCounts[ev.id] : (ev.wishlistCount || 0)} onWishlist={() => toggleWishlist(ev.id, ev.wishlistCount)} registered={registered.has(ev.id)} />)}
@@ -1044,7 +1369,9 @@ export function Discover({ st, go, param }) {
           )
         ) : (
           <div className="ev-grid">
-            {loading ? <div style={{ color: "var(--ink-3)", padding: 20 }}>Loading groups...</div> : grps.map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={g.isJoined || st.joined?.has(g.id) ? true : (g.isPending || st.pending?.has(g.id)) ? "pending" : false} onJoin={(g)=>{ st.toggleJoin(g); }} />)}
+            {loading ? <div style={{ color: "var(--ink-3)", padding: 20 }}>Loading groups...</div> : grps.length === 0 ? (
+              <Empty icon={<I.groups />} title="No groups found" text="There are no groups scheduled in this category matching the filters." />
+            ) : grps.map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={g.isJoined || st.joined?.has(g.id) ? true : (g.isPending || st.pending?.has(g.id)) ? "pending" : false} onJoin={(g)=>{ st.toggleJoin(g); }} />)}
           </div>
         )}
       </div>

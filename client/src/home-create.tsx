@@ -31,7 +31,7 @@ export function CoverPicker({ value, onPick }) {
   );
 }
 
-export function Toggle({ on, onClick }) { return <button className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
+export function Toggle({ on, onClick }) { return <button type="button" className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
 
 
 
@@ -3458,7 +3458,15 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
                 <button className="hbtn hbtn--primary" style={{ width: "100%", marginTop: 24, justifyContent: "center" }} onClick={() => setGalleryModal(false)}>Confirm</button>
               </div>
 
-              {renderSubRolesModal(uploadRolesModalOpen, () => setUploadRolesModalOpen(false), galleryUploadRoles, setGalleryUploadRoles, "Who can upload?")}
+              {renderSubRolesModal(uploadRolesModalOpen, () => setUploadRolesModalOpen(false), galleryUploadRoles, (nextUpload) => {
+                const nextVal = typeof nextUpload === 'function' ? nextUpload(galleryUploadRoles) : nextUpload;
+                setGalleryUploadRoles(nextVal);
+                const nextView = {
+                  public: !!(galleryViewRoles.public || nextVal.public),
+                  roles: Array.from(new Set([...(galleryViewRoles.roles || []), ...(nextVal.roles || [])]))
+                };
+                setGalleryViewRoles(nextView);
+              }, "Who can upload?")}
               {renderSubRolesModal(viewRolesModalOpen, () => setViewRolesModalOpen(false), galleryViewRoles, setGalleryViewRoles, "Who can view?")}
             </div>
           </div>

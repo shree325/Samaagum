@@ -64,7 +64,7 @@ export function CoverPicker({ value, onPick }) {
   );
 }
 
-export function Toggle({ on, onClick }) { return <button className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
+export function Toggle({ on, onClick }) { return <button type="button" className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
 
 export function format24to12(timeStr) {
   if (!timeStr) return "";
@@ -1706,10 +1706,10 @@ export const DEFAULT_FREE_ENTITLEMENTS = {
 export function CreateEvent(props: any) {
   const { editEv } = props;
   const [eventData, setEventData] = useState(null as any);
-  const [loading, setLoading] = useState(editEv?.id && editEv.id !== 'new');
+  const [loading, setLoading] = useState(editEv?.id && editEv.id !== 'new' && !editEv.__draft);
 
   useEffect(() => {
-    if (editEv?.id && editEv.id !== 'new') {
+    if (editEv?.id && editEv.id !== 'new' && !editEv.__draft) {
       setLoading(true);
       const token = localStorage.getItem('token');
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {} as any;
@@ -1729,7 +1729,7 @@ export function CreateEvent(props: any) {
     } else {
       setLoading(false);
     }
-  }, [editEv?.id]);
+  }, [editEv?.id, editEv?.__draft]);
 
   if (loading) {
     return (

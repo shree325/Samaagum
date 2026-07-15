@@ -85,7 +85,7 @@ export function SortBar({ sort, onSort }) {
   return (
     <div style={{ display: "flex", gap: 2, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: 3 }}>
       {opts.map(([k, l]) => (
-        <button key={k} onClick={() => onSort(k)} style={{ padding: "5px 12px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: sort === k ? 600 : 400, background: sort === k ? "var(--ink)" : "transparent", color: sort === k ? "#fff" : "var(--ink-2)", transition: "all .15s" }}>{l}</button>
+        <button key={k} onClick={() => onSort(k)} style={{ padding: "5px 12px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: sort === k ? 600 : 400, background: sort === k ? "var(--ink)" : "transparent", color: sort === k ? "var(--surface)" : "var(--ink-2)", transition: "all .15s" }}>{l}</button>
       ))}
     </div>
   );
@@ -1680,7 +1680,7 @@ export function GroupDetail({ group, st, go }) {
                               </div>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-                              <button onClick={() => setActiveTag(null)} style={{ fontSize: 11.5, padding: "3px 10px", borderRadius: 12, border: "1px solid var(--border)", background: activeTag === null ? "var(--ink)" : "transparent", color: activeTag === null ? "#fff" : "var(--ink-2)", cursor: "pointer", fontWeight: activeTag === null ? 600 : 400 }}>All</button>
+                              <button onClick={() => setActiveTag(null)} style={{ fontSize: 11.5, padding: "3px 10px", borderRadius: 12, border: "1px solid var(--border)", background: activeTag === null ? "var(--ink)" : "transparent", color: activeTag === null ? "var(--surface)" : "var(--ink-2)", cursor: "pointer", fontWeight: activeTag === null ? 600 : 400 }}>All</button>
                               {ALL_FORUM_TAGS.map(t => {
                                 const tc = TAG_COLORS[t] || TAG_COLORS.General;
                                 const isActive = activeTag === t;
