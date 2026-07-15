@@ -7,6 +7,7 @@ import { Avatar, Grain, QRCode } from './home-icons';
 import { Empty } from './home-shell';
 import { Waitlist } from './home-waitlist';
 import { I } from './home-icons';
+import { OnlineMeetingCard } from "./OnlineMeetingCard";
 import { Events } from './landing-features';
 
 /* ============================================================
@@ -255,6 +256,7 @@ export function MyTickets({ st, go }) {
         ? 'Free'
         : (firstTicket?.price_amount_minor != null ? `₹${(firstTicket.price_amount_minor / 100).toFixed(0)}` : '—'),
       online: e.location_type === 'online',
+      online_link: e.online_link || null,
       date: dateStr,
       time: timeStr,
       venue: e.location_type === 'online' ? 'Online' : getVenueStr(e.venue),
@@ -302,6 +304,7 @@ export function MyTickets({ st, go }) {
         ? 'Free'
         : (firstTicket?.price_amount_minor != null ? `₹${(firstTicket.price_amount_minor / 100).toFixed(0)}` : '—'),
       online: e.location_type === 'online',
+      online_link: e.online_link || null,
       date: dateStr,
       time: timeStr,
       venue: e.location_type === 'online' ? 'Online' : getVenueStr(e.venue),
@@ -330,6 +333,7 @@ export function MyTickets({ st, go }) {
       cover: e.cover || meta.cover || "",
       cat: meta.category || e.cat || "General",
       online: e.location_type === 'online',
+      online_link: e.online_link || null,
       month, day, date: dateStr, time,
       venue: e.location_type === 'online' ? 'Online' : (venueObj.name || venueObj.address || 'Venue TBD'),
     };
@@ -755,7 +759,13 @@ export function AllTickets({ st, go }) {
                   onClick={() => go("ticket", t)}
                 >
                   <div style={{ width: 64, height: 64, borderRadius: 10, flexShrink: 0, background: "#fff", padding: 6, boxSizing: "border-box", boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
-                    <TicketQR token={t.qrToken || t.id || t.ev || "ticket"} size={52} />
+                    {t.online ? (
+                      <div style={{ width: '100%', height: '100%', borderRadius: 6, background: `url(${t.cover || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&q=80&w=100'}) center/cover no-repeat`, position: 'relative' }}>
+                        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 9, fontWeight: 700, textAlign: 'center', padding: '2px 0', borderBottomLeftRadius: 6, borderBottomRightRadius: 6 }}>ONLINE</div>
+                      </div>
+                    ) : (
+                      <TicketQR token={t.qrToken || t.id || t.ev || "ticket"} size={52} />
+                    )}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.ev}</div>
@@ -825,12 +835,18 @@ function downloadInvoice(t) {
         <h1>Samaagum · Ticket Invoice</h1>
         <div class="sub">Issued ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</div>
         <table>${rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("")}</table>
-        ${qrSrc ? `
+        ${t.online ? (t.online_link ? `
+        <div class="qr-block">
+          <div style="padding: 16px; background: #f3f4f6; border-radius: 8px; font-weight: 600; text-align: center;">
+            <div style="color: #6b7280; font-size: 12px; margin-bottom: 4px;">Meeting Link</div>
+            <a href="${t.online_link}" target="_blank" style="color: #0b5cff; text-decoration: none; word-break: break-all;">${t.online_link}</a>
+          </div>
+        </div>` : "") : (qrSrc ? `
         <div class="qr-block">
           <img src="${qrSrc}" alt="Ticket QR code" />
           <div class="cap">Show this QR code at the gate for scanning</div>
           <div class="tok">Token: ${token}</div>
-        </div>` : ""}
+        </div>` : "")}
         <div class="foot">This invoice was generated automatically and serves as proof of booking.</div>
         <script>
           (() => {
@@ -855,7 +871,9 @@ async function shareTicket(t) {
   const url = `${window.location.origin}${window.location.pathname}#ticket/${encodeURIComponent(t.qrToken || t.id || "")}`;
   const shareData = {
     title: `${t.ev || "My ticket"} · Samaagum`,
-    text: `My ticket for ${t.ev || "this event"} — ${t.date || ""}`,
+    text: t.online && t.online_link 
+      ? `Join ${t.ev || "this event"} online — ${t.date || ""} · ${t.online_link}`
+      : `My ticket for ${t.ev || "this event"} — ${t.date || ""}`,
     url
   };
   if (navigator.share) {
@@ -904,16 +922,22 @@ export function TicketDetail({ tkt, st, go }) {
         </div>
 
         <div className="qr-ticket">
-          <div className="qt-cov" style={{ background: t.cover && (t.cover.startsWith("linear-gradient") || t.cover.startsWith("radial-gradient") || t.cover.startsWith("var(")) ? t.cover : `url(${t.cover}) center/cover no-repeat` }}>
-            <Grain />
-            <span className="pill" style={{ background: "rgba(0,0,0,0.3)", color: "#fff", backdropFilter: "blur(8px)" }}>{t.tier}</span>
-          </div>
+          {!t.online && (
+            <div className="qt-cov" style={{ background: t.cover && (t.cover.startsWith("linear-gradient") || t.cover.startsWith("radial-gradient") || t.cover.startsWith("var(")) ? t.cover : `url(${t.cover}) center/cover no-repeat` }}>
+              <Grain />
+              <span className="pill" style={{ background: "rgba(0,0,0,0.3)", color: "#fff", backdropFilter: "blur(8px)" }}>{t.tier}</span>
+            </div>
+          )}
           <div className="qt-pad">
             <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 19, color: "var(--ink)", lineHeight: 1.25, textAlign: "center", marginBottom: 20 }}>{t.ev}</div>
 
             {used ? (
               <div className="notice gray" style={{ background: "var(--field)", border: "1px solid var(--border)", margin: "18px 0" }}>
                 <span className="ni"><I.check /></span><div>This ticket was used on {t.date}. The QR is no longer valid.</div>
+              </div>
+            ) : t.online ? (
+              <div style={{ margin: "20px 0 24px" }}>
+                <OnlineMeetingCard url={t.online_link} banner={t.cover} status={t.bookingStatus === 'cancelled' ? 'cancelled' : 'active'} isPast={t.ends_at ? new Date(t.ends_at).getTime() < Date.now() : (t.starts_at ? new Date(t.starts_at).getTime() < Date.now() : false)} />
               </div>
             ) : (
               <div className="qr-container" style={{ display: "flex", flexDirection: "column", alignItems: "center", margin: "20px 0 24px" }}>
@@ -1292,7 +1316,15 @@ export function ScanEventPage({ ev, go }) {
     <div className="scroll" style={{ padding: "24px 20px", maxWidth: 560, margin: "0 auto" }}>
       <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => go("scan")} style={{ marginBottom: 14 }}>&larr; Back to Scan</button>
       <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>{ev.title || "Untitled event"}</h2>
-      <VerifyTicketPanel eventId={ev.id} onCheckedIn={() => {}} />
+      {ev.location_type === 'online' || ev.online ? (
+        <div className="fcard fcard-pad" style={{ textAlign: "center", color: "var(--ink-2)", padding: 32 }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>🌐</div>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>This is an online event.</h3>
+          <p style={{ fontSize: 13 }}>There is nothing to scan.</p>
+        </div>
+      ) : (
+        <VerifyTicketPanel eventId={ev.id} onCheckedIn={() => {}} />
+      )}
     </div>
   );
 }

@@ -2112,7 +2112,10 @@ export async function messagingRoutes(fastify: FastifyInstance) {
               paidAmount: booking.payment_method === 'free'
                 ? 'Free'
                 : (booking.payment_method === 'cash' ? `₹${Number(booking.total_amount_minor || 0) / 100} (Pay in cash)` : `₹${Number(booking.total_amount_minor || 0) / 100}`),
-              status: ticket.status === 'confirmed' ? 'Confirmed' : 'Reserved'
+              status: ticket.status === 'confirmed' ? 'Confirmed' : 'Reserved',
+              isOnline: event.location_type === 'online',
+              onlineLink: event.online_link || '',
+              cover: (event as any).cover || ((event.venue as any)?.meta?.cover) || ''
             });
 
             await sendEmail({
@@ -2264,7 +2267,10 @@ export async function messagingRoutes(fastify: FastifyInstance) {
                   dateString: dateStr,
                   venueString: venueStr,
                   paidAmount: booking.payment_method === 'free' ? 'Free' : `₹${Number(booking.total_amount_minor || 0) / 100}`,
-                  status: 'Confirmed'
+                  status: 'Confirmed',
+                  isOnline: eventForEmail?.location_type === 'online',
+                  onlineLink: eventForEmail?.online_link || '',
+                  cover: (eventForEmail as any)?.cover || ((eventForEmail?.venue as any)?.meta?.cover) || ''
                 });
 
                 await sendEmail({

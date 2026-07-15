@@ -544,8 +544,12 @@ export function JoinEventPage({ ev, st, go }) {
                                                 <button className="hbtn hbtn--soft hbtn--block" style={{ color: "var(--accent-2)" }} onClick={() => go("waitlist", liveEvent)}>
                                                     <I.users /> View Waitlist Status
                                                 </button>
+                                            ) : liveEvent.bookingStatus === 'pending_approval' ? (
+                                                <button className="hbtn hbtn--soft hbtn--block" disabled>
+                                                    Pending Approval
+                                                </button>
                                             ) : (
-                                                <button className="hbtn hbtn--primary hbtn--block" onClick={() => { register(liveEvent.id, false, { ticketTypeId: tier, qty, ticketName: sel?.n }, liveEvent.inviteToken); go("events"); }}>
+                                                <button className="hbtn hbtn--primary hbtn--block" onClick={() => { register(liveEvent.id, false, { ticketTypeId: tier, qty, ticketName: sel?.n }, liveEvent.inviteToken); }}>
                                                     {liveEvent.type === "Free" ? "Request to join" : `Get ${qty > 1 ? qty + " tickets" : "ticket"}`}
                                                 </button>
                                             )
