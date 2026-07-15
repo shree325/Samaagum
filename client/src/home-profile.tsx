@@ -1142,10 +1142,7 @@ export function Profile({ st, go }) {
               </div>
 
               {/* Virtual Card rendering */}
-              {(() => {
-                const VCard = typeof window !== 'undefined' ? window.VirtualCard : null;
-                return VCard ? <VCard user={ME} /> : null;
-              })()}
+              <VirtualCard user={ME} />
 
               {tab === "groups" && (
                 <div className="prof-section">
