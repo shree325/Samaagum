@@ -445,7 +445,7 @@ function EventDetail({ ev, st, go }) {
                     </button>
                   )
                 ) : (
-                  <button className="hbtn hbtn--primary hbtn--block" onClick={() => { register(e.id); go("events"); }}>
+                  <button className="hbtn hbtn--primary hbtn--block" onClick={() => { register(e.id); }}>
                     {e.type === "Free" ? "Request to join" : `Get ${qty > 1 ? qty + " tickets" : "ticket"}`}
                   </button>
                 )
