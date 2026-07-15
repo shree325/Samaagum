@@ -32,6 +32,7 @@ import { connectionRoutes } from './controllers/connectionRoutes';
 import { groupRoutes } from './controllers/groupRoutes';
 import { publicRoutes } from './controllers/publicRoutes';
 import { dashboardRoutes } from './controllers/dashboardRoutes';
+import { integrationRoutes } from './controllers/integrationRoutes';
 
 
 dotenv.config();
@@ -86,9 +87,15 @@ declare module 'fastify' {
 
 // Register authentication decorator
 fastify.decorate('authenticate', async (request: any, reply: any) => {
+    let token = '';
     const authHeader = request.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
-        const token = authHeader.substring(7);
+        token = authHeader.substring(7);
+    } else if (request.query && request.query.token) {
+        token = request.query.token;
+    }
+    
+    if (token) {
         try {
             const parts = token.split('.');
             if (parts.length === 3) {
@@ -123,6 +130,13 @@ fastify.decorate('authenticate', async (request: any, reply: any) => {
         } catch (err) {
             console.warn('⚠️ Warning: Failed to decode JWT payload from header.');
         }
+    }
+
+    if (!request.user) {
+        return reply.status(401).send({
+            success: false,
+            message: 'Unauthorized: Authentication required'
+        });
     }
 });
 
@@ -169,6 +183,7 @@ import { eventRoutes } from './controllers/eventRoutes';
 fastify.register(groupRoutes, { prefix: '/api/groups' });
 fastify.register(eventRoutes, { prefix: '/api/events' });
 fastify.register(dashboardRoutes, { prefix: '/api/dashboard' });
+fastify.register(integrationRoutes, { prefix: '/api/integrations' });
 
 // Health check route
 fastify.get('/health', async (request, reply) => {

@@ -138,7 +138,10 @@ export function generateTicketHtml({
   dateString,
   venueString,
   paidAmount,
-  status
+  status,
+  isOnline = false,
+  onlineLink = '',
+  cover = ''
 }: {
   qrToken: string;
   ticketCode: string;
@@ -147,7 +150,41 @@ export function generateTicketHtml({
   venueString: string;
   paidAmount: string;
   status: string;
+  isOnline?: boolean;
+  onlineLink?: string;
+  cover?: string;
 }) {
+  function detectProvider(url: string) {
+    if (!url) return { id: 'custom', icon: '🌐', text: 'Virtual Meeting', color: '#4b5563', bg: '#f3f4f6' };
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname.toLowerCase();
+      if (host === 'zoom.us' || host.endsWith('.zoom.us')) return { id: 'zoom', icon: '📹', text: 'Zoom', color: '#0b5cff', bg: '#e6f0ff' };
+      if (host === 'meet.google.com') return { id: 'google', icon: '🎥', text: 'Google Meet', color: '#008744', bg: '#e6f4ea' };
+      if (host === 'teams.microsoft.com' || host === 'teams.live.com') return { id: 'teams', icon: '🌐', text: 'Teams', color: '#5a5eb9', bg: '#eef0f9' };
+      if (host.endsWith('.webex.com')) return { id: 'webex', icon: '🌐', text: 'Webex', color: '#00bceb', bg: '#e6f8fd' };
+      if (host === 'meet.jit.si' || host.endsWith('.jitsi.org')) return { id: 'jitsi', icon: '🌐', text: 'Jitsi', color: '#1d76ba', bg: '#e8f2f8' };
+      return { id: 'custom', icon: '🌐', text: 'Virtual Meeting', color: '#4b5563', bg: '#f3f4f6' };
+    } catch {
+      return { id: 'custom', icon: '🌐', text: 'Virtual Meeting', color: '#4b5563', bg: '#f3f4f6' };
+    }
+  }
+
+  const provider = detectProvider(onlineLink);
+  let displayBanner = 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&q=80&w=1000';
+  if (cover && typeof cover === 'string') {
+    if (!cover.startsWith('data:') && !cover.startsWith('blob:') && !cover.startsWith('file:')) {
+      if (cover.startsWith('http')) {
+        displayBanner = cover;
+      } else if (cover.startsWith('/')) {
+        const baseUrl = process.env.APP_BASE_URL || 'https://samaagum.com';
+        displayBanner = `${baseUrl}${cover}`;
+      } else {
+        const baseUrl = process.env.APP_BASE_URL || 'https://samaagum.com';
+        displayBanner = `${baseUrl}/${cover}`;
+      }
+    }
+  }
   return `
 <!DOCTYPE html>
 <html>
@@ -159,6 +196,10 @@ export function generateTicketHtml({
   .qr-code { width: 200px; height: 200px; border-radius: 8px; border: 1px solid #e5e7eb; padding: 10px; margin: 0 auto; display: block; }
   .scan-text { color: #6b7280; font-size: 14px; margin-top: 15px; }
   .token-text { color: #9ca3af; font-size: 12px; margin-top: 4px; font-family: monospace; }
+  .online-meeting-card { padding: 20px; display: flex; flex-direction: column; gap: 16px; background: #fff; }
+  .provider-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; font-size: 13px; font-weight: 500; }
+  .link-box { font-size: 14px; color: #4b5563; word-break: break-all; font-family: monospace; background: #f9fafb; padding: 10px 14px; border-radius: 8px; border: 1px solid #e5e7eb; }
+  .join-btn { display: block; width: 100%; padding: 12px; font-size: 15px; background: #111827; color: #fff; text-align: center; text-decoration: none; border-radius: 8px; font-weight: 500; box-sizing: border-box; }
   .divider { height: 1px; background: #f3f4f6; margin: 20px; }
   .details { padding: 0 20px; }
   .row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f9fafb; }
@@ -171,11 +212,26 @@ export function generateTicketHtml({
 </head>
 <body>
 <div class="ticket-card">
+  ${isOnline ? `
+    <img src="${displayBanner}" alt="Event Banner" width="100%" style="display: block; width: 100%; max-width: 600px; border-radius: 12px 12px 0 0; object-fit: cover; max-height: 200px;" />
+    <div class="online-meeting-card">
+      <div>
+        <span class="provider-badge" style="background: ${provider.bg}; color: ${provider.color};">
+          ${provider.icon} ${provider.text}
+        </span>
+      </div>
+      <div class="link-box">
+        <a href="${onlineLink}" style="color: inherit; text-decoration: none;">${onlineLink}</a>
+      </div>
+      <a href="${onlineLink}" class="join-btn" target="_blank">Join Meeting</a>
+    </div>
+  ` : `
   <div class="qr-section">
     <img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrToken)}" alt="QR Code" />
     <div class="scan-text">Show this at the gate for scanning</div>
     <div class="token-text">Token: ${qrToken}</div>
   </div>
+  `}
   <div class="divider"></div>
   <div class="details">
     <div class="row">

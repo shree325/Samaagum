@@ -1,3 +1,4 @@
+import { useIntegrationStatus, ConnectModal, MeetingPreviewCard, MeetingLinkModal, detectProvider } from './VirtualMeetings';
 // @ts-nocheck
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Field } from './components';
@@ -1488,18 +1489,17 @@ export function AccessControlModal({ open, onClose, mode, selectedAccess, setSel
   );
 }
 
-export const RECENT_LOCATIONS = [
-  {
-    name: "Delhi darbar hotel",
-    address: "51, Jawahar Marg, Jhanda Chowk, Indore, Madhya Pradesh 452007, India",
-  },
-];
+export const RECENT_LOCATIONS = [];
 
-export function LocationSection({ venue, setVenue, locType, setLocType }) {
+export function LocationSection({ venue, setVenue, locType, setLocType, eventId, onEventCreated, existingVirtualMeeting, onProviderSwitch }) {
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState(venue);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const apiBase = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? "http://localhost:3000" : "";
+  const token = localStorage.getItem('token') || '';
+  
+  const [activeModal, setActiveModal] = useState<'zoom' | 'google' | null>(null);
+  const [editingUrl, setEditingUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!draft || draft.length < 2 || draft.startsWith("http")) {
@@ -1516,7 +1516,7 @@ export function LocationSection({ venue, setVenue, locType, setLocType }) {
         });
     }, 300);
     return () => clearTimeout(timer);
-  }, [draft]);
+  }, [draft, apiBase]);
 
   const commit = (value, type) => {
     setVenue(value);
@@ -1534,12 +1534,25 @@ export function LocationSection({ venue, setVenue, locType, setLocType }) {
   const displaySub =
     venue
       ? locType === "online"
-        ? "Virtual event"
+        ? `${detectProvider(venue) === 'google' ? 'Google Meet' : detectProvider(venue) === 'zoom' ? 'Zoom Meeting' : 'Virtual event'} - ${venue}`
         : venue
       : "Offline location or virtual link";
 
   return (
     <div className="loc-sec-container">
+      {activeModal && (
+        <MeetingLinkModal
+          provider={activeModal}
+          initialUrl={editingUrl ?? ''}
+          onClose={() => { setActiveModal(null); setEditingUrl(null); }}
+          onSave={(url) => {
+            commit(url, 'online');
+            setActiveModal(null);
+            setEditingUrl(null);
+          }}
+        />
+      )}
+
       {/* Header (toggle button) */}
       <button
         type="button"
@@ -1557,6 +1570,17 @@ export function LocationSection({ venue, setVenue, locType, setLocType }) {
           <I.chevD />
         </span>
       </button>
+
+      {venue && locType === 'online' && !isOpen && (
+        <MeetingPreviewCard
+          url={venue}
+          onEdit={() => { 
+            setEditingUrl(venue); 
+            setActiveModal(detectProvider(venue) === 'google' ? 'google' : 'zoom'); 
+          }}
+          onRemove={() => commit('', 'physical')}
+        />
+      )}
 
       {/* Expanded panel */}
       {isOpen && (
@@ -1611,48 +1635,31 @@ export function LocationSection({ venue, setVenue, locType, setLocType }) {
             </div>
           )}
 
-          {/* Recent Locations */}
-          {RECENT_LOCATIONS.length > 0 && (
-            <>
-              <p className="loc-sec-label">Recent Locations</p>
-              {RECENT_LOCATIONS.map((loc, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => commit(loc.address, "physical")}
-                  className="loc-sec-btn"
-                >
-                  <I.pin style={{ width: 15, height: 15, color: "var(--ink-3)", marginTop: 2, flexShrink: 0 }} />
-                  <div className="loc-sec-btn-content">
-                    <p style={{ margin: 0, fontSize: "13px", fontWeight: 600, color: "var(--ink)", lineHeight: "1.2" }}>{loc.name}</p>
-                    <p style={{ margin: "2px 0 0", fontSize: "11px", color: "var(--ink-3)" }}>{loc.address}</p>
-                  </div>
-                </button>
-              ))}
-            </>
-          )}
-
           <hr style={{ border: "none", borderTop: "1px solid var(--border-2)", margin: "8px 16px" }} />
 
           {/* Virtual Options */}
           <p className="loc-sec-label">Virtual Options</p>
           <button
             type="button"
-            onClick={() => commit("https://zoom.us/j/", "online")}
+            onClick={() => setActiveModal("zoom")}
             className="loc-sec-btn"
             style={{ alignItems: "center" }}
           >
             <I.online style={{ width: 16, height: 16, color: "var(--accent-1)", flexShrink: 0 }} />
-            <span style={{ fontSize: "13px", color: "var(--ink)" }}>Create Zoom meeting</span>
+            <span style={{ fontSize: "13px", color: "var(--ink)", flex: 1, textAlign: 'left' }}>
+              Add Zoom Link
+            </span>
           </button>
           <button
             type="button"
-            onClick={() => commit("https://meet.google.com/", "online")}
+            onClick={() => setActiveModal("google")}
             className="loc-sec-btn"
             style={{ alignItems: "center" }}
           >
             <I.online style={{ width: 16, height: 16, color: "var(--accent-2)", flexShrink: 0 }} />
-            <span style={{ fontSize: "13px", color: "var(--ink)" }}>Create Google Meet</span>
+            <span style={{ fontSize: "13px", color: "var(--ink)", flex: 1, textAlign: 'left' }}>
+              Add Google Meet Link
+            </span>
           </button>
 
           {/* Hint */}
@@ -1678,6 +1685,7 @@ export function LocationSection({ venue, setVenue, locType, setLocType }) {
     </div>
   );
 }
+
 
 /* ---------------- Create Event ---------------- */
 /* ---------------- Create Event ---------------- */
@@ -1735,6 +1743,7 @@ export function CreateEvent(props: any) {
 }
 
 function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }: any) {
+  const [existingVirtualMeeting, setExistingVirtualMeeting] = useState(editEv?.virtualMeeting || null);
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
@@ -3117,6 +3126,53 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                   setVenue={setVenue}
                   locType={locType}
                   setLocType={setLocType}
+                  eventId={editEv?.id !== 'new' ? editEv?.id : null}
+                  onEventCreated={async (provider) => {
+                    if (!title) throw new Error("Title is required before creating a meeting.");
+                    if (!startDate) throw new Error("Start date is required.");
+                    if (!startTime) throw new Error("Start time is required.");
+                    if (!endDate) throw new Error("End date is required.");
+                    if (!endTime) throw new Error("End time is required.");
+
+                    const sTime24 = parse12to24(startTime) || "00:00";
+                    const s = new Date(`${startDate}T${sTime24}:00`);
+                    const eTime24 = parse12to24(endTime) || "00:00";
+                    const e = new Date(`${endDate}T${eTime24}:00`);
+
+                    const payload = {
+                      title,
+                      starts_at: s.toISOString(),
+                      ends_at: e.toISOString(),
+                      status: 'draft',
+                      virtual_provider: provider
+                    };
+
+                    const token = localStorage.getItem('token');
+                    const headers = token ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } : {} as any;
+                    const res = await fetch(`${apiBase}/api/events`, {
+                      method: 'POST',
+                      headers,
+                      body: JSON.stringify(payload)
+                    });
+                    const data = await res.json();
+                    if (!data.success) throw new Error(data.message || 'Failed to create draft event');
+                    
+                    if (data.data.virtualMeeting) {
+                      setExistingVirtualMeeting(data.data.virtualMeeting);
+                      setVenue(data.data.virtualMeeting.joinUrl);
+                      setLocType('online');
+                    }
+                    
+                    // Navigate to the newly created event to replace the "new" URL
+                    window.history.replaceState(null, '', `/events/${data.data.id}/edit`);
+                    window.location.reload();
+                  }}
+                  existingVirtualMeeting={existingVirtualMeeting}
+                  onProviderSwitch={(newUrl, newMeeting) => {
+                    setExistingVirtualMeeting(newMeeting);
+                    setVenue(newUrl || '');
+                    setLocType(newUrl ? 'online' : 'physical');
+                  }}
                 />
               </div>
 

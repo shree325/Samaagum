@@ -83,10 +83,38 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 return reply.status(400).send({ success: false, message: 'Title is required' });
             }
             const data = await EventService.createEvent(request.user.id, request.user.tenantId, request.body);
+            
+            const { VirtualMeetingService } = require('../services/VirtualMeetingService');
+            let virtualMeetingData = null;
+            if (request.body.virtual_provider && request.body.virtual_provider !== 'none') {
+                try {
+                    const meeting = await VirtualMeetingService.createMeeting(
+                        request.body.virtual_provider, 
+                        request.user.id, 
+                        data.event.id, 
+                        data
+                    );
+                    await prisma.events.update({
+                        where: { id: data.event.id },
+                        data: { online_link: meeting.joinUrl }
+                    });
+                    data.event.online_link = meeting.joinUrl;
+                    virtualMeetingData = {
+                        provider: meeting.provider,
+                        meetingId: meeting.meetingId,
+                        joinUrl: meeting.joinUrl,
+                        hostUrl: meeting.hostUrl,
+                        canRegenerate: true
+                    };
+                } catch (e: any) {
+                    console.error('Failed to create virtual meeting on event creation', e);
+                }
+            }
+
             if ((fastify as any).io) {
                 (fastify as any).io.of('/groups').emit('events_updated', { action: 'create' });
             }
-            return reply.status(201).send({ success: true, data, message: 'Event created successfully' });
+            return reply.status(201).send({ success: true, data: { ...data, virtualMeeting: virtualMeetingData }, message: 'Event created successfully' });
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });
         }
@@ -421,6 +449,22 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                 ownerUserId = entityRows[0]?.user_id || null;
             }
 
+            const virtualMeeting = await prisma.event_virtual_meetings.findFirst({ where: { event_id: id }});
+            let integration = null;
+            if (virtualMeeting) {
+                integration = await prisma.user_integrations.findFirst({
+                    where: { user_id: ownerUserId || userId, provider: virtualMeeting.provider }
+                });
+            }
+            const virtualMeetingData = virtualMeeting ? {
+                provider: virtualMeeting.provider,
+                meetingId: virtualMeeting.meeting_id,
+                joinUrl: (virtualMeeting.metadata as any)?.join_url,
+                hostUrl: (virtualMeeting.metadata as any)?.host_url,
+                canRegenerate: !!integration,
+                ownershipWarning: integration?.user_id !== (ownerUserId || userId)
+            } : null;
+
             return reply.send({
                 success: true,
                 data: {
@@ -435,7 +479,8 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                     ticketId,
                     qrToken,
                     checkinStatus,
-                    attendees: attendeeNames
+                    attendees: attendeeNames,
+                    virtualMeeting: virtualMeetingData
                 }
             });
         } catch (e: any) {
@@ -448,7 +493,38 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
         try {
             if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
             const { id } = request.params as any;
-            const data = await EventService.updateEvent(id, request.user.id, request.body);
+            
+            const { VirtualMeetingService } = require('../services/VirtualMeetingService');
+            let updates = request.body;
+
+            if (updates.virtual_provider) {
+                const existing = await prisma.event_virtual_meetings.findFirst({ where: { event_id: id }});
+                
+                if (updates.virtual_provider === 'none') {
+                    if (existing) await VirtualMeetingService.deleteMeeting(existing.provider, request.user.id, id);
+                    updates.online_link = null;
+                } else if (existing && existing.provider !== updates.virtual_provider) {
+                    if (!updates.replace_existing) throw new Error('PROVIDER_SWITCH_NOT_CONFIRMED');
+                    await VirtualMeetingService.deleteMeeting(existing.provider, request.user.id, id).catch(() => {});
+                    const eventData = await EventService.getEventById(id, request.user.id);
+                    const meeting = await VirtualMeetingService.createMeeting(updates.virtual_provider, request.user.id, id, { ...eventData?.event, ...updates });
+                    updates.online_link = meeting.joinUrl;
+                } else if (!existing) {
+                    const eventData = await EventService.getEventById(id, request.user.id);
+                    const meeting = await VirtualMeetingService.createMeeting(updates.virtual_provider, request.user.id, id, { ...eventData?.event, ...updates });
+                    updates.online_link = meeting.joinUrl;
+                }
+            }
+
+            const data = await EventService.updateEvent(id, request.user.id, updates);
+            
+            if (updates.starts_at || updates.ends_at) {
+                const existing = await prisma.event_virtual_meetings.findFirst({ where: { event_id: id }});
+                if (existing) {
+                    await VirtualMeetingService.updateMeeting(existing.provider, request.user.id, id, data).catch(() => {});
+                }
+            }
+
             if ((fastify as any).io) {
                 (fastify as any).io.of('/groups').emit('events_updated', { action: 'update', eventId: id });
                 (fastify as any).io.of('/groups').to(`event_${id}`).emit('dashboard_updated', { action: 'settings_update', eventId: id });
@@ -465,11 +541,20 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
         try {
             if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
             const { id } = request.params as any;
+            
+            const meeting = await prisma.event_virtual_meetings.findFirst({ where: { event_id: id }});
+            if (meeting) {
+                const { VirtualMeetingService } = require('../services/VirtualMeetingService');
+                await VirtualMeetingService.deleteMeeting(meeting.provider, request.user.id, id).catch((err: any) => {
+                    console.warn('⚠️ Could not delete provider meeting:', err.message);
+                });
+            }
+
             await EventService.deleteEvent(id, request.user.id);
             if ((fastify as any).io) {
                 (fastify as any).io.of('/groups').emit('events_updated', { action: 'delete', eventId: id });
             }
-            return reply.send({ success: true, message: 'Event cancelled/deleted' });
+            return reply.send({ success: true, message: 'Event deleted' });
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });
         }
@@ -1196,7 +1281,10 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                                 dateString: dateStr,
                                 venueString: venueStr,
                                 paidAmount: booking.payment_method === 'free' ? 'Free' : (booking.payment_method === 'cash' ? `₹${Number(booking.total_amount_minor || 0) / 100} (Pay in Cash at Venue)` : `₹${Number(booking.total_amount_minor || 0) / 100}`),
-                                status: booking.payment_method === 'cash' ? 'Pending Payment (Cash)' : 'Confirmed'
+                                status: booking.payment_method === 'cash' ? 'Pending Payment (Cash)' : 'Confirmed',
+                                isOnline: event?.location_type === 'online',
+                                onlineLink: event?.online_link || '',
+                                cover: (event as any)?.cover || ((event?.venue as any)?.meta?.cover) || ''
                             });
                             await sendEmail({
                                 to: guestUser.primary_email,
@@ -1311,7 +1399,10 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                                     dateString: dateStr,
                                     venueString: venueStr,
                                     paidAmount: paidStr,
-                                    status: 'Confirmed'
+                                    status: 'Confirmed',
+                                    isOnline: eventForEmail?.location_type === 'online',
+                                    onlineLink: eventForEmail?.online_link || '',
+                                    cover: (eventForEmail as any)?.cover || ((eventForEmail?.venue as any)?.meta?.cover) || ''
                                 });
                                 await sendEmail({
                                     to: guestUser.primary_email,
@@ -1479,7 +1570,10 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                                 dateString: dateStr,
                                 venueString: venueStr,
                                 paidAmount: paidStr,
-                                status: 'Confirmed'
+                                status: 'Confirmed',
+                                isOnline: eventForEmail?.location_type === 'online',
+                                onlineLink: eventForEmail?.online_link || '',
+                                cover: (eventForEmail as any)?.cover || ((eventForEmail?.venue as any)?.meta?.cover) || ''
                             });
                             await sendEmail({
                                 to: guestUser.primary_email,

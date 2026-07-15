@@ -1086,8 +1086,8 @@ export function PublicProfile({ profile, go, socket }) {
               )}
 
               {/* Virtual Card (gated by privacy settings) */}
-              {canShowVirtualCard && window.VirtualCard && (
-                <window.VirtualCard user={cardUser} />
+              {canShowVirtualCard && (
+                <VirtualCard user={cardUser} />
               )}
 
             </div>

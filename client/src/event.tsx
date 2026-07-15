@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { I, Avatar, Grain } from './home-icons';
 import { EventDashboard } from './event-dashboard';
 import DiscussionPanel from './discussion-panel';
+import { OnlineMeetingCard } from './OnlineMeetingCard';
 
 function Toggle({ on, onClick }) { return <button type="button" className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
 
@@ -244,6 +245,7 @@ export function EventPage({ ev, st, go }) {
         cat: meta.category || e.cat || "General",
         type: (e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : 'Paid',
         online: e.location_type === 'online',
+        online_link: e.online_link || null,
         month,
         day,
         date: dateStr,
@@ -318,6 +320,7 @@ export function EventPage({ ev, st, go }) {
           cat: meta.category || ev.cat || "General",
           type: (ev.registration_mode === 'free' || ev.registration_mode === 'free_rsvp') ? 'Free' : 'Paid',
           online: ev.location_type === 'online',
+          online_link: ev.online_link || null,
           month,
           day,
           date: dateStr,
@@ -1186,7 +1189,14 @@ export function EventPage({ ev, st, go }) {
                     </div>
                   </div>
 
-                  {!e.online && e.venue && (
+                  {e.online ? (
+                    <div className="ev-block">
+                      <h3>Location</h3>
+                      <div className="ev-map" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-2)', color: 'var(--ink-2)', fontSize: 16, fontWeight: 500, height: 120, border: '1px solid var(--border)', borderRadius: 'var(--r-md)' }}>
+                        <span style={{ marginRight: 8, fontSize: 24 }}>🌐</span> Online Event
+                      </div>
+                    </div>
+                  ) : e.venue ? (
                     <div className="ev-block">
                       <h3>Location</h3>
                       <div className="ev-map">
@@ -1212,7 +1222,7 @@ export function EventPage({ ev, st, go }) {
                         </a>
                       </div>
                     </div>
-                  )}
+                  ) : null}
 
                   {e.instructions && (
                     <div className="ev-block" style={{ background: "var(--field)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "16px" }}>
@@ -2408,17 +2418,21 @@ export function EventPage({ ev, st, go }) {
               <div className="ev-aside" style={{ width: 280, marginLeft: 20 }}>
                 {isMember && (
                   <div className="ticket-box">
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "20px 16px" }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", color: "var(--accent-2)", letterSpacing: "0.05em", marginBottom: 12 }}>
-                        Your Event Ticket
+                    {e.online ? (
+                      <OnlineMeetingCard url={e.online_link} banner={e.cover} status={currentEvent.status} isPast={e.ends_at ? new Date(e.ends_at) < new Date() : (e.starts_at ? new Date(e.starts_at) < new Date() : false)} />
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "20px 16px" }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", color: "var(--accent-2)", letterSpacing: "0.05em", marginBottom: 12 }}>
+                          Your Event Ticket
+                        </div>
+                        <div style={{ padding: 10, background: "#fff", borderRadius: "var(--r-md)", boxShadow: "0 4px 12px rgba(0,0,0,0.06)", width: 140, height: 140, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          {window.TicketQR && <window.TicketQR token={e.qrToken || e.attendeeId || e.id || "test"} size={120} />}
+                        </div>
+                        <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 10, textAlign: "center" }}>
+                          Scan QR at entry gate
+                        </div>
                       </div>
-                      <div style={{ padding: 10, background: "#fff", borderRadius: "var(--r-md)", boxShadow: "0 4px 12px rgba(0,0,0,0.06)", width: 140, height: 140, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        {window.TicketQR && <window.TicketQR token={e.qrToken || e.attendeeId || e.id || "test"} size={120} />}
-                      </div>
-                      <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 10, textAlign: "center" }}>
-                        Scan QR at entry gate
-                      </div>
-                    </div>
+                    )}
                   </div>
                 )}
 
