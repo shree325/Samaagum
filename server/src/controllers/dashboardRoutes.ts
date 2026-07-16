@@ -134,6 +134,16 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                 }).then(Boolean) : false;
 
                 const venueObj = ev.venue as any;
+                const priceMinors = ev.ticket_types.map(t => t.price_amount_minor ? Number(t.price_amount_minor) : 0);
+                const isFree = String(ev.registration_mode) === 'free' || String(ev.registration_mode) === 'free_rsvp' || priceMinors.length === 0 || priceMinors.every(p => p === 0);
+                let priceLabel = 'Free';
+                if (!isFree && priceMinors.length > 0) {
+                    const minPrice = Math.min(...priceMinors) / 100;
+                    const maxPrice = Math.max(...priceMinors) / 100;
+                    const basePrice = minPrice === maxPrice ? `₹${minPrice.toFixed(0)}` : `₹${minPrice.toFixed(0)} - ₹${maxPrice.toFixed(0)}`;
+                    priceLabel = ev.cash_enabled ? `${basePrice} in cash` : basePrice;
+                }
+
                 return {
                     id: ev.id,
                     title: ev.title,
@@ -144,6 +154,8 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                     location_type: ev.location_type,
                     venue: venueObj?.name || venueObj?.address || null,
                     registration_mode: ev.registration_mode,
+                    cash_enabled: ev.cash_enabled,
+                    price: priceLabel,
                     ticket_types: ev.ticket_types.map(t => {
                         const price = t.price_amount_minor ? Number(t.price_amount_minor) : 0;
                         return {
@@ -294,6 +306,16 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                         where: { event_id_user_id: { event_id: ev.id, user_id: userId } }
                     }).then(Boolean) : false;
 
+                    const priceMinors = ev.ticket_types.map(t => t.price_amount_minor ? Number(t.price_amount_minor) : 0);
+                    const isFree = String(ev.registration_mode) === 'free' || String(ev.registration_mode) === 'free_rsvp' || priceMinors.length === 0 || priceMinors.every(p => p === 0);
+                    let priceLabel = 'Free';
+                    if (!isFree && priceMinors.length > 0) {
+                        const minPrice = Math.min(...priceMinors) / 100;
+                        const maxPrice = Math.max(...priceMinors) / 100;
+                        const basePrice = minPrice === maxPrice ? `₹${minPrice.toFixed(0)}` : `₹${minPrice.toFixed(0)} - ₹${maxPrice.toFixed(0)}`;
+                        priceLabel = ev.cash_enabled ? `${basePrice} in cash` : basePrice;
+                    }
+
                     return {
                         id: ev.id,
                         title: ev.title,
@@ -304,6 +326,8 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                         location_type: ev.location_type,
                         venue: venueObj?.name || venueObj?.address || null,
                         registration_mode: ev.registration_mode,
+                        cash_enabled: ev.cash_enabled,
+                        price: priceLabel,
                         ticket_types: ev.ticket_types.map(t => {
                             const price = t.price_amount_minor ? Number(t.price_amount_minor) : 0;
                             return {

@@ -586,13 +586,29 @@ export function JoinEventPage({ ev, st, go }) {
                                                     Pending Approval
                                                 </button>
                                             ) : (
-                                                <button 
-                                                    className="hbtn hbtn--primary hbtn--block" 
-                                                    disabled={liveEvent.type !== "Free" && !tier}
-                                                    onClick={() => { register(liveEvent.id, false, { ticketTypeId: tier, qty, ticketName: sel?.n }, liveEvent.inviteToken); go("events"); }}
-                                                >
-                                                    {liveEvent.type === "Free" ? "Request to join" : `Get ${qty > 1 ? qty + " tickets" : "ticket"}`}
-                                                </button>
+                                                <>
+                                                    <button 
+                                                        className="hbtn hbtn--primary hbtn--block" 
+                                                        disabled={liveEvent.type !== "Free" && !tier}
+                                                        onClick={() => { register(liveEvent.id, false, { ticketTypeId: tier, qty, ticketName: sel?.n }, liveEvent.inviteToken); go("events"); }}
+                                                    >
+                                                        {liveEvent.type === "Free" ? "Request to join" : `Get ${qty > 1 ? qty + " tickets" : "ticket"}`}
+                                                    </button>
+                                                    {(() => {
+                                                        let settingsObj = liveEvent.settings || {};
+                                                        if (typeof settingsObj === 'string') {
+                                                            try { settingsObj = JSON.parse(settingsObj); } catch {}
+                                                        }
+                                                        const isCapacityLimited = settingsObj?.capacity?.limit === true || (evtCap && evtCap > 0 && evtCap < 9999);
+                                                        if (!isCapacityLimited) return null;
+                                                        const remaining = evtCap - evtGoing;
+                                                        return (
+                                                            <div style={{ fontSize: 12.5, color: "var(--accent-2)", fontWeight: 600, marginTop: 8, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                                                                {remaining > 0 ? `${remaining} seats left` : "Sold Out"}
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </>
                                             )
                                         )}
                                     </div>

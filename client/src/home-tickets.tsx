@@ -48,6 +48,15 @@ function getVenueStr(v) {
   return v || 'Venue TBD';
 }
 
+function formatCurrency(amountMinor: number | null, currency: string = 'INR') {
+  if (amountMinor === null || amountMinor === undefined) return 'Free';
+  const amount = Number(amountMinor) / 100;
+  if (currency.toUpperCase() === 'INR') {
+    return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  }
+  return `${currency.toUpperCase()} ${amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+}
+
 function normalizeJoinedEvent(e) {
   const startsAt = e.starts_at ? new Date(e.starts_at) : null;
   const dateStr = startsAt ? startsAt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : "Date TBD";
@@ -61,20 +70,23 @@ function normalizeJoinedEvent(e) {
   const shortNo = idSource.split('-')[0].toUpperCase();
   const friendlyTicketId = `${eventNameClean}_${shortNo}`;
 
+  const totalMinor = Number(e.bookingTotalMinor ?? 0);
+  const paidVal = (e.registration_mode === 'free' || e.registration_mode === 'free_rsvp')
+    ? 'Free'
+    : (totalMinor > 0 ? formatCurrency(totalMinor, e.bookingCurrency ?? 'INR') : (firstTicket?.price_amount_minor != null ? formatCurrency(Number(firstTicket.price_amount_minor), e.bookingCurrency ?? 'INR') : 'Free'));
+
   return {
     ...e,
     ev: e.title || e.ev,
     cover: e.cover || meta.cover || "",
     tier: e.bookedTicketName || firstTicket?.name || "General",
-    paid: (e.registration_mode === 'free' || e.registration_mode === 'free_rsvp')
-      ? 'Free'
-      : (firstTicket?.price_amount_minor != null ? `₹${(firstTicket.price_amount_minor / 100).toFixed(0)}` : '—'),
+    paid: paidVal,
     online: e.location_type === 'online',
     date: dateStr,
     time: timeStr,
     venue: e.location_type === 'online' ? 'Online' : getVenueStr(e.venue),
     attendee: (typeof window !== 'undefined' && window.ME?.name) || ME.name,
-    qty: 1,
+    qty: Number(e.bookingQty) > 0 ? Number(e.bookingQty) : 1,
     status: e.status === 'cancelled' ? 'voided' : 'confirmed',
     // Real per-attendee verification token (from tickets.qr_token via GET /joined) — the
     // event's own id is kept as `t.id` for display/keys, but the QR/verification content
@@ -247,19 +259,24 @@ export function MyTickets({ st, go }) {
     const venueObj = (typeof e.venue === 'object' && e.venue !== null) ? e.venue : {};
     const meta = venueObj.meta || {};
     const firstTicket = Array.isArray(e.tickets) ? e.tickets[0] : null;
+
+    const totalMinor = Number(e.bookingTotalMinor ?? 0);
+    const paidVal = (e.registration_mode === 'free' || e.registration_mode === 'free_rsvp')
+      ? 'Free'
+      : (totalMinor > 0 ? formatCurrency(totalMinor, e.bookingCurrency ?? 'INR') : (firstTicket?.price_amount_minor != null ? formatCurrency(Number(firstTicket.price_amount_minor), e.bookingCurrency ?? 'INR') : 'Free'));
+
     return {
       ...e,
       ev: e.title || e.ev,
       cover: e.cover || meta.cover || "",
-      tier: firstTicket?.name || "General",
-      paid: (e.registration_mode === 'free' || e.registration_mode === 'free_rsvp')
-        ? 'Free'
-        : (firstTicket?.price_amount_minor != null ? `₹${(firstTicket.price_amount_minor / 100).toFixed(0)}` : '—'),
+      tier: e.bookedTicketName || firstTicket?.name || "General",
+      paid: paidVal,
       online: e.location_type === 'online',
       online_link: e.online_link || null,
       date: dateStr,
       time: timeStr,
       venue: e.location_type === 'online' ? 'Online' : getVenueStr(e.venue),
+      qty: Number(e.bookingQty) > 0 ? Number(e.bookingQty) : 1,
     };
   };
 

@@ -1301,7 +1301,7 @@ export function EventPage({ ev, st, go }) {
                                   <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                                     Questionnaire Answers
                                   </div>
-                                  {Object.entries(r.answers).filter(([k]) => !['ticketTypeId', 'qty', 'ticketName', 'isQuestionnaireSubmit'].includes(k)).map(([key, val]) => {
+                                  {Object.entries(r.answers).filter(([k]) => !['ticketTypeId', 'qty', 'ticketName', 'isQuestionnaireSubmit', 'registration_location'].includes(k)).map(([key, val]) => {
                                     const label = getQuestionLabel(key);
                                     return (
                                       <div key={key} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -2558,7 +2558,7 @@ export function EventPage({ ev, st, go }) {
             </div>
             <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
               {responseMember.answers && Object.keys(responseMember.answers).length > 0 ? (
-                Object.entries(responseMember.answers).filter(([k]) => !['ticketTypeId', 'qty', 'ticketName', 'isQuestionnaireSubmit'].includes(k)).map(([key, val]) => {
+                Object.entries(responseMember.answers).filter(([k]) => !['ticketTypeId', 'qty', 'ticketName', 'isQuestionnaireSubmit', 'registration_location'].includes(k)).map(([key, val]) => {
                   const label = getQuestionLabel(key);
                   return (
                     <div key={key}>
