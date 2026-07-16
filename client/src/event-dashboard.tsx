@@ -6,6 +6,9 @@ import {
 } from 'recharts';
 import { I, Avatar } from './home-icons';
 import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
+import { DashboardMetricCard, DashboardEmptyState } from './components/dashboard';
+import { useEventDashboard } from './hooks/useEventDashboard';
+import * as selectors from './selectors/eventDashboardSelectors';
 
 /* ================================================================
    TYPES
@@ -91,30 +94,21 @@ interface BulkActionResult {
 /** Use when the backend cannot yet provide this analytics data */
 function UnavailableChart({ message, snapshot }: { message: string; snapshot?: string }) {
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center',
-      justifyContent: 'center', height: '100%', minHeight: 160,
-      gap: 8, color: 'var(--ink-3)', padding: 24, textAlign: 'center'
-    }}>
-      <I.warning style={{ width: 28, height: 28, opacity: 0.35 }} />
-      <div style={{ fontSize: 13, fontWeight: 600 }}>{message}</div>
-      {snapshot && <div style={{ fontSize: 12, opacity: 0.7 }}>{snapshot}</div>}
-    </div>
+    <DashboardEmptyState
+      title="Visualization Unavailable"
+      message={snapshot ? `${message} (${snapshot})` : message}
+    />
   );
 }
 
 /** Use when the API works but there are simply no records yet */
 function EmptyState({ title, message, icon }: { title: string; message: string; icon?: React.ReactNode }) {
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center',
-      justifyContent: 'center', height: '100%', minHeight: 160,
-      gap: 8, color: 'var(--ink-3)', padding: 24, textAlign: 'center'
-    }}>
-      {icon ?? <I.users style={{ width: 28, height: 28, opacity: 0.35 }} />}
-      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink-2)' }}>{title}</div>
-      <div style={{ fontSize: 13 }}>{message}</div>
-    </div>
+    <DashboardEmptyState
+      title={title}
+      message={message}
+      icon={icon}
+    />
   );
 }
 
@@ -123,28 +117,22 @@ function StatCard({ icon, iconBg, iconColor, value, label, onClick }: {
   icon: React.ReactNode; iconBg: string; iconColor: string;
   value: React.ReactNode; label: string; onClick?: () => void;
 }) {
+  let theme: 'blue' | 'green' | 'orange' | 'purple' | 'emerald' | 'gray' = 'gray';
+  if (iconColor === '#3b82f6') theme = 'blue';
+  else if (iconColor === '#f59e0b') theme = 'orange';
+  else if (iconColor === '#10b981') theme = 'green';
+  else if (iconColor === '#ef4444') theme = 'orange';
+  else if (iconColor === '#8b5cf6') theme = 'purple';
+
   return (
-    <div
+    <DashboardMetricCard
+      variant="stat"
+      title={label}
+      value={value}
+      icon={icon}
+      colorTheme={theme}
       onClick={onClick}
-      style={{
-        background: 'var(--surface)', padding: '12px 16px', borderRadius: 12,
-        border: '1px solid var(--border)', display: 'flex', flexDirection: 'column',
-        gap: 6, cursor: onClick ? 'pointer' : 'default',
-        transition: 'all 0.2s',
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: 8 }}>
-        <span style={{ fontSize: 12.5, color: 'var(--ink-3)', fontWeight: 600, letterSpacing: '-0.01em', display: 'block' }}>{label}</span>
-        <div style={{
-          width: 28, height: 28, borderRadius: '50%',
-          background: iconBg, color: iconColor,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-        }}>
-          {icon}
-        </div>
-      </div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--ink)', lineHeight: 1, letterSpacing: '-0.02em' }}>{value}</div>
-    </div>
+    />
   );
 }
 
@@ -429,19 +417,26 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
   // Zero attendees on a real event is valid and must never trigger demo mode.
   const isDemoMode = !e?.id;
 
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [members, setMembers] = useState<EventMember[]>([]);
-  const [membersAvailable, setMembersAvailable] = useState(true);
-  const [loading, setLoading] = useState(true);
+  const {
+    stats,
+    waitlistPreview,
+    waitlistCount,
+    waitlistEnabled,
+    members,
+    membersAvailable,
+    loading,
+    error: hookError,
+    refetch,
+    fetchWaitlistOnly
+  } = useEventDashboard(e, apiBase, token);
+
   const [error, setError] = useState('');
+  useEffect(() => {
+    if (hookError) setError(hookError);
+  }, [hookError]);
 
   // Tab state
   const [activeTab, setActiveTab] = useState<'registered' | 'pending' | 'checkedIn' | 'revenue'>('registered');
-
-  // Isolated waitlist state
-  const [waitlistPreview, setWaitlistPreview] = useState<WaitlistEntry[]>([]);
-  const [waitlistCount, setWaitlistCount]     = useState(0);
-  const [waitlistEnabled, setWaitlistEnabled] = useState(false);
 
   // Export CSV state
   const [showExportModal, setShowExportModal] = useState(false);
@@ -468,68 +463,6 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
   const [mapZoom, setMapZoom]           = useState<number>(1);
   // Check-in Timeline chart scale filter
   const [checkinScale, setCheckinScale] = useState<'today' | 'week' | 'month'>('today');
-
-  /* -------- Data fetching -------- */
-  const fetchStats = useCallback(async () => {
-    if (!e?.id) return;
-    try {
-      const res = await fetch(`${apiBase}/api/events/${e.id}/dashboard-stats`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-      const data = await res.json();
-      if (data.success) {
-        setStats(data.data);
-        setWaitlistPreview(data.data.waitlist ?? []);
-        setWaitlistCount(data.data.waitlistCount ?? 0);
-        setWaitlistEnabled(data.data.waitlistEnabled ?? false);
-      }
-      else setError(data.message || 'Failed to load dashboard data.');
-    } catch {
-      setError('Network error loading dashboard.');
-    }
-  }, [e?.id, apiBase, token]);
-
-  const fetchWaitlistOnly = useCallback(async () => {
-    if (!e?.id) return;
-    try {
-      const res = await fetch(`${apiBase}/api/events/${e.id}/dashboard-waitlist`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-      const data = await res.json();
-      if (data.success) {
-        setWaitlistPreview(data.data.waitlist ?? []);
-        setWaitlistCount(data.data.waitlistCount ?? 0);
-        setWaitlistEnabled(data.data.waitlistEnabled ?? false);
-      }
-    } catch {}
-  }, [e?.id, apiBase, token]);
-
-  const fetchMembers = useCallback(async () => {
-    if (!e?.id) return;
-    try {
-      const res = await fetch(`${apiBase}/api/events/${e.id}/members`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-      const data = await res.json();
-      if (data.success) setMembers(data.data || []);
-      else setMembersAvailable(false);
-    } catch {
-      setMembersAvailable(false);
-    }
-  }, [e?.id]);
-
-  const refetch = useCallback(async () => {
-    await Promise.all([fetchStats(), fetchMembers().catch(() => {})]);
-  }, [fetchStats, fetchMembers]);
-
-  useEffect(() => {
-    if (!e?.id) { setLoading(false); return; }
-    setLoading(true);
-    Promise.all([
-      fetchStats(),
-      fetchMembers().catch(() => { setMembersAvailable(false); })
-    ]).finally(() => setLoading(false));
-  }, [e?.id]);
 
   /* -------- Active data -------- */
   const activeStats = isDemoMode ? DEMO_STATS : (stats ?? {
@@ -572,197 +505,50 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
 
   /* -------- Derived metrics (useMemo) -------- */
   const checkinPercentage = useMemo(() =>
-    activeStats.totalAttendees > 0
-      ? Math.round((activeStats.checkedInCount / activeStats.totalAttendees) * 100)
-      : 0,
+    selectors.calculateCheckinPercentage(activeStats.totalAttendees, activeStats.checkedInCount),
   [activeStats.checkedInCount, activeStats.totalAttendees]);
 
-  const bookingStatusData = useMemo(() => [
-    { name: 'Confirmed',       value: confirmed.filter(u => u.bookingStatus === 'confirmed').length },
-    { name: 'Pending Payment', value: confirmed.filter(u => u.bookingStatus === 'pending_payment').length },
-  ], [confirmed]);
+  const bookingStatusData = useMemo(() =>
+    selectors.calculateBookingStatusData(confirmed),
+  [confirmed]);
 
   const paidBookings = useMemo(() =>
-    confirmed.filter(u => u.bookingStatus === 'confirmed' && u.amountMinor > 0),
+    selectors.getPaidBookings(confirmed),
   [confirmed]);
 
   const cashPending = useMemo(() =>
-    confirmed.filter(u => u.isCashPayment && u.bookingStatus === 'pending_payment').length,
+    selectors.calculateCashPending(confirmed),
   [confirmed]);
 
   const avgBookingValue = useMemo(() =>
-    paidBookings.length > 0
-      ? (activeStats.revenue / paidBookings.length).toLocaleString('en-IN', { maximumFractionDigits: 2 })
-      : '—',
+    selectors.calculateAvgBookingValue(activeStats.revenue, paidBookings.length),
   [paidBookings.length, activeStats.revenue]);
 
-  const ticketSoldDistribution = useMemo(() => {
-    if (isDemoMode) {
-      return [
-        { name: 'VIP Ticket', value: 34 },
-        { name: 'General Admission', value: 124 },
-        { name: 'Student Ticket', value: 46 }
-      ];
-    }
-    const counts: Record<string, number> = {};
-    confirmed.forEach(u => {
-      const name = u.ticketTypeName || 'General RSVP';
-      counts[name] = (counts[name] || 0) + 1;
-    });
-    return Object.entries(counts).map(([name, value]) => ({ name, value }));
-  }, [confirmed, isDemoMode]);
+  const ticketSoldDistribution = useMemo(() =>
+    selectors.calculateTicketSoldDistribution(confirmed, isDemoMode, [
+      { name: 'VIP Ticket', value: 34 },
+      { name: 'General Admission', value: 124 },
+      { name: 'Student Ticket', value: 46 }
+    ]),
+  [confirmed, isDemoMode]);
 
-  const revenueByTicketType = useMemo(() => {
-    const grouped: Record<string, number> = {};
-    confirmed.forEach(a => {
-      if (!a.ticketTypeName || a.amountMinor <= 0) return;
-      grouped[a.ticketTypeName] = (grouped[a.ticketTypeName] || 0) + (a.amountMinor / 100);
-    });
-    return Object.entries(grouped).map(([name, value]) => ({ name, value }));
-  }, [confirmed]);
+  const revenueByTicketType = useMemo(() =>
+    selectors.calculateRevenueByTicketType(confirmed),
+  [confirmed]);
 
   const hasTicketBreakdown = revenueByTicketType.length > 0;
 
-  const attendeeByUserId = useMemo(() => {
-    return new Map(confirmed.map(att => [att.userId, att]));
-  }, [confirmed]);
+  const attendeeByUserId = useMemo(() =>
+    selectors.getAttendeeByUserIdMap(confirmed),
+  [confirmed]);
 
-  const roleCheckInStats = useMemo(() => {
-    if (!membersAvailable || !activeMembers.length) return null;
-    const roleMap: Record<string, { checked: number; total: number }> = {};
-    activeMembers.forEach(m => {
-      if (!roleMap[m.role]) roleMap[m.role] = { checked: 0, total: 0 };
-      roleMap[m.role].total++;
-      const att = attendeeByUserId.get(m.userId);
-      if (att?.checkinStatus === 'checked_in') roleMap[m.role].checked++;
-    });
-    return Object.entries(roleMap).map(([name, v]) => ({ name, ...v }));
-  }, [activeMembers, attendeeByUserId, membersAvailable]);
+  const roleCheckInStats = useMemo(() =>
+    selectors.calculateRoleCheckInStats(activeMembers, attendeeByUserId, membersAvailable),
+  [activeMembers, attendeeByUserId, membersAvailable]);
 
-  const registrationTimeline = useMemo(() => {
-    if (isDemoMode) {
-      if (overviewScale === 'today') {
-        return [
-          { name: '9 AM',  total: 4, confirmed: 3 },
-          { name: '11 AM', total: 10, confirmed: 8 },
-          { name: '1 PM',  total: 18, confirmed: 14 },
-          { name: '3 PM',  total: 24, confirmed: 19 },
-          { name: '5 PM',  total: 32, confirmed: 28 },
-        ];
-      } else if (overviewScale === 'week') {
-        return [
-          { name: 'Jul 7',  total: 400, confirmed: 280 },
-          { name: 'Jul 8',  total: 510, confirmed: 360 },
-          { name: 'Jul 9',  total: 680, confirmed: 490 },
-          { name: 'Jul 10', total: 850, confirmed: 590 },
-          { name: 'Jul 11', total: 1010, confirmed: 710 },
-          { name: 'Jul 12', total: 1150, confirmed: 810 },
-          { name: 'Jul 13', total: 1248, confirmed: 856 },
-        ];
-      } else {
-        return [
-          { name: 'Jun 15', total: 100, confirmed: 80 },
-          { name: 'Jun 20', total: 280, confirmed: 200 },
-          { name: 'Jun 25', total: 510, confirmed: 380 },
-          { name: 'Jun 30', total: 820, confirmed: 610 },
-          { name: 'Jul 5',  total: 1050, confirmed: 780 },
-          { name: 'Jul 13', total: 1248, confirmed: 856 },
-        ];
-      }
-    }
-
-    if (!confirmed.length) return [];
-
-    const now = new Date();
-    const todayStr = now.toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
-    // Filter attendees by duration
-    const filtered = confirmed.filter(att => {
-      if (!att.createdAt) return false;
-      const attDate = new Date(att.createdAt);
-      if (overviewScale === 'today') {
-        return attDate.toLocaleDateString('en-CA') === todayStr;
-      } else if (overviewScale === 'week') {
-        return now.getTime() - attDate.getTime() <= 7 * 24 * 60 * 60 * 1000;
-      } else {
-        return now.getTime() - attDate.getTime() <= 30 * 24 * 60 * 60 * 1000;
-      }
-    });
-
-    if (overviewScale === 'today') {
-      const hourMap: Record<string, { total: number; confirmed: number }> = {};
-      filtered.forEach(att => {
-        if (!att.createdAt) return;
-        const d = new Date(att.createdAt);
-        const hourLabel = d.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
-        if (!hourMap[hourLabel]) {
-          hourMap[hourLabel] = { total: 0, confirmed: 0 };
-        }
-        hourMap[hourLabel].total++;
-        if (att.bookingStatus === 'confirmed') {
-          hourMap[hourLabel].confirmed++;
-        }
-      });
-
-      const sortedHours = Object.keys(hourMap).sort((a, b) => {
-        const parseHour = (h: string) => {
-          const parts = h.split(' ');
-          let val = parseInt(parts[0]);
-          const ampm = parts[1];
-          if (ampm === 'PM' && val !== 12) val += 12;
-          if (ampm === 'AM' && val === 12) val = 0;
-          return val;
-        };
-        return parseHour(a) - parseHour(b);
-      });
-
-      let totalCumulative = 0;
-      let confirmedCumulative = 0;
-
-      return sortedHours.map(hour => {
-        totalCumulative += hourMap[hour].total;
-        confirmedCumulative += hourMap[hour].confirmed;
-        return {
-          name: hour,
-          total: totalCumulative,
-          confirmed: confirmedCumulative
-        };
-      });
-    }
-
-    // Group confirmed attendees by YYYY-MM-DD ISO date string for week / month
-    const dateMap: Record<string, { total: number; confirmed: number }> = {};
-    filtered.forEach(att => {
-      if (!att.createdAt) return;
-      const dateKey = new Date(att.createdAt).toISOString().split('T')[0];
-      if (!dateMap[dateKey]) {
-        dateMap[dateKey] = { total: 0, confirmed: 0 };
-      }
-      dateMap[dateKey].total++;
-      if (att.bookingStatus === 'confirmed') {
-        dateMap[dateKey].confirmed++;
-      }
-    });
-
-    // Lexicographically sort YYYY-MM-DD date keys
-    const sortedDates = Object.keys(dateMap).sort((a, b) => a.localeCompare(b));
-
-    // Cumulative tracking
-    let totalCumulative = 0;
-    let confirmedCumulative = 0;
-
-    return sortedDates.map(date => {
-      totalCumulative += dateMap[date].total;
-      confirmedCumulative += dateMap[date].confirmed;
-      return {
-        name: new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', {
-          month: 'short',
-          day: 'numeric'
-        }),
-        total: totalCumulative,
-        confirmed: confirmedCumulative
-      };
-    });
-  }, [confirmed, overviewScale, isDemoMode]);
+  const registrationTimeline = useMemo(() =>
+    selectors.calculateRegistrationTimeline(confirmed, isDemoMode, overviewScale),
+  [confirmed, isDemoMode, overviewScale]);
 
   // Request Status breakdown for Donut Chart
   const requestStatusData = useMemo(() => {
@@ -1282,7 +1068,7 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
                   <Pie
                     data={[
                       { name: 'Checked In', value: activeStats.checkedInCount === 0 && activeStats.totalAttendees === 0 ? 0 : Math.max(0, activeStats.checkedInCount) },
-                      { name: 'Remaining',  value: Math.max(0, activeStats.totalAttendees - activeStats.checkedInCount) || (isDemoMode ? 2 : 1) },
+                      { name: 'Remaining',  value: activeStats.totalAttendees === 0 ? (isDemoMode ? 2 : 1) : Math.max(0, activeStats.totalAttendees - activeStats.checkedInCount) },
                     ]}
                     innerRadius={52} outerRadius={70} paddingAngle={2}
                     dataKey="value" stroke="none" startAngle={90} endAngle={-270}

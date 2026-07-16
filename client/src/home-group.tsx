@@ -12,6 +12,7 @@ import { Discussions, Footer } from './landing-activity';
 import { I } from './home-icons';
 import { Events } from './landing-features';
 import { EventCard } from './home-cards';
+import { GroupDashboard } from './group-dashboard';
 
 /* ============================================================
    Samaagum Home — Group detail (forum, events, members, gallery)
@@ -228,7 +229,222 @@ export function CommentItem({ c, depth, canReply, isOwner, currentUserId, replyi
   );
 }
 
+/* ─── Conducted Events Section ─────────────────────────────────────────────── */
+
+function ConductedEventsSection({ groupId }) {
+  const [events, setEvents] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [imgLoaded, setImgLoaded] = React.useState({});
+
+  React.useEffect(() => {
+    if (!groupId || groupId === 'newg') { setLoading(false); return; }
+    const apiBase = window.location.port === '8080' ? 'http://localhost:3000' : '';
+    const token = localStorage.getItem('token');
+    setLoading(true);
+    fetch(`${apiBase}/api/groups/${groupId}/conducted-events`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+    })
+      .then(r => r.json())
+      .then(d => {
+        const raw = (d.data || []);
+        // Secondary client-side filter for safety
+        const past = raw.filter(ev => {
+          if (ev.status === 'completed' || ev.status === 'ended') return true;
+          const end = ev.ends_at ? new Date(ev.ends_at) : (ev.starts_at ? new Date(new Date(ev.starts_at).getTime() + 3 * 60 * 60 * 1000) : null);
+          return end && end < new Date();
+        });
+        // Already sorted by server desc, but sort again for safety
+        past.sort((a, b) => new Date(b.starts_at || 0).getTime() - new Date(a.starts_at || 0).getTime());
+        setEvents(past);
+      })
+      .catch(() => setEvents([]))
+      .finally(() => setLoading(false));
+  }, [groupId]);
+
+  const formatDate = (iso) => {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const formatTime = (iso) => {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  };
+  const apiBase = window.location.port === '8080' ? 'http://localhost:3000' : '';
+  const resolveUrl = (u) => u && !u.startsWith('blob:') ? (u.startsWith('/api/') ? apiBase + u : u) : null;
+
+  const cardStyle = {
+    display: 'grid',
+    gridTemplateColumns: '180px 1fr auto auto auto',
+    gap: '20px',
+    alignItems: 'center',
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: 14,
+    padding: '16px 20px',
+    cursor: 'default',
+    userSelect: 'none',
+    transition: 'background 0.15s',
+  };
+
+  if (loading) {
+    return (
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '24px' }}>
+        <h3 style={{ marginTop: 0, marginBottom: 20, fontSize: 18, fontWeight: 700, color: 'var(--ink)' }}>Conducted Events</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {[1, 2, 3].map(i => (
+            <div key={i} style={{ ...cardStyle, animation: 'pulse 1.5s ease-in-out infinite' }}>
+              <div style={{ width: 180, height: 101, borderRadius: 10, background: 'var(--surface-2)' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ height: 18, width: '60%', borderRadius: 6, background: 'var(--surface-2)' }} />
+                <div style={{ height: 13, width: '80%', borderRadius: 6, background: 'var(--surface-2)' }} />
+              </div>
+              <div style={{ height: 40, width: 80, borderRadius: 8, background: 'var(--surface-2)' }} />
+              <div style={{ height: 40, width: 80, borderRadius: 8, background: 'var(--surface-2)' }} />
+              <div style={{ height: 40, width: 64, borderRadius: 8, background: 'var(--surface-2)' }} />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (events.length === 0) {
+    return (
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '24px' }}>
+        <h3 style={{ marginTop: 0, marginBottom: 20, fontSize: 18, fontWeight: 700, color: 'var(--ink)' }}>Conducted Events</h3>
+        <div style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--ink-3)' }}>
+          <svg width="72" height="72" viewBox="0 0 72 72" fill="none" style={{ marginBottom: 16, opacity: 0.35 }}>
+            <rect x="8" y="16" width="56" height="44" rx="6" stroke="currentColor" strokeWidth="2.5" fill="none"/>
+            <path d="M8 28h56" stroke="currentColor" strokeWidth="2.5"/>
+            <path d="M24 8v12M48 8v12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+            <path d="M22 42h10M22 52h28" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.5"/>
+          </svg>
+          <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--ink)', marginBottom: 8 }}>No Events Conducted Yet</div>
+          <div style={{ fontSize: 14, color: 'var(--ink-3)', maxWidth: 320, margin: '0 auto', lineHeight: 1.6 }}>
+            This group hasn't organized any events yet.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '24px' }}>
+      <h3 style={{ marginTop: 0, marginBottom: 20, fontSize: 18, fontWeight: 700, color: 'var(--ink)' }}>
+        Conducted Events
+        <span style={{ marginLeft: 10, fontSize: 13, fontWeight: 500, color: 'var(--ink-3)', background: 'var(--surface-2)', padding: '2px 10px', borderRadius: 20 }}>
+          {events.length}
+        </span>
+      </h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {events.map((ev) => {
+          const banner = resolveUrl(ev.cover || ev.banner || ev.image);
+          const attendeeCount = ev.attendees_count ?? ev.attendee_count ?? ev.registrations_count ?? ev.checkin_count ?? ev.joined ?? 0;
+          const category = ev.category || ev.cat || null;
+
+          const coverBg = banner && (banner.startsWith("linear-gradient") || banner.startsWith("radial-gradient") || banner.startsWith("var(") || banner.startsWith("#") || banner.startsWith("rgb"))
+            ? banner
+            : (banner ? `url(${banner}) center/cover no-repeat` : 'var(--dusk)');
+
+          return (
+            <div
+              key={ev.id}
+              style={cardStyle}
+              onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--surface) 80%, var(--ink) 3%)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface)'; }}
+            >
+              {/* Banner */}
+              <div style={{
+                width: 180,
+                height: 101,
+                borderRadius: 10,
+                overflow: 'hidden',
+                background: coverBg,
+                flexShrink: 0,
+                position: 'relative'
+              }}>
+                <Grain />
+              </div>
+
+
+              {/* Event info */}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 15.5, color: 'var(--ink)', marginBottom: 5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {ev.name || ev.title || 'Untitled Event'}
+                </div>
+                {(ev.description || ev.desc) && (
+                  <div style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: 8 }}>
+                    {ev.description || ev.desc}
+                  </div>
+                )}
+                {category && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: 'var(--accent-2)', background: 'color-mix(in srgb, var(--accent-2) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--accent-2) 25%, transparent)', borderRadius: 20, padding: '2px 9px' }}>
+                    {category}
+                  </span>
+                )}
+              </div>
+
+              {/* Start */}
+              <div style={{ textAlign: 'center', minWidth: 90 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Start</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: 'var(--ink-2)', marginBottom: 4 }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                  </svg>
+                  {formatDate(ev.starts_at)}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: 'var(--ink-3)' }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                  {formatTime(ev.starts_at)}
+                </div>
+              </div>
+
+              {/* End */}
+              <div style={{ textAlign: 'center', minWidth: 90 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>End</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: 'var(--ink-2)', marginBottom: 4 }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                  </svg>
+                  {formatDate(ev.ends_at || ev.starts_at)}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: 'var(--ink-3)' }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                  {formatTime(ev.ends_at || ev.starts_at)}
+                </div>
+              </div>
+
+              {/* Attendees */}
+              <div style={{ textAlign: 'center', minWidth: 72 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Attendees</div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent-2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                  </svg>
+                  <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--accent-2)', lineHeight: 1 }}>{attendeeCount.toLocaleString()}</span>
+                  <span style={{ fontSize: 10, color: 'var(--ink-3)' }}>Joined</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <style>{`
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 export function MemberOnlyScreen({ onJoin, isPending }) {
+
   return (
     <div style={{ textAlign: "center", padding: "80px 20px", color: "var(--ink-3)", background: "var(--surface)", borderRadius: "var(--r-md)", border: "1px dashed var(--border)" }}>
       <I.lock style={{ width: 48, height: 48, marginBottom: 16, opacity: 0.3 }} />
@@ -300,6 +516,8 @@ export function GroupDetail({ group, st, go }) {
   const [onlineCount, setOnlineCount] = useState(g.online || 0);
   const [galleryItems, setGalleryItems] = useState([]);
   const [callerIsAdmin, setCallerIsAdmin] = useState(false);
+  const [conductedEvents, setConductedEvents] = useState([]);
+  const [conductedEventsLoading, setConductedEventsLoading] = useState(false);
   const [galleryUploading, setGalleryUploading] = useState(false);
   const [previewMedia, setPreviewMedia] = useState(null);
   const [imageZoom, setImageZoom] = useState(1);
@@ -941,6 +1159,31 @@ export function GroupDetail({ group, st, go }) {
     }
   };
 
+  const handleCancelJoinRequestClick = async () => {
+    if (!confirm("Are you sure you want to cancel your request to join this group?")) return;
+    try {
+      const token = localStorage.getItem('token');
+      const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+      const res = await fetch(`${apiBase}/api/groups/${g.id}/join/cancel`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMembershipState(null);
+        fetchGroupDetails();
+        if (window.toast) window.toast("Join request cancelled.");
+      } else {
+        alert(data.message || "Failed to cancel request");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Failed to cancel request due to a network error.");
+    }
+  };
+
   const submitJoinRequest = async (submissionAnswers) => {
     try {
       const token = localStorage.getItem('token');
@@ -983,7 +1226,7 @@ export function GroupDetail({ group, st, go }) {
     const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
 
     const fetchStats = async () => {
-      if (!isOwner) return;
+      if (!canManageGroup) return;
       try {
         const token = localStorage.getItem('token');
         const res = await fetch(`${apiBase}/api/groups/${g.id}/dashboard-stats`, {
@@ -1560,12 +1803,17 @@ export function GroupDetail({ group, st, go }) {
                 </button>
               ) : (
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button className={`hbtn hbtn--sm ${isJoined || isPending ? "hbtn--ghost" : "hbtn--primary"}`} onClick={handleJoinClick}>
+                  <button className={`hbtn hbtn--sm ${isJoined || isPending ? "hbtn--ghost" : "hbtn--primary"}`} onClick={isPending ? undefined : handleJoinClick} style={isPending ? { cursor: 'default' } : undefined}>
                     {isPending ? <><I.clock />Requested</> : isJoined ? <><I.check />Joined</> : capacityFull ? <><I.users style={{ width: 14, height: 14 }} />Join Waitlist</> : <><I.plus />Join group</>}
                   </button>
                   {isJoined && (
                     <button className="hbtn hbtn--sm hbtn--soft" style={{ color: "var(--red)" }} onClick={handleLeaveClick}>
                       Leave Group
+                    </button>
+                  )}
+                  {isPending && (
+                    <button className="hbtn hbtn--sm hbtn--soft" style={{ color: "var(--red)" }} onClick={handleCancelJoinRequestClick}>
+                      Cancel Request
                     </button>
                   )}
                 </div>
@@ -1590,7 +1838,7 @@ export function GroupDetail({ group, st, go }) {
             ))}
           </div>
 
-          <div className="grp-cols">
+          <div className="grp-cols" style={tab === "dashboard" ? { gridTemplateColumns: "1fr" } : undefined}>
             <div style={{ minWidth: 0 }}>
               {showMemberOnlyScreen ? (
                 <MemberOnlyScreen onJoin={handleJoinClick} isPending={isPending} />
@@ -1612,6 +1860,7 @@ export function GroupDetail({ group, st, go }) {
                           </div>
                         </div>
                       )}
+                      <ConductedEventsSection groupId={g.id} />
                     </div>
                   )}
                   {tab === "discussion" && (
@@ -1891,65 +2140,7 @@ export function GroupDetail({ group, st, go }) {
                   )}
 
                   {tab === "dashboard" && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Moderation Dashboard</h3>
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <button className="hbtn hbtn--soft hbtn--sm" onClick={() => go("edit-group", g)}>
-                            <I.edit style={{ width: 14 }} /> Edit Group Settings
-                          </button>
-                          {!g.settings?.isArchived && (
-                            <button className="hbtn hbtn--sm" style={{ background: "var(--surface-2)", color: "var(--ink-2)" }} onClick={async () => {
-                              if (!confirm("Archive this group? It will be hidden from Discover but visible in your My Groups > Archive.")) return;
-                              const _ab = window.location.port === "8080" ? "http://localhost:3000" : "";
-                              const _tk = localStorage.getItem('token');
-                              const _res = await fetch(`${_ab}/api/groups/${g.id}/archive`, {
-                                method: 'POST',
-                                headers: _tk ? { 'Authorization': `Bearer ${_tk}` } : {}
-                              });
-                              const _d = await _res.json();
-                              if (_d.success) { go("groups", { tab: "created", createdSub: "archive" }); } else { alert(_d.message || "Failed to archive"); }
-                            }}>
-                              Archive Group
-                            </button>
-                          )}
-                          {g.settings?.isArchived && (
-                            <button className="hbtn hbtn--sm hbtn--soft" onClick={async () => {
-                              const _ab = window.location.port === "8080" ? "http://localhost:3000" : "";
-                              const _tk = localStorage.getItem('token');
-                              const _res = await fetch(`${_ab}/api/groups/${g.id}/unarchive`, {
-                                method: 'POST',
-                                headers: _tk ? { 'Authorization': `Bearer ${_tk}` } : {}
-                              });
-                              const _d = await _res.json();
-                              if (_d.success) { go("groups", { tab: "created", createdSub: "active" }); } else { alert(_d.message || "Failed to unarchive"); }
-                            }}>
-                              Unarchive Group
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                        <div className="side-card" style={{ padding: 16 }}>
-                          <div style={{ color: "var(--ink-2)", fontSize: 13, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600, marginBottom: 8 }}>Total Posts</div>
-                          <div style={{ fontSize: 24, fontWeight: 700 }}>{dashboardStats.totalPosts}</div>
-                        </div>
-                        <div className="side-card" style={{ padding: 16 }}>
-                          <div style={{ color: "var(--ink-2)", fontSize: 13, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600, marginBottom: 8 }}>Active Members</div>
-                          <div style={{ fontSize: 24, fontWeight: 700 }}>{dashboardStats.activeMembers}</div>
-                        </div>
-                        <div className="side-card" style={{ padding: 16 }}>
-                          <div style={{ color: "var(--ink-2)", fontSize: 13, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600, marginBottom: 8 }}>Reported Posts</div>
-                          <div style={{ fontSize: 24, fontWeight: 700, color: dashboardStats.reportedPosts > 0 ? "var(--red)" : "inherit" }}>{dashboardStats.reportedPosts}</div>
-                        </div>
-                        {g.joinMode === 'approval' && (
-                          <div className="side-card" style={{ padding: 16 }}>
-                            <div style={{ color: "var(--ink-2)", fontSize: 13, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600, marginBottom: 8 }}>Pending Join Requests</div>
-                            <div style={{ fontSize: 24, fontWeight: 700, color: dashboardStats.pendingMembers > 0 ? "var(--accent-2)" : "inherit" }}>{dashboardStats.pendingMembers}</div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                    <GroupDashboard group={g} st={st} go={go} embedded={true} setTab={setTab} members={members} />
                   )}
                   {tab === "invites" && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -2203,49 +2394,50 @@ export function GroupDetail({ group, st, go }) {
               )}
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div className="side-card">
-                <h4>About</h4>
-                <p style={{ fontSize: 13.5, lineHeight: 1.6, color: "var(--ink-2)" }}>{g.description || g.desc}</p>
-                <div style={{ marginTop: 12 }}>
-                  <div className="side-stat"><span className="k">Members</span><span className="v">{members.length.toLocaleString()}</span></div>
-                  <div className="side-stat"><span className="k">Posts</span><span className="v">{g.posts || 0}</span></div>
-                  <div className="side-stat"><span className="k">Join policy</span><span className="v">{g.joinMode === 'open' ? 'Anyone can join' : g.joinMode === 'invite_only' ? 'Invite only' : 'Approval required'}</span></div>
+            {tab !== "dashboard" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div className="side-card">
+                  <h4>About</h4>
+                  <div style={{ marginTop: 12 }}>
+                    <div className="side-stat"><span className="k">Members</span><span className="v">{members.length.toLocaleString()}</span></div>
+                    <div className="side-stat"><span className="k">Posts</span><span className="v">{g.posts || 0}</span></div>
+                    <div className="side-stat"><span className="k">Join policy</span><span className="v">{g.joinMode === 'open' ? 'Anyone can join' : g.joinMode === 'invite_only' ? 'Invite only' : 'Approval required'}</span></div>
+                  </div>
                 </div>
-              </div>
-              <div className="side-card">
-                <h4>Top members</h4>
-                {members.slice(0, 5).map((m, i) => {
-                  const mName = typeof m === 'object' ? (m.users?.display_name || m.name || m) : m;
-                  const mUsername = typeof m === 'object' ? `@${m.users?.username || m.username || 'unknown'}` : '';
-                  const targetRole = typeof m === 'object' ? (m.role || (m.roles ? getHighestRole(m.roles) : (i === 0 ? "group_owner" : i < 3 ? "group_moderator" : "group_member"))) : "group_member";
-                  const mRole = targetRole.replace('group_', '');
-                  return (
-                    <div
-                      key={m.id || mName}
-                      className="member-row"
-                      onClick={() => {
-                        const targetUser = typeof m === 'object' && m.users ? m.users : (typeof m === 'object' ? m : { id: m.id, name: mName, username: mUsername.replace('@', '') });
-                        if (targetUser && targetUser.id) {
-                          go("public-profile", targetUser);
-                        }
-                      }}
-                      style={{ cursor: "pointer" }}
-                    >
-                      <Avatar name={mName} userId={m.id || m.user_id} img={m.profilePhoto || m.users?.profilePhoto} size={32} />
-                      <div className="mi">
-                        <div className="n" style={{ display: "flex", alignItems: "center", gap: 5 }}>{mName} {mRole === 'owner' && <I.crown className="crown" />}</div>
-                        <div className="r" style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                          <span style={{ color: "var(--ink-2)" }}>{mUsername}</span>
-                          <span>·</span>
-                          <span style={{ textTransform: "capitalize" }}>{mRole}</span>
+                <div className="side-card">
+                  <h4>Top members</h4>
+                  {members.slice(0, 5).map((m, i) => {
+                    const mName = typeof m === 'object' ? (m.users?.display_name || m.name || m) : m;
+                    const mUsername = typeof m === 'object' ? `@${m.users?.username || m.username || 'unknown'}` : '';
+                    const targetRole = typeof m === 'object' ? (m.role || (m.roles ? getHighestRole(m.roles) : (i === 0 ? "group_owner" : i < 3 ? "group_moderator" : "group_member"))) : "group_member";
+                    const mRole = targetRole.replace('group_', '');
+                    return (
+                      <div
+                        key={m.id || mName}
+                        className="member-row"
+                        onClick={() => {
+                          const targetUser = typeof m === 'object' && m.users ? m.users : (typeof m === 'object' ? m : { id: m.id, name: mName, username: mUsername.replace('@', '') });
+                          if (targetUser && targetUser.id) {
+                            go("public-profile", targetUser);
+                          }
+                        }}
+                        style={{ cursor: "pointer" }}
+                      >
+                        <Avatar name={mName} userId={m.id || m.user_id} img={m.profilePhoto || m.users?.profilePhoto} size={32} />
+                        <div className="mi">
+                          <div className="n" style={{ display: "flex", alignItems: "center", gap: 5 }}>{mName} {mRole === 'owner' && <I.crown className="crown" />}</div>
+                          <div className="r" style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                            <span style={{ color: "var(--ink-2)" }}>{mUsername}</span>
+                            <span>·</span>
+                            <span style={{ textTransform: "capitalize" }}>{mRole}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>

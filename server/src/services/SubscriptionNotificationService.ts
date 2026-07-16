@@ -1,6 +1,7 @@
 import prisma from '../config/prisma';
 import { sendEmail } from '../utils/email';
 import { sendNotificationToUser } from './messagingSocket';
+import { notificationService } from './NotificationService';
 
 export class SubscriptionNotificationService {
   /**
@@ -75,6 +76,19 @@ export class SubscriptionNotificationService {
           continue;
         }
 
+        // Write a sentinel record immediately so scheduler doesn't re-process
+        // this subscription on the next 24h run, regardless of channel preferences.
+        await prisma.notification_log.create({
+          data: {
+            tenant_id: sub.tenant_id,
+            user_id: user.id,
+            channel: 'socket',
+            template_key: 'subscription_expiring_soon',
+            provider_ref: sub.id,
+            status: 'dedup_sentinel'
+          }
+        });
+
         const planName = sub.plans?.key
           ? sub.plans.key.charAt(0).toUpperCase() + sub.plans.key.slice(1)
           : 'Samaagum Plan';
@@ -83,27 +97,32 @@ export class SubscriptionNotificationService {
           ? new Date(sub.valid_to).toLocaleDateString('en-US', { dateStyle: 'long' })
           : 'in 5 days';
 
-        // 1. Create In-App Notification Log entry
-        await prisma.notification_log.create({
-          data: {
-            tenant_id: sub.tenant_id,
-            user_id: user.id,
-            channel: 'socket',
-            template_key: 'subscription_expiring_soon',
-            provider_ref: sub.id, // stores sub.id to track uniqueness
-            status: 'queued'
-          }
-        });
-
-        // 2. Try sending socket message to user real-time if online
-        try {
-          sendNotificationToUser(user.id, 'subscription.expiring', {
-            planName,
-            expiryDate: sub.valid_to
+        // 1. Create In-App Notification Log entry (only if in-app is enabled)
+        const inAppEnabled = await notificationService.shouldDeliver(user.id, 'SUBSCRIPTION_EXPIRING', 'app');
+        if (inAppEnabled) {
+          await prisma.notification_log.create({
+            data: {
+              tenant_id: sub.tenant_id,
+              user_id: user.id,
+              channel: 'socket',
+              template_key: 'subscription_expiring_soon',
+              provider_ref: sub.id,
+              status: 'queued'
+            }
           });
-          console.log(`[SubscriptionNotificationService] Real-time socket notification sent to user ${user.id}`);
-        } catch (socketErr) {
-          console.error(`[SubscriptionNotificationService] Failed to send socket notification to user ${user.id}:`, socketErr);
+
+          // 2. Try sending socket message to user real-time if online
+          try {
+            sendNotificationToUser(user.id, 'subscription.expiring', {
+              planName,
+              expiryDate: sub.valid_to
+            });
+            console.log(`[SubscriptionNotificationService] Real-time socket notification sent to user ${user.id}`);
+          } catch (socketErr) {
+            console.error(`[SubscriptionNotificationService] Failed to send socket notification to user ${user.id}:`, socketErr);
+          }
+        } else {
+          console.log(`[SubscriptionNotificationService] In-app notification skipped per user preference (user: ${user.id}).`);
         }
 
         // 3. Send Email
@@ -125,15 +144,19 @@ export class SubscriptionNotificationService {
           </div>
         `;
 
-        try {
-          await sendEmail({
-            to: user.primary_email,
-            subject: emailSubject,
-            html: emailHtml
-          });
-          console.log(`[SubscriptionNotificationService] Expiration warning email sent to ${user.primary_email}`);
-        } catch (emailErr) {
-          console.error(`[SubscriptionNotificationService] Failed to send email to ${user.primary_email}:`, emailErr);
+        if (await notificationService.shouldDeliver(user.id, 'SUBSCRIPTION_EXPIRING', 'email')) {
+          try {
+            await sendEmail({
+              to: user.primary_email,
+              subject: emailSubject,
+              html: emailHtml
+            });
+            console.log(`[SubscriptionNotificationService] Expiration warning email sent to ${user.primary_email}`);
+          } catch (emailErr) {
+            console.error(`[SubscriptionNotificationService] Failed to send email to ${user.primary_email}:`, emailErr);
+          }
+        } else {
+          console.log(`[SubscriptionNotificationService] Expiration warning email skipped per user preference (user: ${user.id}).`);
         }
       }
     } catch (err) {

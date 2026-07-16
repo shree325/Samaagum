@@ -322,8 +322,12 @@ export class EventService {
           // Notify everyone including the creator, as per user requirement
 
           if (userIds.size > 0) {
+            const { notificationService } = require('./NotificationService');
             for (const memberId of userIds) {
               try {
+                const canDeliver = await notificationService.shouldDeliverByTemplateKey(memberId, 'group_event_created');
+                if (!canDeliver) continue;
+
                 sendNotificationToUser(memberId, 'group.notification', {
                   type: 'group_event_created',
                   title: 'New Group Event',
@@ -1068,38 +1072,68 @@ export class EventService {
             if (body.capacity_total !== undefined && body.capacity_total !== event.capacity_total) changedFields.push('Capacity');
             if (body.online_link !== undefined && body.online_link !== event.online_link) changedFields.push('Location');
           }
-          if (JSON.stringify(body.venue || {}) !== JSON.stringify(event.venue || {})) {
+          const locationChanged = (() => {
+            if (body.location_type !== undefined && body.location_type !== event.location_type) {
+              return true;
+            }
+            const isOnline = body.location_type === 'online' || (body.location_type === undefined && event.location_type === 'online');
+            if (isOnline) {
+              return body.online_link !== undefined && body.online_link !== event.online_link;
+            } else {
+              if (body.venue === undefined) return false;
+              const oldV = (typeof event.venue === 'string' ? (event.venue.trim() !== '' ? JSON.parse(event.venue) : {}) : event.venue) || {};
+              const newV = (typeof body.venue === 'string' ? (body.venue.trim() !== '' ? JSON.parse(body.venue) : {}) : body.venue) || {};
+              return (
+                (newV.name !== undefined && newV.name !== oldV.name) ||
+                (newV.address !== undefined && newV.address !== oldV.address) ||
+                (newV.latitude !== undefined && newV.latitude !== oldV.latitude) ||
+                (newV.longitude !== undefined && newV.longitude !== oldV.longitude) ||
+                (newV.lat !== undefined && newV.lat !== oldV.lat) ||
+                (newV.lng !== undefined && newV.lng !== oldV.lng)
+              );
+            }
+          })();
+
+          if (locationChanged) {
             if (!changedFields.includes('Location')) changedFields.push('Location');
           }
           const changedFieldsStr = changedFields.length > 0 ? changedFields.join(', ') : 'Settings';
 
 
-          const notificationsData = memberUserIds.map(uid => ({
-            tenant_id: event.tenant_id || '00000000-0000-0000-0000-000000000000',
-            user_id: uid,
-            channel: 'socket',
-            template_key: 'event_updated',
-            status: 'sent',
-            provider_ref: JSON.stringify({ 
-              eventId: id, 
-              eventTitle: body.title || event.title,
-              changedFields: changedFieldsStr 
-            })
-          }));
-
-          await prisma.notification_log.createMany({
-            data: notificationsData,
-            skipDuplicates: true
-          });
-
+          const { notificationService: ns } = require('./NotificationService');
+          const filteredUpdateIds: string[] = [];
           for (const uid of memberUserIds) {
-            sendNotificationToUser(uid, 'group.notification', {
-              type: 'event_updated',
-              eventId: id,
-              eventTitle: body.title || event.title,
-              changedFields: changedFieldsStr,
-              text: `The event <b>${body.title || event.title}</b> has been updated.${changedFieldsStr ? ` Changes: ${changedFieldsStr}` : ''}`
+            if (await ns.shouldDeliverByTemplateKey(uid, 'event_updated')) filteredUpdateIds.push(uid);
+          }
+
+          if (filteredUpdateIds.length > 0) {
+            const notificationsData = filteredUpdateIds.map(uid => ({
+              tenant_id: event.tenant_id || '00000000-0000-0000-0000-000000000000',
+              user_id: uid,
+              channel: 'socket',
+              template_key: 'event_updated',
+              status: 'sent',
+              provider_ref: JSON.stringify({ 
+                eventId: id, 
+                eventTitle: body.title || event.title,
+                changedFields: changedFieldsStr 
+              })
+            }));
+
+            await prisma.notification_log.createMany({
+              data: notificationsData,
+              skipDuplicates: true
             });
+
+            for (const uid of filteredUpdateIds) {
+              sendNotificationToUser(uid, 'group.notification', {
+                type: 'event_updated',
+                eventId: id,
+                eventTitle: body.title || event.title,
+                changedFields: changedFieldsStr,
+                text: `The event <b>${body.title || event.title}</b> has been updated.${changedFieldsStr ? ` Changes: ${changedFieldsStr}` : ''}`
+              });
+            }
           }
         }
       } catch (err) {
@@ -1228,29 +1262,36 @@ export class EventService {
     if (wasClosed && isNowOpen) {
       const wishlistingUsers = await this.wishlistRepo.getUsersWishlistingEvent(eventId);
       if (wishlistingUsers.length > 0) {
-        // notify via db and socket
         try {
-          const notificationsData = wishlistingUsers.map(({ user_id }) => ({
-            tenant_id: event.tenant_id || '00000000-0000-0000-0000-000000000000',
-            user_id: user_id,
-            channel: 'socket',
-            template_key: 'registration_opened',
-            status: 'sent',
-            provider_ref: JSON.stringify({ eventId: event.id, eventTitle: event.title })
-          }));
-
-          await prisma.notification_log.createMany({
-            data: notificationsData,
-            skipDuplicates: true
-          });
-
+          const { notificationService: ns2 } = require('./NotificationService');
+          const filteredWishlist: string[] = [];
           for (const { user_id } of wishlistingUsers) {
-            sendNotificationToUser(user_id, 'group.notification', {
-              type: 'registration_opened',
-              eventId: eventId,
-              eventTitle: event.title,
-              text: `Registration is now OPEN for ${event.title}!`
+            if (await ns2.shouldDeliverByTemplateKey(user_id, 'registration_opened')) filteredWishlist.push(user_id);
+          }
+
+          if (filteredWishlist.length > 0) {
+            const notificationsData = filteredWishlist.map(uid => ({
+              tenant_id: event.tenant_id || '00000000-0000-0000-0000-000000000000',
+              user_id: uid,
+              channel: 'socket',
+              template_key: 'registration_opened',
+              status: 'sent',
+              provider_ref: JSON.stringify({ eventId: event.id, eventTitle: event.title })
+            }));
+
+            await prisma.notification_log.createMany({
+              data: notificationsData,
+              skipDuplicates: true
             });
+
+            for (const uid of filteredWishlist) {
+              sendNotificationToUser(uid, 'group.notification', {
+                type: 'registration_opened',
+                eventId: eventId,
+                eventTitle: event.title,
+                text: `Registration is now OPEN for ${event.title}!`
+              });
+            }
           }
         } catch (e) {
           console.error('Failed to send wishlist notification', e);
@@ -2072,10 +2113,10 @@ export class EventService {
     const event = await prisma.events.findUnique({ where: { id: eventId } });
     if (!event) throw new Error('Event not found');
 
-    const venue = (event.venue as any) || {};
-    const meta = venue.meta || {};
-    const gallery = meta.gallery || {};
-    const items = gallery.items || [];
+    const venue = event.venue && typeof event.venue === 'object' ? (event.venue as any) : {};
+    const meta = venue.meta && typeof venue.meta === 'object' ? venue.meta : {};
+    const gallery = meta.gallery && typeof meta.gallery === 'object' ? meta.gallery : {};
+    const items = Array.isArray(gallery.items) ? gallery.items : [];
 
     const isHostOrCoHost = await this.verifyEventCapability(userId, eventId, 'event.configure_tickets');
     const isScanner = !isHostOrCoHost && await this.verifyEventCapability(userId, eventId, 'checkin.gate_staff');
@@ -2103,10 +2144,10 @@ export class EventService {
     const event = await prisma.events.findUnique({ where: { id: eventId } });
     if (!event) throw new Error('Event not found');
 
-    const venue = (event.venue as any) || {};
-    const meta = venue.meta || {};
-    const gallery = meta.gallery || {};
-    const items = gallery.items || [];
+    const venue = event.venue && typeof event.venue === 'object' ? (event.venue as any) : {};
+    const meta = venue.meta && typeof venue.meta === 'object' ? venue.meta : {};
+    const gallery = meta.gallery && typeof meta.gallery === 'object' ? meta.gallery : {};
+    const items = Array.isArray(gallery.items) ? gallery.items : [];
 
     const isHostOrCoHost = await this.verifyEventCapability(userId, eventId, 'event.configure_tickets');
     const isScanner = !isHostOrCoHost && await this.verifyEventCapability(userId, eventId, 'checkin.gate_staff');
@@ -2165,10 +2206,10 @@ export class EventService {
       throw new Error('Forbidden: Only organizers can approve media');
     }
 
-    const venue = (event.venue as any) || {};
-    const meta = venue.meta || {};
-    const gallery = meta.gallery || {};
-    const items = gallery.items || [];
+    const venue = event.venue && typeof event.venue === 'object' ? (event.venue as any) : {};
+    const meta = venue.meta && typeof venue.meta === 'object' ? venue.meta : {};
+    const gallery = meta.gallery && typeof meta.gallery === 'object' ? meta.gallery : {};
+    const items = Array.isArray(gallery.items) ? gallery.items : [];
 
     const nextItems = items.map((item: any) => {
       if (item.id === itemId) {
@@ -2193,10 +2234,10 @@ export class EventService {
     const isHostOrCoHost = await this.verifyEventCapability(userId, eventId, 'event.configure_tickets');
     const isScanner = !isHostOrCoHost && await this.verifyEventCapability(userId, eventId, 'checkin.gate_staff');
 
-    const venue = (event.venue as any) || {};
-    const meta = venue.meta || {};
-    const gallery = meta.gallery || {};
-    const items = gallery.items || [];
+    const venue = event.venue && typeof event.venue === 'object' ? (event.venue as any) : {};
+    const meta = venue.meta && typeof venue.meta === 'object' ? venue.meta : {};
+    const gallery = meta.gallery && typeof meta.gallery === 'object' ? meta.gallery : {};
+    const items = Array.isArray(gallery.items) ? gallery.items : [];
 
     const itemToDelete = items.find((item: any) => item.id === itemId);
     if (!itemToDelete) throw new Error('Item not found');

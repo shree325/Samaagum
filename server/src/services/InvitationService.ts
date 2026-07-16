@@ -97,11 +97,20 @@ export class InvitationService {
             console.log(`[Email] Invite for ${target.email || target.username || 'unknown'}: ${inviteLink}`);
             if (target.email) {
                 try {
-                    await sendEmail({
-                        to: target.email,
-                        subject: `You've been invited to join ${group.name} on Samaagum`,
-                        html: `<p>Hi!</p><p>${inviterName} has invited you to join <strong>${group.name}</strong> on Samaagum.</p><p>Click the link below to accept your invitation:</p><p><a href="${inviteLink}">${inviteLink}</a></p><p>This link is for your use only.</p>`
-                    });
+                    let deliver = true;
+                    if (existingUser) {
+                        const { notificationService } = await import('./NotificationService');
+                        deliver = await notificationService.shouldDeliver(existingUser.id!, 'GROUP_INVITE', 'email');
+                    }
+                    if (deliver) {
+                        await sendEmail({
+                            to: target.email,
+                            subject: `You've been invited to join ${group.name} on Samaagum`,
+                            html: `<p>Hi!</p><p>${inviterName} has invited you to join <strong>${group.name}</strong> on Samaagum.</p><p>Click the link below to accept your invitation:</p><p><a href="${inviteLink}">${inviteLink}</a></p><p>This link is for your use only.</p>`
+                        });
+                    } else {
+                        console.log(`[InvitationService] Invitation email to ${target.email} skipped per user preference.`);
+                    }
                 } catch (emailErr: any) {
                     console.error('[Email] Failed to send invite email:', emailErr.message);
                 }

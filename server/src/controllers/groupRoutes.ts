@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { GroupService } from '../services/GroupService';
 import { InvitationService } from '../services/InvitationService';
 import { GroupNotificationService } from '../services/GroupNotificationService';
+import { notificationService } from '../services/NotificationService';
 import prisma from '../config/prisma';
 
 
@@ -148,8 +149,82 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
         }
     });
 
+    // GET /:id/conducted-events — read-only list of past events hosted by this group
+    fastify.get('/:id/conducted-events', async (request: any, reply) => {
+        try {
+            const { id } = request.params as any;
+            const now = new Date();
+
+            // Fetch events hosted by this group's entity that are completed or in the past
+            const events = await prisma.events.findMany({
+                where: {
+                    hosted_by_entity_id: id,
+                    OR: [
+                        { status: 'completed' },
+                        { ends_at: { lt: now } },
+                        // If no ends_at, treat starts_at + 3h as end
+                        {
+                            AND: [
+                                { ends_at: null },
+                                { starts_at: { lt: new Date(now.getTime() - 3 * 60 * 60 * 1000) } }
+                            ]
+                        }
+                    ]
+                },
+                orderBy: { starts_at: 'desc' },
+                select: {
+                    id: true,
+                    title: true,
+                    description: true,
+                    starts_at: true,
+                    ends_at: true,
+                    status: true,
+                    settings: true,
+                    venue: true,
+                    _count: {
+                        select: {
+                            bookings: {
+                                where: { status: 'confirmed' }
+                            }
+                        }
+                    }
+                } as any
+            });
+
+            const data = events.map((ev: any) => {
+                const settings = ev.settings && typeof ev.settings === 'object' ? ev.settings : {};
+                const venue = ev.venue && typeof ev.venue === 'object' ? ev.venue : {};
+                const meta = venue.meta && typeof venue.meta === 'object' ? venue.meta : {};
+                
+                // Read cover and category from venue.meta or settings
+                const cover = meta.cover || venue.cover || settings.cover || null;
+                const category = meta.category || settings.category || null;
+
+                return {
+                    id: ev.id,
+                    name: ev.title,
+                    title: ev.title,
+                    description: ev.description,
+                    cover,
+                    starts_at: ev.starts_at,
+                    ends_at: ev.ends_at,
+                    status: ev.status,
+                    category,
+                    attendees_count: ev._count?.bookings || 0,
+                };
+            });
+
+            return reply.send({ success: true, data });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+
+
     // GET /:id
     fastify.get('/:id', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+
         try {
             const { id } = request.params as any;
             const res = await GroupService.getGroupDetails(id, request.user);
@@ -255,32 +330,35 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                     });
                     const requesterName = requester?.profiles?.display_name || requester?.primary_email?.split('@')[0] || 'Someone';
 
-                    const notif = await prisma.notification_log.create({
-                        data: {
-                            tenant_id: request.user.tenantId || '00000000-0000-0000-0000-000000000000',
-                            user_id: ownerUserId,
-                            channel: 'app',
-                            template_key: 'group_join_request',
-                            status: 'queued',
-                            provider_ref: JSON.stringify({
-                                groupId: id,
-                                groupName,
-                                requesterId: request.user.id,
-                                requesterName,
-                                answers
-                            })
-                        }
-                    });
-
-                    const chatNamespace = (fastify as any).io?.of('/chat');
-                    if (chatNamespace) {
-                        chatNamespace.to(`user:${ownerUserId}`).emit('group.notification', {
-                            id: notif.id,
-                            type: 'join',
-                            text: `<b>${requesterName}</b> requested to join <b>${groupName}</b>`,
-                            groupId: id,
-                            answers
+                    const deliver = await notificationService.shouldDeliver(ownerUserId, 'JOIN_REQUESTS');
+                    if (deliver) {
+                        const notif = await prisma.notification_log.create({
+                            data: {
+                                tenant_id: request.user.tenantId || '00000000-0000-0000-0000-000000000000',
+                                user_id: ownerUserId,
+                                channel: 'app',
+                                template_key: 'group_join_request',
+                                status: 'queued',
+                                provider_ref: JSON.stringify({
+                                    groupId: id,
+                                    groupName,
+                                    requesterId: request.user.id,
+                                    requesterName,
+                                    answers
+                                })
+                            }
                         });
+
+                        const chatNamespace = (fastify as any).io?.of('/chat');
+                        if (chatNamespace) {
+                            chatNamespace.to(`user:${ownerUserId}`).emit('group.notification', {
+                                id: notif.id,
+                                type: 'join',
+                                text: `<b>${requesterName}</b> requested to join <b>${groupName}</b>`,
+                                groupId: id,
+                                answers
+                            });
+                        }
                     }
                 }
             }
@@ -500,6 +578,21 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             if (e.message.includes('Not a member') || e.message.includes('Owner cannot leave')) {
                 return reply.status(400).send({ success: false, message: e.message });
             }
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // POST /:id/join/cancel
+    fastify.post('/:id/join/cancel', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+            await GroupService.cancelJoinRequest(id, request.user.id);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('dashboard_updated', { action: 'cancel_join_request', userId: request.user.id });
+            }
+            return { success: true, message: 'Join request cancelled successfully' };
+        } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });
         }
     });

@@ -554,12 +554,17 @@ export function Notifications({ st, go, socket }) {
       }, ...prev]);
     };
     const onNotificationActed = (payload) => {
-      setItems(prev => prev.map(item => {
-        if (item.id === payload.notificationId) {
-          return { ...item, unread: false, acted: payload.action };
+      setItems(prev => {
+        if (payload.action === 'deleted') {
+          return prev.filter(item => item.id !== payload.notificationId);
         }
-        return item;
-      }));
+        return prev.map(item => {
+          if (item.id === payload.notificationId) {
+            return { ...item, unread: false, acted: payload.action };
+          }
+          return item;
+        });
+      });
     };
     socket.on("connection.request.received", onConnRequest);
     socket.on("connection.accepted", onConnAccepted);

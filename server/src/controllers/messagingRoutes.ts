@@ -4,6 +4,7 @@ import { locationService } from '../services/locationService';
 import { DEFAULT_CHAT_SETTINGS } from '../settings-library/settingsSeeder';
 import { conversationReadService } from '../services/ConversationReadService';
 import { GroupService } from '../services/GroupService';
+import { notificationService, NotificationService } from '../services/NotificationService';
 import { EventService } from '../services/EventService';
 import { EventInvitationService } from '../services/EventInvitationService';
 import { sendEmail, generateTicketHtml, formatCurrency } from '../utils/email';
@@ -726,15 +727,13 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         where: { addressee_user_id: userId, state: 'requested' }
       });
 
-      const unreadNotifLogs = await prisma.notification_log.count({
-        where: { user_id: userId, status: { not: 'read' } }
-      });
+      const unreadNotifCount = await notificationService.getUnreadCount(userId);
 
       return reply.send({
         success: true,
         data: {
           messages: uniqueSenders.size,
-          notifs: pendingConnRequests + unreadNotifLogs
+          notifs: unreadNotifCount
         }
       });
     } catch (err: any) {
@@ -779,11 +778,24 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       return reply.status(401).send({ success: false, message: 'Unauthorized' });
     }
     try {
-      const logs = await prisma.notification_log.findMany({
-        where: { user_id: userId },
+      const rawLogs = await prisma.notification_log.findMany({
+        where: { user_id: userId, status: { not: 'dedup_sentinel' } },
         orderBy: { created_at: 'desc' },
-        take: 50
+        take: 100
       });
+
+      const { inAppEnabled, preferences } = await notificationService.getUserPreferences(userId);
+      const logs = rawLogs.filter(log => {
+        if (!inAppEnabled) return false;
+        
+        const prefType = NotificationService.getPrefType(log.template_key);
+        
+        if (prefType) {
+          const key = `${prefType}:app`;
+          return preferences[key] !== false;
+        }
+        return true;
+      }).slice(0, 50);
 
       const msgIds = logs
         .filter(l => l.template_key === 'message_received' && l.provider_ref)
@@ -2058,36 +2070,39 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       delete filteredAnswers.ticketTypeId;
       delete filteredAnswers.qty;
 
-      const notif = await prisma.notification_log.create({
-          data: {
-            tenant_id: event.tenant_id,
-            user_id: ownerUserId,
-            channel: 'app',
-            template_key: 'event_join_request',
-            status: 'queued',
-            provider_ref: JSON.stringify({
-              eventId,
-              eventTitle: event.title,
-              requesterId: userId,
-              requesterName,
+      const deliver = await notificationService.shouldDeliver(ownerUserId, 'EVENT_JOIN_REQUESTS');
+      if (deliver) {
+        const notif = await prisma.notification_log.create({
+            data: {
+              tenant_id: event.tenant_id,
+              user_id: ownerUserId,
+              channel: 'app',
+              template_key: 'event_join_request',
+              status: 'queued',
+              provider_ref: JSON.stringify({
+                eventId,
+                eventTitle: event.title,
+                requesterId: userId,
+                requesterName,
+                answers: filteredAnswers,
+                questionLabels
+              })
+            }
+          });
+
+          // Trigger socket emit if available
+          const chatNamespace = (fastify as any).io?.of('/chat');
+          if (chatNamespace) {
+            chatNamespace.to(`user:${ownerUserId}`).emit('group.notification', {
+              id: notif.id,
+              type: 'registration',
+              text: `<b>${requesterName}</b> requested to join <b>${event.title}</b>`,
+              eventId: eventId,
               answers: filteredAnswers,
               questionLabels
-            })
+            });
           }
-        });
-
-        // Trigger socket emit if available
-        const chatNamespace = (fastify as any).io?.of('/chat');
-        if (chatNamespace) {
-          chatNamespace.to(`user:${ownerUserId}`).emit('group.notification', {
-            id: notif.id,
-            type: 'registration',
-            text: `<b>${requesterName}</b> requested to join <b>${event.title}</b>`,
-            eventId: eventId,
-            answers: filteredAnswers,
-            questionLabels
-          });
-        }
+      }
 
         const groupsNamespace = (fastify as any).io?.of('/groups');
         if (groupsNamespace) {
@@ -2126,13 +2141,17 @@ export async function messagingRoutes(fastify: FastifyInstance) {
               quantity: bookingQty
             });
 
-            await sendEmail({
-              to: requesterEmail,
-              subject: `Your ticket for ${event.title}`,
-              html: htmlContent
-            });
-            console.log(`Ticket email sent to ${requesterEmail}`);
-            emailMsg = ` Ticket emailed to ${requesterEmail}.`;
+            if (await notificationService.shouldDeliver(userId, 'TICKET_BOOKED', 'email')) {
+              await sendEmail({
+                to: requesterEmail,
+                subject: `Your ticket for ${event.title}`,
+                html: htmlContent
+              });
+              console.log(`Ticket email sent to ${requesterEmail}`);
+              emailMsg = ` Ticket emailed to ${requesterEmail}.`;
+            } else {
+              emailMsg = ` Ticket email skipped per user preference.`;
+            }
           } catch (err: any) {
             console.error('Failed to send ticket email:', err);
             emailMsg = ` Failed to email ticket.`;
@@ -2212,29 +2231,32 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       }
 
       if (action === 'accept') {
-        // Send accepted notification to the guest (requester)
-        await prisma.notification_log.create({
-          data: {
-            tenant_id: log.tenant_id,
-            user_id: requesterId,
-            channel: 'app',
-            template_key: 'event_request_accepted',
-            status: 'queued',
-            provider_ref: JSON.stringify({
-              eventId,
-              eventTitle
-            })
-          }
-        });
-
-        // Trigger socket emit to guest
-        const chatNamespace = (fastify as any).io?.of('/chat');
-        if (chatNamespace) {
-          chatNamespace.to(`user:${requesterId}`).emit('group.notification', {
-            type: 'event',
-            text: `Your request to join <b>${eventTitle}</b> was accepted! 🎉`,
-            eventId
+        // Send accepted notification to the guest (requester) only if they allow it
+        const canSendAcceptNotif = await notificationService.shouldDeliver(requesterId, 'REGISTRATION_APPROVED', 'app');
+        if (canSendAcceptNotif) {
+          await prisma.notification_log.create({
+            data: {
+              tenant_id: log.tenant_id,
+              user_id: requesterId,
+              channel: 'app',
+              template_key: 'event_request_accepted',
+              status: 'queued',
+              provider_ref: JSON.stringify({
+                eventId,
+                eventTitle
+              })
+            }
           });
+
+          // Trigger socket emit to guest
+          const chatNamespace = (fastify as any).io?.of('/chat');
+          if (chatNamespace) {
+            chatNamespace.to(`user:${requesterId}`).emit('group.notification', {
+              type: 'event',
+              text: `Your request to join <b>${eventTitle}</b> was accepted! 🎉`,
+              eventId
+            });
+          }
         }
 
         const chatNamespace2 = (fastify as any).io?.of('/chat');
@@ -2255,9 +2277,10 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         }
 
         try {
-          const userRec = await prisma.users.findUnique({ where: { id: requesterId } });
-          if (userRec?.primary_email && booking) {
-            const li = await prisma.booking_line_items.findFirst({ where: { booking_id: booking.id } });
+          if (await notificationService.shouldDeliver(requesterId, 'REGISTRATION_APPROVED', 'email')) {
+            const userRec = await prisma.users.findUnique({ where: { id: requesterId } });
+            if (userRec?.primary_email && booking) {
+              const li = await prisma.booking_line_items.findFirst({ where: { booking_id: booking.id } });
             if (li) {
               const tk = await prisma.tickets.findFirst({ where: { line_item_id: li.id } });
               if (tk) {
@@ -2296,34 +2319,38 @@ export async function messagingRoutes(fastify: FastifyInstance) {
               }
             }
           }
+        }
         } catch (err: any) {
           console.error('[messagingRoutes] Failed to send accept email:', err);
         }
 
         return reply.send({ success: true, action: 'accepted' });
       } else {
-        // Send declined notification to the guest (requester)
-        await prisma.notification_log.create({
-          data: {
-            tenant_id: log.tenant_id,
-            user_id: requesterId,
-            channel: 'app',
-            template_key: 'event_request_declined',
-            status: 'queued',
-            provider_ref: JSON.stringify({
-              eventId,
-              eventTitle
-            })
-          }
-        });
-
-        // Trigger socket emit to guest
-        const chatNamespace = (fastify as any).io?.of('/chat');
-        if (chatNamespace) {
-          chatNamespace.to(`user:${requesterId}`).emit('group.notification', {
-            type: 'system',
-            text: `Your request to join <b>${eventTitle}</b> was declined`
+        // Send declined notification to the guest (requester) only if they allow it
+        const canSendDeclineNotif = await notificationService.shouldDeliver(requesterId, 'REGISTRATION_DECLINED', 'app');
+        if (canSendDeclineNotif) {
+          await prisma.notification_log.create({
+            data: {
+              tenant_id: log.tenant_id,
+              user_id: requesterId,
+              channel: 'app',
+              template_key: 'event_request_declined',
+              status: 'queued',
+              provider_ref: JSON.stringify({
+                eventId,
+                eventTitle
+              })
+            }
           });
+
+          // Trigger socket emit to guest
+          const chatNamespace = (fastify as any).io?.of('/chat');
+          if (chatNamespace) {
+            chatNamespace.to(`user:${requesterId}`).emit('group.notification', {
+              type: 'system',
+              text: `Your request to join <b>${eventTitle}</b> was declined`
+            });
+          }
         }
 
         const chatNamespace2 = (fastify as any).io?.of('/chat');
