@@ -2598,19 +2598,20 @@ export class EventService {
     const bookings = await prisma.bookings.findMany({
       where: { event_id: eventId, status: 'waitlisted' },
       include: {
-        users_bookings_booker_user_idTousers: {
+        users: {
           select: {
             id: true,
-            display_name: true,
-            username: true,
-            avatar_url: true,
-            email: true
+            first_name: true,
+            last_name: true,
+            primary_email: true,
+            profile_image_data: true,
+            profiles: { select: { display_name: true } }
           }
         },
         booking_line_items: {
           include: {
             ticket_types: {
-              select: { title: true, price: true }
+              select: { name: true, price_amount_minor: true }
             }
           }
         }
@@ -2621,9 +2622,14 @@ export class EventService {
     return bookings.map(b => ({
       id: b.id,
       created_at: b.created_at,
-      user: b.users_bookings_booker_user_idTousers,
-      ticket_type: b.booking_line_items?.[0]?.ticket_types?.title || 'General',
-      price: b.booking_line_items?.[0]?.ticket_types?.price || 0
+      user: b.users ? {
+        id: b.users.id,
+        display_name: b.users.profiles?.display_name || b.users.first_name || 'Guest',
+        email: b.users.primary_email,
+        picture: b.users.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(b.users.profile_image_data).toString('base64')}` : null,
+      } : null,
+      ticket_type: b.booking_line_items?.[0]?.ticket_types?.name || 'General',
+      price: Number(b.booking_line_items?.[0]?.ticket_types?.price_amount_minor || 0)
     }));
   }
 

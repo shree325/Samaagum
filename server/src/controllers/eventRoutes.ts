@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { EventService } from '../services/EventService';
 import { EventInvitationService } from '../services/EventInvitationService';
 import { TicketRealtimeService } from '../services/TicketRealtimeService';
+import { EventExportController } from '../controllers/EventExportController';
 import prisma from '../config/prisma';
 import QRCode from 'qrcode';
 import { sendEmail, generateTicketHtml } from '../utils/email';
@@ -897,6 +898,9 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
         }
     });
 
+    fastify.get('/:id/export/summary', { preHandler: [(fastify as any).authenticate] }, EventExportController.summary);
+    fastify.get('/:id/export', { preHandler: [(fastify as any).authenticate] }, EventExportController.export);
+
     // GET /:id/dashboard-stats
     fastify.get('/:id/dashboard-stats', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
         try {
@@ -1077,6 +1081,13 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                 }
             }
 
+            // Accurate count via dedicated COUNT (not take:6)
+            const waitlistTotalCount = await prisma.bookings.count({
+              where: { event_id: id, status: 'waitlisted' }
+            });
+            const waitlistAll = await EventService.getWaitlist(id);
+            const waitlistEnabled = (event.settings as any)?.capacity?.waitlist === true;
+
             return {
                 success: true,
                 data: {
@@ -1086,6 +1097,15 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                     revenue: totalRevenueMinor / 100,
                     capacity: event.capacity_total || 120,
                     wishlistCount,
+                    waitlistEnabled,
+                    waitlistCount: waitlistTotalCount,
+                    waitlist: waitlistAll.slice(0, 5).map((b, idx) => ({
+                      id: b.id,
+                      userId: b.user?.id || null,
+                      name: b.user?.display_name || 'Guest',
+                      joinedAt: b.created_at?.toISOString?.() || null,
+                      position: idx + 1,
+                    })),
                     confirmed: confirmedAttendees.map(a => {
                         let parsedAnswers = {};
                         try {
@@ -1138,6 +1158,48 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                     }
                 }
             };
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // GET /:id/dashboard-waitlist
+    fastify.get('/:id/dashboard-waitlist', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id } = request.params as any;
+
+            const isAdmin = await EventService.verifyEventAdmin(request.user.id, id);
+            if (!isAdmin) {
+                return reply.status(403).send({ success: false, message: 'Forbidden' });
+            }
+
+            const event = await prisma.events.findUnique({
+                where: { id },
+                select: { settings: true, capacity_total: true }
+            });
+            if (!event) return reply.status(404).send({ success: false, message: 'Event not found' });
+
+            const waitlistAll = await EventService.getWaitlist(id);
+            const waitlistCount = await prisma.bookings.count({
+                where: { event_id: id, status: 'waitlisted' }
+            });
+            const waitlistEnabled = (event.settings as any)?.capacity?.waitlist === true;
+
+            return reply.send({
+                success: true,
+                data: {
+                    waitlistEnabled,
+                    waitlistCount,
+                    waitlist: waitlistAll.slice(0, 5).map((b, idx) => ({
+                        id: b.id,
+                        userId: b.user?.id || null,
+                        name: b.user?.display_name || 'Guest',
+                        joinedAt: b.created_at?.toISOString?.() || null,
+                        position: idx + 1,
+                    }))
+                }
+            });
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });
         }

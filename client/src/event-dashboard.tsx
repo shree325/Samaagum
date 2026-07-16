@@ -41,6 +41,13 @@ interface BookingRecord {
   status: 'confirmed' | 'pending_payment' | 'pending_approval' | 'rejected' | 'cancelled';
   createdAt: string;
 }
+interface WaitlistEntry {
+  id: string;
+  userId: string | null;
+  name: string;
+  joinedAt: string | null;
+  position: number;
+}
 interface DashboardStats {
   totalAttendees: number;
   checkedInCount: number;
@@ -51,6 +58,9 @@ interface DashboardStats {
   confirmed: ConfirmedAttendee[];
   requests: PendingRequest[];
   bookings: BookingRecord[];
+  waitlistEnabled: boolean;
+  waitlist: WaitlistEntry[];
+  waitlistCount: number;
   locations?: {
     totalMapped: number;
     totalUnknown: number;
@@ -194,8 +204,17 @@ const DEMO_STATS: DashboardStats = {
   checkedInCount: 856,
   pendingRequestsCount: 24,
   revenue: 184500,
-  capacity: 2000,
+  capacity: 1248,
   wishlistCount: 380,
+  waitlistEnabled: true,
+  waitlistCount: 12,
+  waitlist: [
+    { id:'w1', userId:'wu1', name:'Neha Verma',    joinedAt: new Date(Date.now()-600000).toISOString(),  position:1 },
+    { id:'w2', userId:'wu2', name:'Aman Kumar',    joinedAt: new Date(Date.now()-720000).toISOString(),  position:2 },
+    { id:'w3', userId:'wu3', name:'Kavya Singh',   joinedAt: new Date(Date.now()-900000).toISOString(),  position:3 },
+    { id:'w4', userId:'wu4', name:'Darshan Rathi', joinedAt: new Date(Date.now()-1080000).toISOString(), position:4 },
+    { id:'w5', userId:'wu5', name:'Meera Iyer',    joinedAt: new Date(Date.now()-1260000).toISOString(), position:5 },
+  ],
   confirmed: [
     { id: 'a1', userId: 'u1', bookingId: 'b1', name: 'Prathmesh Sangale', email: 'p@ex.com', checkinStatus: 'checked_in', bookingStatus: 'confirmed', isCashPayment: false, amountMinor: 149900, answers: {}, ticketTypeName: 'VIP Ticket', time: '10:42 AM' },
     { id: 'a2', userId: 'u2', bookingId: 'b2', name: 'Rahul Sharma', email: 'r@ex.com', checkinStatus: 'checked_in', bookingStatus: 'confirmed', isCashPayment: false, amountMinor: 79900, answers: {}, ticketTypeName: 'General', time: '10:40 AM' },
@@ -225,6 +244,179 @@ const DEMO_MEMBERS: EventMember[] = [
 ];
 const COLORS = ['#8b5cf6', '#10b981', '#3b82f6', '#f59e0b', '#ef4444'];
 
+function relativeTime(iso: string | null): string {
+  if (!iso) return '';
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (diff < 60)         return 'Just now';
+  if (diff < 3600)       return `${Math.floor(diff / 60)} min ago`;
+  if (diff < 86400)      return `${Math.floor(diff / 3600)} hour${Math.floor(diff/3600)>1?'s':''} ago`;
+  return `${Math.floor(diff / 86400)} day${Math.floor(diff/86400)>1?'s':''} ago`;
+}
+
+/* ================================================================
+   EXPORT CSV COMPONENT
+   ================================================================ */
+function ExportCsvModal({ ev, onClose }: { ev: any; onClose: () => void }) {
+  const [summary, setSummary] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [exportingKey, setExportingKey] = useState<string | null>(null);
+  const [customFieldFilter, setCustomFieldFilter] = useState('confirmed');
+
+  useEffect(() => {
+    let active = true;
+    const fetchSummary = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`/api/events/${ev.id}/export/summary`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const json = await res.json();
+        if (active && json.success) {
+          setSummary(json.data);
+          setLoading(false);
+        }
+      } catch (err) {
+        if (active) setLoading(false);
+      }
+    };
+    fetchSummary();
+    return () => { active = false; };
+  }, [ev.id]);
+
+  const handleExport = async (type: string) => {
+    setExportingKey(type);
+    try {
+      const token = localStorage.getItem('token');
+      const url = new URL(`/api/events/${ev.id}/export`, window.location.origin);
+      url.searchParams.set('type', type);
+      url.searchParams.set('format', 'csv');
+      if (type === 'custom-fields') {
+        url.searchParams.set('filter', customFieldFilter);
+      }
+
+      const res = await fetch(url.toString(), {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        if (window.toast) window.toast(json.message || `Export failed (${res.status})`, 'error');
+        setExportingKey(null);
+        return;
+      }
+
+      // Check Content-Disposition for filename
+      let filename = `${ev.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${type}.csv`;
+      const disposition = res.headers.get('Content-Disposition');
+      if (disposition && disposition.indexOf('filename=') !== -1) {
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        if (match && match[1]) filename = match[1];
+      }
+
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+
+      if (window.toast) window.toast("Export downloaded successfully", "success");
+    } catch (err) {
+      if (window.toast) window.toast("An error occurred during export", "error");
+    } finally {
+      setExportingKey(null);
+    }
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={onClose} />
+      <div className="view-enter" style={{ position: 'relative', background: 'var(--surface)', borderRadius: 20, width: '100%', maxWidth: 520, boxShadow: '0 20px 40px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
+        
+        <div style={{ padding: '24px 24px 20px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--ink)' }}>Export CSV</h2>
+            <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--ink-3)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: '50%' }}>
+              <I.x style={{ width: 20, height: 20 }} />
+            </button>
+          </div>
+        </div>
+
+        <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {loading ? (
+            <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)' }}>Loading export options...</div>
+          ) : !summary ? (
+            <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--red)' }}>Failed to load export summary.</div>
+          ) : (
+            Object.entries(summary).map(([key, data]: [string, any]) => {
+              if (!data.enabled && data.count === 0) return null;
+
+              const isGenerating = exportingKey === key;
+              const disabled = data.count === 0 || exportingKey !== null;
+
+              return (
+                <div key={key} style={{ border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: 16, display: 'flex', flexDirection: 'column', gap: 12, background: 'var(--field)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+                    <div>
+                      <div style={{ fontWeight: 600, color: 'var(--ink)', fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {key === 'ticketSales' && '📊 '}
+                        {key === 'attendees' && '👥 '}
+                        {key === 'approvals' && '⏳ '}
+                        {key === 'waitlist' && '📋 '}
+                        {key === 'checkins' && '✅ '}
+                        {key === 'customFields' && '📝 '}
+                        {key === 'revenue' && '💳 '}
+                        {data.title}
+                      </div>
+                      <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 4 }}>{data.description}</div>
+                      <div style={{ fontSize: 13, color: 'var(--brand)', fontWeight: 500, marginTop: 4 }}>{data.countLabel}</div>
+                    </div>
+                    
+                    <button 
+                      className={`hbtn ${isGenerating ? 'hbtn--soft' : 'hbtn--primary'} hbtn--sm`} 
+                      disabled={disabled}
+                      onClick={() => handleExport(key)}
+                      style={{ whiteSpace: 'nowrap', opacity: disabled && !isGenerating ? 0.5 : 1 }}
+                    >
+                      {isGenerating ? (
+                        <>Preparing export...</>
+                      ) : data.count === 0 ? (
+                        <>Disabled</>
+                      ) : (
+                        <>Export CSV</>
+                      )}
+                    </button>
+                  </div>
+
+                  {key === 'customFields' && data.count > 0 && (
+                    <div style={{ display: 'flex', gap: 16, marginTop: 8, padding: '12px 16px', background: 'var(--surface)', borderRadius: 'var(--r-sm)', border: '1px solid var(--border)' }}>
+                      {['confirmed', 'pending', 'waitlist', 'all'].map(f => (
+                        <label key={f} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer' }}>
+                          <input 
+                            type="radio" 
+                            name={`customFieldFilter-${key}`}
+                            checked={customFieldFilter === f}
+                            onChange={() => setCustomFieldFilter(f)}
+                            style={{ accentColor: 'var(--brand)', margin: 0 }}
+                          />
+                          {f.charAt(0).toUpperCase() + f.slice(1)}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ================================================================
    MAIN COMPONENT
    ================================================================ */
@@ -245,6 +437,14 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
 
   // Tab state
   const [activeTab, setActiveTab] = useState<'registered' | 'pending' | 'checkedIn' | 'revenue'>('registered');
+
+  // Isolated waitlist state
+  const [waitlistPreview, setWaitlistPreview] = useState<WaitlistEntry[]>([]);
+  const [waitlistCount, setWaitlistCount]     = useState(0);
+  const [waitlistEnabled, setWaitlistEnabled] = useState(false);
+
+  // Export CSV state
+  const [showExportModal, setShowExportModal] = useState(false);
 
   // Pending actions state
   const [selectedRequests, setSelectedRequests] = useState<string[]>([]);
@@ -277,12 +477,32 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
       const data = await res.json();
-      if (data.success) setStats(data.data);
+      if (data.success) {
+        setStats(data.data);
+        setWaitlistPreview(data.data.waitlist ?? []);
+        setWaitlistCount(data.data.waitlistCount ?? 0);
+        setWaitlistEnabled(data.data.waitlistEnabled ?? false);
+      }
       else setError(data.message || 'Failed to load dashboard data.');
     } catch {
       setError('Network error loading dashboard.');
     }
-  }, [e?.id]);
+  }, [e?.id, apiBase, token]);
+
+  const fetchWaitlistOnly = useCallback(async () => {
+    if (!e?.id) return;
+    try {
+      const res = await fetch(`${apiBase}/api/events/${e.id}/dashboard-waitlist`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      const data = await res.json();
+      if (data.success) {
+        setWaitlistPreview(data.data.waitlist ?? []);
+        setWaitlistCount(data.data.waitlistCount ?? 0);
+        setWaitlistEnabled(data.data.waitlistEnabled ?? false);
+      }
+    } catch {}
+  }, [e?.id, apiBase, token]);
 
   const fetchMembers = useCallback(async () => {
     if (!e?.id) return;
@@ -314,7 +534,8 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
   /* -------- Active data -------- */
   const activeStats = isDemoMode ? DEMO_STATS : (stats ?? {
     totalAttendees: 0, checkedInCount: 0, pendingRequestsCount: 0,
-    revenue: 0, capacity: 0, wishlistCount: 0, confirmed: [], requests: [], bookings: []
+    revenue: 0, capacity: 0, wishlistCount: 0, confirmed: [], requests: [], bookings: [],
+    waitlistEnabled: false, waitlist: [], waitlistCount: 0,
   } as DashboardStats);
   const activeMembers = isDemoMode ? DEMO_MEMBERS : members;
 
@@ -330,6 +551,24 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
       setActiveTab('registered');
     }
   }, [isPaidEvent, activeTab]);
+
+  useEffect(() => {
+    if (!e?.id || typeof window.io === 'undefined') return;
+    const apiBaseUrl = window.location.port === '8080' ? 'http://localhost:3000' : '';
+    const socket = window.io(`${apiBaseUrl}/groups`, { transports: ['websocket'] });
+    socket.emit('join_event', e.id);
+
+    socket.on('waitlist_updated', (payload: any) => {
+      if (payload?.eventId === e.id || !payload?.eventId) {
+        fetchWaitlistOnly();
+      }
+    });
+
+    return () => {
+      socket.emit('leave_event', e.id);
+      socket.disconnect();
+    };
+  }, [e?.id, fetchWaitlistOnly]);
 
   /* -------- Derived metrics (useMemo) -------- */
   const checkinPercentage = useMemo(() =>
@@ -531,7 +770,7 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
     return [
       { name: 'Pending',  value: bList.filter(b => b.status === 'pending_approval').length },
       { name: 'Approved', value: bList.filter(b => b.status === 'confirmed' || b.status === 'pending_payment').length },
-      { name: 'Rejected', value: bList.filter(b => b.status === 'rejected').length },
+      { name: 'Rejected', value: bList.filter(b => b.status === 'cancelled').length },
     ];
   }, [activeStats.bookings]);
 
@@ -596,7 +835,7 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
         if (!hourMap[hourLabel]) hourMap[hourLabel] = { received: 0, approved: 0, rejected: 0 };
         hourMap[hourLabel].received++;
         if (b.status === 'confirmed' || b.status === 'pending_payment') hourMap[hourLabel].approved++;
-        else if (b.status === 'rejected') hourMap[hourLabel].rejected++;
+        else if (b.status === 'cancelled') hourMap[hourLabel].rejected++;
       });
       const sortedHours = Object.keys(hourMap).sort((a, b) => {
         const parseHour = (h: string) => {
@@ -622,7 +861,7 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
       dateMap[dateKey].received++;
       if (b.status === 'confirmed' || b.status === 'pending_payment') {
         dateMap[dateKey].approved++;
-      } else if (b.status === 'rejected') {
+      } else if (b.status === 'cancelled') {
         dateMap[dateKey].rejected++;
       }
     });
@@ -950,8 +1189,12 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
      SECTION RENDERERS
      ================================================================ */
 
-  const renderRegisteredSection = () => (
-    <div className="dash-section" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+  const renderRegisteredSection = () => {
+    const isCapacityFull = activeStats.capacity > 0 && activeStats.totalAttendees >= activeStats.capacity;
+    const showSplitLayout = isCapacityFull && waitlistEnabled && waitlistPreview.length > 0;
+
+    return (
+      <div className="dash-section" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
       {/* Row 1: Attendee Overview (left) + Check-in Progress (right) */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
@@ -1073,60 +1316,149 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
         </div>
       </div>
 
-      {/* Row 2: Recent Members */}
-      <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--border)', padding: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--ink)' }}>Recent Members</h3>
-          <button className="hbtn hbtn--soft hbtn--sm" style={{ color: '#6366f1', background: 'transparent', border: 'none', fontWeight: 600 }}>
-            View all
-          </button>
+      {/* Row 2: Recent Members + optional Waitlist Queue */}
+      <div style={{
+        display: 'flex',
+        gap: 16,
+        alignItems: 'flex-start',
+        flexWrap: 'wrap',
+      }}>
+        {/* ── Left: Recent Members (75% or 100%) ── */}
+        <div style={{
+          flex: showSplitLayout ? '3 1 0' : '1 1 100%',
+          minWidth: 0,
+          background: 'var(--surface)', borderRadius: 16,
+          border: '1px solid var(--border)', padding: 24,
+          transition: 'flex 0.25s ease',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--ink)' }}>Recent Members</h3>
+            <button className="hbtn hbtn--soft hbtn--sm" style={{ color: '#6366f1', background: 'transparent', border: 'none', fontWeight: 600 }}>
+              View all
+            </button>
+          </div>
+
+          {confirmed.length === 0 && !isDemoMode ? (
+            <EmptyState title="No members yet" message="New member registrations will appear here." />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {confirmed.slice(0, 5).map((u, idx) => {
+                const memberRecord = activeMembers.find(m => m.userId === u.userId);
+                const role = memberRecord?.role ?? 'Member';
+                const rolePalette: Record<string, { bg: string; color: string }> = {
+                  Admin:     { bg: 'rgba(239,68,68,0.1)',   color: '#ef4444' },
+                  Moderator: { bg: 'rgba(245,158,11,0.1)',  color: '#f59e0b' },
+                  Member:    { bg: 'rgba(139,92,246,0.12)', color: '#8b5cf6' },
+                  Guest:     { bg: 'rgba(59,130,246,0.1)',  color: '#3b82f6' },
+                };
+                const { bg: roleBg, color: roleColor } = rolePalette[role] ?? rolePalette.Member;
+                return (
+                  <div key={u.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0',
+                    borderBottom: idx < Math.min(confirmed.length, 5) - 1 ? '1px solid var(--border)' : 'none',
+                  }}>
+                    <Avatar name={u.name} size={40} />
+                    {/* Name + role badge */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 200 }}>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{u.name}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 999, background: roleBg, color: roleColor }}>{role}</span>
+                    </div>
+                    {/* Joined date — only in demo (no createdAt in live API) */}
+                    <div style={{ flex: 1 }}>
+                      {isDemoMode && u.time && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--ink-3)' }}>
+                          <I.cal style={{ width: 13, height: 13 }} />
+                          Joined {u.time}
+                        </div>
+                      )}
+                    </div>
+                    {/* Status badge */}
+                    <span style={{
+                      fontSize: 12, fontWeight: 600, padding: '4px 12px', borderRadius: 999,
+                      background: u.bookingStatus === 'confirmed' ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
+                      color: u.bookingStatus === 'confirmed' ? '#059669' : '#d97706',
+                    }}>
+                      {u.bookingStatus === 'confirmed' ? 'Confirmed' : 'Pending Payment'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {confirmed.length === 0 && !isDemoMode ? (
-          <EmptyState title="No members yet" message="New member registrations will appear here." />
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {confirmed.slice(0, 5).map((u, idx) => {
-              const memberRecord = activeMembers.find(m => m.userId === u.userId);
-              const role = memberRecord?.role ?? 'Member';
-              const rolePalette: Record<string, { bg: string; color: string }> = {
-                Admin:     { bg: 'rgba(239,68,68,0.1)',   color: '#ef4444' },
-                Moderator: { bg: 'rgba(245,158,11,0.1)',  color: '#f59e0b' },
-                Member:    { bg: 'rgba(139,92,246,0.12)', color: '#8b5cf6' },
-                Guest:     { bg: 'rgba(59,130,246,0.1)',  color: '#3b82f6' },
-              };
-              const { bg: roleBg, color: roleColor } = rolePalette[role] ?? rolePalette.Member;
-              return (
-                <div key={u.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0',
-                  borderBottom: idx < Math.min(confirmed.length, 5) - 1 ? '1px solid var(--border)' : 'none',
+        {/* ── Right: Waitlist Queue (25%) — only when split ── */}
+        {showSplitLayout && (
+          <div style={{
+            flex: '1 1 0', minWidth: 220,
+            background: 'var(--surface)', borderRadius: 16,
+            border: '1px solid var(--border)', padding: 24,
+            animation: 'wq-fade-in 0.25s ease forwards',
+          }}>
+            <style>{`
+              @keyframes wq-fade-in { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+            `}</style>
+            
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <I.users style={{ width: 16, height: 16, color: '#6366f1' }} />
+                <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--ink)' }}>Waitlist Queue</h3>
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: '2px 7px',
+                  borderRadius: 999, background: 'rgba(99,102,241,0.12)', color: '#6366f1'
                 }}>
-                  <Avatar name={u.name} size={40} />
-                  {/* Name + role badge */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 200 }}>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{u.name}</span>
-                    <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 999, background: roleBg, color: roleColor }}>{role}</span>
-                  </div>
-                  {/* Joined date — only in demo (no createdAt in live API) */}
-                  <div style={{ flex: 1 }}>
-                    {isDemoMode && u.time && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--ink-3)' }}>
-                        <I.cal style={{ width: 13, height: 13 }} />
-                        Joined {u.time}
+                  {waitlistCount}
+                </span>
+              </div>
+              <button
+                className="hbtn hbtn--soft hbtn--sm"
+                style={{ color: '#6366f1', background: 'transparent', border: 'none', fontWeight: 600 }}
+                onClick={() => go('waitlist', e)}
+              >
+                View all
+              </button>
+            </div>
+
+            {/* Queue entries */}
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {waitlistPreview.map((entry, idx) => (
+                <div key={entry.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0',
+                  borderBottom: idx < waitlistPreview.length - 1 ? '1px solid var(--border)' : 'none',
+                }}>
+                  <span style={{
+                    width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                    background: 'rgba(99,102,241,0.1)', color: '#6366f1',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 11, fontWeight: 700,
+                  }}>
+                    #{entry.position}
+                  </span>
+                  <Avatar name={entry.name} size={32} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {entry.name}
+                    </div>
+                    {entry.joinedAt && (
+                      <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 1 }}>
+                        Joined {relativeTime(entry.joinedAt)}
                       </div>
                     )}
                   </div>
-                  {/* Status badge */}
-                  <span style={{
-                    fontSize: 12, fontWeight: 600, padding: '4px 12px', borderRadius: 999,
-                    background: u.bookingStatus === 'confirmed' ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
-                    color: u.bookingStatus === 'confirmed' ? '#059669' : '#d97706',
-                  }}>
-                    {u.bookingStatus === 'confirmed' ? 'Confirmed' : 'Pending Payment'}
-                  </span>
                 </div>
-              );
-            })}
+              ))}
+            </div>
+
+            {/* Footer */}
+            {waitlistCount > 5 && (
+              <div style={{
+                marginTop: 16, textAlign: 'center', fontSize: 12,
+                color: 'var(--ink-3)', borderTop: '1px solid var(--border)', paddingTop: 12,
+              }}>
+                {waitlistCount} people in waitlist
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1713,6 +2045,7 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
       </div>
     </div>
   );
+};
   /* -------- Section 2: Pending Requests -------- */
   const renderPendingSection = () => (
     <div className="dash-section" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -1724,7 +2057,7 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
         <StatCard icon={<I.check style={{ width: 20, height: 20 }} />} iconBg="rgba(16,185,129,0.1)" iconColor="#10b981"
           value={activeStats.bookings.filter(b => b.status === 'confirmed' || b.status === 'pending_payment').length.toLocaleString()} label="Approved" />
         <StatCard icon={<I.filter style={{ width: 20, height: 20 }} />} iconBg="rgba(239,68,68,0.1)" iconColor="#ef4444"
-          value={activeStats.bookings.filter(b => b.status === 'rejected').length.toLocaleString()} label="Rejected" />
+          value={activeStats.bookings.filter(b => b.status === 'cancelled').length.toLocaleString()} label="Rejected" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24 }}>
@@ -2324,6 +2657,11 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
 
   return (
     <div className="scroll" style={{ background: 'var(--bg)', minHeight: '100vh' }}>
+      {/* Export CSV modal */}
+      {showExportModal && stats && (
+        <ExportCsvModal ev={e} onClose={() => setShowExportModal(false)} />
+      )}
+
       {/* Confirmation modal */}
       {confirmModal && (
         <ConfirmModal
@@ -2340,8 +2678,8 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
 
           {/* Header */}
-          {!embedded && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16 }}>
+            {!embedded ? (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
                   <button className="back" onClick={() => go('events')} style={{ width: 36, height: 36, background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, cursor: 'pointer' }}>
@@ -2352,11 +2690,27 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
                 <h1 style={{ fontSize: 30, fontWeight: 800, margin: '0 0 8px', color: 'var(--ink)', letterSpacing: '-0.02em' }}>{e.title || 'Dashboard Preview'}</h1>
                 <div style={{ fontSize: 14, color: 'var(--ink-3)' }}>Track and analyze your event performance</div>
               </div>
-              <button className="hbtn hbtn--primary" onClick={() => go('edit-event', e)}>
-                <I.edit style={{ width: 16, height: 16 }} /> Edit Event
+            ) : (
+              <div>
+                <h2 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 8px', color: 'var(--ink)', letterSpacing: '-0.02em' }}>Dashboard</h2>
+                <div style={{ fontSize: 14, color: 'var(--ink-3)' }}>Track and analyze your event performance</div>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button 
+                className="hbtn hbtn--soft" 
+                style={{ color: '#10b981', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}
+                onClick={() => setShowExportModal(true)}
+              >
+                <I.download style={{ width: 16, height: 16 }} /> Export CSV
               </button>
+              {!embedded && (
+                <button className="hbtn hbtn--primary" onClick={() => go('edit-event', e)}>
+                  <I.edit style={{ width: 16, height: 16 }} /> Edit Event
+                </button>
+              )}
             </div>
-          )}
+          </div>
 
           {/* Banners */}
           {isDemoMode && (
