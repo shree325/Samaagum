@@ -240,6 +240,7 @@ export function JoinEventPage({ ev, st, go }) {
     const [qty, setQty] = React.useState(1);
     const [showTicketPopup, setShowTicketPopup] = useState(false);
     const [expandedTicketDetails, setExpandedTicketDetails] = useState<Record<string, boolean>>({});
+    const [checkoutTransactionId, setCheckoutTransactionId] = useState('');
 
     const sel = tier ? tiers.find((t: any) => t.id === tier) : null;
     const evtCap = liveEvent.cap || e.cap;
@@ -587,12 +588,30 @@ export function JoinEventPage({ ev, st, go }) {
                                                 </button>
                                             ) : (
                                                 <>
+                                                    {/* Cash + Approval: Show payment instructions & Transaction ID input upfront */}
+                                                    {liveEvent.cash_enabled && liveEvent.approval_required && (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                                                            <div style={{ padding: '10px 12px', background: 'rgba(245,158,11,0.1)', color: '#f59e0b', borderRadius: 8, fontSize: 12, lineHeight: 1.5 }}>
+                                                                <strong>Cash Payment Required</strong> – Please check the event description for payment details and complete the payment before submitting.
+                                                            </div>
+                                                            <input
+                                                                type="text"
+                                                                className="cinput"
+                                                                placeholder="Transaction ID / UTR (optional)"
+                                                                value={checkoutTransactionId}
+                                                                onChange={ev => setCheckoutTransactionId(ev.target.value)}
+                                                                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--field)', fontSize: 13 }}
+                                                            />
+                                                        </div>
+                                                    )}
                                                     <button 
                                                         className="hbtn hbtn--primary hbtn--block" 
                                                         disabled={liveEvent.type !== "Free" && !tier}
-                                                        onClick={() => { register(liveEvent.id, false, { ticketTypeId: tier, qty, ticketName: sel?.n }, liveEvent.inviteToken); go("events"); }}
+                                                        onClick={() => { register(liveEvent.id, false, { ticketTypeId: tier, qty, ticketName: sel?.n, transactionId: checkoutTransactionId || undefined }, liveEvent.inviteToken); go("events"); }}
                                                     >
-                                                        {liveEvent.type === "Free" ? "Request to join" : `Get ${qty > 1 ? qty + " tickets" : "ticket"}`}
+                                                        {liveEvent.cash_enabled && liveEvent.approval_required
+                                                            ? (liveEvent.type === "Free" ? "Request to join" : 'Submit Payment Request')
+                                                            : (liveEvent.type === "Free" ? "Request to join" : `Get ${qty > 1 ? qty + " tickets" : "ticket"}`)}
                                                     </button>
                                                     {(() => {
                                                         let settingsObj = liveEvent.settings || {};

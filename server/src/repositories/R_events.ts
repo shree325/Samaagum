@@ -12,9 +12,10 @@ export class R_events implements IR_events {
         location_type, venue, online_link, capacity_total,
         registration_mode, approval_required, registration_form_id,
         cash_enabled, financial_locked_at, instruction,
-        registration_status, registration_opens_at, registration_closes_at, settings
+        registration_status, registration_opens_at, registration_closes_at, settings,
+        payment_instructions, payment_hold_hours
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
       RETURNING *;
     `;
     const values = [
@@ -28,7 +29,9 @@ export class R_events implements IR_events {
       event.registration_form_id, event.cash_enabled ?? false,
       event.financial_locked_at, event.instruction,
       event.registration_status ?? 'OPEN', event.registration_opens_at ?? null, event.registration_closes_at ?? null,
-      event.settings ? JSON.stringify(event.settings) : null
+      event.settings ? JSON.stringify(event.settings) : null,
+      event.payment_instructions ?? null,
+      event.payment_hold_hours ?? 48
     ];
     const result = await this.db.query(query, values);
     return result.rows[0];
@@ -94,6 +97,8 @@ export class R_events implements IR_events {
     addField('registration_opens_at', 'registration_opens_at');
     addField('registration_closes_at', 'registration_closes_at');
     addField('settings', 'settings', v => JSON.stringify(v));
+    addField('payment_instructions', 'payment_instructions');
+    addField('payment_hold_hours', 'payment_hold_hours');
 
     if (fields.length === 0) {
       const current = await this.db.query('SELECT * FROM events WHERE id = $1', [id]);

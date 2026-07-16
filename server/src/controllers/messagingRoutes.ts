@@ -1847,6 +1847,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       }
 
       const isCash = event.cash_enabled === true;
+      const submittedTransactionId = (answers as any).transactionId || null;
       const initialStatus = isWaitlisted 
         ? 'waitlisted' 
         : (approvalRequired ? 'pending_approval' : (isCash ? 'pending_payment' : 'confirmed'));
@@ -1891,7 +1892,11 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             status: initialStatus as any,
             payment_method: paymentMethod,
             total_amount_minor: ticketPriceMinor * requestedQty,
-            total_currency: 'INR'
+            total_currency: 'INR',
+            hold_expires_at: initialStatus === 'pending_payment'
+              ? new Date(Date.now() + ((event as any).payment_hold_hours || 48) * 60 * 60 * 1000)
+              : null,
+            ...(submittedTransactionId ? { payment_proof_url: submittedTransactionId } : {})
           }
         });
 
@@ -2103,39 +2108,43 @@ export async function messagingRoutes(fastify: FastifyInstance) {
 
         let emailMsg = '';
         if (requesterEmail) {
-          try {
-            const dateStr = event.starts_at ? new Date(event.starts_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'TBD';
-            const vObj = (event.venue as any) || {};
-            const venueStr = vObj.address || vObj.name || event.location_type || 'TBD';
-            const lineItems = await prisma.booking_line_items.findMany({ where: { booking_id: booking.id } });
-            const bookingQty = lineItems.reduce((sum, item) => sum + item.quantity, 0);
-            const totalPaidMinor = booking.total_amount_minor ? Number(booking.total_amount_minor) : 0;
-            const paidStr = totalPaidMinor > 0 ? formatCurrency(totalPaidMinor, booking.total_currency || 'INR') : 'Free';
+          if (initialStatus === 'confirmed') {
+            try {
+              const dateStr = event.starts_at ? new Date(event.starts_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'TBD';
+              const vObj = (event.venue as any) || {};
+              const venueStr = vObj.address || vObj.name || event.location_type || 'TBD';
+              const lineItems = await prisma.booking_line_items.findMany({ where: { booking_id: booking.id } });
+              const bookingQty = lineItems.reduce((sum, item) => sum + item.quantity, 0);
+              const totalPaidMinor = booking.total_amount_minor ? Number(booking.total_amount_minor) : 0;
+              const paidStr = totalPaidMinor > 0 ? formatCurrency(totalPaidMinor, booking.total_currency || 'INR') : 'Free';
 
-            const htmlContent = generateTicketHtml({
-              qrToken: ticket.qr_token,
-              ticketCode: ticket.ticket_code || ticket.id,
-              attendeeName: requesterName,
-              dateString: dateStr,
-              venueString: venueStr,
-              paidAmount: paidStr,
-              status: ticket.status === 'confirmed' ? 'Confirmed' : 'Reserved',
-              isOnline: event.location_type === 'online',
-              onlineLink: event.online_link || '',
-              cover: (event as any).cover || ((event.venue as any)?.meta?.cover) || '',
-              quantity: bookingQty
-            });
+              const htmlContent = generateTicketHtml({
+                qrToken: ticket.qr_token,
+                ticketCode: ticket.ticket_code || ticket.id,
+                attendeeName: requesterName,
+                dateString: dateStr,
+                venueString: venueStr,
+                paidAmount: paidStr,
+                status: 'Confirmed',
+                isOnline: event.location_type === 'online',
+                onlineLink: event.online_link || '',
+                cover: (event as any).cover || ((event.venue as any)?.meta?.cover) || '',
+                quantity: bookingQty
+              });
 
-            await sendEmail({
-              to: requesterEmail,
-              subject: `Your ticket for ${event.title}`,
-              html: htmlContent
-            });
-            console.log(`Ticket email sent to ${requesterEmail}`);
-            emailMsg = ` Ticket emailed to ${requesterEmail}.`;
-          } catch (err: any) {
-            console.error('Failed to send ticket email:', err);
-            emailMsg = ` Failed to email ticket.`;
+              await sendEmail({
+                to: requesterEmail,
+                subject: `Your ticket for ${event.title}`,
+                html: htmlContent
+              });
+              console.log(`Ticket email sent to ${requesterEmail}`);
+              emailMsg = ` Ticket emailed to ${requesterEmail}.`;
+            } catch (err: any) {
+              console.error('Failed to send ticket email:', err);
+              emailMsg = ` Failed to email ticket.`;
+            }
+          } else if (initialStatus === 'pending_payment') {
+            emailMsg = ` Ticket will be emailed upon payment confirmation.`;
           }
         } else {
           emailMsg = ` No email address found for user.`;

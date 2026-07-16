@@ -250,6 +250,10 @@ const start = async () => {
         // Start event reminder scheduler (60 / 30 / 10 min before start)
         EventReminderService.startScheduler();
 
+        // Start hold expiration scheduler for cash bookings
+        const { HoldExpirationScheduler } = require('./services/HoldExpirationScheduler');
+        HoldExpirationScheduler.startScheduler();
+
         try {
             await fastify.listen({ port: PORT, host: '::' });
             console.log(`🚀 Server is running on port ${PORT} (IPv6/IPv4 dual-stack)`);

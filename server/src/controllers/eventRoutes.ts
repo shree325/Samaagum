@@ -420,10 +420,12 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
 
             let bookingStatus = null;
             let bookingId = null;
+            let paymentProofUrl = null;
             let attendeeId = null;
             let ticketId = null;
             let qrToken = null;
             let checkinStatus = null;
+            let holdExpiresAt = null;
             if (userId) {
                 const booking = await prisma.bookings.findFirst({
                     where: {
@@ -435,6 +437,8 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                 if (booking) {
                     bookingStatus = booking.status;
                     bookingId = booking.id;
+                    paymentProofUrl = booking.payment_proof_url || null;
+                    holdExpiresAt = booking.hold_expires_at || null;
                     const myAttendee = await prisma.attendees.findFirst({
                         where: { booking_id: booking.id, user_id: userId },
                         include: { tickets: true }
@@ -489,6 +493,8 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                     },
                     bookingStatus,
                     bookingId,
+                    paymentProofUrl,
+                    holdExpiresAt,
                     attendeeId,
                     ticketId,
                     qrToken,
@@ -956,7 +962,10 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
             // Pending join requests
             const pendingRequests = await prisma.attendees.findMany({
                 where: { bookings: { event_id: id, status: 'pending_approval' } },
-                include: { users_attendees_user_idTousers: { select: { profile_image_data: true } } }
+                include: {
+                    users_attendees_user_idTousers: { select: { profile_image_data: true } },
+                    bookings: { select: { payment_proof_url: true, payment_method: true } }
+                }
             });
 
             const totalRevenueMinor = bookings
@@ -1149,6 +1158,7 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                         } catch (e) {}
                         const userPic = (r as any).users_attendees_user_idTousers?.profile_image_data;
                         const picture = userPic ? `data:image/jpeg;base64,${Buffer.from(userPic).toString('base64')}` : null;
+                        const bk = (r as any).bookings;
                         return {
                             id: r.id,
                             userId: r.user_id,
@@ -1156,7 +1166,9 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                             name: r.name,
                             email: r.email,
                             picture,
-                            answers: parsedAnswers
+                            answers: parsedAnswers,
+                            transactionId: bk?.payment_proof_url || null,
+                            isCash: bk?.payment_method === 'cash'
                         };
                     }),
                     bookings: bookings.map(b => ({
@@ -1164,6 +1176,63 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                         status: b.status,
                         createdAt: b.created_at
                     })),
+                    cashBookings: (await prisma.bookings.findMany({
+                        where: { event_id: id, payment_method: 'cash' },
+                        include: {
+                            users: { select: { first_name: true, last_name: true, primary_email: true } },
+                            booking_line_items: {
+                                include: {
+                                    ticket_types: { select: { name: true } }
+                                }
+                            }
+                        },
+                        orderBy: { created_at: 'desc' }
+                    })).map(b => ({
+                        id: b.id,
+                        status: b.status,
+                        payment_proof_url: b.payment_proof_url,
+                        total_amount_minor: b.total_amount_minor ? Number(b.total_amount_minor) : 0,
+                        created_at: b.created_at,
+                        hold_expires_at: b.hold_expires_at,
+                        users: {
+                            display_name: `${(b as any).users?.first_name || ''} ${(b as any).users?.last_name || ''}`.trim() || 'Guest',
+                            email: (b as any).users?.primary_email || 'N/A'
+                        },
+                        booking_line_items: (b as any).booking_line_items.map((li: any) => ({
+                            ticket_types: {
+                                name: li.ticket_types?.name || 'Ticket'
+                            }
+                        }))
+                    })),
+                    auditLogs: await (async () => {
+                        const rawLogs = await prisma.event_registration_log.findMany({
+                            where: { event_id: id },
+                            include: {
+                                users: { select: { first_name: true, last_name: true } }
+                            },
+                            orderBy: { created_at: 'desc' }
+                        });
+                        const logBookingIds = Array.from(new Set(rawLogs.map(l => l.booking_id).filter(Boolean))) as string[];
+                        const logBookings = logBookingIds.length > 0 ? await prisma.bookings.findMany({
+                            where: { id: { in: logBookingIds } },
+                            include: { users: { select: { first_name: true, last_name: true } } }
+                        }) : [];
+                        const logBookingsMap = new Map(logBookings.map(b => [b.id, b]));
+                        
+                        return rawLogs.map(l => {
+                            const targetBooking = l.booking_id ? logBookingsMap.get(l.booking_id) : null;
+                            const targetUser = targetBooking ? `${(targetBooking as any).users?.first_name || ''} ${(targetBooking as any).users?.last_name || ''}`.trim() : null;
+                            return {
+                                id: l.id,
+                                changedBy: `${(l as any).users?.first_name || ''} ${(l as any).users?.last_name || ''}`.trim() || 'System',
+                                targetUser,
+                                action: l.action,
+                                bookingId: l.booking_id,
+                                remarks: l.remarks,
+                                createdAt: l.created_at
+                            };
+                        });
+                    })(),
                     locations: {
                         totalMapped,
                         totalUnknown,
@@ -1238,11 +1307,13 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
             }
 
             const isCash = booking.payment_method === 'cash';
+            // If cash booking already has a transaction ID (pay-then-approve flow), confirm immediately
+            const cashAlreadyPaid = isCash && !!booking.payment_proof_url;
             const nextStatus = action === 'accept'
-                ? (isCash ? 'pending_payment' : 'confirmed')
+                ? (isCash && !cashAlreadyPaid ? 'pending_payment' : 'confirmed')
                 : 'cancelled';
             const nextTicketStatus = action === 'accept'
-                ? (isCash ? 'reserved' : 'confirmed')
+                ? (isCash && !cashAlreadyPaid ? 'reserved' : 'confirmed')
                 : 'cancelled';
 
             await prisma.$transaction(async (tx) => {
@@ -1354,26 +1425,27 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                             const bookingQty = lineItems.reduce((sum, item) => sum + item.quantity, 0);
                             const totalPaidMinor = booking.total_amount_minor ? Number(booking.total_amount_minor) : 0;
                             const paidStr = totalPaidMinor > 0 ? formatCurrency(totalPaidMinor, booking.total_currency || 'INR') : 'Free';
-
-                            const htmlContent = generateTicketHtml({
-                                qrToken: tk.qr_token,
-                                ticketCode: tk.ticket_code || tk.id,
-                                attendeeName: guestName,
-                                dateString: dateStr,
-                                venueString: venueStr,
-                                paidAmount: paidStr,
-                                status: booking.payment_method === 'cash' ? 'Pending Payment (Cash)' : 'Confirmed',
-                                isOnline: event?.location_type === 'online',
-                                onlineLink: event?.online_link || '',
-                                cover: (event as any)?.cover || ((event?.venue as any)?.meta?.cover) || '',
-                                quantity: bookingQty
-                            });
-                            await sendEmail({
-                                to: guestUser.primary_email,
-                                subject: `Your ticket for ${event?.title}`,
-                                html: htmlContent
-                            });
-                            console.log(`[eventRoutes] Ticket email sent to ${guestUser.primary_email} after admin approval`);
+                            if (booking.payment_method !== 'cash') {
+                                const htmlContent = generateTicketHtml({
+                                    qrToken: tk.qr_token,
+                                    ticketCode: tk.ticket_code || tk.id,
+                                    attendeeName: guestName,
+                                    dateString: dateStr,
+                                    venueString: venueStr,
+                                    paidAmount: paidStr,
+                                    status: 'Confirmed',
+                                    isOnline: event?.location_type === 'online',
+                                    onlineLink: event?.online_link || '',
+                                    cover: (event as any)?.cover || ((event?.venue as any)?.meta?.cover) || '',
+                                    quantity: bookingQty
+                                });
+                                await sendEmail({
+                                    to: guestUser.primary_email,
+                                    subject: `Your ticket for ${event?.title}`,
+                                    html: htmlContent
+                                });
+                                console.log(`[eventRoutes] Ticket email sent to ${guestUser.primary_email} after admin approval`);
+                            }
                         }
                     }
                 } catch (emailErr: any) {
@@ -2169,6 +2241,211 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                 success: true,
                 data: { event: validation.event, purpose: validation.invite?.purpose }
             });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // POST /:id/bookings/:bookingId/confirm-cash
+    fastify.post('/:id/bookings/:bookingId/confirm-cash', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, bookingId } = request.params as any;
+            const { remarks } = request.body as any || {};
+
+            const isAdmin = await EventService.verifyEventAdmin(request.user.id, id);
+            if (!isAdmin) return reply.status(403).send({ success: false, message: 'Forbidden' });
+
+            const booking = await prisma.bookings.findUnique({
+                where: { id: bookingId },
+                include: { events: true }
+            });
+            if (!booking) return reply.status(404).send({ success: false, message: 'Booking not found' });
+
+            await prisma.$transaction(async (tx) => {
+                await tx.bookings.update({
+                    where: { id: bookingId },
+                    data: { status: 'confirmed' }
+                });
+
+                const lineItems = await tx.booking_line_items.findMany({
+                    where: { booking_id: bookingId }
+                });
+
+                for (const li of lineItems) {
+                    await tx.tickets.updateMany({
+                        where: { line_item_id: li.id },
+                        data: { status: 'confirmed' }
+                    });
+                }
+
+                await tx.$executeRawUnsafe(
+                    `INSERT INTO event_registration_log (event_id, changed_by, action, booking_id, remarks)
+                     VALUES ($1::uuid, $2::uuid, $3, $4::uuid, $5)`,
+                    id, request.user.id, 'status_changed_to_confirmed', bookingId, remarks || 'Payment confirmed by host'
+                );
+            });
+
+            // Try sending confirmation email
+            try {
+                const attendee = await prisma.attendees.findFirst({
+                    where: { booking_id: bookingId }
+                });
+                if (attendee && attendee.email && booking.events) {
+                    const { sendEmail, generateTicketHtml, formatCurrency } = require('../utils/email');
+                    const dateStr = booking.events.starts_at ? new Date(booking.events.starts_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'TBD';
+                    const vObj = (booking.events.venue as any) || {};
+                    const venueStr = vObj.address || vObj.name || booking.events.location_type || 'TBD';
+                    const lineItems = await prisma.booking_line_items.findMany({ where: { booking_id: bookingId } });
+                    const bookingQty = lineItems.reduce((sum, item) => sum + item.quantity, 0);
+                    const totalPaidMinor = booking.total_amount_minor ? Number(booking.total_amount_minor) : 0;
+                    const paidStr = totalPaidMinor > 0 ? formatCurrency(totalPaidMinor, booking.total_currency || 'INR') : 'Free';
+
+                    const ticketRecord = await prisma.tickets.findFirst({
+                        where: { line_item_id: { in: lineItems.map(li => li.id) } }
+                    });
+
+                    if (ticketRecord) {
+                        const htmlContent = generateTicketHtml({
+                            qrToken: ticketRecord.qr_token,
+                            ticketCode: ticketRecord.ticket_code || ticketRecord.id,
+                            attendeeName: attendee.name,
+                            dateString: dateStr,
+                            venueString: venueStr,
+                            paidAmount: paidStr,
+                            status: 'Confirmed',
+                            isOnline: booking.events.location_type === 'online',
+                            onlineLink: booking.events.online_link || '',
+                            cover: (booking.events as any).cover || ((booking.events.venue as any)?.meta?.cover) || '',
+                            quantity: bookingQty
+                        });
+
+                        await sendEmail({
+                            to: attendee.email,
+                            subject: `Your ticket for ${booking.events.title}`,
+                            html: htmlContent
+                        });
+                    }
+                }
+            } catch (emailErr) {
+                console.error('[confirm-cash] Failed to send email:', emailErr);
+            }
+
+            return reply.send({ success: true });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // POST /:id/bookings/:bookingId/reject-cash
+    fastify.post('/:id/bookings/:bookingId/reject-cash', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, bookingId } = request.params as any;
+            const { remarks } = request.body as any || {};
+
+            const isAdmin = await EventService.verifyEventAdmin(request.user.id, id);
+            if (!isAdmin) return reply.status(403).send({ success: false, message: 'Forbidden' });
+
+            await prisma.$transaction(async (tx) => {
+                await tx.bookings.update({
+                    where: { id: bookingId },
+                    data: { status: 'cancelled' }
+                });
+
+                const lineItems = await tx.booking_line_items.findMany({
+                    where: { booking_id: bookingId }
+                });
+
+                for (const li of lineItems) {
+                    await tx.tickets.updateMany({
+                        where: { line_item_id: li.id },
+                        data: { status: 'cancelled' }
+                    });
+                }
+
+                await tx.$executeRawUnsafe(
+                    `INSERT INTO event_registration_log (event_id, changed_by, action, booking_id, remarks)
+                     VALUES ($1::uuid, $2::uuid, $3, $4::uuid, $5)`,
+                    id, request.user.id, 'status_changed_to_cancelled', bookingId, remarks || 'Payment rejected by host'
+                );
+            });
+
+            await EventService.reconcileWaitlist(id);
+
+            return reply.send({ success: true });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // POST /:id/bookings/:bookingId/refund-cash
+    fastify.post('/:id/bookings/:bookingId/refund-cash', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, bookingId } = request.params as any;
+            const { remarks } = request.body as any || {};
+
+            const isAdmin = await EventService.verifyEventAdmin(request.user.id, id);
+            if (!isAdmin) return reply.status(403).send({ success: false, message: 'Forbidden' });
+
+            await prisma.$transaction(async (tx) => {
+                await tx.bookings.update({
+                    where: { id: bookingId },
+                    data: { status: 'refunded_offline' }
+                });
+
+                const lineItems = await tx.booking_line_items.findMany({
+                    where: { booking_id: bookingId }
+                });
+
+                for (const li of lineItems) {
+                    await tx.tickets.updateMany({
+                        where: { line_item_id: li.id },
+                        data: { status: 'cancelled' }
+                    });
+                }
+
+                await tx.$executeRawUnsafe(
+                    `INSERT INTO event_registration_log (event_id, changed_by, action, booking_id, remarks)
+                     VALUES ($1::uuid, $2::uuid, $3, $4::uuid, $5)`,
+                    id, request.user.id, 'status_changed_to_refunded-offline', bookingId, remarks || 'Offline refund processed by host'
+                );
+            });
+
+            await EventService.reconcileWaitlist(id);
+
+            return reply.send({ success: true });
+        } catch (e: any) {
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
+    // POST /bookings/:bookingId/payment-proof
+    fastify.post('/bookings/:bookingId/payment-proof', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { bookingId } = request.params as any;
+
+            const booking = await prisma.bookings.findUnique({ where: { id: bookingId } });
+            if (!booking) return reply.status(404).send({ success: false, message: 'Booking not found' });
+            if (booking.booker_user_id !== request.user.id) {
+                return reply.status(403).send({ success: false, message: 'Forbidden: You do not own this booking' });
+            }
+
+            const { transactionId } = request.body || {};
+            let proofData = transactionId;
+
+            if (!proofData || typeof proofData !== 'string') {
+                return reply.status(400).send({ success: false, message: 'Transaction ID is required' });
+            }
+
+            await prisma.bookings.update({
+                where: { id: bookingId },
+                data: { payment_proof_url: proofData }
+            });
+
+            return reply.send({ success: true, paymentProofUrl: proofData });
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });
         }

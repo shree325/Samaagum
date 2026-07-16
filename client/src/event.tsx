@@ -125,6 +125,7 @@ export function EventPage({ ev, st, go }) {
 
   const [currentEvent, setCurrentEvent] = useState(e);
   const [showShareSheet, setShowShareSheet] = useState(false);
+  const [uploadingProof, setUploadingProof] = useState(false);
   // Once fetchEventDetails() resolves with the real server record (including the resolved
   // hostName/location_type), let it override the initial prop-derived snapshot so the header
   // (title/host/online-in-person/price badges) reflects the latest saved state, not just
@@ -340,6 +341,9 @@ export function EventPage({ ev, st, go }) {
           formFields: ev.formFields || meta.formFields || [],
           bookingStatus: data.data.bookingStatus,
           bookingId: data.data.bookingId,
+          paymentProofUrl: data.data.paymentProofUrl,
+          holdExpiresAt: data.data.holdExpiresAt,
+          payment_instructions: ev.payment_instructions,
           attendeeId: data.data.attendeeId,
           ticketId: data.data.ticketId,
           qrToken: data.data.qrToken,
@@ -359,6 +363,32 @@ export function EventPage({ ev, st, go }) {
     } catch (err) {
       console.error(err);
     }
+  };
+  const [transactionId, setTransactionId] = useState('');
+
+  const handleSubmitTransactionId = async () => {
+    if (!currentEvent.bookingId) return;
+    setUploadingProof(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${apiBase}/api/events/bookings/${currentEvent.bookingId}/payment-proof`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ transactionId: transactionId || 'N/A' })
+      });
+      if (!res.ok) throw new Error('Upload failed');
+      const data = await res.json();
+      if (data.success && data.paymentProofUrl) {
+        setCurrentEvent((prev: any) => ({ ...prev, paymentProofUrl: data.paymentProofUrl }));
+        if (window.toast) window.toast('Payment proof uploaded successfully', 'success');
+      }
+    } catch (err) {
+      if (window.toast) window.toast('Failed to upload payment proof', 'warning');
+    }
+    setUploadingProof(false);
   };
 
   const fetchHostStats = async () => {
@@ -2418,20 +2448,83 @@ export function EventPage({ ev, st, go }) {
               <div className="ev-aside" style={{ width: 280, marginLeft: 20 }}>
                 {isMember && (
                   <div className="ticket-box">
-                    {e.online ? (
-                      <OnlineMeetingCard url={e.online_link} banner={e.cover} status={currentEvent.status} isPast={e.ends_at ? new Date(e.ends_at) < new Date() : (e.starts_at ? new Date(e.starts_at) < new Date() : false)} />
-                    ) : (
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "20px 16px" }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", color: "var(--accent-2)", letterSpacing: "0.05em", marginBottom: 12 }}>
-                          Your Event Ticket
+                    {currentEvent.bookingStatus === 'pending_payment' ? (
+                      <div style={{ display: "flex", flexDirection: "column", padding: "20px 16px", background: "rgba(245,158,11,0.05)", borderRadius: "var(--r-md)", border: "1px solid rgba(245,158,11,0.2)" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                          <span style={{ display: "inline-flex", width: 24, height: 24, borderRadius: "50%", background: "#f59e0b", color: "#fff", alignItems: "center", justifyContent: "center" }}>
+                            <I.clock style={{ width: 14, height: 14 }} />
+                          </span>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: "#92400e" }}>Payment Pending</span>
                         </div>
-                        <div style={{ padding: 10, background: "#fff", borderRadius: "var(--r-md)", boxShadow: "0 4px 12px rgba(0,0,0,0.06)", width: 140, height: 140, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          {window.TicketQR && <window.TicketQR token={e.qrToken || e.attendeeId || e.id || "test"} size={120} />}
+                        
+                        <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 16 }}>
+                          Your registration is on hold. Please complete the payment to secure your ticket.
                         </div>
-                        <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 10, textAlign: "center" }}>
-                          Scan QR at entry gate
-                        </div>
+
+                        {currentEvent.payment_instructions && (
+                          <div style={{ background: "var(--surface)", padding: 12, borderRadius: 8, fontSize: 13, color: "var(--ink)", border: "1px solid var(--border)", marginBottom: 16, whiteSpace: 'pre-wrap' }}>
+                            <strong style={{ display: 'block', marginBottom: 4 }}>Payment Instructions:</strong>
+                            {currentEvent.payment_instructions}
+                          </div>
+                        )}
+
+                        {currentEvent.paymentProofUrl ? (
+                          <div style={{ background: "rgba(16,185,129,0.1)", color: "#065f46", padding: "12px", borderRadius: 8, fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
+                            <I.check style={{ width: 16, height: 16 }} />
+                            <div>
+                              <strong>Proof uploaded!</strong>
+                              <div style={{ fontSize: 11, opacity: 0.8 }}>Waiting for organizer verification.</div>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {currentEvent.holdExpiresAt && new Date(currentEvent.holdExpiresAt) > new Date() && (
+                              <div style={{ fontSize: 12, color: "#ef4444", fontWeight: 600, marginBottom: 12 }}>
+                                Hold expires at: {new Date(currentEvent.holdExpiresAt).toLocaleString()}
+                              </div>
+                            )}
+                            {currentEvent.holdExpiresAt && new Date(currentEvent.holdExpiresAt) <= new Date() && (
+                              <div style={{ fontSize: 12, color: "#ef4444", fontWeight: 700, marginBottom: 12, textTransform: 'uppercase' }}>
+                                Hold Expired. Registration may be cancelled.
+                              </div>
+                            )}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              <input 
+                                type="text" 
+                                className="cinput" 
+                                placeholder="Transaction ID (optional)" 
+                                value={transactionId} 
+                                onChange={e => setTransactionId(e.target.value)}
+                                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--field)' }}
+                              />
+                              <button 
+                                className="hbtn hbtn--primary" 
+                                onClick={handleSubmitTransactionId} 
+                                disabled={uploadingProof} 
+                                style={{ width: '100%', justifyContent: 'center' }}
+                              >
+                                {uploadingProof ? 'Submitting...' : 'Submit Transaction Proof'}
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
+                    ) : (
+                      e.online ? (
+                        <OnlineMeetingCard url={e.online_link} banner={e.cover} status={currentEvent.status} isPast={e.ends_at ? new Date(e.ends_at) < new Date() : (e.starts_at ? new Date(e.starts_at) < new Date() : false)} />
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "20px 16px" }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", color: "var(--accent-2)", letterSpacing: "0.05em", marginBottom: 12 }}>
+                            Your Event Ticket
+                          </div>
+                          <div style={{ padding: 10, background: "#fff", borderRadius: "var(--r-md)", boxShadow: "0 4px 12px rgba(0,0,0,0.06)", width: 140, height: 140, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            {window.TicketQR && <window.TicketQR token={e.qrToken || e.attendeeId || e.id || "test"} size={120} />}
+                          </div>
+                          <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 10, textAlign: "center" }}>
+                            Scan QR at entry gate
+                          </div>
+                        </div>
+                      )
                     )}
                   </div>
                 )}

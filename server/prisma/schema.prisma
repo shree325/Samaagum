@@ -186,6 +186,7 @@ model bookings {
   hold_expires_at       DateTime?               @db.Timestamptz(6)
   total_amount_minor    BigInt?
   total_currency        String?                 @db.Char(3)
+  payment_proof_url     String?
   created_at            DateTime                @default(now()) @db.Timestamptz(6)
   updated_at            DateTime                @default(now()) @db.Timestamptz(6)
   affiliate_commissions affiliate_commissions[]
@@ -568,6 +569,8 @@ model events {
   registration_opens_at  DateTime?                @db.Timestamptz(6)
   registration_closes_at DateTime?                @db.Timestamptz(6)
   settings               Json?
+  payment_instructions   String?
+  payment_hold_hours     Int?                     @default(48)
   addons                 addons[]
   bookings               bookings[]
   bundles                bundles[]
@@ -2670,6 +2673,8 @@ model event_registration_log {
   event_id   String   @db.Uuid
   changed_by String   @db.Uuid
   action     String
+  booking_id String?  @db.Uuid
+  remarks    String?
   created_at DateTime @default(now()) @db.Timestamptz(6)
   users      users    @relation(fields: [changed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
   events     events   @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -2702,6 +2707,7 @@ enum booking_status {
   expired
   cancelled
   refunded
+  refunded_offline @map("refunded-offline")
   waitlisted
 }
 

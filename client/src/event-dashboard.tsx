@@ -35,6 +35,8 @@ interface PendingRequest {
   picture: string | null;
   answers: Record<string, unknown>;
   time?: string;
+  transactionId?: string | null;
+  isCash?: boolean;
 }
 interface BookingRecord {
   id: string;
@@ -61,6 +63,8 @@ interface DashboardStats {
   waitlistEnabled: boolean;
   waitlist: WaitlistEntry[];
   waitlistCount: number;
+  cashBookings?: any[];
+  auditLogs?: any[];
   locations?: {
     totalMapped: number;
     totalUnknown: number;
@@ -208,6 +212,8 @@ const DEMO_STATS: DashboardStats = {
   wishlistCount: 380,
   waitlistEnabled: true,
   waitlistCount: 12,
+  cashBookings: [],
+  auditLogs: [],
   waitlist: [
     { id:'w1', userId:'wu1', name:'Neha Verma',    joinedAt: new Date(Date.now()-600000).toISOString(),  position:1 },
     { id:'w2', userId:'wu2', name:'Aman Kumar',    joinedAt: new Date(Date.now()-720000).toISOString(),  position:2 },
@@ -436,7 +442,8 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
   const [error, setError] = useState('');
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<'registered' | 'pending' | 'checkedIn' | 'revenue'>('registered');
+  const [activeTab, setActiveTab] = useState<'registered' | 'pending' | 'checkedIn' | 'revenue' | 'cash'>('registered');
+  const [previewProofUrl, setPreviewProofUrl] = useState<string | null>(null);
 
   // Isolated waitlist state
   const [waitlistPreview, setWaitlistPreview] = useState<WaitlistEntry[]>([]);
@@ -536,6 +543,7 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
     totalAttendees: 0, checkedInCount: 0, pendingRequestsCount: 0,
     revenue: 0, capacity: 0, wishlistCount: 0, confirmed: [], requests: [], bookings: [],
     waitlistEnabled: false, waitlist: [], waitlistCount: 0,
+    cashBookings: [], auditLogs: []
   } as DashboardStats);
   const activeMembers = isDemoMode ? DEMO_MEMBERS : members;
 
@@ -547,7 +555,7 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
   const isPaidEvent = isDemoMode || e.registration_mode === 'paid' || e.type === 'Paid';
 
   useEffect(() => {
-    if (!isPaidEvent && activeTab === 'revenue') {
+    if (!isPaidEvent && (activeTab === 'revenue' || activeTab === 'cash')) {
       setActiveTab('registered');
     }
   }, [isPaidEvent, activeTab]);
@@ -1181,6 +1189,50 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
         setSelectedRequests(result.failed.map(f => f.bookingId));
         setActionLoading(false);
         await refetch();
+      }
+    });
+  };
+
+  const handleCashAction = async (bookingId: string, action: 'confirm' | 'reject' | 'refund', remarks?: string) => {
+    const endpoint = action === 'confirm' ? 'confirm-cash' : action === 'reject' ? 'reject-cash' : 'refund-cash';
+    const res = await fetch(`${apiBase}/api/events/${e.id}/bookings/${bookingId}/${endpoint}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ remarks })
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(
+        body?.error ||
+        body?.message ||
+        `Request failed with status ${res.status}`
+      );
+    }
+  };
+
+  const executeCashAction = (bookingId: string, action: 'confirm' | 'reject' | 'refund', name: string) => {
+    const isReject = action === 'reject';
+    const isRefund = action === 'refund';
+    setConfirmModal({
+      title: isReject ? `Reject payment for ${name}?` : isRefund ? `Refund payment for ${name}?` : `Confirm payment for ${name}?`,
+      message: isReject
+        ? "This will cancel the booking and release capacity."
+        : isRefund
+        ? "This will map the booking status to refunded_offline and release capacity."
+        : `Confirm payment has been received for ${name}?`,
+      confirmLabel: isReject ? 'Reject' : isRefund ? 'Refund' : 'Mark Received',
+      confirmDanger: isReject || isRefund,
+      onConfirm: async () => {
+        setConfirmModal(null);
+        setActionLoading(true);
+        try {
+          await handleCashAction(bookingId, action);
+          if (window.toast) window.toast(`Successfully updated cash payment status for ${name}`, 'success');
+          await refetch();
+        } catch (err: any) {
+          if (window.toast) window.toast(err.message || 'Failed to perform cash action', 'warning');
+        }
+        setActionLoading(false);
       }
     });
   };
@@ -2205,20 +2257,28 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
                       </div>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="hbtn hbtn--soft hbtn--sm" style={{ color: '#ef4444' }}
-                      onClick={() => executeAction(u.bookingId, 'reject', u.name)} disabled={actionLoading}>
-                      Reject
-                    </button>
-                    <button className="hbtn hbtn--primary hbtn--sm"
-                      onClick={() => executeAction(u.bookingId, 'accept', u.name)} disabled={actionLoading}>
-                      Approve
-                    </button>
-                    <button className="hbtn hbtn--soft hbtn--sm"
-                      onClick={() => setExpandedAnswers(prev => ({ ...prev, [u.id]: !prev[u.id] }))}>
-                      {expandedAnswers[u.id] ? 'Hide Responses' : 'Responses'}
-                    </button>
-                  </div>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      {u.isCash && u.transactionId && u.transactionId !== 'N/A' && (
+                        <div style={{ fontSize: 11, color: '#f59e0b', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 6, padding: '3px 8px', fontWeight: 600 }}>
+                          Txn: {u.transactionId}
+                        </div>
+                      )}
+                      {u.isCash && !u.transactionId && (
+                        <div style={{ fontSize: 11, color: 'var(--ink-3)', fontStyle: 'italic' }}>Cash · No Txn ID</div>
+                      )}
+                      <button className="hbtn hbtn--soft hbtn--sm" style={{ color: '#ef4444' }}
+                        onClick={() => executeAction(u.bookingId, 'reject', u.name)} disabled={actionLoading}>
+                        Reject
+                      </button>
+                      <button className="hbtn hbtn--primary hbtn--sm"
+                        onClick={() => executeAction(u.bookingId, 'accept', u.name)} disabled={actionLoading}>
+                        {u.isCash && u.transactionId ? 'Approve & Confirm' : 'Approve'}
+                      </button>
+                      <button className="hbtn hbtn--soft hbtn--sm"
+                        onClick={() => setExpandedAnswers(prev => ({ ...prev, [u.id]: !prev[u.id] }))}>
+                        {expandedAnswers[u.id] ? 'Hide Responses' : 'Responses'}
+                      </button>
+                    </div>
                 </div>
                 {expandedAnswers[u.id] && (
                   <div style={{ padding: '0 16px 16px 66px', borderTop: '1px solid var(--border-2)', background: 'rgba(255,255,255,0.02)' }}>
@@ -2606,6 +2666,192 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
     </div>
   );
 
+  const renderCashSection = () => {
+    const cashBookings = activeStats.cashBookings || [];
+    const pendingCash = cashBookings.filter(b => b.status === 'pending_payment');
+    const processedCash = cashBookings.filter(b => b.status !== 'pending_payment');
+    const auditLogs = activeStats.auditLogs || [];
+
+    return (
+      <div className="dash-section" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        {/* Cash Stats */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16 }}>
+          <StatCard icon={<I.wallet style={{ width: 20, height: 20 }} />} iconBg="rgba(236,72,153,0.1)" iconColor="#ec4899"
+            value={cashBookings.length.toLocaleString()} label="Total Cash Bookings" />
+          <StatCard icon={<I.clock style={{ width: 20, height: 20 }} />} iconBg="rgba(245,158,11,0.1)" iconColor="#f59e0b"
+            value={pendingCash.length} label="Awaiting Payment" />
+          <StatCard icon={<I.check style={{ width: 20, height: 20 }} />} iconBg="rgba(16,185,129,0.1)" iconColor="#10b981"
+            value={cashBookings.filter(b => b.status === 'confirmed').length} label="Confirmed Payments" />
+          <StatCard icon={<I.filter style={{ width: 20, height: 20 }} />} iconBg="rgba(239,68,68,0.1)" iconColor="#ef4444"
+            value={cashBookings.filter(b => b.status === 'refunded_offline' || b.status === 'cancelled').length} label="Refunded/Cancelled" />
+        </div>
+
+        {/* Pending Cash Queue */}
+        <div style={{ background: 'var(--surface)', padding: 24, borderRadius: 12, border: '1px solid var(--border)' }}>
+          <h3 style={{ fontSize: 16, margin: '0 0 16px', fontWeight: 600 }}>
+            Awaiting Verification Queue {pendingCash.length > 0 && <span style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b', borderRadius: 999, padding: '2px 8px', fontSize: 12, marginLeft: 8 }}>{pendingCash.length}</span>}
+          </h3>
+
+          {pendingCash.length === 0 ? (
+            <EmptyState title="No pending payments" message="All offline payments are verified or confirmed!" icon={<I.check style={{ width: 28, height: 28, opacity: 0.35 }} />} />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {pendingCash.map((b) => {
+                const isExpired = b.hold_expires_at && new Date(b.hold_expires_at) < new Date();
+                return (
+                  <div key={b.id} style={{ display: 'flex', flexDirection: 'column', background: 'var(--field)', borderRadius: 10, overflow: 'hidden', border: isExpired ? '1px solid rgba(239,68,68,0.3)' : '1px solid var(--border-2)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', flexWrap: 'wrap', gap: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ background: 'var(--surface-3)', width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                          {b.users.display_name.charAt(0)}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{b.users.display_name}</div>
+                          <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>{b.users.email}</div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 140 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>₹{(b.total_amount_minor / 100).toFixed(2)}</div>
+                        <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+                          Ticket: {b.booking_line_items?.[0]?.ticket_types?.name || 'Standard'}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                        <div style={{ fontSize: 11, color: isExpired ? '#ef4444' : 'var(--ink-3)', fontWeight: isExpired ? 600 : 'normal' }}>
+                          Hold expires: {b.hold_expires_at ? new Date(b.hold_expires_at).toLocaleString() : 'N/A'}
+                        </div>
+                        {isExpired && <span style={{ fontSize: 10, color: '#ef4444', fontWeight: 700, textTransform: 'uppercase' }}>Expired Hold</span>}
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        {b.payment_proof_url && b.payment_proof_url !== 'N/A' ? (
+                          (b.payment_proof_url.startsWith('data:image') || b.payment_proof_url.startsWith('http')) ? (
+                            <div style={{ cursor: 'pointer', borderRadius: 4, overflow: 'hidden', border: '1px solid var(--border)', width: 36, height: 36 }} onClick={() => setPreviewProofUrl(b.payment_proof_url)}>
+                              <img src={b.payment_proof_url} alt="Proof" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: 12, color: 'var(--ink-2)', background: 'var(--bg-2)', padding: '6px 12px', borderRadius: 6, fontWeight: 600 }}>
+                              Txn: {b.payment_proof_url}
+                            </div>
+                          )
+                        ) : (
+                          <span style={{ fontSize: 11, color: 'var(--ink-3)', fontStyle: 'italic' }}>No txn ID provided</span>
+                        )}
+                        
+                        <button className="hbtn hbtn--soft hbtn--sm" style={{ color: '#ef4444' }}
+                          onClick={() => executeCashAction(b.id, 'reject', b.users.display_name)} disabled={actionLoading}>
+                          Reject
+                        </button>
+                        <button className="hbtn hbtn--primary hbtn--sm"
+                          onClick={() => executeCashAction(b.id, 'confirm', b.users.display_name)} disabled={actionLoading}>
+                          Mark Received
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Processed Cash Bookings */}
+        <div style={{ background: 'var(--surface)', padding: 24, borderRadius: 12, border: '1px solid var(--border)' }}>
+          <h3 style={{ fontSize: 16, margin: '0 0 16px', fontWeight: 600 }}>Processed / Verified Bookings</h3>
+          {processedCash.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--ink-3)', textAlign: 'center', padding: 12 }}>No processed cash bookings yet.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-2)', color: 'var(--ink-3)', textAlign: 'left' }}>
+                    <th style={{ padding: '10px 8px' }}>Attendee</th>
+                    <th style={{ padding: '10px 8px' }}>Amount</th>
+                    <th style={{ padding: '10px 8px' }}>Status</th>
+                    <th style={{ padding: '10px 8px' }}>Proof</th>
+                    <th style={{ padding: '10px 8px' }}>Processed Date</th>
+                    <th style={{ padding: '10px 8px' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {processedCash.map((b) => (
+                    <tr key={b.id} style={{ borderBottom: '1px solid var(--border-3)' }}>
+                      <td style={{ padding: '10px 8px' }}>
+                        <div>{b.users.display_name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{b.users.email}</div>
+                      </td>
+                      <td style={{ padding: '10px 8px' }}>₹{(b.total_amount_minor / 100).toFixed(2)}</td>
+                      <td style={{ padding: '10px 8px' }}>
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600,
+                          background: b.status === 'confirmed' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                          color: b.status === 'confirmed' ? '#10b981' : '#ef4444'
+                        }}>
+                          {b.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 8px' }}>
+                        {b.payment_proof_url && b.payment_proof_url !== 'N/A' ? (
+                          (b.payment_proof_url.startsWith('data:image') || b.payment_proof_url.startsWith('http')) ? (
+                            <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => setPreviewProofUrl(b.payment_proof_url)}>
+                              View Proof
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-1)' }}>{b.payment_proof_url}</span>
+                          )
+                        ) : (
+                          <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>N/A</span>
+                        )}
+                      </td>
+                      <td style={{ padding: '10px 8px', color: 'var(--ink-3)' }}>
+                        {new Date(b.created_at).toLocaleDateString()}
+                      </td>
+                      <td style={{ padding: '10px 8px' }}>
+                        {b.status === 'confirmed' && (
+                          <button className="hbtn hbtn--soft hbtn--sm" style={{ color: '#ef4444' }}
+                            onClick={() => executeCashAction(b.id, 'refund', b.users.display_name)} disabled={actionLoading}>
+                            Refund
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Audit Trails */}
+        <div style={{ background: 'var(--surface)', padding: 24, borderRadius: 12, border: '1px solid var(--border)' }}>
+          <h3 style={{ fontSize: 16, margin: '0 0 16px', fontWeight: 600 }}>Cash Payment Log & Audit Trail</h3>
+          {auditLogs.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--ink-3)', textAlign: 'center', padding: 12 }}>No logs recorded.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {auditLogs.map((l) => (
+                <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '8px 12px', background: 'var(--field)', borderRadius: 6 }}>
+                  <div>
+                    <span style={{ fontWeight: 600 }}>{l.changedBy}</span>
+                    <span style={{ margin: '0 6px', color: 'var(--ink-3)' }}>performed</span>
+                    <span style={{ fontFamily: 'monospace', color: 'var(--accent)' }}>{l.action}</span>
+                    {l.targetUser && (
+                      <span style={{ margin: '0 6px', color: 'var(--ink-3)' }}>on <span style={{ fontWeight: 600, color: 'var(--ink)' }}>{l.targetUser}</span></span>
+                    )}
+                    {l.remarks && <span style={{ marginLeft: 8, color: 'var(--ink-2)' }}>({l.remarks})</span>}
+                  </div>
+                  <div style={{ color: 'var(--ink-3)' }}>{new Date(l.createdAt).toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   /* ================================================================
      TAB NAVIGATION CARDS
      ================================================================ */
@@ -2638,20 +2884,29 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
       iconColor: '#10b981'
     },
   ] as const;
-  const allTabs = isPaidEvent
-    ? [
-        ...tabs,
-        { 
-          id: 'revenue', 
-          label: 'Revenue', 
-          val: `₹${activeStats.revenue.toLocaleString('en-IN')}`, 
-          sub: isDemoMode ? '↑ 18.4%' : 'total collected',
-          icon: <I.wallet style={{ width: 20, height: 20 }} />,
-          iconBg: 'rgba(59,130,246,0.12)',
-          iconColor: '#3b82f6'
-        } as const
-      ]
-    : [...tabs];
+  const allTabs = [...tabs] as any[];
+  if (isPaidEvent) {
+    allTabs.push({ 
+      id: 'revenue', 
+      label: 'Revenue', 
+      val: `₹${activeStats.revenue.toLocaleString('en-IN')}`, 
+      sub: isDemoMode ? '↑ 18.4%' : 'total collected',
+      icon: <I.wallet style={{ width: 20, height: 20 }} />,
+      iconBg: 'rgba(59,130,246,0.12)',
+      iconColor: '#3b82f6'
+    });
+    if (e.cash_enabled) {
+      allTabs.push({
+        id: 'cash',
+        label: 'Cash Payments',
+        val: activeStats.cashBookings ? activeStats.cashBookings.filter((b: any) => b.status === 'pending_payment').length : 0,
+        sub: 'Awaiting confirmation',
+        icon: <I.wallet style={{ width: 20, height: 20 }} />,
+        iconBg: 'rgba(236,72,153,0.12)',
+        iconColor: '#ec4899'
+      });
+    }
+  }
 
   if (loading) return <div style={{ padding: 60, textAlign: 'center', color: 'var(--ink-3)' }}>Loading dashboard…</div>;
 
@@ -2763,9 +3018,18 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
             {activeTab === 'pending'    && renderPendingSection()}
             {activeTab === 'checkedIn' && renderCheckedInSection()}
             {activeTab === 'revenue'   && isPaidEvent && renderRevenueSection()}
+            {activeTab === 'cash'      && isPaidEvent && renderCashSection()}
           </div>
         </div>
       </div>
+      {previewProofUrl && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: 16 }} onClick={() => setPreviewProofUrl(null)}>
+          <div style={{ position: 'relative', maxWidth: '90%', maxHeight: '90%' }}>
+            <img src={previewProofUrl} alt="Payment Proof Full" style={{ maxWidth: '100%', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8, boxShadow: 'var(--sh-xl)' }} />
+            <button style={{ position: 'absolute', top: -40, right: 0, background: 'transparent', border: 'none', color: '#fff', fontSize: 32, cursor: 'pointer' }} onClick={() => setPreviewProofUrl(null)}>×</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
