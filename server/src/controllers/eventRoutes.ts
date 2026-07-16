@@ -4,7 +4,7 @@ import { EventInvitationService } from '../services/EventInvitationService';
 import { TicketRealtimeService } from '../services/TicketRealtimeService';
 import prisma from '../config/prisma';
 import QRCode from 'qrcode';
-import { sendEmail, generateTicketHtml } from '../utils/email';
+import { sendEmail, generateTicketHtml, formatCurrency } from '../utils/email';
 
 // Best-effort JWT decode for routes that are public but want to personalize the response
 // (e.g. visibility gating, booking status) when a caller happens to be logged in.
@@ -236,7 +236,16 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 let qrToken: string | null = null;
                 let checkinStatus: string | null = null;
                 let bookedTicketName: string | null = null;
+                let bookingQty = 1;
+                let bookingTotalMinor = 0;
+                let bookingCurrency = 'INR';
                 if (bookingId) {
+                    const bookingObj = bookings.find(b => b.id === bookingId);
+                    if (bookingObj) {
+                        bookingTotalMinor = bookingObj.total_amount_minor ? Number(bookingObj.total_amount_minor) : 0;
+                        bookingCurrency = bookingObj.total_currency || 'INR';
+                    }
+
                     const myAttendee = await prisma.attendees.findFirst({
                         where: { booking_id: bookingId, user_id: userId },
                         include: { tickets: true }
@@ -248,12 +257,13 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                         checkinStatus = myAttendee.checkin_status;
                     }
                     
-                    const lineItem = await prisma.booking_line_items.findFirst({
+                    const lineItems = await prisma.booking_line_items.findMany({
                         where: { booking_id: bookingId },
                         include: { ticket_types: true }
                     });
-                    if (lineItem?.ticket_types) {
-                        bookedTicketName = lineItem.ticket_types.name;
+                    bookingQty = lineItems.reduce((sum, item) => sum + item.quantity, 0);
+                    if (lineItems[0]?.ticket_types) {
+                        bookedTicketName = lineItems[0].ticket_types.name;
                     }
                 }
 
@@ -287,7 +297,10 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                     isWishlisted,
                     waitlistPosition,
                     totalWaiting,
-                    bookedTicketName
+                    bookedTicketName,
+                    bookingQty,
+                    bookingTotalMinor,
+                    bookingCurrency
                 });
             };
 
@@ -1262,7 +1275,8 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                 try {
                     const guestUser = await prisma.users.findUnique({ where: { id: guestId } });
                     if (guestUser?.primary_email) {
-                        const li = await prisma.booking_line_items.findFirst({ where: { booking_id: bookingId } });
+                        const lineItems = await prisma.booking_line_items.findMany({ where: { booking_id: bookingId } });
+                        const li = lineItems[0];
                         const tk = li ? await prisma.tickets.findFirst({ where: { line_item_id: li.id } }) : null;
                         if (tk) {
                             const guestProfile = await prisma.profiles.findUnique({ where: { user_id: guestId } });
@@ -1274,17 +1288,23 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                                 ? new Date(event.starts_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
                                 : 'TBD';
                             const venueStr = vObj.address || vObj.name || event?.location_type || 'TBD';
+                            
+                            const bookingQty = lineItems.reduce((sum, item) => sum + item.quantity, 0);
+                            const totalPaidMinor = booking.total_amount_minor ? Number(booking.total_amount_minor) : 0;
+                            const paidStr = totalPaidMinor > 0 ? formatCurrency(totalPaidMinor, booking.total_currency || 'INR') : 'Free';
+
                             const htmlContent = generateTicketHtml({
                                 qrToken: tk.qr_token,
                                 ticketCode: tk.ticket_code || tk.id,
                                 attendeeName: guestName,
                                 dateString: dateStr,
                                 venueString: venueStr,
-                                paidAmount: booking.payment_method === 'free' ? 'Free' : (booking.payment_method === 'cash' ? `₹${Number(booking.total_amount_minor || 0) / 100} (Pay in Cash at Venue)` : `₹${Number(booking.total_amount_minor || 0) / 100}`),
+                                paidAmount: paidStr,
                                 status: booking.payment_method === 'cash' ? 'Pending Payment (Cash)' : 'Confirmed',
                                 isOnline: event?.location_type === 'online',
                                 onlineLink: event?.online_link || '',
-                                cover: (event as any)?.cover || ((event?.venue as any)?.meta?.cover) || ''
+                                cover: (event as any)?.cover || ((event?.venue as any)?.meta?.cover) || '',
+                                quantity: bookingQty
                             });
                             await sendEmail({
                                 to: guestUser.primary_email,
@@ -1390,8 +1410,10 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                                     ? new Date(eventForEmail.starts_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
                                     : 'TBD';
                                 const venueStr = vObj.address || vObj.name || eventForEmail?.location_type || 'TBD';
+                                const lineItems = await prisma.booking_line_items.findMany({ where: { booking_id: booking.id } });
+                                const bookingQty = lineItems.reduce((sum, item) => sum + item.quantity, 0);
                                 const amtMinor = Number(booking?.total_amount_minor || 0);
-                                const paidStr = booking?.payment_method === 'free' ? 'Free' : `₹${amtMinor / 100}`;
+                                const paidStr = amtMinor > 0 ? formatCurrency(amtMinor, booking?.total_currency || 'INR') : 'Free';
                                 const htmlContent = generateTicketHtml({
                                     qrToken: tk.qr_token,
                                     ticketCode: tk.ticket_code || tk.id,
@@ -1402,7 +1424,8 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                                     status: 'Confirmed',
                                     isOnline: eventForEmail?.location_type === 'online',
                                     onlineLink: eventForEmail?.online_link || '',
-                                    cover: (eventForEmail as any)?.cover || ((eventForEmail?.venue as any)?.meta?.cover) || ''
+                                    cover: (eventForEmail as any)?.cover || ((eventForEmail?.venue as any)?.meta?.cover) || '',
+                                    quantity: bookingQty
                                 });
                                 await sendEmail({
                                     to: guestUser.primary_email,
@@ -1561,8 +1584,10 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                                 ? new Date(eventForEmail.starts_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
                                 : 'TBD';
                             const venueStr = vObj.address || vObj.name || eventForEmail?.location_type || 'TBD';
+                            const lineItems = await prisma.booking_line_items.findMany({ where: { booking_id: booking.id } });
+                            const bookingQty = lineItems.reduce((sum, item) => sum + item.quantity, 0);
                             const amtMinor = Number(booking?.total_amount_minor || 0);
-                            const paidStr = booking?.payment_method === 'free' ? 'Free' : `₹${amtMinor / 100}`;
+                            const paidStr = amtMinor > 0 ? formatCurrency(amtMinor, booking?.total_currency || 'INR') : 'Free';
                             const htmlContent = generateTicketHtml({
                                 qrToken: ticket.qr_token,
                                 ticketCode: ticket.ticket_code || ticket.id,
@@ -1573,7 +1598,8 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                                 status: 'Confirmed',
                                 isOnline: eventForEmail?.location_type === 'online',
                                 onlineLink: eventForEmail?.online_link || '',
-                                cover: (eventForEmail as any)?.cover || ((eventForEmail?.venue as any)?.meta?.cover) || ''
+                                cover: (eventForEmail as any)?.cover || ((eventForEmail?.venue as any)?.meta?.cover) || '',
+                                quantity: bookingQty
                             });
                             await sendEmail({
                                 to: guestUser.primary_email,

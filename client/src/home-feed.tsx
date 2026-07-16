@@ -230,7 +230,17 @@ export function HeroCarousel({ events, go, wishlisted, wishlistCounts, toggleWis
                   </div>
                   <div className="factions">
                     <button className="hbtn hbtn--primary" onClick={(e) => { e.stopPropagation(); go('event', ev); }}>
-                      View Details · {ev.ticket_types && ev.ticket_types.length > 0 ? (ev.ticket_types[0].price_minor === 0 ? 'Free' : `₹${ev.ticket_types[0].price_minor / 100}`) : 'Free'}
+                      View Details · {ev.price || (() => {
+                        const isFree = ev.registration_mode === 'free' || 
+                                       ev.registration_mode === 'free_rsvp' || 
+                                       !ev.ticket_types || 
+                                       ev.ticket_types.length === 0 || 
+                                       !ev.ticket_types[0].price_minor || 
+                                       Number(ev.ticket_types[0].price_minor) === 0;
+                        if (isFree) return 'Free';
+                        const basePrice = `₹${Number(ev.ticket_types[0].price_minor) / 100}`;
+                        return ev.cash_enabled ? `${basePrice} in cash` : basePrice;
+                      })()}
                     </button>
                     {ev.host?.name && (
                       <div className="att">

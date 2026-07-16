@@ -131,6 +131,15 @@ export async function sendEmail({
   }
 }
 
+export function formatCurrency(amountMinor: number | bigint | null, currency: string = 'INR') {
+  if (amountMinor === null || amountMinor === undefined) return 'Free';
+  const amount = Number(amountMinor) / 100;
+  if (currency.toUpperCase() === 'INR') {
+    return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  }
+  return `${currency.toUpperCase()} ${amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+}
+
 export function generateTicketHtml({
   qrToken,
   ticketCode,
@@ -141,7 +150,10 @@ export function generateTicketHtml({
   status,
   isOnline = false,
   onlineLink = '',
-  cover = ''
+  cover = '',
+  quantity = 1,
+  totalAmountMinor,
+  currency = 'INR'
 }: {
   qrToken: string;
   ticketCode: string;
@@ -153,6 +165,9 @@ export function generateTicketHtml({
   isOnline?: boolean;
   onlineLink?: string;
   cover?: string;
+  quantity?: number;
+  totalAmountMinor?: number | bigint | null;
+  currency?: string;
 }) {
   function detectProvider(url: string) {
     if (!url) return { id: 'custom', icon: '🌐', text: 'Virtual Meeting', color: '#4b5563', bg: '#f3f4f6' };
@@ -185,6 +200,14 @@ export function generateTicketHtml({
       }
     }
   }
+
+  const displayPaidAmount =
+    totalAmountMinor !== null && totalAmountMinor !== undefined
+      ? Number(totalAmountMinor) > 0
+        ? formatCurrency(totalAmountMinor, currency)
+        : "Free"
+      : paidAmount || "Free";
+
   return `
 <!DOCTYPE html>
 <html>
@@ -252,11 +275,11 @@ export function generateTicketHtml({
     </div>
     <div class="row">
       <div class="label">Quantity</div>
-      <div class="value">1</div>
+      <div class="value">${quantity}</div>
     </div>
     <div class="row">
       <div class="label">Paid</div>
-      <div class="value">${paidAmount}</div>
+      <div class="value">${displayPaidAmount}</div>
     </div>
     <div class="row">
       <div class="label">Status</div>

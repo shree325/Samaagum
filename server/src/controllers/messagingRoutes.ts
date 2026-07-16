@@ -6,7 +6,7 @@ import { conversationReadService } from '../services/ConversationReadService';
 import { GroupService } from '../services/GroupService';
 import { EventService } from '../services/EventService';
 import { EventInvitationService } from '../services/EventInvitationService';
-import { sendEmail, generateTicketHtml } from '../utils/email';
+import { sendEmail, generateTicketHtml, formatCurrency } from '../utils/email';
 
 // Must exactly match the client-side formula in normalizeJoinedEvent
 // (client/src/home-tickets.tsx) that computes the "friendly" ticket id shown to users,
@@ -2054,6 +2054,10 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         return acc;
       }, {});
 
+      const filteredAnswers = { ...answers };
+      delete filteredAnswers.ticketTypeId;
+      delete filteredAnswers.qty;
+
       const notif = await prisma.notification_log.create({
           data: {
             tenant_id: event.tenant_id,
@@ -2066,7 +2070,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
               eventTitle: event.title,
               requesterId: userId,
               requesterName,
-              answers,
+              answers: filteredAnswers,
               questionLabels
             })
           }
@@ -2080,7 +2084,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             type: 'registration',
             text: `<b>${requesterName}</b> requested to join <b>${event.title}</b>`,
             eventId: eventId,
-            answers,
+            answers: filteredAnswers,
             questionLabels
           });
         }
@@ -2103,19 +2107,23 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             const dateStr = event.starts_at ? new Date(event.starts_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'TBD';
             const vObj = (event.venue as any) || {};
             const venueStr = vObj.address || vObj.name || event.location_type || 'TBD';
+            const lineItems = await prisma.booking_line_items.findMany({ where: { booking_id: booking.id } });
+            const bookingQty = lineItems.reduce((sum, item) => sum + item.quantity, 0);
+            const totalPaidMinor = booking.total_amount_minor ? Number(booking.total_amount_minor) : 0;
+            const paidStr = totalPaidMinor > 0 ? formatCurrency(totalPaidMinor, booking.total_currency || 'INR') : 'Free';
+
             const htmlContent = generateTicketHtml({
               qrToken: ticket.qr_token,
               ticketCode: ticket.ticket_code || ticket.id,
               attendeeName: requesterName,
               dateString: dateStr,
               venueString: venueStr,
-              paidAmount: booking.payment_method === 'free'
-                ? 'Free'
-                : (booking.payment_method === 'cash' ? `₹${Number(booking.total_amount_minor || 0) / 100} (Pay in cash)` : `₹${Number(booking.total_amount_minor || 0) / 100}`),
+              paidAmount: paidStr,
               status: ticket.status === 'confirmed' ? 'Confirmed' : 'Reserved',
               isOnline: event.location_type === 'online',
               onlineLink: event.online_link || '',
-              cover: (event as any).cover || ((event.venue as any)?.meta?.cover) || ''
+              cover: (event as any).cover || ((event.venue as any)?.meta?.cover) || '',
+              quantity: bookingQty
             });
 
             await sendEmail({
@@ -2260,17 +2268,23 @@ export async function messagingRoutes(fastify: FastifyInstance) {
                   ? new Date(eventForEmail.starts_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
                   : 'TBD';
                 const venueStr = vObj.address || vObj.name || eventForEmail?.location_type || 'TBD';
+                const lineItems = await prisma.booking_line_items.findMany({ where: { booking_id: booking.id } });
+                const bookingQty = lineItems.reduce((sum, item) => sum + item.quantity, 0);
+                const totalPaidMinor = booking.total_amount_minor ? Number(booking.total_amount_minor) : 0;
+                const paidStr = totalPaidMinor > 0 ? formatCurrency(totalPaidMinor, booking.total_currency || 'INR') : 'Free';
+
                 const htmlContent = generateTicketHtml({
                   qrToken: tk.qr_token,
                   ticketCode: tk.ticket_code || tk.id,
                   attendeeName: requesterName,
                   dateString: dateStr,
                   venueString: venueStr,
-                  paidAmount: booking.payment_method === 'free' ? 'Free' : `₹${Number(booking.total_amount_minor || 0) / 100}`,
+                  paidAmount: paidStr,
                   status: 'Confirmed',
                   isOnline: eventForEmail?.location_type === 'online',
                   onlineLink: eventForEmail?.online_link || '',
-                  cover: (eventForEmail as any)?.cover || ((eventForEmail?.venue as any)?.meta?.cover) || ''
+                  cover: (eventForEmail as any)?.cover || ((eventForEmail?.venue as any)?.meta?.cover) || '',
+                  quantity: bookingQty
                 });
 
                 await sendEmail({
