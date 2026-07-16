@@ -1331,6 +1331,26 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                 });
             });
 
+            // Write audit log
+            const auditAction = action === 'accept'
+                ? (cashAlreadyPaid ? 'status_changed_to_confirmed' : (isCash ? 'status_changed_to_pending_payment' : 'status_changed_to_confirmed'))
+                : 'status_changed_to_cancelled';
+            const auditRemark = action === 'accept'
+                ? (cashAlreadyPaid ? 'Approved and payment verified by host (Pay-then-Approve)' : 'Join request approved by host')
+                : 'Join request rejected by host';
+            try {
+                await prisma.$executeRawUnsafe(
+                    `INSERT INTO event_registration_log (event_id, changed_by, action, booking_id, remarks) VALUES ($1, $2, $3, $4, $5)`,
+                    id,
+                    request.user.id,
+                    auditAction,
+                    bookingId,
+                    auditRemark
+                );
+            } catch (logErr: any) {
+                console.error('[eventRoutes] Failed to write audit log:', logErr.message);
+            }
+
             const guestId = booking.booker_user_id;
             const event = await prisma.events.findUnique({ where: { id } });
 
@@ -1425,7 +1445,8 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                             const bookingQty = lineItems.reduce((sum, item) => sum + item.quantity, 0);
                             const totalPaidMinor = booking.total_amount_minor ? Number(booking.total_amount_minor) : 0;
                             const paidStr = totalPaidMinor > 0 ? formatCurrency(totalPaidMinor, booking.total_currency || 'INR') : 'Free';
-                            if (booking.payment_method !== 'cash') {
+                            // Send ticket email if non-cash, OR if cash booking was already paid (pay-then-approve confirmed immediately)
+                            if (booking.payment_method !== 'cash' || cashAlreadyPaid) {
                                 const htmlContent = generateTicketHtml({
                                     qrToken: tk.qr_token,
                                     ticketCode: tk.ticket_code || tk.id,
