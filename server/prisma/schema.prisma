@@ -177,28 +177,30 @@ model booking_line_items {
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model bookings {
-  id                    String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id             String                  @db.Uuid
-  event_id              String                  @db.Uuid
-  booker_user_id        String                  @db.Uuid
-  status                booking_status          @default(pending_payment)
-  payment_method        payment_method          @default(free)
-  hold_expires_at       DateTime?               @db.Timestamptz(6)
-  total_amount_minor    BigInt?
-  total_currency        String?                 @db.Char(3)
-  created_at            DateTime                @default(now()) @db.Timestamptz(6)
-  updated_at            DateTime                @default(now()) @db.Timestamptz(6)
-  affiliate_commissions affiliate_commissions[]
-  attendees             attendees[]
-  booking_line_items    booking_line_items[]
-  users                 users                   @relation(fields: [booker_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  events                events                  @relation(fields: [event_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tenants               tenants                 @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  coupon_redemptions    coupon_redemptions[]
-  disputes              disputes[]
-  invoices              invoices?
-  payments              payments[]
-  referral_clicks       referral_clicks[]
+  id                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id              String                   @db.Uuid
+  event_id               String                   @db.Uuid
+  booker_user_id         String                   @db.Uuid
+  status                 booking_status           @default(pending_payment)
+  payment_method         payment_method           @default(free)
+  hold_expires_at        DateTime?                @db.Timestamptz(6)
+  total_amount_minor     BigInt?
+  total_currency         String?                  @db.Char(3)
+  created_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  payment_proof_url      String?
+  affiliate_commissions  affiliate_commissions[]
+  attendees              attendees[]
+  booking_line_items     booking_line_items[]
+  users                  users                    @relation(fields: [booker_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  events                 events                   @relation(fields: [event_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenants                tenants                  @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  coupon_redemptions     coupon_redemptions[]
+  disputes               disputes[]
+  event_registration_log event_registration_log[]
+  invoices               invoices?
+  payments               payments[]
+  referral_clicks        referral_clicks[]
 
   @@index([booker_user_id], map: "idx_bookings_booker_user_id")
   @@index([event_id], map: "idx_bookings_event_id")
@@ -568,6 +570,8 @@ model events {
   registration_opens_at  DateTime?                @db.Timestamptz(6)
   registration_closes_at DateTime?                @db.Timestamptz(6)
   settings               Json?
+  payment_instructions   String?
+  payment_hold_hours     Int?                     @default(48)
   addons                 addons[]
   bookings               bookings[]
   bundles                bundles[]
@@ -579,6 +583,7 @@ model events {
   eventMedias            event_media[]
   event_registration_log event_registration_log[]
   event_team_assignments event_team_assignments[]
+  eventVirtualMeetings   event_virtual_meetings[]
   event_wishlist         event_wishlist[]
   entities               entities                 @relation(fields: [hosted_by_entity_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   events                 events?                  @relation("eventsToevents", fields: [parent_event_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -591,7 +596,6 @@ model events {
   ticket_types           ticket_types[]
   waitlist_entries       waitlist_entries[]
   wishlists              wishlists[]
-  eventVirtualMeetings   event_virtual_meetings[]
 
   @@index([hosted_by_entity_id], map: "idx_events_hosted_by_entity_id")
   @@index([status], map: "idx_events_status")
@@ -1035,11 +1039,11 @@ model messages {
   is_edited            Boolean?               @default(false)
   is_deleted           Boolean?               @default(false)
   updated_at           DateTime?              @default(now()) @db.Timestamptz(6)
-  edited_at            DateTime?              @db.Timestamptz(6)
-  deleted_at           DateTime?              @db.Timestamptz(6)
-  reply_to_message_id  String?                @db.Uuid
   attachments_count    Int?                   @default(0)
+  deleted_at           DateTime?              @db.Timestamptz(6)
   deleted_for_everyone Boolean                @default(false)
+  edited_at            DateTime?              @db.Timestamptz(6)
+  reply_to_message_id  String?                @db.Uuid
   status               MessageStatus          @default(ACTIVE)
   type                 MessageType            @default(TEXT)
   version              Int                    @default(1)
@@ -1232,8 +1236,8 @@ model profiles {
   phone_number                                       String?       @db.VarChar(20)
   user_name                                          String?
   headline                                           String?
-  privacy_prefs                                      Json?         @default("{}")
   messaging_restriction                              String?       @default("anyone") @db.VarChar(50)
+  privacy_prefs                                      Json?         @default("{}")
   media_assets_profiles_cover_asset_idTomedia_assets media_assets? @relation("profiles_cover_asset_idTomedia_assets", fields: [cover_asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_profiles_cover")
   media_assets_profiles_photo_asset_idTomedia_assets media_assets? @relation("profiles_photo_asset_idTomedia_assets", fields: [photo_asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_profiles_photo")
   tenants                                            tenants       @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -1830,6 +1834,7 @@ model users {
   tickets                                                              tickets[]
   user_badges                                                          user_badges[]
   user_consents                                                        user_consents[]
+  userIntegrations                                                     user_integrations[]
   user_interests                                                       user_interests[]
   tenants                                                              tenants                         @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   waitlist_entries                                                     waitlist_entries[]
@@ -2335,8 +2340,8 @@ model message_receipts {
   user_id      String    @db.Uuid
   delivered_at DateTime? @db.Timestamptz(6)
   seen_at      DateTime? @db.Timestamptz(6)
-  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   failed_at    DateTime? @db.Timestamptz(6)
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   messages     messages  @relation(fields: [message_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   users        users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
@@ -2668,13 +2673,16 @@ model messaging_requests {
 }
 
 model event_registration_log {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  event_id   String   @db.Uuid
-  changed_by String   @db.Uuid
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id   String    @db.Uuid
+  changed_by String    @db.Uuid
   action     String
-  created_at DateTime @default(now()) @db.Timestamptz(6)
-  users      users    @relation(fields: [changed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  events     events   @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  booking_id String?   @db.Uuid
+  remarks    String?
+  bookings   bookings? @relation(fields: [booking_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users      users     @relation(fields: [changed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  events     events    @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 }
 
 model event_wishlist {
@@ -2688,6 +2696,37 @@ model event_wishlist {
   @@unique([event_id, user_id])
   @@index([event_id], map: "idx_event_wishlist_event")
   @@index([user_id], map: "idx_event_wishlist_user")
+}
+
+model user_integrations {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id          String    @db.Uuid
+  provider         String    @db.VarChar(50)
+  access_token     String
+  refresh_token    String?
+  expires_at       DateTime? @db.Timestamptz(6)
+  provider_user_id String?   @db.VarChar(255)
+  email            String?   @db.VarChar(255)
+  created_at       DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime? @default(now()) @db.Timestamptz(6)
+  users            users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, provider])
+}
+
+model event_virtual_meetings {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id          String    @db.Uuid
+  provider          String    @db.VarChar(50)
+  meeting_id        String?   @db.VarChar(255)
+  calendar_event_id String?   @db.VarChar(255)
+  conference_id     String?   @db.VarChar(255)
+  metadata          Json?     @default("{}")
+  created_at        DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime? @default(now()) @db.Timestamptz(6)
+  events            events    @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([event_id, provider])
 }
 
 enum assignment_state {
@@ -2705,6 +2744,7 @@ enum booking_status {
   cancelled
   refunded
   waitlisted
+  refunded_offline @map("refunded-offline")
 }
 
 enum checkin_method {

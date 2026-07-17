@@ -2011,6 +2011,16 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
   const [instructions, setInstructions] = useState(draft?.instructions ?? editEv?.venue_raw?.meta?.instructions ?? editEv?.venue?.meta?.instructions ?? editEv?.instructions ?? editEv?.instructions ?? "");
   const [instModalOpen, setInstModalOpen] = useState(false);
 
+  const [paymentInstructions, setPaymentInstructions] = useState(
+    draft?.paymentInstructions ?? editEv?.payment_instructions ?? ""
+  );
+  const [paymentHoldHours, setPaymentHoldHours] = useState(
+    draft?.paymentHoldHours ?? (editEv?.payment_hold_hours ? String(editEv.payment_hold_hours) : "48")
+  );
+  const [allowImageProof, setAllowImageProof] = useState<boolean>(
+    draft?.allowImageProof ?? editEv?.settings?.allow_image_proof ?? false
+  );
+
   useEffect(() => {
     const fetchCategories = async () => {
       try {
@@ -2525,12 +2535,18 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
       online_link: locType === 'online' ? venue : null,
       registration_mode: (type === 'paid' || type === 'cash') ? 'paid' : 'free_rsvp',
       cash_enabled: type === 'cash',
+      payment_instructions: type === 'cash' ? paymentInstructions : null,
+      payment_hold_hours: type === 'cash' ? (parseInt(paymentHoldHours) || 48) : null,
       registration_status: registrationStatus,
       registration_opens_at: registrationStatus === 'SCHEDULED' && regStartDate && regStartTime ? new Date(`${regStartDate}T${regStartTime}`).toISOString() : null,
       registration_closes_at: registrationStatus === 'SCHEDULED' && regEndDate && regEndTime ? new Date(`${regEndDate}T${regEndTime}`).toISOString() : null,
       approval_required: approval,
       capacity_total: capacityEnabled && capacity ? parseInt(capacity) : null,
       waitlist,
+      settings: {
+        ...((editEv && editEv.settings) ? editEv.settings : {}),
+        allow_image_proof: allowImageProof
+      },
       tickets: (type === 'paid' || type === 'cash')
         ? tickets.map((t, i) => ({ name: t.n, capacity: parseInt(t.cap) || null, price_minor: parseInt(t.price) * 100, sort_order: i }))
         : [{ name: 'Free Admission', price_minor: 0, capacity: capacityEnabled && capacity ? parseInt(capacity) : null, sort_order: 0 }]
@@ -4001,6 +4017,12 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
         st={st}
         go={go}
         locType={locType}
+        paymentInstructions={paymentInstructions}
+        setPaymentInstructions={setPaymentInstructions}
+        paymentHoldHours={paymentHoldHours}
+        setPaymentHoldHours={setPaymentHoldHours}
+        allowImageProof={allowImageProof}
+        setAllowImageProof={setAllowImageProof}
       />
 
       <QuestionnaireModal
@@ -4464,7 +4486,7 @@ function QuestionnaireModal({ open, onClose, formFields, setFormFields, enableRe
   );
 }
 
-function TicketSettingsModal({ open, onClose, type, setType, tickets, setTickets, setTk, mobile, upgradeModalOpen, setUpgradeModalOpen, upgradeFeature, setUpgradeFeature, st, go, locType }) {
+function TicketSettingsModal({ open, onClose, type, setType, tickets, setTickets, setTk, mobile, upgradeModalOpen, setUpgradeModalOpen, upgradeFeature, setUpgradeFeature, st, go, locType, paymentInstructions, setPaymentInstructions, paymentHoldHours, setPaymentHoldHours, allowImageProof, setAllowImageProof }) {
   if (!open) return null;
   const entitlements = st?.entitlements || DEFAULT_FREE_ENTITLEMENTS;
   const allowedRegistrationModes = entitlements.event_allowed_registration_modes || ["free"];
@@ -4599,6 +4621,38 @@ function TicketSettingsModal({ open, onClose, type, setType, tickets, setTickets
               >
                 ➕ Add ticket type
               </button>
+            </div>
+          )}
+          {type === "cash" && (
+            <div className="cfield" style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ padding: "12px", background: "rgba(245, 158, 11, 0.12)", color: "#f59e0b", borderRadius: "8px", fontSize: 13, lineHeight: 1.5 }}>
+                  <strong>Note:</strong> Please add your payment details in the event description so attendees can see it.
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)", display: "block" }}>Payment Hold Duration (Hours)</label>
+                <input
+                  type="number"
+                  className="cinput"
+                  placeholder="48"
+                  value={paymentHoldHours}
+                  onChange={e => setPaymentHoldHours(e.target.value)}
+                  style={{ width: "100px", padding: "10px 12px", background: "var(--field)", border: "1px solid var(--border)", borderRadius: "8px" }}
+                />
+                <span style={{ fontSize: 11, color: "var(--ink-3)" }}>Specify the capacity hold window before tickets are automatically cancelled.</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>
+                <Toggle on={allowImageProof} onClick={() => setAllowImageProof(!allowImageProof)} />
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)", margin: 0, cursor: "pointer" }} onClick={() => setAllowImageProof(!allowImageProof)}>
+                    Enable Image Proof Upload
+                  </label>
+                  <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>
+                    Allow attendees to upload an image receipt instead of just a transaction ID.
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>

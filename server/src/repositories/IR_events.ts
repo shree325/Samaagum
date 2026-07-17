@@ -20,6 +20,8 @@ export interface IEvent {
   cash_enabled?: boolean;
   financial_locked_at?: Date | null;
   instruction?: string | null;
+  payment_instructions?: string | null;
+  payment_hold_hours?: number | null;
   registration_status?: 'OPEN' | 'CLOSED' | 'SCHEDULED';
   registration_opens_at?: Date | null;
   registration_closes_at?: Date | null;

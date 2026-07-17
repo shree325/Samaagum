@@ -2,10 +2,29 @@ import React, { useState, useEffect } from 'react';
 import { I, Avatar, Grain } from './home-icons';
 import { FEATURED, ME } from './home-data';
 import { Waitlist } from './home-waitlist';
+import { CheckoutModal } from './checkout_modal';
+import { ClaimFlow } from './home-tickets';
 
 export function JoinEventPage({ ev, st, go }) {
     const [fetchedEvent, setFetchedEvent] = useState<any>(null);
+    const [showClaimPopup, setShowClaimPopup] = useState(false);
+    const [claimAlreadyClaimed, setClaimAlreadyClaimed] = useState(false);
     let e = fetchedEvent || ev || FEATURED;
+    const claimToken = ev?.claimToken;
+    const apiBaseJ = window.location.port === "8080" ? "http://localhost:3000" : "";
+
+    // Check on load if this claim token has already been used
+    useEffect(() => {
+        if (!claimToken) return;
+        fetch(`${apiBaseJ}/api/tickets/claim/${claimToken}`)
+            .then(r => r.json())
+            .then(res => {
+                if (res.claimed === true) {
+                    setClaimAlreadyClaimed(true);
+                }
+            })
+            .catch(() => {});
+    }, [claimToken]);
 
     // Normalize if it's a database event
     if (e && (e.starts_at || typeof e.venue === 'object')) {
@@ -240,6 +259,23 @@ export function JoinEventPage({ ev, st, go }) {
     const [qty, setQty] = React.useState(1);
     const [showTicketPopup, setShowTicketPopup] = useState(false);
     const [expandedTicketDetails, setExpandedTicketDetails] = useState<Record<string, boolean>>({});
+    const [checkoutTransactionId, setCheckoutTransactionId] = useState('');
+    const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            if (file.size > 5 * 1024 * 1024) {
+                if (window.toast) window.toast("File is too large (max 5MB)", "warning");
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                setCheckoutTransactionId(ev.target?.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
 
     const sel = tier ? tiers.find((t: any) => t.id === tier) : null;
     const evtCap = liveEvent.cap || e.cap;
@@ -509,7 +545,38 @@ export function JoinEventPage({ ev, st, go }) {
 
                         {/* Ticket sidebar */}
                         <div className="ev-aside">
-                            {(isClosed || isScheduled) && (!liveEvent.bookingStatus || liveEvent.bookingStatus === 'cancelled') ? (
+                            {claimToken && !claimAlreadyClaimed ? (
+                                <div className="ticket-box" style={{ padding: "32px 24px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+                                    <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(99,102,241,0.1)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent)" }}>
+                                        <I.ticket style={{ width: 24, height: 24 }} />
+                                    </div>
+                                    <h3 style={{ margin: 0, fontSize: 18 }}>You've received a ticket!</h3>
+                                    <p style={{ margin: 0, fontSize: 13.5, color: "var(--ink-3)", lineHeight: 1.4 }}>
+                                        A ticket has been approved for you. Verify your email to claim it and add it to your account.
+                                    </p>
+                                    {/* Blurred ticket placeholder */}
+                                    <div style={{ position: 'relative', width: '100%', marginTop: 4 }}>
+                                        <div style={{
+                                            background: 'var(--surface-2)', padding: '24px 14px', borderRadius: 8,
+                                            border: '1px dashed var(--border)', display: 'flex', justifyContent: 'center',
+                                            alignItems: 'center', width: '100%',
+                                            filter: 'blur(4px)', opacity: 0.5, userSelect: 'none'
+                                        }}>
+                                            <I.ticket style={{ width: 40, height: 40, opacity: 0.5 }} />
+                                        </div>
+                                        <button
+                                            className="hbtn hbtn--primary hbtn--block"
+                                            style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '85%', boxShadow: '0 4px 16px rgba(99,102,241,0.4)' }}
+                                            onClick={() => setShowClaimPopup(true)}
+                                        >
+                                            🎟 Claim Your Ticket
+                                        </button>
+                                    </div>
+                                    <p style={{ margin: 0, fontSize: 11, color: 'var(--ink-3)' }}>
+                                        Your ticket is waiting. Verify your email to unlock it.
+                                    </p>
+                                </div>
+                            ) : (isClosed || isScheduled) && (!liveEvent.bookingStatus || liveEvent.bookingStatus === 'cancelled') ? (
                                 <div className="ticket-box" style={{ padding: "32px 24px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
                                     <div style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--surface-3)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-2)" }}>
                                         {isScheduled ? <I.clock style={{ width: 24, height: 24 }} /> : <I.lock style={{ width: 24, height: 24 }} />}
@@ -587,12 +654,79 @@ export function JoinEventPage({ ev, st, go }) {
                                                 </button>
                                             ) : (
                                                 <>
+                                                    {/* Cash + Approval: Show payment instructions & Transaction ID input upfront */}
+                                                    {liveEvent.cash_enabled && liveEvent.approval_required && (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                                                            <div style={{ padding: '10px 12px', background: 'rgba(245,158,11,0.1)', color: '#f59e0b', borderRadius: 8, fontSize: 12, lineHeight: 1.5 }}>
+                                                                <strong>Cash Payment Required</strong> – Please check the event description for payment details and complete the payment before submitting.
+                                                            </div>
+                                                            {(() => {
+                                                                const settingsObj = liveEvent.settings || {};
+                                                                const allowImg = settingsObj.allow_image_proof === true;
+                                                                return (
+                                                                    <>
+                                                                        {allowImg ? (
+                                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                                                                <div style={{ fontSize: 13, color: 'var(--ink-2)', fontWeight: 600 }}>Submit Transaction ID or Upload Proof:</div>
+                                                                                <input
+                                                                                    type="text"
+                                                                                    className="cinput"
+                                                                                    placeholder="Transaction ID / UTR (optional)"
+                                                                                    value={checkoutTransactionId && !checkoutTransactionId.startsWith('data:') ? checkoutTransactionId : ''}
+                                                                                    onChange={ev => setCheckoutTransactionId(ev.target.value)}
+                                                                                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--field)', fontSize: 13 }}
+                                                                                />
+                                                                                <label style={{ 
+                                                                                    display: 'flex', 
+                                                                                    alignItems: 'center', 
+                                                                                    justifyContent: 'center', 
+                                                                                    gap: 8, 
+                                                                                    padding: '10px 12px', 
+                                                                                    background: checkoutTransactionId.startsWith('data:') ? 'var(--green)' : 'var(--surface)', 
+                                                                                    border: checkoutTransactionId.startsWith('data:') ? 'none' : '1px solid var(--border)', 
+                                                                                    borderRadius: 8, 
+                                                                                    fontSize: 13, 
+                                                                                    fontWeight: 600, 
+                                                                                    color: checkoutTransactionId.startsWith('data:') ? '#fff' : 'var(--ink-2)', 
+                                                                                    cursor: 'pointer',
+                                                                                    transition: 'all 0.2s'
+                                                                                }}>
+                                                                                    <I.image style={{ width: 16, height: 16 }} />
+                                                                                    {checkoutTransactionId.startsWith('data:') ? 'Change Image' : 'Upload Image Proof'}
+                                                                                    <input
+                                                                                        type="file"
+                                                                                        accept="image/*"
+                                                                                        onChange={handleImageChange}
+                                                                                        style={{ display: 'none' }}
+                                                                                    />
+                                                                                </label>
+                                                                                {checkoutTransactionId.startsWith('data:') && (
+                                                                                    <div style={{ fontSize: 12, color: 'var(--accent-2)', fontWeight: 600, textAlign: 'center' }}>Image selected</div>
+                                                                                )}
+                                                                            </div>
+                                                                        ) : (
+                                                                            <input
+                                                                                type="text"
+                                                                                className="cinput"
+                                                                                placeholder="Transaction ID / UTR (optional)"
+                                                                                value={checkoutTransactionId}
+                                                                                onChange={ev => setCheckoutTransactionId(ev.target.value)}
+                                                                                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--field)', fontSize: 13 }}
+                                                                            />
+                                                                        )}
+                                                                    </>
+                                                                );
+                                                            })()}
+                                                        </div>
+                                                    )}
                                                     <button 
                                                         className="hbtn hbtn--primary hbtn--block" 
                                                         disabled={liveEvent.type !== "Free" && !tier}
-                                                        onClick={() => { register(liveEvent.id, false, { ticketTypeId: tier, qty, ticketName: sel?.n }, liveEvent.inviteToken); go("events"); }}
+                                                        onClick={() => setShowCheckoutModal(true)}
                                                     >
-                                                        {liveEvent.type === "Free" ? "Request to join" : `Get ${qty > 1 ? qty + " tickets" : "ticket"}`}
+                                                        {liveEvent.cash_enabled && liveEvent.approval_required
+                                                            ? (liveEvent.type === "Free" ? "Request to join" : 'Submit Payment Request')
+                                                            : (liveEvent.type === "Free" ? "Request to join" : `Get ${qty > 1 ? qty + " tickets" : "ticket"}`)}
                                                     </button>
                                                     {(() => {
                                                         let settingsObj = liveEvent.settings || {};
@@ -711,6 +845,25 @@ export function JoinEventPage({ ev, st, go }) {
                                 </div>
                             )}
 
+                            <CheckoutModal
+                                isOpen={showCheckoutModal}
+                                onClose={() => setShowCheckoutModal(false)}
+                                liveEvent={liveEvent}
+                                qty={qty}
+                                st={st}
+                                sel={sel}
+                                onConfirm={(checkoutPayload: any) => {
+                                    setShowCheckoutModal(false);
+                                    register(liveEvent.id, false, { 
+                                        ticketTypeId: tier, 
+                                        qty, 
+                                        ticketName: sel?.n, 
+                                        transactionId: checkoutTransactionId || undefined,
+                                        ...checkoutPayload 
+                                    }, liveEvent.inviteToken);
+                                    go("events");
+                                }}
+                            />
 
                             <div className="host-card">
                                 <div className="hh"><Avatar name={e.hostBy || e.host} userId={e.hostUserId} img={e.hostPhoto} size={46} /><div><div className="n">{e.host}</div><div className="r">Organizer · 24 events</div></div></div>
@@ -720,6 +873,33 @@ export function JoinEventPage({ ev, st, go }) {
                     </div>
                 </div>
             </div>
+            {/* OTP Popup */}
+            {showClaimPopup && (
+                <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999 }}>
+                    <button 
+                        onClick={() => setShowClaimPopup(false)}
+                        style={{ position: "absolute", top: 24, right: 24, zIndex: 100000, background: "var(--surface-3)", border: "none", borderRadius: "50%", width: 40, height: 40, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}
+                    >
+                        ✕
+                    </button>
+                    <div style={{ width: '100%', height: '100%' }}>
+                        <ClaimFlow 
+                            token={claimToken} 
+                            st={st} 
+                            go={go} 
+                            onClaimed={(_newToken: any) => {
+                                // Re-fetch this event's data from the server now that the user
+                                // is verified and the booking is confirmed. This updates
+                                // liveEvent.bookingStatus → 'confirmed' so the pending banner
+                                // disappears and the user sees the confirmed member view.
+                                fetchEventData();
+                                if (fetchJoinedEvents) fetchJoinedEvents();
+                                setShowClaimPopup(false);
+                            }}
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

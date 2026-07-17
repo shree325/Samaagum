@@ -279,6 +279,8 @@ export class EventService {
       approval_required: body.approval_required || false,
       cash_enabled: body.cash_enabled || false,
       instruction: body.instruction,
+      payment_instructions: body.payment_instructions,
+      payment_hold_hours: body.payment_hold_hours,
       registration_status: body.registration_status,
       registration_opens_at: body.registration_opens_at ? new Date(body.registration_opens_at) : null,
       registration_closes_at: body.registration_closes_at ? new Date(body.registration_closes_at) : null,
@@ -799,6 +801,7 @@ export class EventService {
 
   // Ownership bypass -> assigned role's baseline_capabilities -> governance-tier fallback
   static async verifyEventCapability(userId: string, eventId: string, capability: string): Promise<boolean> {
+    if (!userId || !eventId) return false;
     const event = await prisma.events.findUnique({ where: { id: eventId } });
     if (!event) return false;
     const entityRows = await prisma.$queryRawUnsafe<{ user_id: string }[]>(
@@ -971,6 +974,8 @@ export class EventService {
       venue: body.venue,
       online_link: body.online_link,
       instruction: body.instruction,
+      payment_instructions: body.payment_instructions,
+      payment_hold_hours: body.payment_hold_hours,
       hosted_by_entity_id: hostedByEntityId,
       registration_status: body.registration_status,
       registration_opens_at: body.registration_opens_at ? new Date(body.registration_opens_at) : undefined,
@@ -2335,6 +2340,26 @@ export class EventService {
                 provider_ref: JSON.stringify({ eventId: event.id, eventTitle: event.title })
               }
             }).catch(() => {});
+
+            // Fetch the buyer's email and name
+            const buyerUser = await prisma.users.findUnique({ where: { id: wb.booker_user_id }, include: { profiles: true } });
+            if (buyerUser?.primary_email) {
+              const { TicketNotificationService } = require('./TicketNotificationService');
+              const bName = Array.isArray(buyerUser.profiles) ? buyerUser.profiles[0]?.display_name : (buyerUser.profiles as any)?.display_name;
+              // Send buyer payment/confirmation update
+              await TicketNotificationService.notifyBuyer(wb, event, buyerUser.primary_email, bName || 'Buyer', 'approved');
+
+              // Fetch attendees and tickets for this booking
+              const dbAttendees = await prisma.attendees.findMany({
+                where: { booking_id: wb.id },
+                include: { tickets: true }
+              });
+              for (const att of dbAttendees) {
+                if (att.tickets) {
+                  await TicketNotificationService.handleAttendeeApproval(wb, event, att, att.tickets, buyerUser.primary_email, bName || 'Buyer');
+                }
+              }
+            }
           } else {
             // pending_approval — notify user
             sendNotificationToUser(wb.booker_user_id, 'group.notification', {

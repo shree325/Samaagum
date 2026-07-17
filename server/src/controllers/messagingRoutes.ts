@@ -8,6 +8,7 @@ import { notificationService, NotificationService } from '../services/Notificati
 import { EventService } from '../services/EventService';
 import { EventInvitationService } from '../services/EventInvitationService';
 import { sendEmail, generateTicketHtml, formatCurrency } from '../utils/email';
+import { TicketNotificationService } from '../services/TicketNotificationService';
 
 // Must exactly match the client-side formula in normalizeJoinedEvent
 // (client/src/home-tickets.tsx) that computes the "friendly" ticket id shown to users,
@@ -1610,11 +1611,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
   );
 
   // POST /api/messaging/events/:id/request-join
-  fastify.post<{ Params: { id: string } }>('/events/:id/request-join', { preHandler: [(fastify as any).authenticate] }, async (request, reply) => {
-    const userId = request.user?.id;
-    if (!userId) {
-      return reply.status(401).send({ success: false, message: 'Unauthorized' });
-    }
+  fastify.post<{ Params: { id: string } }>('/events/:id/request-join', { preHandler: [(fastify as any).optionalAuthenticate] }, async (request, reply) => {
     const eventId = request.params.id;
     try {
       const event = await prisma.events.findUnique({
@@ -1622,6 +1619,40 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       });
       if (!event) {
         return reply.status(404).send({ success: false, message: 'Event not found' });
+      }
+
+      let userId = request.user?.id;
+      if (!userId) {
+        const { buyer } = request.body as any;
+        if (!buyer || !buyer.email) {
+          return reply.status(400).send({ success: false, message: 'Buyer information is required.' });
+        }
+        // Find or create buyer user with email_verified: false
+        let dbUser = await prisma.users.findFirst({
+          where: { primary_email: { equals: buyer.email, mode: 'insensitive' } }
+        });
+        if (!dbUser) {
+          dbUser = await prisma.users.create({
+            data: {
+              tenant_id: event.tenant_id,
+              primary_email: buyer.email.toLowerCase().trim(),
+              email_verified: false,
+              profile_completed: false,
+              state: 'active' as any,
+              first_name: buyer.name?.split(' ')[0] || null,
+              last_name: buyer.name?.split(' ').slice(1).join(' ') || null,
+              profiles: {
+                create: {
+                  tenant_id: event.tenant_id,
+                  display_name: buyer.name || buyer.email.split('@')[0],
+                  first_name: buyer.name?.split(' ')[0] || null,
+                  last_name: buyer.name?.split(' ').slice(1).join(' ') || null,
+                }
+              }
+            }
+          });
+        }
+        userId = dbUser.id;
       }
 
       const isHostOrCoHost = await EventService.verifyEventHostOrCoHost(userId, eventId);
@@ -1791,6 +1822,9 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           await prisma.checkins.deleteMany({
             where: { ticket_id: { in: tIds } }
           });
+          await prisma.ticket_claims.deleteMany({
+            where: { ticket_id: { in: tIds } }
+          });
           await prisma.tickets.deleteMany({
             where: { id: { in: tIds } }
           });
@@ -1859,12 +1893,10 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       }
 
       const isCash = event.cash_enabled === true;
-      const initialStatus = isWaitlisted 
-        ? 'waitlisted' 
-        : (approvalRequired ? 'pending_approval' : (isCash ? 'pending_payment' : 'confirmed'));
-      const initialTicketStatus = isWaitlisted 
-        ? 'waitlisted' 
-        : ((approvalRequired || isCash) ? 'reserved' : 'confirmed');
+      const submittedTransactionId = (answers as any).transactionId || null;
+      const initialBookingStatus: string = isWaitlisted ? 'waitlisted' : (approvalRequired ? 'pending_approval' : (isCash ? 'pending_payment' : 'confirmed'));
+      const initialTicketStatus: string = isWaitlisted ? 'waitlisted' : ((approvalRequired || isCash) ? 'reserved' : 'confirmed');
+      const initialAttendeeStatus: string = isWaitlisted ? 'waitlisted' : (approvalRequired ? 'pending' : 'approved');
       const paymentMethod = isCash ? 'cash' : 'free';
       const ticketPriceMinor = ticketType?.price_amount_minor ? Number(ticketType.price_amount_minor) : 0;
       const requestedQty = answers.qty ? Number(answers.qty) : 1;
@@ -1894,16 +1926,20 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       }
 
       // Perform transaction to create booking, line item, ticket, and attendee
-      const { booking, ticket } = await prisma.$transaction(async (tx) => {
+      const { booking, tickets } = await prisma.$transaction(async (tx) => {
         const bk = await tx.bookings.create({
           data: {
             tenant_id: event.tenant_id,
             event_id: eventId,
             booker_user_id: userId,
-            status: initialStatus as any,
+            status: initialBookingStatus as any,
             payment_method: paymentMethod,
             total_amount_minor: ticketPriceMinor * requestedQty,
-            total_currency: 'INR'
+            total_currency: 'INR',
+            hold_expires_at: initialBookingStatus === 'pending_payment'
+              ? new Date(Date.now() + ((event as any).payment_hold_hours || 48) * 60 * 60 * 1000)
+              : null,
+            ...(submittedTransactionId ? { payment_proof_url: submittedTransactionId } : {})
           }
         });
 
@@ -1918,44 +1954,82 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           }
         });
 
-        let tk = await tx.tickets.create({
-          data: {
-            tenant_id: event.tenant_id,
-            line_item_id: li.id,
-            attendee_name: requesterName,
-            attendee_email: requesterEmail,
-            qr_token: require('crypto').randomUUID(),
-            status: initialTicketStatus as any,
-            claimed_by_user_id: userId
+        const createdTickets = [];
+        const attendeesPayload = Array.isArray(answers.attendees) && answers.attendees.length > 0 
+          ? answers.attendees 
+          : Array.from({ length: requestedQty }).map(() => ({ name: requesterName, email: requesterEmail, gender: user?.gender || null }));
+
+        for (const att of attendeesPayload) {
+          let assignedUserId: string | null = null;
+          let attName = att.name || requesterName;
+          let attEmail = (att.email || requesterEmail).toLowerCase().trim();
+          let attGender = att.gender || null;
+
+          if (attEmail) {
+            const existingUser = await tx.users.findFirst({
+              where: { primary_email: { equals: attEmail, mode: 'insensitive' } }
+            });
+            if (existingUser) {
+              assignedUserId = existingUser.id;
+              if (existingUser.id === userId) {
+                  attName = requesterName;
+              }
+            }
           }
-        });
 
-        // ticket_code is derived from the ticket's own id (only known after insert) using the
-        // exact same formula the client uses to display a "friendly" ticket id in the UI
-        // (see normalizeJoinedEvent in client/src/home-tickets.tsx). Keeping these in sync is
-        // what lets a scanner manually type the on-screen ticket id and have it resolve.
-        tk = await tx.tickets.update({
-          where: { id: tk.id },
-          data: { ticket_code: computeTicketCode(event.title, tk.id) }
-        });
+          let tk = await tx.tickets.create({
+            data: {
+              tenant_id: event.tenant_id,
+              line_item_id: li.id,
+              attendee_name: attName,
+              attendee_email: attEmail,
+              attendee_gender: attGender,
+              qr_token: require('crypto').randomUUID(),
+              status: initialTicketStatus as any,
+              claimed_by_user_id: assignedUserId
+            }
+          });
 
-        await tx.attendees.create({
-          data: {
-            tenant_id: event.tenant_id,
-            booking_id: bk.id,
-            ticket_id: tk.id,
-            user_id: userId,
-            name: requesterName,
-            email: requesterEmail,
-            checkin_status: 'not_checked_in',
-            notes: JSON.stringify({
-              ...(typeof answers === 'object' && answers !== null ? answers : {}),
-              registration_location: registrationLocation
-            })
+          tk = await tx.tickets.update({
+            where: { id: tk.id },
+            data: { ticket_code: computeTicketCode(event.title, tk.id) }
+          });
+
+          await tx.attendees.create({
+            data: {
+              tenant_id: event.tenant_id,
+              booking_id: bk.id,
+              ticket_id: tk.id,
+              user_id: assignedUserId,
+              name: attName,
+              email: attEmail,
+              gender: attGender,
+              checkin_status: 'not_checked_in',
+              status: initialAttendeeStatus,
+              notes: JSON.stringify({
+                ...(typeof answers === 'object' && answers !== null ? answers : {}),
+                registration_location: registrationLocation
+              })
+            } as any
+          });
+
+          if (!assignedUserId && attEmail) {
+            const crypto = require('crypto');
+            const token = crypto.randomBytes(32).toString('hex');
+            await tx.ticket_claims.create({
+              data: {
+                tenant_id: event.tenant_id,
+                ticket_id: tk.id,
+                token,
+                state: 'issued'
+              }
+            });
           }
-        });
 
-        return { booking: bk, ticket: tk };
+          createdTickets.push(tk);
+        }
+
+        return { booking: bk, tickets: createdTickets };
       });
 
       // Auto-remove from wishlist if successful
@@ -1967,7 +2041,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         await EventInvitationService.consumeToken(inviteToken, userId, 'join');
       }
 
-      if (initialStatus === 'waitlisted') {
+      if (initialBookingStatus === 'waitlisted') {
         const { EventService } = require('../services/EventService');
         const ws = await EventService.getWaitlistStatus(eventId, userId);
 
@@ -2025,7 +2099,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           totalWaiting: ws.totalWaiting, 
           message: 'Joined waitlist successfully.' 
         });
-      } else if (initialStatus === 'pending_approval') {
+      } else if (initialBookingStatus === 'pending_approval') {
         let ownerUserId = null;
         const entityRow = await prisma.entities.findUnique({
           where: { id: event.hosted_by_entity_id }
@@ -2109,6 +2183,20 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           groupsNamespace.to(`event_${eventId}`).emit('dashboard_updated', { action: 'request-join', eventId });
         }
 
+        // Notify Buyer that their booking request was submitted successfully
+        if (requesterEmail) {
+          await TicketNotificationService.notifyBuyer(booking, event, requesterEmail, requesterName, 'submitted');
+        }
+
+        // Also notify each attendee (if existing Samaagum user, they get a pending email)
+        const dbAttendeesForPending = await prisma.attendees.findMany({ where: { ticket_id: { in: tickets.map((t: any) => t.id) } } });
+        for (const tk of tickets) {
+          const att = dbAttendeesForPending.find((a: any) => a.ticket_id === tk.id);
+          if (att) {
+            await TicketNotificationService.notifyAttendeePending(tk, att, event, requesterName);
+          }
+        }
+
         return reply.send({ success: true, status: 'pending', message: 'Join request submitted for approval.' });
       } else {
         const groupsNamespace = (fastify as any).io?.of('/groups');
@@ -2116,30 +2204,19 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           groupsNamespace.to(`event_${eventId}`).emit('dashboard_updated', { action: 'join', eventId });
         }
 
-        let emailMsg = '';
-        if (requesterEmail) {
-          try {
-            const dateStr = event.starts_at ? new Date(event.starts_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'TBD';
-            const vObj = (event.venue as any) || {};
-            const venueStr = vObj.address || vObj.name || event.location_type || 'TBD';
-            const lineItems = await prisma.booking_line_items.findMany({ where: { booking_id: booking.id } });
-            const bookingQty = lineItems.reduce((sum, item) => sum + item.quantity, 0);
-            const totalPaidMinor = booking.total_amount_minor ? Number(booking.total_amount_minor) : 0;
-            const paidStr = totalPaidMinor > 0 ? formatCurrency(totalPaidMinor, booking.total_currency || 'INR') : 'Free';
+        const isConfirmed = initialBookingStatus === 'confirmed';
+        const isPending = ['pending_approval', 'waitlisted', 'pending_payment'].includes(initialBookingStatus);
 
-            const htmlContent = generateTicketHtml({
-              qrToken: ticket.qr_token,
-              ticketCode: ticket.ticket_code || ticket.id,
-              attendeeName: requesterName,
-              dateString: dateStr,
-              venueString: venueStr,
-              paidAmount: paidStr,
-              status: ticket.status === 'confirmed' ? 'Confirmed' : 'Reserved',
-              isOnline: event.location_type === 'online',
-              onlineLink: event.online_link || '',
-              cover: (event as any).cover || ((event.venue as any)?.meta?.cover) || '',
-              quantity: bookingQty
-            });
+        const notifyStatusMap: any = {
+          'confirmed': 'approved',
+          'pending_approval': 'submitted',
+          'waitlisted': 'waitlisted',
+          'pending_payment': 'submitted'
+        };
+
+        if (requesterEmail) {
+          await TicketNotificationService.notifyBuyer(booking, event, requesterEmail, requesterName, notifyStatusMap[initialBookingStatus] as any);
+        }
 
             if (await notificationService.shouldDeliver(userId, 'TICKET_BOOKED', 'email')) {
               await sendEmail({
@@ -2155,17 +2232,84 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           } catch (err: any) {
             console.error('Failed to send ticket email:', err);
             emailMsg = ` Failed to email ticket.`;
+        const dbAttendees = await prisma.attendees.findMany({ where: { ticket_id: { in: tickets.map(t => t.id) } } });
+        
+        for (const tk of tickets) {
+          const att = dbAttendees.find(a => a.ticket_id === tk.id);
+          if (att) {
+            if (isConfirmed) {
+              await TicketNotificationService.handleAttendeeApproval(booking, event, att, tk, requesterEmail || '', requesterName);
+            } else if (isPending) {
+              await TicketNotificationService.notifyAttendeePending(tk, att, event, requesterName);
+            }
           }
-        } else {
-          emailMsg = ` No email address found for user.`;
         }
 
-        if (initialStatus === 'pending_payment') {
-          return reply.send({ success: true, status: 'pending_payment', message: 'Joined event. Booking pending cash payment at the venue.' + emailMsg });
+        if (initialBookingStatus === 'pending_payment') {
+          // Notify the host about the cash payment registration
+          let ownerUserId = null;
+          const entityRow = await prisma.entities.findUnique({ where: { id: event.hosted_by_entity_id } });
+          if (entityRow) ownerUserId = entityRow.user_id;
+          if (!ownerUserId) {
+            const ownerRole = await prisma.roles.findFirst({ where: { key: 'group_owner' } });
+            if (ownerRole) {
+              const assignment = await prisma.role_assignments.findFirst({
+                where: { scope_entity_id: event.hosted_by_entity_id, role_id: ownerRole.id }
+              });
+              if (assignment) ownerUserId = assignment.user_id;
+            }
+          }
+          if (!ownerUserId) ownerUserId = userId; // Fallback
+
+          const venueObj: any = typeof event.venue === 'string' && event.venue.trim().startsWith('{')
+            ? JSON.parse(event.venue) : (event.venue || {});
+          const eventMeta = venueObj?.meta || {};
+          const formFields = Array.isArray(eventMeta?.formFields) ? eventMeta.formFields : [];
+          const questionLabels = formFields.reduce((acc: Record<string, string>, field: any) => {
+            if (field?.id && field?.question) acc[field.id] = field.question;
+            return acc;
+          }, {});
+
+          const filteredAnswers = { ...answers };
+          delete filteredAnswers.ticketTypeId;
+          delete filteredAnswers.qty;
+
+          const notif = await prisma.notification_log.create({
+            data: {
+              tenant_id: event.tenant_id,
+              user_id: ownerUserId,
+              channel: 'app',
+              template_key: 'event_join_request', // Re-using event_join_request so it shows up in inbox
+              status: 'queued',
+              provider_ref: JSON.stringify({
+                eventId,
+                eventTitle: event.title,
+                requesterId: userId,
+                requesterName,
+                answers: filteredAnswers,
+                questionLabels
+              })
+            }
+          });
+
+          const chatNamespace = (fastify as any).io?.of('/chat');
+          if (chatNamespace) {
+            chatNamespace.to(`user:${ownerUserId}`).emit('group.notification', {
+              id: notif.id,
+              type: 'registration',
+              text: `<b>${requesterName}</b> submitted a cash payment request for <b>${event.title}</b>`,
+              eventId: eventId,
+              answers: filteredAnswers,
+              questionLabels
+            });
+          }
+
+          return reply.send({ success: true, status: 'pending_payment', message: 'Joined event. Booking pending cash payment at the venue.' });
         }
-        return reply.send({ success: true, status: 'confirmed', message: 'Joined event successfully.' + emailMsg });
+        return reply.send({ success: true, status: 'confirmed', message: 'Joined event successfully.' });
       }
     } catch (err: any) {
+      console.error('[request-join] error:', err);
       return reply.status(500).send({ success: false, message: err.message });
     }
   });
@@ -2431,4 +2575,3 @@ export async function messagingRoutes(fastify: FastifyInstance) {
     }
   });
 }
-

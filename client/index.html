@@ -11,6 +11,13 @@
   <!-- Handle Google OAuth redirect: ?token=...&auth=google → save token → go to home (or profile setup if new user) -->
   <script>
     (function() {
+      // Intercept event claims or public event links
+      var hash = window.location.hash;
+      if (hash.startsWith('#event=') || hash.startsWith('#/event/')) {
+        window.location.replace('pages/Samaagum Home.html' + hash);
+        return;
+      }
+
       var params = new URLSearchParams(window.location.search);
       var token = params.get('token');
       var auth  = params.get('auth');

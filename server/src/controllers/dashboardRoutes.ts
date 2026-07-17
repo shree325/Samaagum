@@ -360,7 +360,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
     });
 
     // 3. GET /upcoming-events
-    fastify.get('/upcoming-events', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+    fastify.get('/upcoming-events', { preHandler: [(fastify as any).optionalAuthenticate] }, async (request: any, reply) => {
         try {
             if (!request.user) {
                 return reply.send({ success: true, data: [] });
