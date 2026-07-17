@@ -26,7 +26,7 @@ export function CheckoutModal({
                     return {
                         name: isFirst ? (ME.name || '') : '', 
                         email: isFirst ? ((ME as any).email || (ME as any).primary_email || '') : '', 
-                        gender: isFirst ? (ME.gender || '') : '', 
+                        gender: isFirst ? ((ME as any).gender || '') : '', 
                         status: 'unknown', 
                         warningMsg: ''
                     };

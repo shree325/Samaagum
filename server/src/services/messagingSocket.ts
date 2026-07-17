@@ -2,6 +2,8 @@ import { Server, Socket } from "socket.io";
 import prisma from "../config/prisma";
 import { DEFAULT_CHAT_SETTINGS } from "../settings-library/settingsSeeder";
 import { conversationReadService } from './ConversationReadService';
+import { NotificationPreferenceType } from "@prisma/client";
+import { notificationService } from "./NotificationService";
 
 let chatNamespace: any = null;
 
@@ -584,20 +586,23 @@ export async function startMessaging(io: Server): Promise<void> {
           });
 
           // Log the message notification to the database log
-          try {
-            await prisma.notification_log.create({
-              data: {
-                tenant_id: "00000000-0000-0000-0000-000000000000",
-                user_id: op.user_id,
-                channel: "socket",
-                template_key: "message_received",
-                status: isOnline ? "delivered" : "sent",
-                provider_ref: message.id
-              }
-            });
-            console.log(`📝 Logged message notification in notification_log for user ${op.user_id} with ref ${message.id}`);
-          } catch (logErr) {
-            console.error("❌ Failed to log notification in notification_log:", logErr);
+          const deliver = await notificationService.shouldDeliver(op.user_id, NotificationPreferenceType.MESSAGE_RECEIVED);
+          if (deliver) {
+            try {
+              await prisma.notification_log.create({
+                data: {
+                  tenant_id: "00000000-0000-0000-0000-000000000000",
+                  user_id: op.user_id,
+                  channel: "socket",
+                  template_key: "message_received",
+                  status: isOnline ? "delivered" : "sent",
+                  provider_ref: message.id
+                }
+              });
+              console.log(`📝 Logged message notification in notification_log for user ${op.user_id} with ref ${message.id}`);
+            } catch (logErr) {
+              console.error("❌ Failed to log notification in notification_log:", logErr);
+            }
           }
 
           receiptsList.push({
@@ -634,8 +639,11 @@ export async function startMessaging(io: Server): Promise<void> {
         chatNamespace.to(roomName).emit("message.created", eventPayload);
 
         // Emit real-time notification to all other participants' personal rooms
-        targetIds.forEach(tId => {
-          chatNamespace.to(`user:${tId}`).emit("message.received", eventPayload);
+        targetIds.forEach(async (tId) => {
+          const deliver = await notificationService.shouldDeliver(tId, NotificationPreferenceType.MESSAGE_RECEIVED);
+          if (deliver) {
+            chatNamespace.to(`user:${tId}`).emit("message.received", eventPayload);
+          }
         });
 
         console.log(`✉️ Message sent by ${userId} (display: ${senderName}) in room ${roomName}: "${content.substring(0, 30)}..."`);

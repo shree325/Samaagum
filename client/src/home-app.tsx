@@ -21,6 +21,7 @@ import { CityPicker, Sidebar, Topbar } from './home-shell';
 import { apiBase, UpgradePage, CheckoutPage, CheckoutSuccessPage } from './home-subscription';
 import { ClaimFlow, MyTickets, AllTickets, TicketDetail, ScanHub, ScanEventPage } from './home-tickets';
 import { EventDashboard } from './event-dashboard';
+import { GroupDashboard } from './group-dashboard';
 import { Waitlist } from './home-waitlist';
 import { I, tick } from './home-icons';
 import { PublicProfile } from './public-profile';
@@ -1386,6 +1387,7 @@ useEffect(() => {
     if (v === "create-group") return <CreateGroup go={go} mobile={mobile} st={st} />;
     if (v === "edit-group") return <CreateGroup mode="edit" editGroup={cur.param} go={go} mobile={mobile} st={st} />;
     if (v === "event-dashboard") return <EventDashboard ev={cur.param} st={st} go={go} />;
+    if (v === "group-dashboard") return <GroupDashboard group={cur.param} st={st} go={go} />;
     if (v === "scan") return <ScanHub st={st} go={go} />;
     if (v === "scan-event") return <ScanEventPage ev={cur.param} go={go} />;
     if (v === "ticket") return <TicketDetail tkt={cur.param} st={st} go={go} />;

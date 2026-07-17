@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useEffect, useRef, useState } from 'react';
 import { EVENTS, Mark } from './components';
-import { GROUPS, THREADS } from './home-data';
+import { GROUPS, THREADS, ME } from './home-data';
 import { Avatar, useProfileSync } from './home-icons';
 import { Profile } from './home-profile';
 import { apiBase } from './home-subscription';
@@ -38,6 +38,8 @@ export function Messages({ st, go, mobile, socket }) {
   const scrollRef = useRef(null);
   const prevActiveIdRef = useRef(null);
   const prevMsgLengthRef = useRef(0);
+  const threadsRef = useRef([]);
+  const searchResultsRef = useRef([]);
 
   const getActiveUserId = () => {
     try {
@@ -401,6 +403,11 @@ export function Messages({ st, go, mobile, socket }) {
     }
   };
 
+  // Keep refs in sync with latest state so the presence interval can read
+  // them without being a reactive dependency (prevents exponential re-subscriptions)
+  useEffect(() => { threadsRef.current = threads; }, [threads]);
+  useEffect(() => { searchResultsRef.current = searchResults; }, [searchResults]);
+
   useEffect(() => {
     fetchConversations();
     fetchConnectedUserIds();
@@ -409,11 +416,13 @@ export function Messages({ st, go, mobile, socket }) {
     }
   }, [apiBase, seg]);
 
-  // 2. Fetch presence of participants dynamically on thread list load/refresh
+  // 2. Fetch presence of participants — uses a stable interval reading from refs
+  // so it does NOT re-subscribe every time threads/searchResults change, which
+  // previously caused exponential interval creation and a Node OOM crash.
   useEffect(() => {
     const fetchPresence = () => {
-      const threadUserIds = threads.flatMap(t => t.participants?.map(p => p.userId) || []);
-      const searchUserIds = searchResults.map(r => r.id);
+      const threadUserIds = threadsRef.current.flatMap(t => t.participants?.map(p => p.userId) || []);
+      const searchUserIds = searchResultsRef.current.map(r => r.id);
       const userIds = Array.from(new Set([...threadUserIds, ...searchUserIds])).filter(uid => uid !== currentUserId);
 
       if (userIds.length === 0) return;
@@ -436,10 +445,12 @@ export function Messages({ st, go, mobile, socket }) {
         .catch(err => console.error("Error fetching batch presence:", err));
     };
 
+    // Run once on mount, then every 30 s (presence doesn't need sub-5s freshness)
     fetchPresence();
-    const interval = setInterval(fetchPresence, 4000);
+    const interval = setInterval(fetchPresence, 30000);
     return () => clearInterval(interval);
-  }, [threads, searchResults, currentUserId, apiBase]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUserId, apiBase]); // intentionally omit threads/searchResults — read via refs
 
   // Find active thread
   const active = threads.find(t => t.id === activeId);
@@ -701,7 +712,7 @@ export function Messages({ st, go, mobile, socket }) {
               if (t.id === activeId) {
                 return {
                   ...t,
-                  participants: t.participants.map(p => {
+                  participants: (t.participants || []).map(p => {
                     if (p.userId !== currentUserId && p.id !== currentUserId) {
                       return { ...p, messagingRestriction: 'no_one' };
                     }

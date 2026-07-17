@@ -26,11 +26,26 @@ export interface NotificationPayload {
 
 export class NotificationRealtimeService {
     static async buildPayload(userId: string): Promise<NotificationPayload> {
-        const logs = await prisma.notification_log.findMany({
-            where: { user_id: userId },
+        const rawLogs = await prisma.notification_log.findMany({
+            where: { user_id: userId, status: { not: 'dedup_sentinel' } },
             orderBy: { created_at: 'desc' },
-            take: 50
+            take: 100
         });
+
+        const { NotificationService, notificationService } = await import('./NotificationService');
+        const { inAppEnabled, preferences } = await notificationService.getUserPreferences(userId);
+
+        const logs = rawLogs.filter(log => {
+            if (!inAppEnabled) return false;
+            
+            const prefType = NotificationService.getPrefType(log.template_key);
+            
+            if (prefType) {
+                const key = `${prefType}:app`;
+                return preferences[key] !== false;
+            }
+            return true;
+        }).slice(0, 50);
 
         // Group provider_refs by template_key
         const msgIds = logs.filter(l => l.template_key === 'message_received' && l.provider_ref).map(l => l.provider_ref as string);

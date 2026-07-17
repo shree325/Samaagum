@@ -230,6 +230,8 @@ fastify.register(groupRoutes, { prefix: '/api/groups' });
 fastify.register(eventRoutes, { prefix: '/api/events' });
 fastify.register(dashboardRoutes, { prefix: '/api/dashboard' });
 fastify.register(integrationRoutes, { prefix: '/api/integrations' });
+import { notificationPreferencesRoutes } from './controllers/notificationPreferencesRoutes';
+fastify.register(notificationPreferencesRoutes, { prefix: '/api/notification-preferences' });
 
 // Health check route
 fastify.get('/health', async (request, reply) => {

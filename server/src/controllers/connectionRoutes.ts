@@ -242,18 +242,22 @@ export async function connectionRoutes(fastify: FastifyInstance) {
 
       const updated = await prisma.connections.update({ where: { id }, data: { state: 'accepted' } });
 
-      // Create a persistent notification log entry for the requester
+      // Create a persistent notification log entry for the requester (if they allow it)
       try {
-        await prisma.notification_log.create({
-          data: {
-            tenant_id: conn.tenant_id,
-            user_id: conn.requester_user_id,
-            channel: 'socket',
-            template_key: 'connection_accepted',
-            provider_ref: conn.addressee_user_id,
-            status: 'queued'
-          }
-        });
+        const { notificationService } = require('../services/NotificationService');
+        const canDeliver = await notificationService.shouldDeliverByTemplateKey(conn.requester_user_id, 'connection_accepted');
+        if (canDeliver) {
+          await prisma.notification_log.create({
+            data: {
+              tenant_id: conn.tenant_id,
+              user_id: conn.requester_user_id,
+              channel: 'socket',
+              template_key: 'connection_accepted',
+              provider_ref: conn.addressee_user_id,
+              status: 'queued'
+            }
+          });
+        }
       } catch (err) {
         console.error("Failed to create notification log for accepted connection:", err);
       }

@@ -1,5 +1,8 @@
 {
   "watch": ["src"],
   "ext": "ts,json",
-  "ignore": ["src/i35-validation.ts"]
+  "ignore": ["src/i35-validation.ts"],
+  "execMap": {
+    "ts": "node --max-old-space-size=4096 -r ts-node/register"
+  }
 }

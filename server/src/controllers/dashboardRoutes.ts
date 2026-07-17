@@ -447,20 +447,17 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                     fp.author_user_id, fp.scope_type, fp.scope_id,
                     u.first_name, u.last_name, u.primary_email, u.profile_image_data,
                     g.name as group_name, g.icon as group_icon,
-                    COALESCE(SUM(fv.vote), 0)::int AS vote_score,
+                    (SELECT COALESCE(SUM(fv.vote), 0)::int FROM forum_votes fv WHERE fv.target_id = fp.id AND fv.target_type = 'post') AS vote_score,
                     (SELECT fv2.vote FROM forum_votes fv2 WHERE fv2.target_id = fp.id AND fv2.target_type = 'post' AND fv2.user_id = $1::uuid LIMIT 1) AS user_vote,
-                    COUNT(DISTINCT fc.id)::int AS comments_count
+                    (SELECT COUNT(*)::int FROM forum_comments fc WHERE fc.post_id = fp.id AND fc.deleted_at IS NULL) AS comments_count
                 FROM forum_posts fp
                 JOIN entities e ON e.id = fp.scope_id
                 JOIN groups g ON g.entity_id = e.id
                 LEFT JOIN users u ON u.id = fp.author_user_id
-                LEFT JOIN forum_votes fv ON fv.target_id = fp.id AND fv.target_type = 'post'
-                LEFT JOIN forum_comments fc ON fc.post_id = fp.id AND fc.deleted_at IS NULL
                 WHERE fp.scope_type = 'group'
                   AND e.visibility = 'public'
                   AND fp.deleted_at IS NULL
                   AND fp.status = 'active'
-                GROUP BY fp.id, u.first_name, u.last_name, u.primary_email, u.profile_image_data, g.name, g.icon
                 ORDER BY fp.pinned DESC, fp.created_at DESC
                 LIMIT $2 OFFSET $3
             `, safeUserId, size, offset);
@@ -539,7 +536,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
             const sevenDaysAgo = new Date();
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-            // Fetch public groups
+            // Fetch public groups with select
             const groups = await prisma.groups.findMany({
                 where: {
                     entities: {
@@ -547,47 +544,55 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                         status: 'active'
                     }
                 },
-                include: {
-                    entities: true,
-                    group_invitations: true
+                select: {
+                    entity_id: true,
+                    name: true,
+                    slug: true,
+                    description: true,
+                    icon: true,
+                    banner_data: true,
+                    banner: true,
+                    cover: true,
+                    category: true
                 }
             });
 
-            const scoredGroups = await Promise.all(groups.map(async (g) => {
-                // A. New members in last 7 days
-                const newMembersCount = await prisma.group_memberships.count({
-                    where: {
-                        group_id: g.entity_id,
-                        state: 'active',
-                        created_at: { gte: sevenDaysAgo }
-                    }
-                });
+            const groupIds = groups.map(g => g.entity_id);
 
-                // B. Forum posts in last 7 days
-                const postsCount = await prisma.forum_posts.count({
-                    where: {
-                        scope_type: 'group',
-                        scope_id: g.entity_id,
-                        deleted_at: null,
-                        created_at: { gte: sevenDaysAgo }
-                    }
-                });
+            // Bulk aggregates to avoid N+1 queries
+            const [newMembersCounts, postsCounts, eventsCounts, totalMembersCounts] = await Promise.all([
+                prisma.group_memberships.groupBy({
+                    by: ['group_id'],
+                    where: { group_id: { in: groupIds }, state: 'active', created_at: { gte: sevenDaysAgo } },
+                    _count: { id: true }
+                }),
+                prisma.forum_posts.groupBy({
+                    by: ['scope_id'],
+                    where: { scope_type: 'group', scope_id: { in: groupIds }, deleted_at: null, created_at: { gte: sevenDaysAgo } },
+                    _count: { id: true }
+                }),
+                prisma.events.groupBy({
+                    by: ['hosted_by_entity_id'],
+                    where: { hosted_by_entity_id: { in: groupIds }, created_at: { gte: sevenDaysAgo } },
+                    _count: { id: true }
+                }),
+                prisma.group_memberships.groupBy({
+                    by: ['group_id'],
+                    where: { group_id: { in: groupIds }, state: 'active' },
+                    _count: { id: true }
+                })
+            ]);
 
-                // C. Events created in last 7 days
-                const eventsCount = await prisma.events.count({
-                    where: {
-                        hosted_by_entity_id: g.entity_id,
-                        created_at: { gte: sevenDaysAgo }
-                    }
-                });
+            const newMembersMap = new Map(newMembersCounts.map(item => [item.group_id, item._count.id]));
+            const postsMap = new Map(postsCounts.map(item => [item.scope_id, item._count.id]));
+            const eventsMap = new Map(eventsCounts.map(item => [item.hosted_by_entity_id, item._count.id]));
+            const totalMembersMap = new Map(totalMembersCounts.map(item => [item.group_id, item._count.id]));
 
-                // D. Total membership count
-                const totalMembersCount = await prisma.group_memberships.count({
-                    where: {
-                        group_id: g.entity_id,
-                        state: 'active'
-                    }
-                });
+            const scoredGroups = groups.map((g) => {
+                const newMembersCount = newMembersMap.get(g.entity_id) || 0;
+                const postsCount = postsMap.get(g.entity_id) || 0;
+                const eventsCount = eventsMap.get(g.entity_id) || 0;
+                const totalMembersCount = totalMembersMap.get(g.entity_id) || 0;
 
                 // Score Formula
                 const score = (newMembersCount * 3) + (postsCount * 2) + (eventsCount * 4) + (totalMembersCount * 1);
@@ -606,7 +611,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                     postsThisWeek: postsCount,
                     trendingScore: score
                 };
-            }));
+            });
 
             // Sort descending, take top 10
             scoredGroups.sort((a, b) => b.trendingScore - a.trendingScore);
@@ -662,18 +667,40 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                 }
             }
 
-            // Fetch active public groups
+            // Fetch active public groups with select
             const groups = await prisma.groups.findMany({
                 where: {
                     entities: {
                         visibility: 'public',
                         status: 'active'
                     }
+                },
+                select: {
+                    entity_id: true,
+                    name: true,
+                    slug: true,
+                    description: true,
+                    icon: true,
+                    banner_data: true,
+                    banner: true,
+                    cover: true,
+                    category: true,
+                    settings: true
                 }
             });
 
+            const groupIds = groups.map(g => g.entity_id);
+
+            // Bulk aggregates to avoid N+1 queries
+            const totalMembersCounts = await prisma.group_memberships.groupBy({
+                by: ['group_id'],
+                where: { group_id: { in: groupIds }, state: 'active' },
+                _count: { id: true }
+            });
+            const totalMembersMap = new Map(totalMembersCounts.map(item => [item.group_id, item._count.id]));
+
             // Map and calculate geo proximity info
-            const mappedGroups = await Promise.all(groups.map(async (g) => {
+            const mappedGroups = groups.map((g) => {
                 const settingsObj = (g.settings as any) || {};
                 const loc = settingsObj.location || (settingsObj.city ? { city: settingsObj.city } : null);
                 
@@ -695,12 +722,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                     }
                 }
 
-                const totalMembersCount = await prisma.group_memberships.count({
-                    where: {
-                        group_id: g.entity_id,
-                        state: 'active'
-                    }
-                });
+                const totalMembersCount = totalMembersMap.get(g.entity_id) || 0;
 
                 return {
                     id: g.entity_id,
@@ -717,7 +739,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                     _distance: distance,
                     _hasLocation: hasLocation
                 };
-            }));
+            });
 
             // Proximity sort logic
             if (refCityName) {
