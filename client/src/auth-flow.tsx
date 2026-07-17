@@ -88,6 +88,39 @@ export function useAuth() {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const claimToken = params.get('claim');
+    if (claimToken && getModeFromUrl() === 'signup') {
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+      
+      fetch(`${apiBase}/api/messaging/claims/${claimToken}`)
+        .then(res => res.json())
+        .then(info => {
+          if (info.success && info.claim && info.claim.email) {
+            const claim = info.claim;
+            const firstName = claim.name ? claim.name.split(' ')[0] : "";
+            const lastName = claim.name ? claim.name.split(' ').slice(1).join(' ') : "";
+            setData(d => ({ ...d, email: claim.email, name: claim.name || "", firstName, lastName }));
+            
+            fetch(`${apiBase}/api/admin/otp/send`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: claim.email, purpose: 'Signup' })
+            }).then(r => r.json()).then(otpData => {
+              if (otpData.success) {
+                setData(d => ({ ...d, otp: otpData.code || '' }));
+                setIdx(ORDER['signup'].indexOf('otp'));
+                setDir('f');
+              }
+            }).catch(e => console.error(e));
+          }
+        }).catch(e => console.error(e));
+    }
+  }, []);
+
   const order = ORDER[mode];
   const step = order[Math.min(idx, order.length - 1)];
   const set = (patch) => setData(d => ({ ...d, ...patch }));
@@ -407,8 +440,23 @@ export function ScreenOtp({ m }) {
             }
             setTimeout(() => {
               m.set({ otp: code });
-              // If user hasn't completed onboarding, redirect to the correct step
-              if (data.profileCompleted === false && data.onboardingStep && data.onboardingStep !== 'done') {
+              const claimParam = new URLSearchParams(window.location.search).get('claim');
+              
+              if (claimParam) {
+                const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                const base = isLocalhost ? 'http://localhost:8080' : window.location.origin;
+                const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+                
+                fetch(`${apiBase}/api/messaging/claim`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${data.token}` },
+                  body: JSON.stringify({ token: claimParam })
+                }).then(() => {
+                  window.location.replace(`${base}/pages/Samaagum%20Home.html#/events`);
+                }).catch(() => {
+                  window.location.replace(`${base}/pages/Samaagum%20Home.html#/events/invite/${claimParam}`);
+                });
+              } else if (data.profileCompleted === false && data.onboardingStep && data.onboardingStep !== 'done') {
                 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
                 const base = isLocalhost ? 'http://localhost:8080' : window.location.origin;
                 window.location.replace(`${base}/pages/Samaagum%20Auth.html?mode=signup#${data.onboardingStep}`);
@@ -939,7 +987,13 @@ export function ScreenDone({ m }) {
         </div>
       )}
 
-      <a href="Samaagum%20Home.html" className="sbtn sbtn--primary sbtn--block focusable" style={{ textDecoration: "none" }}>Enter Samaagum<Ic.arrowR /></a>
+      {(() => {
+        const claimToken = new URLSearchParams(window.location.search).get('claim');
+        const href = claimToken ? `Samaagum%20Home.html#/events/invite/${claimToken}` : "Samaagum%20Home.html";
+        return (
+          <a href={href} className="sbtn sbtn--primary sbtn--block focusable" style={{ textDecoration: "none" }}>Enter Samaagum<Ic.arrowR /></a>
+        );
+      })()}
       {/* <p style={{ textAlign: "center", fontSize: 13, color: "var(--ink-3)", marginTop: 14, cursor: "pointer" }} onClick={m.restart}>↻</p> */}
     </div>
   );

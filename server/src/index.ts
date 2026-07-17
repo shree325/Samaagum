@@ -33,7 +33,8 @@ import { groupRoutes } from './controllers/groupRoutes';
 import { publicRoutes } from './controllers/publicRoutes';
 import { dashboardRoutes } from './controllers/dashboardRoutes';
 import { integrationRoutes } from './controllers/integrationRoutes';
-
+import { userRoutes } from './controllers/userRoutes';
+import { ticketRoutes } from './controllers/ticketRoutes';
 
 dotenv.config();
 
@@ -118,7 +119,13 @@ fastify.decorate('authenticate', async (request: any, reply: any) => {
                     where: { id: uid },
                     select: { state: true }
                 });
-                if (dbUser && dbUser.state === 'suspended') {
+                if (!dbUser) {
+                    return reply.status(401).send({
+                        success: false,
+                        message: 'Unauthorized: User not found.'
+                    });
+                }
+                if (dbUser.state === 'suspended') {
                     return reply.status(403).send({
                         success: false,
                         message: 'You have been suspended. contact admin for futher information '
@@ -137,6 +144,43 @@ fastify.decorate('authenticate', async (request: any, reply: any) => {
             success: false,
             message: 'Unauthorized: Authentication required'
         });
+    }
+});
+
+// Register optional authentication decorator
+fastify.decorate('optionalAuthenticate', async (request: any, reply: any) => {
+    let token = '';
+    const authHeader = request.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+    } else if (request.query && request.query.token) {
+        token = request.query.token;
+    }
+    
+    if (token) {
+        try {
+            const parts = token.split('.');
+            if (parts.length === 3) {
+                const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+                if (payload && !payload.tenantId) {
+                    payload.tenantId = '00000000-0000-0000-0000-000000000000';
+                }
+  
+                const uid = payload?.id;
+                const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                if (uid && UUID_REGEX.test(uid)) {
+                    const dbUser = await prisma.users.findUnique({
+                        where: { id: uid },
+                        select: { state: true }
+                    });
+                    if (dbUser && dbUser.state !== 'suspended') {
+                        request.user = payload;
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn('Warning: Failed to decode JWT payload from header in optionalAuthenticate.');
+        }
     }
 });
 
@@ -176,6 +220,8 @@ fastify.register(adminGeoRoutes, { prefix: '/api/admin' });
 fastify.register(userSubscriptionRoutes, { prefix: '/api/subscription' });
 fastify.register(uploadRoutes, { prefix: '/api' });
 fastify.register(publicRoutes, { prefix: '/api/public' });
+fastify.register(userRoutes, { prefix: '/api/users' });
+fastify.register(ticketRoutes, { prefix: '/api/tickets' });
 fastify.register(messagingTestRoutes, { prefix: '/api/test' });
 fastify.register(messagingRoutes, { prefix: '/api/messaging' });
 fastify.register(connectionRoutes, { prefix: '/api/connections' });

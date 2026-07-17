@@ -586,7 +586,7 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
   // Verifies an OTP
   fastify.post('/otp/verify', async (request: any, reply) => {
     try {
-      const { email, purpose, code, gender, dob, firstName, lastName, phoneNumber } = request.body as any;
+      const { email, purpose, code, gender, dob, firstName, lastName, phoneNumber, claimToken } = request.body as any;
       if (!email || !purpose || !code) {
         return reply.status(400).send({ success: false, message: 'Email, purpose and verification code are required.' });
       }

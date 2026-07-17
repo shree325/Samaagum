@@ -117,9 +117,15 @@ export function DashboardApp() {
   // On every home-page load, verify the user has completed onboarding.
   // If not, redirect back to the auth page at the step they left off at.
   useEffect(() => {
-    if (!token) {
+    const hash = window.location.hash;
+    const isPublicRoute = hash.startsWith('#event=') || hash.startsWith('#/event/');
+    if (!token && !isPublicRoute) {
       window.location.replace('/');
       return;
+    }
+    if (!token && isPublicRoute) {
+      setOnboardingChecked(true);
+      return; // Skip onboarding check for public routes
     }
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const base = isLocalhost ? 'http://localhost:3000' : window.location.origin;
@@ -141,6 +147,14 @@ export function DashboardApp() {
       });
   }, []);
 
+  // Clean up any stale pending_claim tokens (the OTP verify endpoint handles claiming directly)
+  useEffect(() => {
+    const pendingClaim = localStorage.getItem('pending_claim');
+    if (pendingClaim) {
+      localStorage.removeItem('pending_claim');
+    }
+  }, []);
+
 
   useEffect(() => {
     const originalFetch = window.fetch;
@@ -158,6 +172,10 @@ export function DashboardApp() {
         } catch (e) {
           // ignore
         }
+      }
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        window.location.replace('/');
       }
       return response;
     };
@@ -635,6 +653,15 @@ export function DashboardApp() {
     } else if (hash.startsWith('#/events/invite/')) {
       const token = hash.split('#/events/invite/')[1];
       if (token) navigate(`/event-invite`, { state: token, replace: true });
+    } else if (hash.startsWith('#event=') || hash.startsWith('#/event/')) {
+      const hashStr = hash.replace('#/event/', '#event=');
+      const [eventPart, queryPart] = hashStr.split('?');
+      const eventId = eventPart.replace('#event=', '');
+      let claimToken = null;
+      if (queryPart && queryPart.includes('claim=')) {
+        claimToken = new URLSearchParams(queryPart).get('claim');
+      }
+      navigate(`/event`, { state: { id: eventId, claimToken }, replace: true });
     }
   }, [navigate]);
 
@@ -1298,9 +1325,9 @@ useEffect(() => {
         );
       }
       const e = cur.param || FEATURED;
-      const isOwner = e.hostBy === ME.name || e.host === ME.name || e.created_by === ME.id || (st.createdEvents && st.createdEvents.some(ce => ce.id === e.id));
-      const isAdmin = ME.role && ME.role.toLowerCase().includes("admin");
-      const isModerator = ME.role && ME.role.toLowerCase().includes("moderator");
+      const isOwner = window.ME && (e.hostBy === window.ME.name || e.host === window.ME.name || e.created_by === window.ME.id || (st.createdEvents && st.createdEvents.some(ce => ce.id === e.id)));
+      const isAdmin = window.ME?.role && window.ME.role.toLowerCase().includes("admin");
+      const isModerator = window.ME?.role && window.ME.role.toLowerCase().includes("moderator");
       
       // Check if user has a confirmed or pending booking/membership for this event
       const UUID_RE_H = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1322,7 +1349,7 @@ useEffect(() => {
       const joinedRoleMeta = joinedEntry?.role ? (st.eventRoles || []).find(r => r.key === joinedEntry.role) : null;
       const isEventStaff = isOwner || isAdmin || isModerator ||
         !!(joinedRoleMeta && (joinedRoleMeta.capabilities?.includes('event.manage') || joinedRoleMeta.capabilities?.includes('event.configure_tickets')));
-      const isReg = hasJoined || isEventStaff;
+      const isReg = !!token && (hasJoined || isEventStaff);
 
       // Merge bookingStatus into the event object so EventPage and JoinEventPage can use it
       const evWithStatus = { ...e, bookingStatus };
@@ -1363,10 +1390,11 @@ useEffect(() => {
     if (v === "scan-event") return <ScanEventPage ev={cur.param} go={go} />;
     if (v === "ticket") return <TicketDetail tkt={cur.param} st={st} go={go} />;
     if (v === "waitlist") return <Waitlist ev={cur.param} st={st} go={go} />;
-    if (v === "claim") return <ClaimFlow st={st} go={go} />;
+    if (v === "claim") return <ClaimFlow token={cur.param} st={st} go={go} />;
     if (v === "upgrade") return <UpgradePage st={st} go={go} />;
     if (v === "checkout") return <CheckoutPage param={cur.param} st={st} go={go} />;
     if (v === "checkout-success") return <CheckoutSuccessPage param={cur.param} st={st} go={go} />;
+    if (!token) return null;
     return <HomeFeed st={st} go={go} />;
   };
 
