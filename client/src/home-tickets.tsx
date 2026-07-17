@@ -1251,6 +1251,7 @@ export function VerifyTicketPanel({ eventId, onCheckedIn }) {
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
   const rafRef = useRef(null);
+  const [selectedProfile, setSelectedProfile] = useState<any>(null);
 
   const lookup = async (token) => {
     const t = (token || "").trim();
@@ -1275,10 +1276,11 @@ export function VerifyTicketPanel({ eventId, onCheckedIn }) {
     }
   };
 
-  const confirmCheckin = async (paymentReceived = false) => {
-    if (!result?.valid || result.alreadyCheckedIn) return;
-    if (result.isCashPayment && result.isPaymentPending && !paymentReceived) {
-      if (!window.confirm(`Has cash payment of ₹${(result.amountMinor || 0) / 100} been collected?`)) {
+  const confirmCheckin = async (paymentReceived = false, specificTicket: any = null) => {
+    const target = specificTicket || result;
+    if (!target?.valid || target.alreadyCheckedIn) return;
+    if (target.isCashPayment && target.isPaymentPending && !paymentReceived) {
+      if (!window.confirm(`Has cash payment of ₹${(target.amountMinor || 0) / 100} been collected?`)) {
         return;
       }
       paymentReceived = true;
@@ -1286,7 +1288,7 @@ export function VerifyTicketPanel({ eventId, onCheckedIn }) {
     setBusy(true);
     try {
       const authToken = localStorage.getItem('token');
-      const res = await fetch(`${apiBase}/api/events/${eventId}/verify/${encodeURIComponent(result.token)}/checkin`, {
+      const res = await fetch(`${apiBase}/api/events/${eventId}/verify/${encodeURIComponent(target.qrToken)}/checkin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1296,7 +1298,14 @@ export function VerifyTicketPanel({ eventId, onCheckedIn }) {
       });
       const data = await res.json();
       if (data.success) {
-        setResult(r => ({ ...r, alreadyCheckedIn: true, isPaymentPending: false }));
+        if (result.isMultiple) {
+          setResult(r => ({
+            ...r,
+            tickets: r.tickets.map(t => t.ticketId === target.ticketId ? { ...t, alreadyCheckedIn: true, isPaymentPending: false } : t)
+          }));
+        } else {
+          setResult(r => ({ ...r, alreadyCheckedIn: true, isPaymentPending: false }));
+        }
         onCheckedIn && onCheckedIn();
       } else {
         alert(data.message || "Check-in failed.");
@@ -1370,7 +1379,7 @@ export function VerifyTicketPanel({ eventId, onCheckedIn }) {
           onChange={ev2 => { setTokenInput(ev2.target.value); setResult(null); }}
           onFocus={() => setResult(null)}
           onKeyDown={ev2 => { if (ev2.key === 'Enter') { setResult(null); lookup(tokenInput); } }}
-          placeholder="Paste or type ticket token…"
+          placeholder="Paste or type ticket token / Booking ID..."
           style={{ flex: 1, padding: "9px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)", fontSize: 13 }}
         />
         <button className="hbtn hbtn--primary hbtn--sm" disabled={busy || !tokenInput.trim()} onClick={() => { setResult(null); lookup(tokenInput); }}>Verify</button>
@@ -1388,27 +1397,119 @@ export function VerifyTicketPanel({ eventId, onCheckedIn }) {
       )}
 
       {result && (
-        <div style={{ marginTop: 12, padding: 12, borderRadius: 8, border: "1px solid var(--border)", background: result.valid ? (result.alreadyCheckedIn ? "var(--field)" : "rgba(31,157,87,0.08)") : "rgba(239,68,68,0.08)" }}>
-          {result.valid ? (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 13.5 }}>{result.name}</div>
-                {result.email && <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{result.email}</div>}
-                {result.isCashPayment && (
-                  <div style={{ fontSize: 12, fontWeight: 500, color: result.isPaymentPending ? "#f59e0b" : "#1f9d57", marginTop: 4 }}>
-                    {result.isPaymentPending ? `⚠️ Cash Payment Pending: ₹${(result.amountMinor || 0) / 100}` : "✅ Cash Collected"}
+        <div style={{ marginTop: 12 }}>
+          {!result.valid && (
+            <div style={{ padding: 12, borderRadius: 8, border: "1px solid var(--border)", background: "rgba(239,68,68,0.08)" }}>
+              <div style={{ fontSize: 13, color: "#ef4444" }}>Invalid ticket / Booking ID — {result.reason === 'not_found' ? "no matching ticket for this event." : (result.reason || "not recognized.")}</div>
+            </div>
+          )}
+
+          {result.valid && result.isMultiple && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>Booking found. Contains {result.tickets?.length || 0} ticket(s):</div>
+              {result.tickets?.map((t: any) => (
+                <div key={t.ticketId} style={{ padding: 12, borderRadius: 8, border: "1px solid var(--border)", background: t.alreadyCheckedIn ? "var(--field)" : "rgba(31,157,87,0.08)" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: t.userId ? "pointer" : "default" }} onClick={() => { if (t.userId) setSelectedProfile(t); }}>
+                      {/* Avatar */}
+                      {t.picture && t.picture !== "null" ? (
+                        <img src={t.picture} style={{ width: 38, height: 38, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: "2px solid var(--border)" }} />
+                      ) : (
+                        <div style={{ width: 38, height: 38, borderRadius: "50%", background: "var(--accent-2)", color: "#fff", fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: "2px solid var(--border)" }}>
+                          {t.name ? t.name.charAt(0).toUpperCase() : "?"}
+                        </div>
+                      )}
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13.5, textDecoration: t.userId ? "underline" : "none" }}>
+                          {t.name}
+                        </div>
+                        {t.email && <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{t.email}</div>}
+                        {t.isCashPayment && (
+                          <div style={{ fontSize: 12, fontWeight: 500, color: t.isPaymentPending ? "#f59e0b" : "#1f9d57", marginTop: 4 }}>
+                            {t.isPaymentPending ? `⚠️ Cash Payment Pending: ₹${(t.amountMinor || 0) / 100}` : "✅ Cash Collected"}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {t.alreadyCheckedIn ? (
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "var(--accent-2)", background: "rgba(124,90,255,0.1)", padding: "4px 10px", borderRadius: 999 }}>Already checked in</span>
+                    ) : (
+                      <button className="hbtn hbtn--primary hbtn--sm" disabled={busy} onClick={() => confirmCheckin(false, t)}>Check-in</button>
+                    )}
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {result.valid && !result.isMultiple && (
+            <div style={{ padding: 12, borderRadius: 8, border: "1px solid var(--border)", background: result.alreadyCheckedIn ? "var(--field)" : "rgba(31,157,87,0.08)" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: result.userId ? "pointer" : "default" }} onClick={() => { if (result.userId) setSelectedProfile(result); }}>
+                  {/* Avatar */}
+                  {result.picture && result.picture !== "null" ? (
+                    <img src={result.picture} style={{ width: 38, height: 38, borderRadius: "50%", objectFit: "cover", flexShrink: 0, border: "2px solid var(--border)" }} />
+                  ) : (
+                    <div style={{ width: 38, height: 38, borderRadius: "50%", background: "var(--accent-2)", color: "#fff", fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: "2px solid var(--border)" }}>
+                      {result.name ? result.name.charAt(0).toUpperCase() : "?"}
+                    </div>
+                  )}
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13.5, textDecoration: result.userId ? "underline" : "none" }}>
+                      {result.name}
+                    </div>
+                    {result.email && <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{result.email}</div>}
+                    {result.isCashPayment && (
+                      <div style={{ fontSize: 12, fontWeight: 500, color: result.isPaymentPending ? "#f59e0b" : "#1f9d57", marginTop: 4 }}>
+                        {result.isPaymentPending ? `⚠️ Cash Payment Pending: ₹${(result.amountMinor || 0) / 100}` : "✅ Cash Collected"}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {result.alreadyCheckedIn ? (
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "var(--accent-2)", background: "rgba(124,90,255,0.1)", padding: "4px 10px", borderRadius: 999 }}>Already checked in</span>
+                ) : (
+                  <button className="hbtn hbtn--primary hbtn--sm" disabled={busy} onClick={() => confirmCheckin(false)}>Confirm Check-in</button>
                 )}
               </div>
-              {result.alreadyCheckedIn ? (
-                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--accent-2)", background: "rgba(124,90,255,0.1)", padding: "4px 10px", borderRadius: 999 }}>Already checked in</span>
+            </div>
+          )}
+        </div>
+      )}
+      
+      {selectedProfile && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setSelectedProfile(null)}>
+          <div style={{ background: 'var(--surface)', borderRadius: 16, width: '100%', maxWidth: 360, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ height: 80, background: 'var(--accent-grad, linear-gradient(135deg, #3b82f6, #8b5cf6))', position: 'relative' }}>
+              <button onClick={() => setSelectedProfile(null)} style={{ position: 'absolute', top: 12, right: 12, background: 'rgba(0,0,0,0.2)', border: 'none', color: '#fff', width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <I.x style={{ width: 16, height: 16 }} />
+              </button>
+            </div>
+            <div style={{ padding: '0 20px 24px', marginTop: -40, position: 'relative', textAlign: 'center' }}>
+              {selectedProfile.picture && selectedProfile.picture !== "null" ? (
+                <img src={selectedProfile.picture} style={{ width: 80, height: 80, borderRadius: '50%', border: '4px solid var(--surface)', objectFit: 'cover', background: 'var(--bg-1)', display: 'block', margin: '0 auto 12px' }} />
               ) : (
-                <button className="hbtn hbtn--primary hbtn--sm" disabled={busy} onClick={() => confirmCheckin(false)}>Confirm Check-in</button>
+                <div style={{ width: 80, height: 80, borderRadius: '50%', border: '4px solid var(--surface)', background: 'var(--accent-2)', color: '#fff', fontSize: 32, fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                  {selectedProfile.name ? selectedProfile.name.charAt(0).toUpperCase() : 'U'}
+                </div>
+              )}
+              <h3 style={{ margin: '0 0 4px 0', fontSize: 20, fontWeight: 700, color: 'var(--ink)' }}>{selectedProfile.name}</h3>
+              {selectedProfile.username && <p style={{ margin: '0 0 8px 0', fontSize: 13, color: 'var(--ink-2)', fontWeight: 500 }}>@{selectedProfile.username}</p>}
+              {selectedProfile.headline && <p style={{ margin: '0 0 16px 0', fontSize: 14, color: 'var(--ink)' }}>{selectedProfile.headline}</p>}
+              
+              <div style={{ textAlign: 'left', background: 'var(--field)', borderRadius: 8, padding: 12, marginTop: 16 }}>
+                <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 4, textTransform: 'uppercase', fontWeight: 600 }}>Contact</div>
+                <div style={{ fontSize: 14, color: 'var(--ink)' }}>{selectedProfile.email || 'No email provided'}</div>
+              </div>
+              
+              {selectedProfile.bio && (
+                <div style={{ textAlign: 'left', background: 'var(--field)', borderRadius: 8, padding: 12, marginTop: 12 }}>
+                  <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 4, textTransform: 'uppercase', fontWeight: 600 }}>About</div>
+                  <div style={{ fontSize: 14, color: 'var(--ink)', lineHeight: 1.4 }}>{selectedProfile.bio}</div>
+                </div>
               )}
             </div>
-          ) : (
-            <div style={{ fontSize: 13, color: "#ef4444" }}>Invalid ticket — {result.reason === 'not_found' ? "no matching ticket for this event." : (result.reason || "not recognized.")}</div>
-          )}
+          </div>
         </div>
       )}
     </div>

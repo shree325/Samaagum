@@ -16,6 +16,8 @@ export class TicketNotificationService {
     let html = '';
 
     const eventName = event.title;
+    const bookingIdCode = booking?.id ? 'BKG-' + booking.id.split('-')[0].toUpperCase() : '';
+    const bookingIdHtml = bookingIdCode ? `<p style="margin-top: 15px; padding: 10px; background-color: #f3f4f6; border-radius: 8px; display: inline-block;">Booking ID: <b>${bookingIdCode}</b></p>` : '';
 
     switch (status) {
       case 'submitted':
@@ -23,33 +25,38 @@ export class TicketNotificationService {
         html = `<h3>Booking request submitted</h3>
                 <p>Hi ${buyerName},</p>
                 <p>Your booking request for <b>${eventName}</b> has been received and is pending host approval.</p>
-                <p>You will be notified once the host approves or rejects your booking.</p>`;
+                <p>You will be notified once the host approves or rejects your booking.</p>
+                ${bookingIdHtml}`;
         break;
       case 'approved':
         subject = `Booking approved for ${eventName}`;
         html = `<h3>Booking Approved!</h3>
                 <p>Hi ${buyerName},</p>
                 <p>Great news! Your booking for <b>${eventName}</b> has been approved.</p>
-                <p>Attendees will receive their respective tickets shortly.</p>`;
+                <p>Attendees will receive their respective tickets shortly.</p>
+                ${bookingIdHtml}`;
         break;
       case 'rejected':
         subject = `Booking request declined for ${eventName}`;
         html = `<h3>Booking Declined</h3>
                 <p>Hi ${buyerName},</p>
-                <p>We're sorry to inform you that your booking request for <b>${eventName}</b> was not approved by the host.</p>`;
+                <p>We're sorry to inform you that your booking request for <b>${eventName}</b> was not approved by the host.</p>
+                ${bookingIdHtml}`;
         break;
       case 'waitlisted':
         subject = `You are on the waitlist for ${eventName}`;
         html = `<h3>Waitlist Joined</h3>
                 <p>Hi ${buyerName},</p>
                 <p>You have successfully joined the waitlist for <b>${eventName}</b>.</p>
-                <p>We will notify you instantly if a spot frees up and you are promoted to claim a seat.</p>`;
+                <p>We will notify you instantly if a spot frees up and you are promoted to claim a seat.</p>
+                ${bookingIdHtml}`;
         break;
       case 'payment_success':
         subject = `Payment successful for ${eventName}`;
         html = `<h3>Payment Confirmed</h3>
                 <p>Hi ${buyerName},</p>
-                <p>Your payment for <b>${eventName}</b> has been successfully processed.</p>`;
+                <p>Your payment for <b>${eventName}</b> has been successfully processed.</p>
+                ${bookingIdHtml}`;
         break;
     }
 
@@ -145,7 +152,7 @@ export class TicketNotificationService {
       // EXISTING VERIFIED SAMAAGUM USER
       // 1. Send Notification
       try {
-        await prisma.notification_log.create({
+        const notif = await prisma.notification_log.create({
           data: {
             tenant_id: event.tenant_id,
             user_id: attendee.user_id,
@@ -160,6 +167,18 @@ export class TicketNotificationService {
             })
           }
         });
+
+        try {
+          const { sendNotificationToUser } = require('./messagingSocket');
+          sendNotificationToUser(attendee.user_id, 'group.notification', {
+            id: notif.id,
+            type: 'event',
+            text: `🎉 Your ticket for <b>${event.title}</b> is confirmed!`,
+            eventId: event.id
+          });
+        } catch (socketErr) {
+          console.error('[TicketNotificationService] Failed to emit socket event', socketErr);
+        }
       } catch (e) {
         console.error('[TicketNotificationService] Failed to create approved notification log', e);
       }
@@ -243,7 +262,10 @@ export class TicketNotificationService {
         isOnline: event.location_type === 'online',
         onlineLink: event.online_link || '',
         cover: (event as any).cover || ((event.venue as any)?.meta?.cover) || '',
-        quantity: 1 // Sending a single ticket explicitly
+        quantity: bookingQty,
+        totalAmountMinor: totalPaidMinor,
+        currency: booking.total_currency || 'INR',
+        bookingIdCode: booking?.id ? 'BKG-' + booking.id.split('-')[0].toUpperCase() : undefined
       });
 
       await sendEmail({

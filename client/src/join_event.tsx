@@ -247,6 +247,7 @@ export function JoinEventPage({ ev, st, go }) {
                 n: t.name,
                 d: t.description || (isFree ? "Free entry" : "Standard entry"),
                 p: isFree ? "Free" : `₹${(priceVal / 100).toFixed(0)}`,
+                priceVal: priceVal,
                 free: isFree,
                 isFull: t.isFull,
                 capacity: t.capacity || null,
