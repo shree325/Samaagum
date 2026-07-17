@@ -25,7 +25,7 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
     });
 
     // GET /available-roles
-    fastify.get('/available-roles', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+    fastify.get('/available-roles', { preHandler: [(fastify as any).optionalAuthenticate] }, async (request: any, reply) => {
         try {
             const roles = await GroupService.getAvailableGroupRoles();
             return reply.send({ success: true, data: roles });
@@ -309,7 +309,7 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
     });
 
     // GET /:id/members
-    fastify.get('/:id/members', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+    fastify.get('/:id/members', { preHandler: [(fastify as any).optionalAuthenticate] }, async (request: any, reply) => {
         try {
             const { id } = request.params as any;
             const { state } = request.query as any;
@@ -925,7 +925,7 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
     });
 
     // GET /:id/gallery — public groups allow unauthenticated/non-member read
-    fastify.get('/:id/gallery', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+    fastify.get('/:id/gallery', { preHandler: [(fastify as any).optionalAuthenticate] }, async (request: any, reply) => {
         try {
             const { id } = request.params as any;
             const isAdmin = request.user ? await GroupService.verifyGroupAdmin(request.user.id, id) : false;

@@ -14,6 +14,7 @@ function isRealEventId(id) { return typeof id === "string" && UUID_RE.test(id); 
 
 export function EventPage({ ev, st, go }) {
   let e = ev || FEATURED;
+  const claimToken = typeof window !== 'undefined' ? (window.location.hash.split('claim=')[1]?.split('&')[0] || new URLSearchParams(window.location.search).get("claim") || e.inviteToken) : null;
 
   // Normalize if it's a database event
   if (e && (e.starts_at || typeof e.venue === 'object' || typeof e.venue === 'string')) {
@@ -423,11 +424,11 @@ export function EventPage({ ev, st, go }) {
     }
   };
 
-  const handleHostRequestAction = async (bookingId, action) => {
+  const handleHostRequestAction = async (attendeeId, action) => {
     if (e.id === "new" || !isRealEventId(e.id)) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`${apiBase}/api/events/${e.id}/requests/${bookingId}/action`, {
+      const res = await fetch(`${apiBase}/api/events/${e.id}/requests/attendees/${attendeeId}/action`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -495,8 +496,9 @@ export function EventPage({ ev, st, go }) {
     (async () => {
       try {
         const token = localStorage.getItem('token');
+        if (!token) return;
         const res = await fetch(`${apiBase}/api/events/available-roles`, {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+          headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
         if (data.success) setAvailableRoles(data.data || []);
@@ -1307,12 +1309,12 @@ export function EventPage({ ev, st, go }) {
                                 <div style={{ display: "flex", gap: 8 }}>
                                   <button className="hbtn hbtn--ghost hbtn--sm"
                                     style={{ color: "#ef4444", background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: "20px", padding: "6px 16px", fontSize: 13, fontWeight: 600 }}
-                                    onClick={() => handleHostRequestAction(r.bookingId, 'decline')}>
+                                    onClick={() => handleHostRequestAction(r.id, 'decline')}>
                                     Decline
                                   </button>
                                   <button className="hbtn hbtn--primary hbtn--sm"
                                     style={{ background: "linear-gradient(135deg,#ff6b4a,#ff4d8d)", border: "none", borderRadius: "20px", padding: "6px 18px", fontSize: 13, fontWeight: 600, color: "#fff" }}
-                                    onClick={() => handleHostRequestAction(r.bookingId, 'accept')}>
+                                    onClick={() => handleHostRequestAction(r.id, 'accept')}>
                                     Approve
                                   </button>
                                 </div>
@@ -2446,6 +2448,21 @@ export function EventPage({ ev, st, go }) {
             {/* Ticket sidebar — only for confirmed members / staff, not pending or non-joined visitors */}
             {tab === "about" && (
               <div className="ev-aside" style={{ width: 280, marginLeft: 20 }}>
+                {claimToken && !isMember && (
+                  <div className="ticket-box" style={{ cursor: "pointer", transition: "transform 0.2s" }} onClick={() => go("claim", claimToken)} onMouseEnter={e => e.currentTarget.style.transform = "scale(1.02)"} onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 16px" }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", color: "var(--accent-2)", letterSpacing: "0.05em", marginBottom: 12 }}>
+                        You have a Ticket!
+                      </div>
+                      <div style={{ padding: 10, background: "#fff", borderRadius: "var(--r-md)", boxShadow: "0 4px 12px rgba(0,0,0,0.06)", width: 140, height: 140, display: "flex", alignItems: "center", justifyContent: "center", filter: "blur(5px)", opacity: 0.9 }}>
+                        {window.TicketQR ? <window.TicketQR token={claimToken} size={120} /> : <div style={{width: 120, height: 120, background: "#eee"}} />}
+                      </div>
+                      <div style={{ fontSize: 13, color: "var(--ink)", marginTop: 16, textAlign: "center", fontWeight: 600 }}>
+                        Click to claim & view ticket
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {isMember && (
                   <div className="ticket-box">
                     {currentEvent.bookingStatus === 'pending_payment' ? (

@@ -25,6 +25,7 @@ interface ConfirmedAttendee {
   time?: string;             // only present in demo data
   createdAt?: string;        // registration ISO timestamp
   checkinTime?: string;      // checkin timestamp
+  claimStatus?: 'claimed' | 'claim_pending'; // present for guest attendees who claimed via OTP
 }
 interface PendingRequest {
   id: string;
@@ -37,6 +38,7 @@ interface PendingRequest {
   time?: string;
   transactionId?: string | null;
   isCash?: boolean;
+  purchaserName?: string;
 }
 interface BookingRecord {
   id: string;
@@ -1127,8 +1129,8 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
   ];
 
   /* -------- Request actions -------- */
-  const handleSingleAction = async (bookingId: string, action: 'accept' | 'reject') => {
-    const res = await fetch(`${apiBase}/api/events/${e.id}/requests/${bookingId}/action`, {
+  const handleSingleAction = async (attendeeId: string, action: 'accept' | 'reject') => {
+    const res = await fetch(`${apiBase}/api/events/${e.id}/requests/attendees/${attendeeId}/action`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ action })
@@ -1143,7 +1145,7 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
     }
   };
 
-  const executeAction = (bookingId: string, action: 'accept' | 'reject', name: string) => {
+  const executeAction = (attendeeId: string, action: 'accept' | 'reject', name: string) => {
     const isReject = action === 'reject';
     setConfirmModal({
       title: isReject ? `Decline ${name}'s request?` : `Approve ${name}'s request?`,
@@ -1156,7 +1158,7 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
         setConfirmModal(null);
         setActionLoading(true);
         try {
-          await handleSingleAction(bookingId, action);
+          await handleSingleAction(attendeeId, action);
           await refetch();
         } catch { /* silent */ }
         setActionLoading(false);
@@ -1427,10 +1429,16 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
                     {/* Status badge */}
                     <span style={{
                       fontSize: 12, fontWeight: 600, padding: '4px 12px', borderRadius: 999,
-                      background: u.bookingStatus === 'confirmed' ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
-                      color: u.bookingStatus === 'confirmed' ? '#059669' : '#d97706',
+                      background: u.bookingStatus === 'pending_payment' 
+                        ? 'rgba(245,158,11,0.12)' 
+                        : (u.claimStatus === 'claim_pending' ? 'rgba(59,130,246,0.12)' : 'rgba(16,185,129,0.12)'),
+                      color: u.bookingStatus === 'pending_payment' 
+                        ? '#d97706' 
+                        : (u.claimStatus === 'claim_pending' ? '#3b82f6' : '#059669'),
                     }}>
-                      {u.bookingStatus === 'confirmed' ? 'Confirmed' : 'Pending Payment'}
+                      {u.bookingStatus === 'pending_payment' 
+                        ? 'Pending Payment' 
+                        : (u.claimStatus === 'claim_pending' ? 'Approved · Claim Pending' : 'Approved · Claimed')}
                     </span>
                   </div>
                 );
@@ -2253,6 +2261,7 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
                       <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{u.name}</div>
                       <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>
                         {u.email}
+                        {u.purchaserName && <div style={{ marginTop: 2, color: 'var(--ink-2)' }}>Purchaser: {u.purchaserName}</div>}
                         {isDemoMode && u.time && ` · ${u.time}`}
                       </div>
                     </div>
@@ -2267,11 +2276,11 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
                         <div style={{ fontSize: 11, color: 'var(--ink-3)', fontStyle: 'italic' }}>Cash · No Txn ID</div>
                       )}
                       <button className="hbtn hbtn--soft hbtn--sm" style={{ color: '#ef4444' }}
-                        onClick={() => executeAction(u.bookingId, 'reject', u.name)} disabled={actionLoading}>
+                        onClick={() => executeAction(u.id, 'reject', u.name)} disabled={actionLoading}>
                         Reject
                       </button>
                       <button className="hbtn hbtn--primary hbtn--sm"
-                        onClick={() => executeAction(u.bookingId, 'accept', u.name)} disabled={actionLoading}>
+                        onClick={() => executeAction(u.id, 'accept', u.name)} disabled={actionLoading}>
                         {u.isCash && u.transactionId ? 'Approve & Confirm' : 'Approve'}
                       </button>
                       <button className="hbtn hbtn--soft hbtn--sm"

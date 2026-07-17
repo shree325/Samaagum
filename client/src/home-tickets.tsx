@@ -95,6 +95,7 @@ function normalizeJoinedEvent(e) {
     ticketId: friendlyTicketId,
     attendeeId: e.attendeeId || null,
     checkedIn: e.checkinStatus === 'checked_in',
+    allAttendees: e.allAttendees || [],
   };
 }
 
@@ -970,13 +971,13 @@ export function TicketDetail({ tkt, st, go }) {
 
             <div className="qt-rows">
               {t.ticketId && <div className="qt-row"><span className="k">Ticket ID</span><span className="v" style={{ fontFamily: "monospace", fontSize: 12 }}>{t.ticketId}</span></div>}
-              <div className="qt-row"><span className="k">Attendee</span><span className="v">{t.attendee}</span></div>
+              {t.allAttendees?.length <= 1 && <div className="qt-row"><span className="k">Attendee</span><span className="v">{t.attendee}</span></div>}
               <div className="qt-row"><span className="k">Date</span><span className="v">{t.date} · {t.time}</span></div>
               <div className="qt-row"><span className="k">{t.online ? "Location" : "Venue"}</span><span className="v">{t.venue}</span></div>
               <div className="qt-row"><span className="k">Quantity</span><span className="v">{t.qty}</span></div>
               <div className="qt-row"><span className="k">Paid</span><span className="v">{t.paid}</span></div>
               <div className="qt-row">
-                <span className="k">Status</span>
+                <span className="k">Order Status</span>
                 <span className="v">
                   {used ? (
                     <span className="pill gray">Used</span>
@@ -988,6 +989,29 @@ export function TicketDetail({ tkt, st, go }) {
                 </span>
               </div>
             </div>
+
+            {t.allAttendees && t.allAttendees.length > 0 && (
+              <div style={{ marginTop: 24 }}>
+                <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)", marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Attendee Status</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {t.allAttendees.map((att: any) => (
+                    <div key={att.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--field)', padding: '12px', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)' }}>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink)' }}>{att.name}</div>
+                        {att.email && <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>{att.email}</div>}
+                      </div>
+                      <div>
+                        {att.status === 'approved' ? <span className="pill green">Approved</span> :
+                         att.status === 'pending' ? <span className="pill" style={{ background: "rgba(245,158,11,0.12)", color: "#f59e0b" }}>Pending</span> :
+                         att.status === 'waitlisted' ? <span className="pill gray">Waitlisted</span> :
+                         att.status === 'rejected' ? <span className="pill" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>Rejected</span> :
+                         <span className="pill gray">{att.status}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div style={{ display: "flex", gap: 9, marginTop: 18 }}>
               <button className="hbtn hbtn--ghost" style={{ flex: 1 }} onClick={() => downloadInvoice(t)}><I.download /> Invoice</button>
@@ -1002,87 +1026,209 @@ export function TicketDetail({ tkt, st, go }) {
 }
 
 /* ---------------- Claim-your-ticket (F4) ---------------- */
-export function ClaimFlow({ st, go }) {
-  const [step, setStep] = useState("landing"); // landing | otp | done
+export function ClaimFlow({ token, st, go, onClaimed }: any) {
+  const [step, setStep] = useState("loading"); // loading | landing | otp | done | error
   const [code, setCode] = useState(["", "", "", "", "", ""]);
   const [status, setStatus] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [otpError, setOtpError] = useState("");
   const refs = useRef([]);
-  const t = { ev: "Founders & Funders Mixer — Summer Edition", cover: COVERS.sunset, tier: "VIP · Front tables", date: "Thu, Jun 18", time: "6:30 PM", venue: "Skydeck, Indiranagar" };
+  const [claimData, setClaimData] = useState<any>(null);
+
+  const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+  const authToken = localStorage.getItem('token');
+
+  useEffect(() => {
+    if (!token) {
+      setStep("error");
+      setErrorMsg("No claim token provided.");
+      return;
+    }
+    fetch(`${apiBase}/api/tickets/claim/${token}`)
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          setClaimData(res.data);
+          setStep("landing");
+        } else {
+          setStep("error");
+          setErrorMsg(res.message);
+        }
+      })
+      .catch(() => {
+        setStep("error");
+        setErrorMsg("Failed to load claim details.");
+      });
+  }, [token, apiBase]);
+
+  const sendOtp = () => {
+    setStatus("sending");
+    setErrorMsg("");
+    fetch(`${apiBase}/api/tickets/claim/otp/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token })
+    })
+    .then(r => r.json())
+    .then(res => {
+      setStatus("");
+      if (res.success) {
+        setOtpError("");
+        setStep("otp");
+      } else {
+        setErrorMsg(res.message || "Failed to send OTP.");
+      }
+    })
+    .catch(() => {
+      setStatus("");
+      setErrorMsg("Network error. Please try again.");
+    });
+  };
+
+  const verifyOtp = (otp) => {
+    setStatus("checking");
+    setOtpError("");
+    const headers: any = { "Content-Type": "application/json" };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    fetch(`${apiBase}/api/tickets/claim/otp/verify`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ token, otp })
+    })
+    .then(r => r.json())
+    .then(res => {
+      if (res.success) {
+        if (res.token) {
+          localStorage.setItem('token', res.token);
+          // Immediately update window.ME from the new token so the UI
+          // treats this user as a verified, logged-in member right away
+          try {
+            const parts = res.token.split('.');
+            if (parts.length >= 2) {
+              const p = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+              if (p.id) (window as any).ME.id = p.id;
+              if (p.email) {
+                const local = p.email.split('@')[0];
+                (window as any).ME.name = local.replace(/[._-]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+                (window as any).ME.handle = `@${local}`;
+              }
+            }
+          } catch (_) {}
+        }
+        // Notify parent (join_event.tsx) so it can re-fetch the event page state
+        if (typeof onClaimed === 'function') {
+          onClaimed(res.token);
+        }
+        // Refresh joined-events list in the sidebar
+        if (st && typeof st.fetchJoinedEvents === 'function') {
+          st.fetchJoinedEvents();
+        }
+        setStep("done");
+      } else {
+        setStatus("");
+        setOtpError(res.message || "Invalid OTP. Please try again.");
+        setCode(["", "", "", "", "", ""]);
+        setTimeout(() => refs.current[0]?.focus(), 50);
+      }
+    })
+    .catch(() => {
+      setStatus("");
+      setOtpError("Network error. Please try again.");
+    });
+  };
 
   const onDigit = (i, v) => {
     if (!/^\d?$/.test(v)) return;
     const next = [...code]; next[i] = v; setCode(next);
     if (v && i < 5) refs.current[i + 1]?.focus();
     if (next.every(d => d) && next.join("").length === 6) {
-      setStatus("checking");
-      setTimeout(() => {
-        // Automatically add claimed ticket to user's wallet
-        if (st && st.addClaimedTicket) {
-          st.addClaimedTicket(t);
-        }
-        setStep("done");
-      }, 900);
+      verifyOtp(next.join(""));
     }
   };
 
   return (
     <div className="scroll">
       <div className="flow view-enter" style={{ maxWidth: 480, margin: "0 auto", padding: "24px 16px" }}>
-        {step === "landing" && (
+        {step === "loading" && (
+          <div style={{ textAlign: "center", padding: "40px" }}>Loading...</div>
+        )}
+        
+        {step === "error" && (
+          <div className="fcard fcard-pad" style={{ textAlign: "center", color: "var(--red)" }}>
+            <h3>Error</h3>
+            <p>{errorMsg}</p>
+          </div>
+        )}
+
+        {step === "landing" && claimData && (
           <>
             <div style={{ textAlign: "center", padding: "10px 0 6px" }}><Wordmark size={20} /></div>
             <div className="fcard" style={{ marginTop: 18 }}>
-              <div className="qt-cov" style={{ background: t.cover && (t.cover.startsWith("linear-gradient") || t.cover.startsWith("radial-gradient") || t.cover.startsWith("var(")) ? t.cover : `url(${t.cover}) center/cover no-repeat`, height: 120, position: "relative", display: "flex", alignItems: "flex-end", padding: 16 }}>
+              <div className="qt-cov" style={{ background: claimData.cover && (claimData.cover.startsWith("linear-gradient") || claimData.cover.startsWith("radial-gradient") || claimData.cover.startsWith("var(")) ? claimData.cover : `url(${claimData.cover}) center/cover no-repeat`, height: 120, position: "relative", display: "flex", alignItems: "flex-end", padding: 16 }}>
                 <Grain />
-                <span className="pill" style={{ background: "rgba(0,0,0,0.3)", color: "#fff", backdropFilter: "blur(8px)" }}>{t.tier}</span>
+                <span className="pill" style={{ background: "rgba(0,0,0,0.3)", color: "#fff", backdropFilter: "blur(8px)" }}>Ticket for {claimData.ticketName || 'Guest'}</span>
               </div>
               <div className="fcard-pad">
                 <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--accent-2)" }}>You've been given a ticket</div>
-                <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 22, color: "var(--ink)", marginTop: 8, lineHeight: 1.2 }}>{t.ev}</h2>
-                <div className="tkt-meta" style={{ fontSize: 13, marginTop: 12 }}>
-                  <span><I.cal style={{ width: 14, height: 14 }} /> {t.date} · {t.time}</span>
-                  <span><I.pin style={{ width: 14, height: 14 }} /> {t.venue}</span>
-                </div>
+                <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 22, color: "var(--ink)", marginTop: 8, lineHeight: 1.2 }}>{claimData.eventTitle}</h2>
                 <div className="notice info" style={{ marginTop: 16 }}>
                   <span className="ni"><I.link /></span>
                   <div>This is a secure single-use claim link. Verify it's you to add the ticket to your Samaagum wallet. Your entry stays valid even if you never claim.</div>
                 </div>
-                <button className="hbtn hbtn--primary hbtn--block" style={{ marginTop: 16 }} onClick={() => setStep("otp")}>Claim this ticket</button>
+                {errorMsg && (
+                  <div style={{ marginTop: 12, fontSize: 13, color: "var(--red)", background: "rgba(239,68,68,0.08)", padding: "8px 12px", borderRadius: 6 }}>
+                    {errorMsg}
+                  </div>
+                )}
+                <button className="hbtn hbtn--primary hbtn--block" style={{ marginTop: 16 }} onClick={sendOtp} disabled={status === "sending"}>
+                  {status === "sending" ? "Sending OTP..." : "Claim this ticket"}
+                </button>
               </div>
             </div>
           </>
         )}
 
-        {step === "otp" && (
+        {step === "otp" && claimData && (
           <>
-            <div className="flow-head"><button className="back" onClick={() => setStep("landing")}><I.arrowL /></button><div><div className="flow-title">Verify it's you</div><div className="flow-sub">Code sent to a•••a@samaagum.co</div></div></div>
+            <div className="flow-head"><button className="back" onClick={() => setStep("landing")}><I.arrowL /></button><div><div className="flow-title">Verify it's you</div><div className="flow-sub">Code sent to {claimData.attendeeEmail}</div></div></div>
             <div className="fcard fcard-pad" style={{ textAlign: "center" }}>
-              <p style={{ fontSize: 14, color: "var(--ink-2)", marginBottom: 18 }}>Enter the 6-digit code we emailed to the address on this ticket.</p>
+              <p style={{ fontSize: 14, color: "var(--ink-2)", marginBottom: 18 }}>Enter the 6-digit code we sent to <strong>{claimData.attendeeEmail}</strong></p>
               <div style={{ display: "flex", gap: 9, justifyContent: "center" }}>
                 {code.map((d, i) => (
                   <input key={i} ref={el => refs.current[i] = el} className="otp-box" value={d} maxLength={1} inputMode="numeric"
-                    style={{ width: 42, height: 48, fontSize: 20, textAlign: "center", borderRadius: 8, border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)" }}
+                    style={{ width: 42, height: 48, fontSize: 20, textAlign: "center", borderRadius: 8, border: `1px solid ${otpError ? 'var(--red)' : 'var(--border)'}`, background: "var(--field)", color: "var(--ink)" }}
                     onChange={e => onDigit(i, e.target.value)}
                     onKeyDown={e => { if (e.key === "Backspace" && !d && i > 0) refs.current[i - 1]?.focus(); }} />
                 ))}
               </div>
-              {status === "checking" && <div style={{ marginTop: 16, fontSize: 13, color: "var(--ink-3)", display: "flex", gap: 8, justifyContent: "center", alignItems: "center" }}><Spinner /> Verifying…</div>}
-              <div style={{ marginTop: 18, fontSize: 13, color: "var(--ink-3)" }}>Didn't get it? <button className="linkbtn" onClick={() => alert("A new code has been sent.")}>Resend code</button></div>
+              {otpError && <div style={{ marginTop: 12, fontSize: 13, color: "var(--red)", background: "rgba(239,68,68,0.08)", padding: "8px 12px", borderRadius: 6 }}>{otpError}</div>}
+              {status === "checking" && <div style={{ marginTop: 12, fontSize: 13, color: "var(--ink-3)", display: "flex", gap: 8, justifyContent: "center", alignItems: "center" }}>Verifying…</div>}
+              <div style={{ marginTop: 18, fontSize: 13, color: "var(--ink-3)" }}>Didn't get it? <button className="linkbtn" onClick={sendOtp}>Resend code</button></div>
             </div>
           </>
         )}
 
-        {step === "done" && (
+        {step === "done" && claimData && (
           <div className="fcard" style={{ marginTop: 20 }}>
             <div className="terminal" style={{ textAlign: "center", padding: 24 }}>
-              <div className="badge" style={{ background: "rgba(16, 185, 129, 0.1)", color: "#10b981", width: 64, height: 64, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}><I.check style={{ width: 34, height: 34 }} /></div>
-              <h2>Ticket claimed</h2>
-              <p style={{ fontSize: 14, color: "var(--ink-2)" }}>{t.ev} is now in your wallet. We've linked it to your account — see you there!</p>
+              <div style={{ background: "rgba(16, 185, 129, 0.1)", color: "#10b981", width: 64, height: 64, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}><I.check style={{ width: 34, height: 34 }} /></div>
+              <h2>🎉 Ticket Claimed!</h2>
+              <p style={{ fontSize: 14, color: "var(--ink-2)" }}>
+                <strong>{claimData.eventTitle}</strong> is now in your wallet. Your account has been verified — you are now a confirmed member!
+              </p>
             </div>
             <div className="fcard-pad" style={{ paddingTop: 4, paddingBottom: 24 }}>
               <div style={{ display: "flex", gap: 10 }}>
-                <button className="hbtn hbtn--primary hbtn--block" onClick={() => go("events")}><I.ticket /> View tickets</button>
-                <button className="hbtn hbtn--ghost" onClick={() => go("home")}>Home</button>
+                <button className="hbtn hbtn--primary hbtn--block" onClick={() => {
+                  // Close popup and show event as confirmed member
+                  if (typeof onClaimed === 'function') onClaimed(localStorage.getItem('token'));
+                  // Full reload ensures profile, sidebar, and event page all refresh cleanly
+                  window.location.reload();
+                }}><I.check /> Go to Event</button>
+                <button className="hbtn hbtn--ghost" onClick={() => {
+                  window.location.hash = '#events';
+                  window.location.reload();
+                }}><I.ticket /> My Tickets</button>
               </div>
             </div>
           </div>
