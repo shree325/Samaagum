@@ -791,15 +791,19 @@ export function HomeFeed({ st, go }: any) {
 
 /* ---------------- Discover (browse) ---------------- */
 export function Discover({ st, go, param }) {
-  const [tab, setTab] = useState(param === "events" ? "events" : "groups");
+  // param may be a plain string ("events"/"groups") or an object { tab, category }
+  const initialTab      = (typeof param === 'string' ? param : param?.tab) ?? 'events';
+  const initialCategory = typeof param === 'object' && param !== null ? (param.category ?? null) : null;
+
+  const [tab, setTab] = useState(initialTab === 'events' ? 'events' : 'groups');
 
   useEffect(() => {
-    if (param === "events" || param === "groups") {
-      setTab(param);
-    }
+    if (param === 'events' || param === 'groups') setTab(param);
+    else if (param?.tab === 'events' || param?.tab === 'groups') setTab(param.tab);
   }, [param]);
 
   const { wishlisted, wishlistCounts, toggleWishlist, registered, city, addJoined, addPending } = st;
+  const requireAuth = st.requireAuth ?? ((_ctx, action) => action());
   const [dbEvents, setDbEvents] = useState([]);
   const [dbGroups, setDbGroups] = useState([]);
   const [categoriesList, setCategoriesList] = useState([]);
@@ -813,7 +817,14 @@ export function Discover({ st, go, param }) {
   const [filterFormat, setFilterFormat] = useState({ online: false, inPerson: false });
   const [filterTime, setFilterTime] = useState({ today: false, thisWeek: false, other: false });
   const [filterReg, setFilterReg] = useState({ joined: false, notJoined: false });
-  const [selectedCats, setSelectedCats] = useState(new Set());
+  const [selectedCats, setSelectedCats] = useState<Set<string>>(new Set());
+
+  // Pre-apply category filter when navigated from landing page category card
+  useEffect(() => {
+    if (initialCategory) {
+      setSelectedCats(new Set([initialCategory]));
+    }
+  }, []); // only on mount — intentionally not re-running when param changes
 
   const isToday = (date: Date) => {
     const today = new Date();
@@ -1374,14 +1385,30 @@ export function Discover({ st, go, param }) {
             <Empty icon={<I.ticket />} title="No events found" text="There are no events scheduled in this category matching the filters." />
           ) : (
             <div className="ev-grid">
-              {evs.map(ev => <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)} wishlisted={wishlisted.has(ev.id)} wishlistCount={wishlistCounts[ev.id] !== undefined ? wishlistCounts[ev.id] : (ev.wishlistCount || 0)} onWishlist={() => toggleWishlist(ev.id, ev.wishlistCount)} registered={registered.has(ev.id)} />)}
+              {evs.map(ev => <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)}
+                wishlisted={wishlisted.has(ev.id)}
+                wishlistCount={wishlistCounts[ev.id] !== undefined ? wishlistCounts[ev.id] : (ev.wishlistCount || 0)}
+                onWishlist={() => requireAuth(
+                  { reason: 'bookmark',
+                    pendingNavigation: { view: 'event', param: { id: ev.id } },
+                    pendingAction: { type: 'bookmark', eventId: ev.id } },
+                  () => toggleWishlist(ev.id, ev.wishlistCount)
+                )}
+                registered={registered.has(ev.id)} />)}
             </div>
           )
         ) : (
           <div className="ev-grid">
             {loading ? <div style={{ color: "var(--ink-3)", padding: 20 }}>Loading groups...</div> : grps.length === 0 ? (
               <Empty icon={<I.groups />} title="No groups found" text="There are no groups scheduled in this category matching the filters." />
-            ) : grps.map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={g.isJoined || st.joined?.has(g.id) ? true : (g.isPending || st.pending?.has(g.id)) ? "pending" : false} onJoin={(g)=>{ st.toggleJoin(g); }} />)}
+            ) : grps.map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)}
+              joined={g.isJoined || st.joined?.has(g.id) ? true : (g.isPending || st.pending?.has(g.id)) ? "pending" : false}
+              onJoin={(g) => requireAuth(
+                { reason: 'join-group',
+                  pendingNavigation: { view: 'group', param: { id: g.id } },
+                  pendingAction: { type: 'join-group', groupId: g.id } },
+                () => st.toggleJoin(g)
+              )} />)}
           </div>
         )}
       </div>

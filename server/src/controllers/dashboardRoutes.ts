@@ -69,7 +69,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
             const sevenDaysAgo = new Date();
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-            // Fetch events created within 7 days, published, starts in future, and has cover
+            // Fetch events created within 7 days, published, starts in future
             const recentEvents = await prisma.events.findMany({
                 where: {
                     status: 'published',
@@ -77,7 +77,6 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                     created_at: { gte: sevenDaysAgo }
                 },
                 orderBy: { created_at: 'desc' },
-                take: 10,
                 include: {
                     ticket_types: true
                 }
@@ -89,10 +88,10 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                 const visibility = venueObj?.visibility;
                 const cover = venueObj?.meta?.cover;
                 return (!visibility || visibility === 'public') && !!cover;
-            });
+            }).slice(0, 10);
 
-            // Fallback: If less than 3 events, fill with most-attended upcoming public events
-            if (filteredEvents.length < 3) {
+            // Fallback: If less than 10 events, fill with most-attended upcoming public events with cover
+            if (filteredEvents.length < 10) {
                 const excludedIds = filteredEvents.map(e => e.id);
                 const backupEvents = await prisma.events.findMany({
                     where: {
@@ -112,7 +111,8 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                     .filter(ev => {
                         const venueObj = ev.venue as any;
                         const visibility = venueObj?.visibility;
-                        return !visibility || visibility === 'public';
+                        const cover = venueObj?.meta?.cover;
+                        return (!visibility || visibility === 'public') && !!cover;
                     })
                     .sort((a, b) => b.bookings.length - a.bookings.length)
                     .slice(0, 10 - filteredEvents.length);

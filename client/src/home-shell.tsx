@@ -563,3 +563,118 @@ export function CityPicker({ open, onClose, city, onPick }) {
 }
 
 
+/* ---------------- Guest Sidebar ---------------- */
+/* Shown to unauthenticated users — browse-only navigation. */
+export function GuestSidebar({ view, go }) {
+  const AUTH_PATH = '/pages/Samaagum Auth.html';
+  const nav = [
+    { k: 'discover',        label: 'Discover', ic: <I.compass /> },
+    { k: 'discover-events', label: 'Events',   ic: <I.ticket />  },
+    { k: 'discover-groups', label: 'Groups',   ic: <I.groups />  },
+  ];
+
+  const handleNav = (k) => {
+    if (k === 'discover-events') go('discover', 'events');
+    else if (k === 'discover-groups') go('discover', 'groups');
+    else go(k);
+  };
+
+  const isActive = (k) => {
+    if (k === 'discover-events') return view === 'discover-events';
+    if (k === 'discover-groups') return view === 'discover-groups';
+    return view === k;
+  };
+
+  return (
+    <aside className="sidebar">
+      <div className="sb-brand" style={{ display: 'flex', alignItems: 'center' }}>
+        <Wordmark size={19} />
+      </div>
+
+      <nav className="sb-nav" style={{ flex: 1 }}>
+        {nav.map((it) => (
+          <button
+            key={it.k}
+            className={`sb-item ${isActive(it.k) ? 'on' : ''}`}
+            onClick={() => handleNav(it.k)}
+          >
+            <span className="ic">{it.ic}</span>
+            <span className="label">{it.label}</span>
+          </button>
+        ))}
+      </nav>
+
+      <div className="sb-foot" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 12px 16px' }}>
+        <a
+          href={`${AUTH_PATH}#login`}
+          className="hbtn hbtn--ghost"
+          style={{ textAlign: 'center', textDecoration: 'none', display: 'block' }}
+        >
+          Log in
+        </a>
+        <a
+          href={`${AUTH_PATH}#signup`}
+          className="hbtn hbtn--primary"
+          style={{ textAlign: 'center', textDecoration: 'none', display: 'block' }}
+        >
+          Sign up
+        </a>
+      </div>
+    </aside>
+  );
+}
+
+/* ---------------- Guest Topbar ---------------- */
+/* Shown to unauthenticated users — search + location + Login / Sign up. */
+export function GuestTopbar({ city, onCity, onCreateClick }) {
+  const AUTH_PATH = '/pages/Samaagum Auth.html';
+
+  return (
+    <header className="topbar">
+      {/* Search — read-only placeholder; search is usable for discovery */}
+      <div className="tb-search" style={{ position: 'relative' }}>
+        <span className="ic"><I.search /></span>
+        <input
+          placeholder="Search events, groups, people…"
+          readOnly
+          onClick={() => {
+            /* Guest can search — clicking focuses input. Nothing blocked. */
+          }}
+          style={{ cursor: 'text' }}
+        />
+        <kbd>/</kbd>
+      </div>
+
+      {window.featureSettings?.location_active !== false && (
+        <button className="tb-loc" onClick={onCity}>
+          <I.pin style={{ color: 'var(--accent-2)' }} /> {city || 'Location'} <I.chevD style={{ color: 'var(--ink-3)' }} />
+        </button>
+      )}
+
+      <div className="tb-spacer" />
+
+      {/* Create — shown but guarded */}
+      <button className="tb-icon" onClick={onCreateClick} title="Create">
+        <I.plus />
+      </button>
+
+      {/* Auth CTAs */}
+      <a
+        href={`${AUTH_PATH}#login`}
+        className="hbtn hbtn--ghost"
+        style={{ textDecoration: 'none', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', padding: '6px 14px' }}
+        id="guest-topbar-login"
+      >
+        Log in
+      </a>
+      <a
+        href={`${AUTH_PATH}#signup`}
+        className="hbtn hbtn--primary"
+        style={{ textDecoration: 'none', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', padding: '6px 16px' }}
+        id="guest-topbar-signup"
+      >
+        Sign up
+      </a>
+    </header>
+  );
+}

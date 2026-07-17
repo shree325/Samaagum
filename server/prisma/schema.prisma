@@ -1039,11 +1039,11 @@ model messages {
   is_edited            Boolean?               @default(false)
   is_deleted           Boolean?               @default(false)
   updated_at           DateTime?              @default(now()) @db.Timestamptz(6)
-  attachments_count    Int?                   @default(0)
-  deleted_at           DateTime?              @db.Timestamptz(6)
-  deleted_for_everyone Boolean                @default(false)
   edited_at            DateTime?              @db.Timestamptz(6)
+  deleted_at           DateTime?              @db.Timestamptz(6)
   reply_to_message_id  String?                @db.Uuid
+  attachments_count    Int?                   @default(0)
+  deleted_for_everyone Boolean                @default(false)
   status               MessageStatus          @default(ACTIVE)
   type                 MessageType            @default(TEXT)
   version              Int                    @default(1)
@@ -1236,8 +1236,8 @@ model profiles {
   phone_number                                       String?       @db.VarChar(20)
   user_name                                          String?
   headline                                           String?
-  messaging_restriction                              String?       @default("anyone") @db.VarChar(50)
   privacy_prefs                                      Json?         @default("{}")
+  messaging_restriction                              String?       @default("anyone") @db.VarChar(50)
   media_assets_profiles_cover_asset_idTomedia_assets media_assets? @relation("profiles_cover_asset_idTomedia_assets", fields: [cover_asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_profiles_cover")
   media_assets_profiles_photo_asset_idTomedia_assets media_assets? @relation("profiles_photo_asset_idTomedia_assets", fields: [photo_asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_profiles_photo")
   tenants                                            tenants       @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -1836,11 +1836,11 @@ model users {
   user_consents                                                        user_consents[]
   userIntegrations                                                     user_integrations[]
   user_interests                                                       user_interests[]
+  userNotificationPreferences                                          user_notification_preferences[]
+  userNotificationSettings                                             user_notification_settings?
   tenants                                                              tenants                         @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   waitlist_entries                                                     waitlist_entries[]
   wishlists                                                            wishlists[]
-  userNotificationSettings                                             user_notification_settings[]
-  userNotificationPreferences                                          user_notification_preferences[]
 
   @@unique([tenant_id, primary_email])
   @@index([tenant_id], map: "idx_users_tenant_id")
@@ -2092,29 +2092,30 @@ model attachments {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model attendees {
-  id                                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id                         String    @db.Uuid
-  booking_id                        String    @db.Uuid
-  ticket_id                         String?   @db.Uuid
-  user_id                           String?   @db.Uuid
-  name                              String    @db.VarChar(255)
-  email                             String?   @db.VarChar(255)
-  gender                            String?   @db.VarChar(20)
-  phone                             String?   @db.VarChar(20)
-  dob                               DateTime? @db.Date
-  claimed_at                        DateTime? @db.Timestamptz(6)
-  checkin_status                    String?   @default("not_checked_in") @db.VarChar(50)
+  id                                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                         String          @db.Uuid
+  booking_id                        String          @db.Uuid
+  ticket_id                         String?         @db.Uuid
+  user_id                           String?         @db.Uuid
+  name                              String          @db.VarChar(255)
+  email                             String?         @db.VarChar(255)
+  gender                            String?         @db.VarChar(20)
+  phone                             String?         @db.VarChar(20)
+  dob                               DateTime?       @db.Date
+  claimed_at                        DateTime?       @db.Timestamptz(6)
+  checkin_status                    String?         @default("not_checked_in") @db.VarChar(50)
   notes                             String?
-  created_at                        DateTime? @default(now()) @db.Timestamptz(6)
-  created_by                        String?   @db.Uuid
-  updated_at                        DateTime? @default(now()) @db.Timestamptz(6)
-  updated_by                        String?   @db.Uuid
-  bookings                          bookings  @relation(fields: [booking_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  users_attendees_created_byTousers users?    @relation("attendees_created_byTousers", fields: [created_by], references: [id], onUpdate: NoAction)
-  tenants                           tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  tickets                           tickets?  @relation(fields: [ticket_id], references: [id], onUpdate: NoAction)
-  users_attendees_updated_byTousers users?    @relation("attendees_updated_byTousers", fields: [updated_by], references: [id], onUpdate: NoAction)
-  users_attendees_user_idTousers    users?    @relation("attendees_user_idTousers", fields: [user_id], references: [id], onUpdate: NoAction)
+  created_at                        DateTime?       @default(now()) @db.Timestamptz(6)
+  created_by                        String?         @db.Uuid
+  updated_at                        DateTime?       @default(now()) @db.Timestamptz(6)
+  updated_by                        String?         @db.Uuid
+  status                            attendee_status @default(pending)
+  bookings                          bookings        @relation(fields: [booking_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_attendees_created_byTousers users?          @relation("attendees_created_byTousers", fields: [created_by], references: [id], onUpdate: NoAction)
+  tenants                           tenants         @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tickets                           tickets?        @relation(fields: [ticket_id], references: [id], onUpdate: NoAction)
+  users_attendees_updated_byTousers users?          @relation("attendees_updated_byTousers", fields: [updated_by], references: [id], onUpdate: NoAction)
+  users_attendees_user_idTousers    users?          @relation("attendees_user_idTousers", fields: [user_id], references: [id], onUpdate: NoAction)
 
   @@index([booking_id], map: "idx_attendees_booking")
   @@index([email], map: "idx_attendees_email")
@@ -2339,8 +2340,8 @@ model message_receipts {
   user_id      String    @db.Uuid
   delivered_at DateTime? @db.Timestamptz(6)
   seen_at      DateTime? @db.Timestamptz(6)
-  failed_at    DateTime? @db.Timestamptz(6)
   id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  failed_at    DateTime? @db.Timestamptz(6)
   messages     messages  @relation(fields: [message_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   users        users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
@@ -2728,6 +2729,27 @@ model event_virtual_meetings {
   @@unique([event_id, provider])
 }
 
+model user_notification_settings {
+  user_id        String   @id @db.Uuid
+  in_app_enabled Boolean  @default(true)
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime @default(now()) @db.Timestamptz(6)
+  email_enabled  Boolean  @default(true)
+  users          users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model user_notification_preferences {
+  user_id    String                     @db.Uuid
+  type       NotificationPreferenceType
+  enabled    Boolean                    @default(true)
+  created_at DateTime                   @default(now()) @db.Timestamptz(6)
+  updated_at DateTime                   @default(now()) @db.Timestamptz(6)
+  channel    String                     @default("app")
+  users      users                      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([user_id, type, channel])
+}
+
 enum assignment_state {
   invited
   active
@@ -3049,23 +3071,10 @@ enum NotificationPreferenceType {
   SUBSCRIPTION_ACTIVE
 }
 
-model user_notification_settings {
-  user_id        String   @id @db.Uuid
-  in_app_enabled Boolean  @default(true)
-  email_enabled  Boolean  @default(true)
-  created_at     DateTime @default(now()) @db.Timestamptz(6)
-  updated_at     DateTime @default(now()) @db.Timestamptz(6)
-  users          users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-}
-
-model user_notification_preferences {
-  user_id    String                     @db.Uuid
-  type       NotificationPreferenceType
-  channel    String                     @default("app")
-  enabled    Boolean                    @default(true)
-  created_at DateTime                   @default(now()) @db.Timestamptz(6)
-  updated_at DateTime                   @default(now()) @db.Timestamptz(6)
-  users      users                      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@id([user_id, type, channel])
+enum attendee_status {
+  pending
+  approved
+  rejected
+  waitlisted
+  checked_in
 }

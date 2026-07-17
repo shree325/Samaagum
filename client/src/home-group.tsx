@@ -1660,7 +1660,8 @@ export function GroupDetail({ group, st, go }) {
     setImageZoom(2);
   };
 
-  const _gdApiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+  const _isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  const _gdApiBase = _isLocalhost ? "http://localhost:3000" : "";
   const _resolveUrl = (u) => u && !u.startsWith('blob:') ? (u.startsWith('/api/') ? _gdApiBase + u : u) : null;
   const bannerSrc = _resolveUrl(g.banner);
   const iconSrc = _resolveUrl(g.icon);
