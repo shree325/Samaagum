@@ -276,7 +276,7 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                     // Fetch all attendees for this booking to show order details to the buyer
                     allAttendees = await prisma.attendees.findMany({
                         where: { booking_id: bookingId },
-                        select: { id: true, name: true, email: true, status: true, ticket_id: true }
+                        select: { id: true, name: true, email: true, ticket_id: true }
                     });
                     
                     const lineItems = await prisma.booking_line_items.findMany({
@@ -1011,8 +1011,7 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
 
             const confirmedAttendees = await prisma.attendees.findMany({
                 where: { 
-                    bookings: { event_id: id, status: { in: ['confirmed', 'pending_payment'] } },
-                    status: { in: ['approved', 'checked_in'] }
+                    bookings: { event_id: id, status: { in: ['confirmed', 'pending_payment'] } }
                 },
                 include: {
                     tickets: true,
@@ -1032,8 +1031,7 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
             // Pending join requests
             const pendingRequests = await prisma.attendees.findMany({
                 where: { 
-                    bookings: { event_id: id },
-                    status: 'pending'
+                    bookings: { event_id: id, status: 'pending_approval' }
                 },
                 include: {
                     users_attendees_user_idTousers: { select: { profile_image_data: true } },
@@ -1388,11 +1386,6 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
             const nextAttendeeStatus = action === 'accept' ? 'approved' : 'rejected';
 
             await prisma.$transaction(async (tx) => {
-                await tx.attendees.update({
-                    where: { id: attendeeId },
-                    data: { status: nextAttendeeStatus }
-                });
-                
                 // If there's a ticket attached (which there usually is for pending attendees), update its status
                 if (attendee.ticket_id) {
                     const isCash = booking.payment_method === 'cash';
@@ -1499,7 +1492,7 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                 try {
                     const guestUser = await prisma.users.findUnique({ where: { id: guestId } });
                     if (guestUser?.primary_email) {
-                        const lineItems = await prisma.booking_line_items.findMany({ where: { booking_id: bookingId } });
+                        const lineItems = await prisma.booking_line_items.findMany({ where: { booking_id: booking.id } });
                         const li = lineItems[0];
                         const tk = li ? await prisma.tickets.findFirst({ where: { line_item_id: li.id } }) : null;
                         if (tk) {
@@ -1516,8 +1509,12 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                             const bookingQty = lineItems.reduce((sum, item) => sum + item.quantity, 0);
                             const totalPaidMinor = booking.total_amount_minor ? Number(booking.total_amount_minor) : 0;
                             const paidStr = totalPaidMinor > 0 ? formatCurrency(totalPaidMinor, booking.total_currency || 'INR') : 'Free';
+                            
+                            const isCash = booking.payment_method === 'cash';
+                            const cashAlreadyPaid = isCash && !!booking.payment_proof_url;
+
                             // Send ticket email if non-cash, OR if cash booking was already paid (pay-then-approve confirmed immediately)
-                            if (booking.payment_method !== 'cash' || cashAlreadyPaid) {
+                            if (!isCash || cashAlreadyPaid) {
                                 const htmlContent = generateTicketHtml({
                                     qrToken: tk.qr_token,
                                     ticketCode: tk.ticket_code || tk.id,

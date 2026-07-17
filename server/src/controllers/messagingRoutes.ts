@@ -2216,7 +2216,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           }
         }
 
-        if (initialStatus === 'pending_payment') {
+        if (initialBookingStatus === 'pending_payment') {
           // Notify the host about the cash payment registration
           let ownerUserId = null;
           const entityRow = await prisma.entities.findUnique({ where: { id: event.hosted_by_entity_id } });
@@ -2275,7 +2275,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             });
           }
 
-          return reply.send({ success: true, status: 'pending_payment', message: 'Joined event. Booking pending cash payment at the venue.' + emailMsg });
+          return reply.send({ success: true, status: 'pending_payment', message: 'Joined event. Booking pending cash payment at the venue.' });
         }
         return reply.send({ success: true, status: 'confirmed', message: 'Joined event successfully.' });
       }
