@@ -572,11 +572,17 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
       }
     });
 
+    socket.on('dashboard_updated', (payload: any) => {
+      if (payload?.eventId === e.id || !payload?.eventId) {
+        refetch();
+      }
+    });
+
     return () => {
       socket.emit('leave_event', e.id);
       socket.disconnect();
     };
-  }, [e?.id, fetchWaitlistOnly]);
+  }, [e?.id, fetchWaitlistOnly, refetch]);
 
   /* -------- Derived metrics (useMemo) -------- */
   const checkinPercentage = useMemo(() =>

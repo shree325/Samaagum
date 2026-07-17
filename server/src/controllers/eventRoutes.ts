@@ -1472,6 +1472,34 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                 } catch (emailErr: any) {
                     console.error('[eventRoutes] Failed to send ticket email after approval:', emailErr.message);
                 }
+
+                // Send in-app notification to guest
+                try {
+                    const notif = await prisma.notification_log.create({
+                        data: {
+                            tenant_id: event?.tenant_id || request.user.tenant_id,
+                            user_id: guestId,
+                            channel: 'app',
+                            template_key: 'event_request_accepted',
+                            status: 'queued',
+                            provider_ref: JSON.stringify({
+                                eventId: event?.id,
+                                eventTitle: event?.title
+                            })
+                        }
+                    });
+                    const chatNamespace = (fastify as any).io?.of('/chat');
+                    if (chatNamespace) {
+                        chatNamespace.to(`user:${guestId}`).emit('group.notification', {
+                            id: notif.id,
+                            type: 'registration',
+                            text: `Your request to join <b>${event?.title}</b> was approved!`,
+                            eventId: event?.id
+                        });
+                    }
+                } catch (notifErr: any) {
+                    console.error('[eventRoutes] Failed to send in-app notification after approval:', notifErr.message);
+                }
             }
 
             return { success: true, message: `Request ${action}ed successfully.` };
@@ -2465,6 +2493,56 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                 where: { id: bookingId },
                 data: { payment_proof_url: proofData }
             });
+
+            const event = await prisma.events.findUnique({ where: { id: booking.event_id } });
+            if (event) {
+                const groupsNamespace = (fastify as any).io?.of('/groups');
+                if (groupsNamespace) {
+                    groupsNamespace.to(`event_${event.id}`).emit('dashboard_updated', { action: 'payment-proof', eventId: event.id });
+                }
+
+                let ownerUserId = null;
+                const entityRow = await prisma.entities.findUnique({ where: { id: event.hosted_by_entity_id } });
+                if (entityRow) ownerUserId = entityRow.user_id;
+                if (!ownerUserId) {
+                    const ownerRole = await prisma.roles.findFirst({ where: { key: 'group_owner' } });
+                    if (ownerRole) {
+                        const assignment = await prisma.role_assignments.findFirst({
+                            where: { scope_entity_id: event.hosted_by_entity_id, role_id: ownerRole.id }
+                        });
+                        if (assignment) ownerUserId = assignment.user_id;
+                    }
+                }
+                
+                if (ownerUserId) {
+                    const requesterName = request.user.first_name ? `${request.user.first_name} ${request.user.last_name || ''}`.trim() : request.user.primary_email;
+                    const notif = await prisma.notification_log.create({
+                        data: {
+                            tenant_id: event.tenant_id,
+                            user_id: ownerUserId,
+                            channel: 'app',
+                            template_key: 'event_join_request',
+                            status: 'queued',
+                            provider_ref: JSON.stringify({
+                                eventId: event.id,
+                                eventTitle: event.title,
+                                requesterId: request.user.id,
+                                requesterName
+                            })
+                        }
+                    });
+
+                    const chatNamespace = (fastify as any).io?.of('/chat');
+                    if (chatNamespace) {
+                        chatNamespace.to(`user:${ownerUserId}`).emit('group.notification', {
+                            id: notif.id,
+                            type: 'registration',
+                            text: `<b>${requesterName}</b> submitted a cash payment proof for <b>${event.title}</b>`,
+                            eventId: event.id
+                        });
+                    }
+                }
+            }
 
             return reply.send({ success: true, paymentProofUrl: proofData });
         } catch (e: any) {
