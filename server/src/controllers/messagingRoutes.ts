@@ -2005,7 +2005,6 @@ export async function messagingRoutes(fastify: FastifyInstance) {
               email: attEmail,
               gender: attGender,
               checkin_status: 'not_checked_in',
-              status: initialAttendeeStatus,
               notes: JSON.stringify({
                 ...(typeof answers === 'object' && answers !== null ? answers : {}),
                 registration_location: registrationLocation

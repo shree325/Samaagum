@@ -122,7 +122,8 @@ export function JoinEventPage({ ev, st, go }) {
         if (!liveEvent.id || !UUID_RE_J.test(liveEvent.id)) return;
         const tok = localStorage.getItem('token');
         fetch(`${apiBase}/api/events/${liveEvent.id}`, {
-            headers: tok ? { 'Authorization': `Bearer ${tok}` } : {}
+            headers: tok ? { 'Authorization': `Bearer ${tok}` } : {},
+            cache: 'no-store'
         })
             .then(r => r.json())
             .then(data => {
@@ -235,8 +236,10 @@ export function JoinEventPage({ ev, st, go }) {
     );
 
     const priceStr = e.price || "₹500";
-    const tiers = (e.tickets && e.tickets.length > 0)
-        ? e.tickets.filter((t: any) => !t.visibility || t.visibility === 'public').map((t: any) => {
+    const sourceTickets = fetchedEvent?.tickets || e.tickets;
+    const currentType = liveEvent.type || e.type;
+    const tiers = (sourceTickets && sourceTickets.length > 0)
+        ? sourceTickets.filter((t: any) => !t.visibility || t.visibility === 'public').map((t: any) => {
             const isFree = t.price_minor === 0 || t.price_amount_minor === 0 || (!t.price_minor && !t.price_amount_minor);
             const priceVal = isFree ? 0 : (t.price_minor || t.price_amount_minor || 0);
             return {
@@ -253,9 +256,9 @@ export function JoinEventPage({ ev, st, go }) {
                 salesEndAt: t.sales_end_at || t.salesEndAt || null
             };
           })
-        : (e.type === "Free"
-            ? [{ id: "rsvp", n: "General RSVP", d: "Free entry · approval-based", p: "Free", priceVal: 0, free: true, capacity: null, remaining: null, desc: "Free entry · approval-based", salesEndAt: null }]
-            : [{ id: "general", n: "General Admission", d: "Standard entry", p: e.price || "₹500", priceVal: parseInt((e.price || "500").replace(/\D/g,'')) * 100, free: false, capacity: null, remaining: null, desc: "Standard entry", salesEndAt: null }]);
+        : (currentType === "Free"
+            ? [{ id: "rsvp", n: "General RSVP", d: "Free entry · approval-based", p: "Free", free: true, capacity: null, remaining: null, desc: "Free entry · approval-based", salesEndAt: null }]
+            : [{ id: "general", n: "General Admission", d: "Standard entry", p: e.price || "₹500", free: false, capacity: null, remaining: null, desc: "Standard entry", salesEndAt: null }]);
     const [tier, setTier] = React.useState<string | null>(e.type === "Free" ? (tiers[0]?.id || null) : null);
     const [qty, setQty] = React.useState(1);
     const [showTicketPopup, setShowTicketPopup] = useState(false);
