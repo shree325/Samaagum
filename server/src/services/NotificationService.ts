@@ -226,14 +226,24 @@ export class NotificationService {
       return { inAppEnabled: cached.inAppEnabled, emailEnabled: cached.emailEnabled, preferences: cached.preferences };
     }
 
-    const [settings, overrides] = await Promise.all([
-      prisma.user_notification_settings.findUnique({
-        where: { user_id: userId }
-      }),
-      prisma.user_notification_preferences.findMany({
-        where: { user_id: userId }
-      })
-    ]);
+    let settings: any = null;
+    let overrides: any[] = [];
+    try {
+      const results = await Promise.all([
+        prisma.user_notification_settings.findUnique({
+          where: { user_id: userId }
+        }),
+        prisma.user_notification_preferences.findMany({
+          where: { user_id: userId }
+        })
+      ]);
+      settings = results[0];
+      overrides = results[1];
+    } catch (e: any) {
+      // Gracefully handle missing tables in local dev/staging environments
+      console.warn(`[NotificationService] Warning: Could not fetch user preferences for ${userId}: ${e.message}`);
+    }
+
 
     const inAppEnabled = settings ? settings.in_app_enabled : true;
     const emailEnabled = settings ? settings.email_enabled : true;

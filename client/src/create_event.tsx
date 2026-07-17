@@ -1491,7 +1491,7 @@ export function AccessControlModal({ open, onClose, mode, selectedAccess, setSel
 
 export const RECENT_LOCATIONS = [];
 
-export function LocationSection({ venue, setVenue, locType, setLocType, eventId, onEventCreated, existingVirtualMeeting, onProviderSwitch }) {
+export function LocationSection({ venue, setVenue, locType, setLocType, eventId, onEventCreated, existingVirtualMeeting, onProviderSwitch, offlineEntryType, setOfflineEntryType }) {
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState(venue);
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -1566,6 +1566,27 @@ export function LocationSection({ venue, setVenue, locType, setLocType, eventId,
           <p style={{ margin: 0, fontSize: "14px", fontWeight: 600, color: "var(--ink)", lineHeight: "1.2" }}>{displayTitle}</p>
           <p style={{ margin: "2px 0 0", fontSize: "12px", color: "var(--ink-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displaySub}</p>
         </div>
+        {locType === 'physical' && venue && (
+          <select
+            onClick={(e) => e.stopPropagation()}
+            value={offlineEntryType || 'single'}
+            onChange={(e) => setOfflineEntryType(e.target.value as 'single' | 'multi')}
+            style={{
+              marginRight: "12px",
+              padding: "4px 8px",
+              borderRadius: "4px",
+              background: "var(--surface)",
+              color: "var(--ink)",
+              border: "1px solid var(--border)",
+              fontSize: "12px",
+              outline: "none",
+              cursor: "pointer"
+            }}
+          >
+            <option value="single">Single Entry</option>
+            <option value="multi">Multi Entry</option>
+          </select>
+        )}
         <span style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s", color: "var(--ink-3)", display: "flex", alignItems: "center" }}>
           <I.chevD />
         </span>
@@ -2019,6 +2040,9 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
   );
   const [allowImageProof, setAllowImageProof] = useState<boolean>(
     draft?.allowImageProof ?? editEv?.settings?.allow_image_proof ?? false
+  );
+  const [offlineEntryType, setOfflineEntryType] = useState<'single' | 'multi'>(
+    draft?.offlineEntryType ?? editEv?.settings?.offline_entry_type ?? 'single'
   );
 
   useEffect(() => {
@@ -2545,7 +2569,8 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
       waitlist,
       settings: {
         ...((editEv && editEv.settings) ? editEv.settings : {}),
-        allow_image_proof: allowImageProof
+        allow_image_proof: allowImageProof,
+        offline_entry_type: offlineEntryType
       },
       tickets: (type === 'paid' || type === 'cash')
         ? tickets.map((t, i) => ({ name: t.n, capacity: parseInt(t.cap) || null, price_minor: parseInt(t.price) * 100, sort_order: i }))
@@ -3189,6 +3214,8 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
                     setVenue(newUrl || '');
                     setLocType(newUrl ? 'online' : 'physical');
                   }}
+                  offlineEntryType={offlineEntryType}
+                  setOfflineEntryType={setOfflineEntryType}
                 />
               </div>
 

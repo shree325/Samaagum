@@ -90,7 +90,7 @@ interface EventMember {
 }
 interface BulkActionResult {
   successful: string[];
-  failed: { bookingId: string; error: string }[];
+  failed: { id: string; error: string }[];
 }
 
 /* ================================================================
@@ -977,10 +977,10 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
         const result: BulkActionResult = { successful: [], failed: [] };
         results.forEach((r, i) => {
           if (r.status === 'fulfilled') result.successful.push(selectedRequests[i]);
-          else result.failed.push({ bookingId: selectedRequests[i], error: (r as any).reason?.message ?? 'Unknown' });
+          else result.failed.push({ id: selectedRequests[i], error: (r as any).reason?.message ?? 'Unknown' });
         });
         setBulkResult(result);
-        setSelectedRequests(result.failed.map(f => f.bookingId));
+        setSelectedRequests(result.failed.map(f => f.id));
         setActionLoading(false);
         await refetch();
       }
@@ -2032,7 +2032,7 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontSize: 13, color: 'var(--ink-3)' }}>
             <input type="checkbox"
               checked={selectedRequests.length === requests.length && requests.length > 0}
-              onChange={e => setSelectedRequests(e.target.checked ? requests.map(r => r.bookingId) : [])}
+              onChange={e => setSelectedRequests(e.target.checked ? requests.map(r => r.id) : [])}
             /> Select All
           </div>
         )}
@@ -2045,8 +2045,8 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
               <div key={u.id} style={{ display: 'flex', flexDirection: 'column', background: 'var(--field)', borderRadius: 10, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <input type="checkbox" checked={selectedRequests.includes(u.bookingId)}
-                      onChange={ev => setSelectedRequests(prev => ev.target.checked ? [...prev, u.bookingId] : prev.filter(id => id !== u.bookingId))}
+                    <input type="checkbox" checked={selectedRequests.includes(u.id)}
+                      onChange={ev => setSelectedRequests(prev => ev.target.checked ? [...prev, u.id] : prev.filter(id => id !== u.id))}
                     />
                     <Avatar name={u.name} size={38} img={u.picture ?? undefined} />
                     <div>

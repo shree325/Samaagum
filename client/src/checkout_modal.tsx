@@ -180,7 +180,10 @@ export function CheckoutModal({
 
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: 'var(--surface-2)', borderRadius: 12, fontWeight: 700 }}>
                                 <span>Total Price</span>
-                                <span>{liveEvent.type === "Free" ? "Free" : `${sel?.n} x ${qty}`}</span>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                                    <span style={{ fontSize: 16 }}>{liveEvent.type === "Free" ? "Free" : (sel?.priceVal ? `₹${((sel.priceVal / 100) * qty).toFixed(0)}` : sel?.p)}</span>
+                                    {liveEvent.type !== "Free" && <span style={{ fontSize: 12, color: 'var(--ink-3)', fontWeight: 500 }}>{sel?.n} x {qty}</span>}
+                                </div>
                             </div>
                         </div>
                     )}
