@@ -1494,7 +1494,84 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
             const { MyEventsRealtimeService } = require('../services/MyEventsRealtimeService');
             MyEventsRealtimeService.syncUser(request.user.id).catch(() => {});
 
+            // Send ticket email if request was accepted
+            if (action === 'accept' && guestId) {
+                try {
+                    const guestUser = await prisma.users.findUnique({ where: { id: guestId } });
+                    if (guestUser?.primary_email) {
+                        const lineItems = await prisma.booking_line_items.findMany({ where: { booking_id: bookingId } });
+                        const li = lineItems[0];
+                        const tk = li ? await prisma.tickets.findFirst({ where: { line_item_id: li.id } }) : null;
+                        if (tk) {
+                            const guestProfile = await prisma.profiles.findUnique({ where: { user_id: guestId } });
+                            const guestName = guestProfile?.display_name ||
+                                [guestUser.first_name, guestUser.last_name].filter(Boolean).join(' ') ||
+                                guestUser.primary_email.split('@')[0];
+                            const vObj = (event?.venue as any) || {};
+                            const dateStr = event?.starts_at
+                                ? new Date(event.starts_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                                : 'TBD';
+                            const venueStr = vObj.address || vObj.name || event?.location_type || 'TBD';
+                            
+                            const bookingQty = lineItems.reduce((sum, item) => sum + item.quantity, 0);
+                            const totalPaidMinor = booking.total_amount_minor ? Number(booking.total_amount_minor) : 0;
+                            const paidStr = totalPaidMinor > 0 ? formatCurrency(totalPaidMinor, booking.total_currency || 'INR') : 'Free';
+                            // Send ticket email if non-cash, OR if cash booking was already paid (pay-then-approve confirmed immediately)
+                            if (booking.payment_method !== 'cash' || cashAlreadyPaid) {
+                                const htmlContent = generateTicketHtml({
+                                    qrToken: tk.qr_token,
+                                    ticketCode: tk.ticket_code || tk.id,
+                                    attendeeName: guestName,
+                                    dateString: dateStr,
+                                    venueString: venueStr,
+                                    paidAmount: paidStr,
+                                    status: 'Confirmed',
+                                    isOnline: event?.location_type === 'online',
+                                    onlineLink: event?.online_link || '',
+                                    cover: (event as any)?.cover || ((event?.venue as any)?.meta?.cover) || '',
+                                    quantity: bookingQty
+                                });
+                                await sendEmail({
+                                    to: guestUser.primary_email,
+                                    subject: `Your ticket for ${event?.title}`,
+                                    html: htmlContent
+                                });
+                                console.log(`[eventRoutes] Ticket email sent to ${guestUser.primary_email} after admin approval`);
+                            }
+                        }
+                    }
+                } catch (emailErr: any) {
+                    console.error('[eventRoutes] Failed to send ticket email after approval:', emailErr.message);
+                }
 
+                // Send in-app notification to guest
+                try {
+                    const notif = await prisma.notification_log.create({
+                        data: {
+                            tenant_id: event?.tenant_id || request.user.tenant_id,
+                            user_id: guestId,
+                            channel: 'app',
+                            template_key: 'event_request_accepted',
+                            status: 'queued',
+                            provider_ref: JSON.stringify({
+                                eventId: event?.id,
+                                eventTitle: event?.title
+                            })
+                        }
+                    });
+                    const chatNamespace = (fastify as any).io?.of('/chat');
+                    if (chatNamespace) {
+                        chatNamespace.to(`user:${guestId}`).emit('group.notification', {
+                            id: notif.id,
+                            type: 'registration',
+                            text: `Your request to join <b>${event?.title}</b> was approved!`,
+                            eventId: event?.id
+                        });
+                    }
+                } catch (notifErr: any) {
+                    console.error('[eventRoutes] Failed to send in-app notification after approval:', notifErr.message);
+                }
+            }
 
             return { success: true, message: `Request ${action}ed successfully.` };
         } catch (e: any) {
@@ -2486,6 +2563,56 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                 where: { id: bookingId },
                 data: { payment_proof_url: proofData }
             });
+
+            const event = await prisma.events.findUnique({ where: { id: booking.event_id } });
+            if (event) {
+                const groupsNamespace = (fastify as any).io?.of('/groups');
+                if (groupsNamespace) {
+                    groupsNamespace.to(`event_${event.id}`).emit('dashboard_updated', { action: 'payment-proof', eventId: event.id });
+                }
+
+                let ownerUserId = null;
+                const entityRow = await prisma.entities.findUnique({ where: { id: event.hosted_by_entity_id } });
+                if (entityRow) ownerUserId = entityRow.user_id;
+                if (!ownerUserId) {
+                    const ownerRole = await prisma.roles.findFirst({ where: { key: 'group_owner' } });
+                    if (ownerRole) {
+                        const assignment = await prisma.role_assignments.findFirst({
+                            where: { scope_entity_id: event.hosted_by_entity_id, role_id: ownerRole.id }
+                        });
+                        if (assignment) ownerUserId = assignment.user_id;
+                    }
+                }
+                
+                if (ownerUserId) {
+                    const requesterName = request.user.first_name ? `${request.user.first_name} ${request.user.last_name || ''}`.trim() : request.user.primary_email;
+                    const notif = await prisma.notification_log.create({
+                        data: {
+                            tenant_id: event.tenant_id,
+                            user_id: ownerUserId,
+                            channel: 'app',
+                            template_key: 'event_join_request',
+                            status: 'queued',
+                            provider_ref: JSON.stringify({
+                                eventId: event.id,
+                                eventTitle: event.title,
+                                requesterId: request.user.id,
+                                requesterName
+                            })
+                        }
+                    });
+
+                    const chatNamespace = (fastify as any).io?.of('/chat');
+                    if (chatNamespace) {
+                        chatNamespace.to(`user:${ownerUserId}`).emit('group.notification', {
+                            id: notif.id,
+                            type: 'registration',
+                            text: `<b>${requesterName}</b> submitted a cash payment proof for <b>${event.title}</b>`,
+                            eventId: event.id
+                        });
+                    }
+                }
+            }
 
             return reply.send({ success: true, paymentProofUrl: proofData });
         } catch (e: any) {

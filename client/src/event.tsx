@@ -367,6 +367,21 @@ export function EventPage({ ev, st, go }) {
   };
   const [transactionId, setTransactionId] = useState('');
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        if (window.toast) window.toast("File is too large (max 5MB)", "warning");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setTransactionId(ev.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmitTransactionId = async () => {
     if (!currentEvent.bookingId) return;
     setUploadingProof(true);
@@ -2506,14 +2521,53 @@ export function EventPage({ ev, st, go }) {
                               </div>
                             )}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                              <input 
-                                type="text" 
-                                className="cinput" 
-                                placeholder="Transaction ID (optional)" 
-                                value={transactionId} 
-                                onChange={e => setTransactionId(e.target.value)}
-                                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--field)' }}
-                              />
+                              {(() => {
+                                const allowImg = currentEvent?.settings?.allow_image_proof === true;
+                                return (
+                                  <>
+                                    {allowImg && <div style={{ fontSize: 13, color: 'var(--ink-2)', fontWeight: 600 }}>Submit Transaction ID or Upload Proof:</div>}
+                                    <input 
+                                      type="text" 
+                                      className="cinput" 
+                                      placeholder="Transaction ID / UTR (optional)" 
+                                      value={transactionId && !transactionId.startsWith('data:') ? transactionId : ''} 
+                                      onChange={e => setTransactionId(e.target.value)}
+                                      style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--field)' }}
+                                    />
+                                    {allowImg && (
+                                      <>
+                                        <label style={{ 
+                                          display: 'flex', 
+                                          alignItems: 'center', 
+                                          justifyContent: 'center', 
+                                          gap: 8, 
+                                          padding: '10px 12px', 
+                                          background: transactionId.startsWith('data:') ? 'var(--green)' : 'var(--surface)', 
+                                          border: transactionId.startsWith('data:') ? 'none' : '1px solid var(--border)', 
+                                          borderRadius: 8, 
+                                          fontSize: 13, 
+                                          fontWeight: 600, 
+                                          color: transactionId.startsWith('data:') ? '#fff' : 'var(--ink-2)', 
+                                          cursor: 'pointer',
+                                          transition: 'all 0.2s'
+                                        }}>
+                                          <I.image style={{ width: 16, height: 16 }} />
+                                          {transactionId.startsWith('data:') ? 'Change Image' : 'Upload Image Proof'}
+                                          <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleImageChange}
+                                            style={{ display: 'none' }}
+                                          />
+                                        </label>
+                                        {transactionId.startsWith('data:') && (
+                                          <div style={{ fontSize: 12, color: 'var(--accent-2)', fontWeight: 600, textAlign: 'center' }}>Image selected</div>
+                                        )}
+                                      </>
+                                    )}
+                                  </>
+                                );
+                              })()}
                               <button 
                                 className="hbtn hbtn--primary" 
                                 onClick={handleSubmitTransactionId} 

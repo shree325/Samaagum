@@ -2017,6 +2017,9 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
   const [paymentHoldHours, setPaymentHoldHours] = useState(
     draft?.paymentHoldHours ?? (editEv?.payment_hold_hours ? String(editEv.payment_hold_hours) : "48")
   );
+  const [allowImageProof, setAllowImageProof] = useState<boolean>(
+    draft?.allowImageProof ?? editEv?.settings?.allow_image_proof ?? false
+  );
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -2540,6 +2543,10 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
       approval_required: approval,
       capacity_total: capacityEnabled && capacity ? parseInt(capacity) : null,
       waitlist,
+      settings: {
+        ...((editEv && editEv.settings) ? editEv.settings : {}),
+        allow_image_proof: allowImageProof
+      },
       tickets: (type === 'paid' || type === 'cash')
         ? tickets.map((t, i) => ({ name: t.n, capacity: parseInt(t.cap) || null, price_minor: parseInt(t.price) * 100, sort_order: i }))
         : [{ name: 'Free Admission', price_minor: 0, capacity: capacityEnabled && capacity ? parseInt(capacity) : null, sort_order: 0 }]
@@ -4014,6 +4021,8 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
         setPaymentInstructions={setPaymentInstructions}
         paymentHoldHours={paymentHoldHours}
         setPaymentHoldHours={setPaymentHoldHours}
+        allowImageProof={allowImageProof}
+        setAllowImageProof={setAllowImageProof}
       />
 
       <QuestionnaireModal
@@ -4477,7 +4486,7 @@ function QuestionnaireModal({ open, onClose, formFields, setFormFields, enableRe
   );
 }
 
-function TicketSettingsModal({ open, onClose, type, setType, tickets, setTickets, setTk, mobile, upgradeModalOpen, setUpgradeModalOpen, upgradeFeature, setUpgradeFeature, st, go, locType, paymentInstructions, setPaymentInstructions, paymentHoldHours, setPaymentHoldHours }) {
+function TicketSettingsModal({ open, onClose, type, setType, tickets, setTickets, setTk, mobile, upgradeModalOpen, setUpgradeModalOpen, upgradeFeature, setUpgradeFeature, st, go, locType, paymentInstructions, setPaymentInstructions, paymentHoldHours, setPaymentHoldHours, allowImageProof, setAllowImageProof }) {
   if (!open) return null;
   const entitlements = st?.entitlements || DEFAULT_FREE_ENTITLEMENTS;
   const allowedRegistrationModes = entitlements.event_allowed_registration_modes || ["free"];
@@ -4632,6 +4641,17 @@ function TicketSettingsModal({ open, onClose, type, setType, tickets, setTickets
                   style={{ width: "100px", padding: "10px 12px", background: "var(--field)", border: "1px solid var(--border)", borderRadius: "8px" }}
                 />
                 <span style={{ fontSize: 11, color: "var(--ink-3)" }}>Specify the capacity hold window before tickets are automatically cancelled.</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>
+                <Toggle on={allowImageProof} onClick={() => setAllowImageProof(!allowImageProof)} />
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)", margin: 0, cursor: "pointer" }} onClick={() => setAllowImageProof(!allowImageProof)}>
+                    Enable Image Proof Upload
+                  </label>
+                  <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>
+                    Allow attendees to upload an image receipt instead of just a transaction ID.
+                  </div>
+                </div>
               </div>
             </div>
           )}

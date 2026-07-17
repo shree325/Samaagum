@@ -2216,8 +2216,66 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           }
         }
 
-        if (initialBookingStatus === 'pending_payment') {
-          return reply.send({ success: true, status: 'pending_payment', message: 'Joined event. Booking pending cash payment at the venue.' });
+        if (initialStatus === 'pending_payment') {
+          // Notify the host about the cash payment registration
+          let ownerUserId = null;
+          const entityRow = await prisma.entities.findUnique({ where: { id: event.hosted_by_entity_id } });
+          if (entityRow) ownerUserId = entityRow.user_id;
+          if (!ownerUserId) {
+            const ownerRole = await prisma.roles.findFirst({ where: { key: 'group_owner' } });
+            if (ownerRole) {
+              const assignment = await prisma.role_assignments.findFirst({
+                where: { scope_entity_id: event.hosted_by_entity_id, role_id: ownerRole.id }
+              });
+              if (assignment) ownerUserId = assignment.user_id;
+            }
+          }
+          if (!ownerUserId) ownerUserId = userId; // Fallback
+
+          const venueObj: any = typeof event.venue === 'string' && event.venue.trim().startsWith('{')
+            ? JSON.parse(event.venue) : (event.venue || {});
+          const eventMeta = venueObj?.meta || {};
+          const formFields = Array.isArray(eventMeta?.formFields) ? eventMeta.formFields : [];
+          const questionLabels = formFields.reduce((acc: Record<string, string>, field: any) => {
+            if (field?.id && field?.question) acc[field.id] = field.question;
+            return acc;
+          }, {});
+
+          const filteredAnswers = { ...answers };
+          delete filteredAnswers.ticketTypeId;
+          delete filteredAnswers.qty;
+
+          const notif = await prisma.notification_log.create({
+            data: {
+              tenant_id: event.tenant_id,
+              user_id: ownerUserId,
+              channel: 'app',
+              template_key: 'event_join_request', // Re-using event_join_request so it shows up in inbox
+              status: 'queued',
+              provider_ref: JSON.stringify({
+                eventId,
+                eventTitle: event.title,
+                requesterId: userId,
+                requesterName,
+                answers: filteredAnswers,
+                questionLabels
+              })
+            }
+          });
+
+          const chatNamespace = (fastify as any).io?.of('/chat');
+          if (chatNamespace) {
+            chatNamespace.to(`user:${ownerUserId}`).emit('group.notification', {
+              id: notif.id,
+              type: 'registration',
+              text: `<b>${requesterName}</b> submitted a cash payment request for <b>${event.title}</b>`,
+              eventId: eventId,
+              answers: filteredAnswers,
+              questionLabels
+            });
+          }
+
+          return reply.send({ success: true, status: 'pending_payment', message: 'Joined event. Booking pending cash payment at the venue.' + emailMsg });
         }
         return reply.send({ success: true, status: 'confirmed', message: 'Joined event successfully.' });
       }

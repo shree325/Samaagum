@@ -262,6 +262,21 @@ export function JoinEventPage({ ev, st, go }) {
     const [checkoutTransactionId, setCheckoutTransactionId] = useState('');
     const [showCheckoutModal, setShowCheckoutModal] = useState(false);
 
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            if (file.size > 5 * 1024 * 1024) {
+                if (window.toast) window.toast("File is too large (max 5MB)", "warning");
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                setCheckoutTransactionId(ev.target?.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
     const sel = tier ? tiers.find((t: any) => t.id === tier) : null;
     const evtCap = liveEvent.cap || e.cap;
     const evtGoing = liveEvent.going || e.going;
@@ -645,14 +660,63 @@ export function JoinEventPage({ ev, st, go }) {
                                                             <div style={{ padding: '10px 12px', background: 'rgba(245,158,11,0.1)', color: '#f59e0b', borderRadius: 8, fontSize: 12, lineHeight: 1.5 }}>
                                                                 <strong>Cash Payment Required</strong> – Please check the event description for payment details and complete the payment before submitting.
                                                             </div>
-                                                            <input
-                                                                type="text"
-                                                                className="cinput"
-                                                                placeholder="Transaction ID / UTR (optional)"
-                                                                value={checkoutTransactionId}
-                                                                onChange={ev => setCheckoutTransactionId(ev.target.value)}
-                                                                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--field)', fontSize: 13 }}
-                                                            />
+                                                            {(() => {
+                                                                const settingsObj = liveEvent.settings || {};
+                                                                const allowImg = settingsObj.allow_image_proof === true;
+                                                                return (
+                                                                    <>
+                                                                        {allowImg ? (
+                                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                                                                <div style={{ fontSize: 13, color: 'var(--ink-2)', fontWeight: 600 }}>Submit Transaction ID or Upload Proof:</div>
+                                                                                <input
+                                                                                    type="text"
+                                                                                    className="cinput"
+                                                                                    placeholder="Transaction ID / UTR (optional)"
+                                                                                    value={checkoutTransactionId && !checkoutTransactionId.startsWith('data:') ? checkoutTransactionId : ''}
+                                                                                    onChange={ev => setCheckoutTransactionId(ev.target.value)}
+                                                                                    style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--field)', fontSize: 13 }}
+                                                                                />
+                                                                                <label style={{ 
+                                                                                    display: 'flex', 
+                                                                                    alignItems: 'center', 
+                                                                                    justifyContent: 'center', 
+                                                                                    gap: 8, 
+                                                                                    padding: '10px 12px', 
+                                                                                    background: checkoutTransactionId.startsWith('data:') ? 'var(--green)' : 'var(--surface)', 
+                                                                                    border: checkoutTransactionId.startsWith('data:') ? 'none' : '1px solid var(--border)', 
+                                                                                    borderRadius: 8, 
+                                                                                    fontSize: 13, 
+                                                                                    fontWeight: 600, 
+                                                                                    color: checkoutTransactionId.startsWith('data:') ? '#fff' : 'var(--ink-2)', 
+                                                                                    cursor: 'pointer',
+                                                                                    transition: 'all 0.2s'
+                                                                                }}>
+                                                                                    <I.image style={{ width: 16, height: 16 }} />
+                                                                                    {checkoutTransactionId.startsWith('data:') ? 'Change Image' : 'Upload Image Proof'}
+                                                                                    <input
+                                                                                        type="file"
+                                                                                        accept="image/*"
+                                                                                        onChange={handleImageChange}
+                                                                                        style={{ display: 'none' }}
+                                                                                    />
+                                                                                </label>
+                                                                                {checkoutTransactionId.startsWith('data:') && (
+                                                                                    <div style={{ fontSize: 12, color: 'var(--accent-2)', fontWeight: 600, textAlign: 'center' }}>Image selected</div>
+                                                                                )}
+                                                                            </div>
+                                                                        ) : (
+                                                                            <input
+                                                                                type="text"
+                                                                                className="cinput"
+                                                                                placeholder="Transaction ID / UTR (optional)"
+                                                                                value={checkoutTransactionId}
+                                                                                onChange={ev => setCheckoutTransactionId(ev.target.value)}
+                                                                                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--field)', fontSize: 13 }}
+                                                                            />
+                                                                        )}
+                                                                    </>
+                                                                );
+                                                            })()}
                                                         </div>
                                                     )}
                                                     <button 
