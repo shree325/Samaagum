@@ -1204,6 +1204,10 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                         let parsedAnswers = {};
                         try {
                             parsedAnswers = JSON.parse(a.notes || '{}');
+                            delete (parsedAnswers as any).transactionId;
+                            delete (parsedAnswers as any).buyer;
+                            delete (parsedAnswers as any).attendees;
+                            delete (parsedAnswers as any).registration_location;
                         } catch (e) {}
                         return {
                             id: a.id,
@@ -1221,13 +1225,18 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                             ticketTypeName: (a as any).bookings?.booking_line_items?.[0]?.ticket_types?.name || null,
                             createdAt: a.created_at || (a as any).bookings?.created_at || null,
                             checkinTime: a.checkin_status === 'checked_in' ? a.updated_at : null,
-                            claimStatus: a.user_id ? 'claimed' : 'claim_pending'
+                            claimStatus: a.user_id ? 'claimed' : 'claim_pending',
+                            transactionId: (a as any).bookings?.payment_proof_url || null
                         };
                     }),
                     requests: pendingRequests.map(r => {
                         let parsedAnswers = {};
                         try {
                             parsedAnswers = JSON.parse(r.notes || '{}');
+                            delete (parsedAnswers as any).transactionId;
+                            delete (parsedAnswers as any).buyer;
+                            delete (parsedAnswers as any).attendees;
+                            delete (parsedAnswers as any).registration_location;
                         } catch (e) {}
                         const userPic = (r as any).users_attendees_user_idTousers?.profile_image_data;
                         const picture = userPic ? `data:image/jpeg;base64,${Buffer.from(userPic).toString('base64')}` : null;
@@ -1387,14 +1396,23 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
             const nextAttendeeStatus = action === 'accept' ? 'approved' : 'rejected';
 
             await prisma.$transaction(async (tx) => {
+                const isCash = booking.payment_method === 'cash';
+                const cashAlreadyPaid = isCash && !!booking.payment_proof_url;
+
+                // For approval, if it's cash and not paid, wait for payment. Otherwise confirmed.
+                const nextBookingStatus = action === 'accept'
+                    ? (isCash && !cashAlreadyPaid ? 'pending_payment' : 'confirmed')
+                    : 'cancelled';
+
+                await tx.bookings.update({
+                    where: { id: booking.id },
+                    data: { status: nextBookingStatus }
+                });
+
                 // If there's a ticket attached (which there usually is for pending attendees), update its status
                 if (attendee.ticket_id) {
-                    const isCash = booking.payment_method === 'cash';
-                    const cashAlreadyPaid = isCash && !!booking.payment_proof_url;
-                    
-                    // If waitlist promotion, we might not have a confirmed payment, but ticket ownership is confirmed
                     const nextTicketStatus = action === 'accept' 
-                        ? ((isCash && !cashAlreadyPaid && booking.status === 'pending_payment') ? 'reserved' : 'confirmed')
+                        ? (nextBookingStatus === 'pending_payment' ? 'reserved' : 'confirmed')
                         : 'cancelled';
 
                     await tx.tickets.update({

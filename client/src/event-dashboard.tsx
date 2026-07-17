@@ -90,7 +90,7 @@ interface EventMember {
 }
 interface BulkActionResult {
   successful: string[];
-  failed: { bookingId: string; error: string }[];
+  failed: { id: string; error: string }[];
 }
 
 /* ================================================================
@@ -977,10 +977,10 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
         const result: BulkActionResult = { successful: [], failed: [] };
         results.forEach((r, i) => {
           if (r.status === 'fulfilled') result.successful.push(selectedRequests[i]);
-          else result.failed.push({ bookingId: selectedRequests[i], error: (r as any).reason?.message ?? 'Unknown' });
+          else result.failed.push({ id: selectedRequests[i], error: (r as any).reason?.message ?? 'Unknown' });
         });
         setBulkResult(result);
-        setSelectedRequests(result.failed.map(f => f.bookingId));
+        setSelectedRequests(result.failed.map(f => f.id));
         setActionLoading(false);
         await refetch();
       }
@@ -2032,7 +2032,7 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontSize: 13, color: 'var(--ink-3)' }}>
             <input type="checkbox"
               checked={selectedRequests.length === requests.length && requests.length > 0}
-              onChange={e => setSelectedRequests(e.target.checked ? requests.map(r => r.bookingId) : [])}
+              onChange={e => setSelectedRequests(e.target.checked ? requests.map(r => r.id) : [])}
             /> Select All
           </div>
         )}
@@ -2045,8 +2045,8 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
               <div key={u.id} style={{ display: 'flex', flexDirection: 'column', background: 'var(--field)', borderRadius: 10, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <input type="checkbox" checked={selectedRequests.includes(u.bookingId)}
-                      onChange={ev => setSelectedRequests(prev => ev.target.checked ? [...prev, u.bookingId] : prev.filter(id => id !== u.bookingId))}
+                    <input type="checkbox" checked={selectedRequests.includes(u.id)}
+                      onChange={ev => setSelectedRequests(prev => ev.target.checked ? [...prev, u.id] : prev.filter(id => id !== u.id))}
                     />
                     <Avatar name={u.name} size={38} img={u.picture ?? undefined} />
                     <div>
@@ -2060,8 +2060,8 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
                   </div>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       {u.isCash && u.transactionId && u.transactionId !== 'N/A' && (
-                        <div style={{ fontSize: 11, color: '#f59e0b', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 6, padding: '3px 8px', fontWeight: 600 }}>
-                          Txn: {u.transactionId}
+                        <div style={{ fontSize: 11, color: '#f59e0b', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 6, padding: '3px 8px', fontWeight: 600, maxWidth: 150, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {(typeof u.transactionId === 'string' && (u.transactionId.startsWith('data:image/') || u.transactionId.match(/\.(jpeg|jpg|gif|png)$/) || u.transactionId.startsWith('http'))) ? 'Txn: Image Proof Attached' : `Txn: ${u.transactionId}`}
                         </div>
                       )}
                       {u.isCash && !u.transactionId && (
@@ -2088,7 +2088,7 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
                     </div>
                     {(() => {
                       const filteredEntries = Object.entries(u.answers || {}).filter(
-                        ([key]) => !['ticketTypeId', 'qty', 'ticketName', 'registration_location'].includes(key)
+                        ([key]) => !['ticketTypeId', 'qty', 'ticketName', 'registration_location', 'transactionId', 'buyer', 'attendees'].includes(key)
                       );
                       if (filteredEntries.length === 0) {
                         return (
@@ -2106,11 +2106,27 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
                               <div key={key} style={{ fontSize: 13 }}>
                                 <div style={{ color: 'var(--ink-2)', fontWeight: 500, marginBottom: 2 }}>Q: {questionText}</div>
                                 <div style={{ color: 'var(--ink)', padding: '6px 10px', background: 'var(--surface-2)', borderRadius: 6, border: '1px solid var(--border)', whiteSpace: 'pre-wrap' }}>
-                                  {String(val)}
+                                  {typeof val === 'string' && (val.startsWith('data:image/') || val.match(/\.(jpeg|jpg|gif|png)$/) || val.startsWith('http')) && (val.startsWith('data:image/') || val.includes('res.cloudinary') || val.includes('firebasestorage')) ? (
+                                    <img src={val} alt={questionText} style={{ maxWidth: 200, maxHeight: 200, borderRadius: 8, marginTop: 4, objectFit: 'contain', background: '#000' }} />
+                                  ) : (
+                                    <>{String(val)}</>
+                                  )}
                                 </div>
                               </div>
                             );
                           })}
+                          {u.transactionId && u.transactionId !== 'N/A' && (
+                            <div style={{ fontSize: 13, marginTop: 4, paddingTop: 12, borderTop: "1px dashed var(--border)" }}>
+                              <div style={{ color: 'var(--ink-2)', fontWeight: 500, marginBottom: 2 }}>Payment Proof / Transaction ID</div>
+                              <div style={{ color: 'var(--ink)', padding: '6px 10px', background: 'var(--surface-2)', borderRadius: 6, border: '1px solid var(--border)', whiteSpace: 'pre-wrap' }}>
+                                {(typeof u.transactionId === 'string' && (u.transactionId.startsWith('data:image/') || u.transactionId.match(/\.(jpeg|jpg|gif|png)$/) || u.transactionId.startsWith('http'))) ? (
+                                  <img src={u.transactionId} alt="Payment Proof" style={{ maxWidth: 200, maxHeight: 200, borderRadius: 8, marginTop: 4, objectFit: 'contain', background: '#000' }} />
+                                ) : (
+                                  <>{u.transactionId}</>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })()}
