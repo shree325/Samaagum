@@ -2218,20 +2218,6 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           await TicketNotificationService.notifyBuyer(booking, event, requesterEmail, requesterName, notifyStatusMap[initialBookingStatus] as any);
         }
 
-            if (await notificationService.shouldDeliver(userId, 'TICKET_BOOKED', 'email')) {
-              await sendEmail({
-                to: requesterEmail,
-                subject: `Your ticket for ${event.title}`,
-                html: htmlContent
-              });
-              console.log(`Ticket email sent to ${requesterEmail}`);
-              emailMsg = ` Ticket emailed to ${requesterEmail}.`;
-            } else {
-              emailMsg = ` Ticket email skipped per user preference.`;
-            }
-          } catch (err: any) {
-            console.error('Failed to send ticket email:', err);
-            emailMsg = ` Failed to email ticket.`;
         const dbAttendees = await prisma.attendees.findMany({ where: { ticket_id: { in: tickets.map(t => t.id) } } });
         
         for (const tk of tickets) {

@@ -1839,7 +1839,6 @@ model users {
   tenants                                                              tenants                         @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   waitlist_entries                                                     waitlist_entries[]
   wishlists                                                            wishlists[]
-  userIntegrations                                                     user_integrations[]
   userNotificationSettings                                             user_notification_settings[]
   userNotificationPreferences                                          user_notification_preferences[]
 
@@ -3019,37 +3018,6 @@ enum ConversationParticipantStatus {
   BLOCKED
   LEFT
   EXPIRED
-}
-
-model user_integrations {
-  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id          String    @db.Uuid
-  provider         String    @db.VarChar(50)
-  access_token     String
-  refresh_token    String?
-  expires_at       DateTime? @db.Timestamptz(6)
-  provider_user_id String?   @db.VarChar(255)
-  email            String?   @db.VarChar(255)
-  created_at       DateTime? @default(now()) @db.Timestamptz(6)
-  updated_at       DateTime? @default(now()) @db.Timestamptz(6)
-  users            users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@unique([user_id, provider])
-}
-
-model event_virtual_meetings {
-  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  event_id          String    @db.Uuid
-  provider          String    @db.VarChar(50)
-  meeting_id        String?   @db.VarChar(255)
-  calendar_event_id String?   @db.VarChar(255)
-  conference_id     String?   @db.VarChar(255)
-  metadata          Json?     @default("{}")
-  created_at        DateTime? @default(now()) @db.Timestamptz(6)
-  updated_at        DateTime? @default(now()) @db.Timestamptz(6)
-  events            events    @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@unique([event_id, provider])
 }
 
 enum NotificationPreferenceType {

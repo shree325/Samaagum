@@ -1479,6 +1479,7 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                       eventId: id
                   });
               }
+            } // Close if (canDeliverInApp)
             // Notify Buyer of approval status
             const buyerUser = await prisma.users.findUnique({ where: { id: guestId || '' }, include: { profiles: true } });
             if (buyerUser?.primary_email) {
