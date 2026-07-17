@@ -40,6 +40,9 @@ declare global {
     io?: (...args: any[]) => any;
     ME?: any;
     TicketQR?: any;
+    EVENTS?: any;
+    GROUPS?: any;
+    FEATURED?: any;
   }
 }
 

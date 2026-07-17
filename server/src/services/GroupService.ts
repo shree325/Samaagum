@@ -1399,6 +1399,40 @@ export class GroupService {
         await this.groupMembershipsRepo.leaveGroupTx(groupId, userId);
     }
 
+    static async cancelJoinRequest(groupId: string, userId: string) {
+        const membership = await this.groupMembershipsRepo.getByGroupAndUser(groupId, userId);
+        if (!membership) throw new Error('No membership request found');
+        if (membership.state !== 'pending') throw new Error('Membership is not in pending state');
+
+        // Delete the membership record
+        await this.groupMembershipsRepo.deleteMembership(groupId, userId);
+
+        // Find and delete group_join_request notifications for this group and user
+        const relatedNotifs = await prisma.notification_log.findMany({
+            where: {
+                template_key: 'group_join_request'
+            }
+        });
+
+        for (const notif of relatedNotifs) {
+            try {
+                const parsed = JSON.parse(notif.provider_ref || '{}');
+                if (parsed.groupId === groupId && parsed.requesterId === userId) {
+                    await prisma.notification_log.delete({
+                        where: { id: notif.id }
+                    });
+
+                    // Emit real-time action to clear the notification from owner's screen
+                    const { sendNotificationToUser } = require('./messagingSocket');
+                    sendNotificationToUser(notif.user_id, 'notification.acted', {
+                        notificationId: notif.id,
+                        action: 'deleted'
+                    });
+                }
+            } catch (jsonErr) {}
+        }
+    }
+
     static async updateVisibility(groupId: string, visibility: string, adminUserId: string) {
         if (!(await this.verifyGroupAdmin(adminUserId, groupId))) {
             throw new Error('Forbidden');
@@ -2060,13 +2094,107 @@ export class GroupService {
         `, groupId);
         const pendingMembers = pendingMembersRows[0]?.count || 0;
 
+        const rejectedMembersRows = await prisma.$queryRawUnsafe<{count: number}[]>(`
+            SELECT COUNT(*)::int as count FROM group_memberships WHERE group_id = $1::uuid AND state = 'rejected'
+        `, groupId);
+        const rejectedMembers = rejectedMembersRows[0]?.count || 0;
+
+        // Get all events hosted by this group
+        const groupEventsRows = await prisma.$queryRawUnsafe<{id: string}[]>(`
+            SELECT id FROM events WHERE hosted_by_entity_id = $1::uuid
+        `, groupId);
+        const groupEventIds = groupEventsRows.map(e => e.id);
+
+        let totalRevenue = 0;
+        let paidBookingsCount = 0;
+        let recentTransactions: any[] = [];
+        let ticketSoldDistribution: { name: string, value: number }[] = [];
+
+        if (groupEventIds.length > 0) {
+            // Get confirmed bookings using Prisma client
+            const confirmedBookings = await prisma.bookings.findMany({
+                where: {
+                    event_id: { in: groupEventIds },
+                    status: 'confirmed'
+                },
+                include: {
+                    users: {
+                        select: {
+                            first_name: true,
+                            last_name: true,
+                            primary_email: true
+                        }
+                    },
+                    events: {
+                        select: {
+                            title: true
+                        }
+                    }
+                },
+                orderBy: {
+                    created_at: 'desc'
+                }
+            });
+
+            confirmedBookings.forEach(b => {
+                const amt = b.total_amount_minor ? Number(b.total_amount_minor) : 0;
+                totalRevenue += (amt / 100);
+                if (amt > 0) {
+                    paidBookingsCount++;
+                }
+                const nameStr = b.users ? `${b.users.first_name || ''} ${b.users.last_name || ''}`.trim() || b.users.primary_email || 'Anonymous' : 'Anonymous';
+                recentTransactions.push({
+                    id: b.id,
+                    name: nameStr,
+                    email: b.users?.primary_email,
+                    username: '',
+                    amountMinor: amt,
+                    created_at: b.created_at,
+                    eventTitle: b.events?.title
+                });
+            });
+
+            // Get ticket sold distribution
+            const lineItems = await prisma.booking_line_items.findMany({
+                where: {
+                    bookings: {
+                        event_id: { in: groupEventIds },
+                        status: 'confirmed'
+                    }
+                },
+                include: {
+                    ticket_types: {
+                        select: {
+                            name: true
+                        }
+                    }
+                }
+            });
+
+            const counts: Record<string, number> = {};
+            lineItems.forEach(item => {
+                const name = item.ticket_types?.name || 'Standard';
+                counts[name] = (counts[name] || 0) + (item.quantity || 1);
+            });
+
+            ticketSoldDistribution = Object.entries(counts).map(([name, value]) => ({
+                name,
+                value
+            }));
+        }
+
         return {
             totalPosts,
             pinnedPosts,
             lockedPosts,
             reportedPosts: 0,
             activeMembers,
-            pendingMembers
+            pendingMembers,
+            rejectedMembers,
+            totalRevenue,
+            paidBookingsCount,
+            recentTransactions,
+            ticketSoldDistribution
         };
     }
 

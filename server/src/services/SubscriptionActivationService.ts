@@ -356,13 +356,18 @@ export class SubscriptionActivationService {
                     ? [{ filename: `Invoice-${order.order_number}.pdf`, content: invoicePdfData }]
                     : undefined;
 
-                await sendEmail({
-                    to: emailTo,
-                    subject: `✅ ${planName} Subscription Activated – Invoice ${order.order_number}`,
-                    html: emailHtml,
-                    attachments: emailAttachments
-                });
-                console.log(`[SubscriptionActivationService] Activation email sent to ${emailTo}`);
+                const { notificationService } = await import('./NotificationService');
+                if (await notificationService.shouldDeliver(user.id, 'SUBSCRIPTION_ACTIVE', 'email')) {
+                    await sendEmail({
+                        to: emailTo,
+                        subject: `✅ ${planName} Subscription Activated – Invoice ${order.order_number}`,
+                        html: emailHtml,
+                        attachments: emailAttachments
+                    });
+                    console.log(`[SubscriptionActivationService] Activation email sent to ${emailTo}`);
+                } else {
+                    console.log(`[SubscriptionActivationService] Activation email skipped per user preference (user: ${user.id}).`);
+                }
             } catch (emailErr) {
                 console.error('[SubscriptionActivationService] Failed to send activation email:', emailErr);
             }

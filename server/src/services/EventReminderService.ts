@@ -97,6 +97,12 @@ export class EventReminderService {
         if (userIds.length === 0) continue;
 
         for (const userId of userIds) {
+          // Check preferences
+          const { notificationService } = require('./NotificationService');
+          if (!(await notificationService.shouldDeliverByTemplateKey(userId, templateKey))) {
+            continue;
+          }
+
           // Deduplication: skip if already sent this reminder for this user+event+window
           const existing = await prisma.notification_log.findFirst({
             where: {

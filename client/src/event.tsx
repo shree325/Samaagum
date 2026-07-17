@@ -1,7 +1,42 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { I, Avatar, Grain } from './home-icons';
+import { I, Avatar } from './home-icons';
 import { EventDashboard } from './event-dashboard';
 import DiscussionPanel from './discussion-panel';
+import { isRealEventId, normalizeEventData, getQuestionLabel } from './event-utils';
+import { EventRolesModal } from './EventRolesModal';
+import { EventMemberResponseModal } from './EventMemberResponseModal';
+import { EventSidebar } from './EventSidebar';
+import { EventInviteTab } from './EventInviteTab';
+import { EventAboutTab } from './EventAboutTab';
+import { EventSettingsTab } from './EventSettingsTab';
+import { EventHeaderSection } from './EventHeaderSection';
+import { EventMembersTab } from './EventMembersTab';
+import { EventGalleryTab } from './EventGalleryTab';
+import { EventTicketingTab } from './EventTicketingTab';
+
+// Mock featured event structure if no ev is provided
+const FEATURED: any = {
+  id: "ev-feat",
+  title: "Featured Gatherings",
+  cover: "",
+  cat: "General",
+  registration_mode: "free",
+  location_type: "online",
+  attendees: []
+};
+
+// Dummy context user for fallback purposes
+const ME = (window as any).ME || { name: "User", id: "me-id", role: "admin" };
+
+export function EventPage({ ev, st, go }: { ev: any; st: any; go: (view: string, params?: any) => void }) {
+  let initialNormalized = ev || FEATURED;
+  if (initialNormalized && (initialNormalized.starts_at || typeof initialNormalized.venue === 'object' || typeof initialNormalized.venue === 'string')) {
+    initialNormalized = normalizeEventData(initialNormalized, ME, st.city);
+  } else if (initialNormalized && typeof initialNormalized.venue === 'object' && initialNormalized.venue !== null) {
+    initialNormalized = {
+      ...initialNormalized,
+      venue: initialNormalized.venue.name || initialNormalized.venue.address || 'Venue TBD',
+      gallery: initialNormalized.venue.meta?.gallery || {
 import { OnlineMeetingCard } from './OnlineMeetingCard';
 
 function Toggle({ on, onClick }) { return <button type="button" className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
@@ -104,24 +139,13 @@ export function EventPage({ ev, st, go }) {
         imageOnly: false
       }
     };
-  } else if (e) {
-    if (typeof e.venue === 'object' && e.venue !== null) {
-      e = {
-        ...e,
-        venue: e.venue.name || e.venue.address || 'Venue TBD',
-        gallery: e.venue.meta?.gallery || {
-          enabled: false,
-          uploadRoles: { owner: true, admin: true, moderator: true, public: false },
-          viewRoles: { owner: true, admin: true, moderator: true, public: true },
-          approvalRequired: false,
-          videoOnly: false,
-          imageOnly: false
-        }
-      };
-    }
   }
 
   const { wishlisted, toggleWishlist, city } = st;
+  const isSaved = wishlisted ? wishlisted.has(initialNormalized.id) : false;
+
+  const [currentEvent, setCurrentEvent] = useState(initialNormalized);
+  const e = { ...initialNormalized, ...currentEvent };
   const isSaved = wishlisted ? wishlisted.has(e.id) : false;
 
   const [currentEvent, setCurrentEvent] = useState(e);
@@ -133,15 +157,12 @@ export function EventPage({ ev, st, go }) {
   // whatever was passed in via navigation.
   e = { ...e, ...currentEvent };
   const attendees = currentEvent.attendees || [];
-  const getQuestionLabel = (fieldId) => {
-    const field = (currentEvent.formFields || []).find(f => f.id === fieldId);
-    return field?.question || field?.label || fieldId;
-  };
-  const [hostStats, setHostStats] = useState(null);
-  const [eventMembers, setEventMembers] = useState(null);
-  const [availableRoles, setAvailableRoles] = useState(null);
 
-  // isOwner checks both prop (e.created_by) and the richer server-fetched currentEvent.created_by
+  const [hostStats, setHostStats] = useState<any>(null);
+  const [eventMembers, setEventMembers] = useState<any[] | null>(null);
+  const [availableRoles, setAvailableRoles] = useState<any[] | null>(null);
+  const isSavingRef = useRef(false);
+
   const isOwner = (
     (e.created_by && e.created_by === ME.id) ||
     (currentEvent.created_by && currentEvent.created_by === ME.id) ||
@@ -149,7 +170,6 @@ export function EventPage({ ev, st, go }) {
   );
   const isAdmin = ME.role && ME.role.toLowerCase().includes("admin");
   const isModerator = ME.role && ME.role.toLowerCase().includes("moderator");
-  // Booking status — passed from home-app router or fetched from server
   const bookingStatusProp = currentEvent.bookingStatus || e.bookingStatus || null;
   const isJoined = bookingStatusProp === 'confirmed' || bookingStatusProp === 'pending_payment';
   const isPending = bookingStatusProp === 'pending_approval';
@@ -157,10 +177,9 @@ export function EventPage({ ev, st, go }) {
 
   const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
 
-  const saveEventSettings = async (updatedVenueMeta) => {
+  const saveEventSettings = async (updatedVenueMeta: any) => {
     try {
       const token = localStorage.getItem('token');
-      // Use the preserved raw venue object — NOT the display string
       const rawVenue = currentEvent.venue_raw;
       const currentVenue = (typeof rawVenue === 'object' && rawVenue !== null) ? rawVenue : {};
       const currentMeta = currentVenue.meta || {};
@@ -191,9 +210,8 @@ export function EventPage({ ev, st, go }) {
       });
       const data = await res.json();
       if (data.success) {
-        // Update currentEvent.venue_raw locally so the sync useEffect
-        // reads the new values without a full refetch (which would reset toggles)
-        setCurrentEvent(prev => ({
+        isSavingRef.current = true;
+        setCurrentEvent((prev: any) => ({
           ...prev,
           venue_raw: newVenue
         }));
@@ -209,76 +227,7 @@ export function EventPage({ ev, st, go }) {
 
   const fetchEventDetails = async () => {
     if (e.id === "new" || !isRealEventId(e.id)) {
-      // Mock/Preview mode: populate state directly from the preview object
-      let venueObj: any = {};
-      if (typeof e.venue === 'string') {
-        try { venueObj = e.venue.trim().startsWith('{') ? JSON.parse(e.venue) : { name: e.venue, address: e.venue }; }
-        catch (err) { venueObj = { name: e.venue, address: e.venue }; }
-      } else if (typeof e.venue === 'object' && e.venue !== null) {
-        venueObj = e.venue;
-      }
-      const meta = venueObj.meta || {};
-      const dateObj = e.starts_at ? new Date(e.starts_at) : new Date();
-      const month = e.month || dateObj.toLocaleString("en-US", { month: "short" }).toUpperCase();
-      const day = e.day || dateObj.getDate();
-      const dateStr = e.date || dateObj.toLocaleDateString();
-      const time = e.time || dateObj.toLocaleTimeString();
-
-      let priceVal = '—';
-      if (e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') {
-          priceVal = 'Free';
-      } else if (e.tickets && e.tickets.length > 0) {
-          const prices = e.tickets.map((t: any) => t.price_minor ? t.price_minor / 100 : (t.price_amount_minor ? t.price_amount_minor / 100 : 0));
-          const minPrice = Math.min(...prices);
-          const maxPrice = Math.max(...prices);
-          if (minPrice === maxPrice) {
-              priceVal = minPrice === 0 ? 'Free' : `₹${minPrice.toFixed(0)}`;
-          } else {
-              priceVal = `₹${minPrice.toFixed(0)} - ₹${maxPrice.toFixed(0)}`;
-          }
-      } else if (e.price) {
-          priceVal = e.price;
-      }
-
-      const normalized = {
-        ...e,
-        desc: e.description || e.desc,
-        cover: e.cover || meta.cover || "",
-        cat: meta.category || e.cat || "General",
-        type: (e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : 'Paid',
-        online: e.location_type === 'online',
-        online_link: e.online_link || null,
-        month,
-        day,
-        date: dateStr,
-        time,
-        venue: e.location_type === 'online' ? 'Online' : (venueObj.name || venueObj.address || 'Venue TBD'),
-        city: e.city || (e.location_type === 'online' ? 'Online' : (venueObj.address ? (typeof venueObj.address === 'string' ? venueObj.address.split(',').pop().trim() : '') : '')),
-        going: e.going || 0,
-        cap: e.capacity_total || e.cap || 9999,
-        price: priceVal,
-        host: e.hostName || e.host || ME.name || "Organizer",
-        hostBy: e.hostName || e.hostBy || ME.name || "Organizer",
-        hostType: e.hostType || null,
-        attendees: e.attendees || [],
-        instructions: e.instruction || e.instructions || meta.instructions || "",
-        formFields: e.formFields || meta.formFields || [],
-        bookingStatus: e.bookingStatus,
-        bookingId: e.bookingId,
-        attendeeId: e.attendeeId,
-        ticketId: e.ticketId,
-        qrToken: e.qrToken,
-        checkinStatus: e.checkinStatus,
-        gallery: meta.gallery || e.gallery || {
-          enabled: false,
-          uploadRoles: { owner: true, admin: true, moderator: true, public: false },
-          viewRoles: { owner: true, admin: true, moderator: true, public: true },
-          approvalRequired: false,
-          videoOnly: false,
-          imageOnly: false
-        },
-        venue_raw: venueObj
-      };
+      const normalized = normalizeEventData(e, ME, st.city);
       setCurrentEvent(normalized);
       return;
     }
@@ -290,6 +239,14 @@ export function EventPage({ ev, st, go }) {
       });
       const data = await res.json();
       if (data.success && data.data) {
+        const normalized = normalizeEventData(data.data.event, ME, st.city);
+        normalized.attendees = data.data.attendees || [];
+        normalized.bookingStatus = data.data.bookingStatus;
+        normalized.bookingId = data.data.bookingId;
+        normalized.attendeeId = data.data.attendeeId;
+        normalized.ticketId = data.data.ticketId;
+        normalized.qrToken = data.data.qrToken;
+        normalized.checkinStatus = data.data.checkinStatus;
         let ev = data.data.event;
         const venueObj = ev.venue || {};
         const meta = venueObj.meta || {};
@@ -439,6 +396,7 @@ export function EventPage({ ev, st, go }) {
     }
   };
 
+  const handleHostRequestAction = async (bookingId: string, action: 'accept' | 'decline') => {
   const handleHostRequestAction = async (attendeeId, action) => {
     if (e.id === "new" || !isRealEventId(e.id)) return;
     try {
@@ -466,6 +424,7 @@ export function EventPage({ ev, st, go }) {
     }
   };
 
+  const [galleryItems, setGalleryItems] = useState<any[]>([]);
   const fetchEventGallery = async () => {
     if (e.id === "new" || !isRealEventId(e.id)) return;
     try {
@@ -482,7 +441,7 @@ export function EventPage({ ev, st, go }) {
     }
   };
 
-  const handleRemoveEventMember = async (userId) => {
+  const handleRemoveEventMember = async (userId: string) => {
     if (!userId) return;
     if (!confirm('Are you sure you want to remove this member from the event?')) return;
     try {
@@ -530,9 +489,9 @@ export function EventPage({ ev, st, go }) {
   }, [e.id, isOwner, isAdmin, isModerator]);
 
   useEffect(() => {
-    if (!e?.id || !window.io) return;
+    if (!e?.id || !(window as any).io) return;
     const socketUrl = apiBase ? `${apiBase}/groups` : "/groups";
-    const socket = window.io(socketUrl, { transports: ['websocket'] });
+    const socket = (window as any).io(socketUrl, { transports: ['websocket'] });
     socket.emit('join_event', e.id);
     socket.on('dashboard_updated', () => {
       fetchEventDetails();
@@ -540,7 +499,6 @@ export function EventPage({ ev, st, go }) {
       if (isOwner || isAdmin || isModerator) {
         fetchHostStats();
       }
-      // Also refresh the parent's joinedEvents list so My Events page updates
       if (st.fetchJoinedEvents) st.fetchJoinedEvents();
     });
     socket.on('gallery_updated', () => {
@@ -561,7 +519,6 @@ export function EventPage({ ev, st, go }) {
     imageOnly: false
   };
 
-  // Gallery Settings states in the Advance Settings panel
   const [galleryEnabled, setGalleryEnabled] = useState(initialGallery.enabled);
   const [galleryUploadRoles, setGalleryUploadRoles] = useState(initialGallery.uploadRoles);
   const [galleryViewRoles, setGalleryViewRoles] = useState(initialGallery.viewRoles);
@@ -572,7 +529,6 @@ export function EventPage({ ev, st, go }) {
   const [uploadRolesModalOpen, setUploadRolesModalOpen] = useState(false);
   const [viewRolesModalOpen, setViewRolesModalOpen] = useState(false);
 
-  // Discussion states
   const [discussionEnabled, setDiscussionEnabled] = useState(false);
   const [discussionThreadRoles, setDiscussionThreadRoles] = useState<any>({ roles: ['event_owner'] });
   const [discussionReplyRoles, setDiscussionReplyRoles] = useState<any>({ roles: ['event_owner'] });
@@ -580,36 +536,29 @@ export function EventPage({ ev, st, go }) {
   const [threadRolesModalOpen, setThreadRolesModalOpen] = useState(false);
   const [replyRolesModalOpen, setReplyRolesModalOpen] = useState(false);
 
-  // Registration open/closed toggle (host-only)
-  const regStatusRaw = currentEvent?.registrationStatus || currentEvent?.registration_status || e.registrationStatus || e.registration_status || 'OPEN';
-  const regOpensAtRaw = currentEvent?.registrationOpensAt || currentEvent?.registration_opens_at || e.registrationOpensAt || e.registration_opens_at;
-  const regClosesAtRaw = currentEvent?.registrationClosesAt || currentEvent?.registration_closes_at || e.registrationClosesAt || e.registration_closes_at;
-
   const [registrationOpen, setRegistrationOpen] = useState(false);
   const [isScheduled, setIsScheduled] = useState(false);
   const [regToggleLoading, setRegToggleLoading] = useState(false);
   const [refreshRegStatus, setRefreshRegStatus] = useState(0);
 
-  // Sync from server once event details are loaded
   useEffect(() => {
     const s = currentEvent?.registrationStatus || currentEvent?.registration_status || e.registrationStatus || e.registration_status || 'OPEN';
     const opensAt = currentEvent?.registrationOpensAt || currentEvent?.registration_opens_at || e.registrationOpensAt || e.registration_opens_at;
     const closesAt = currentEvent?.registrationClosesAt || currentEvent?.registration_closes_at || e.registrationClosesAt || e.registration_closes_at;
 
     let eff = s !== 'CLOSED';
-    let timer = null;
+    let timer: any = null;
 
     if (s === 'SCHEDULED') {
       const now = new Date();
       const o = opensAt ? new Date(opensAt) : null;
       const c = closesAt ? new Date(closesAt) : null;
-      
+
       if (o && now < o) {
         eff = false;
         const ms = o.getTime() - now.getTime();
         if (ms <= 2147483647) timer = setTimeout(() => setRefreshRegStatus(prev => prev + 1), ms);
       } else if (c && now < c) {
-        // Between open and close
         const ms = c.getTime() - now.getTime();
         if (ms <= 2147483647) timer = setTimeout(() => setRefreshRegStatus(prev => prev + 1), ms);
       } else if (c && now >= c) {
@@ -625,7 +574,7 @@ export function EventPage({ ev, st, go }) {
         eff = false;
       }
     }
-    
+
     if (timer) return () => clearTimeout(timer);
     setRegistrationOpen(eff);
     setIsScheduled(s === 'SCHEDULED' && eff !== false);
@@ -649,7 +598,7 @@ export function EventPage({ ev, st, go }) {
       if (data.success) {
         setRegistrationOpen(!registrationOpen);
         setIsScheduled(false);
-        setCurrentEvent(prev => ({
+        setCurrentEvent((prev: any) => ({
           ...prev,
           registration_status: newStatus,
           registrationStatus: newStatus
@@ -667,6 +616,10 @@ export function EventPage({ ev, st, go }) {
   };
 
   useEffect(() => {
+    if (isSavingRef.current) {
+      isSavingRef.current = false;
+      return;
+    }
     if (currentEvent && currentEvent.venue_raw) {
       const meta = currentEvent.venue_raw.meta || {};
       const disc = meta.discussion || {};
@@ -686,12 +639,12 @@ export function EventPage({ ev, st, go }) {
   }, [currentEvent]);
 
   const token = localStorage.getItem('token');
-  let currentUserId = null;
+  let currentUserId: string | null = null;
   if (token) {
     try { currentUserId = JSON.parse(atob(token.split('.')[1])).id; } catch (err) { }
   }
 
-  const roleHasCap = (roleKey, cap) => (availableRoles || []).find(r => r.key === roleKey)?.capabilities?.includes(cap);
+  const roleHasCap = (roleKey: string, cap: string) => (availableRoles || []).find(r => r.key === roleKey)?.capabilities?.includes(cap);
 
   const myMemberEntry = eventMembers ? eventMembers.find(m => m.id === currentUserId || (window.ME && m.id === window.ME.id)) : null;
   const isHostOrCoHost = isOwner || !!(myMemberEntry && roleHasCap(myMemberEntry.role, 'event.manage'));
@@ -699,14 +652,9 @@ export function EventPage({ ev, st, go }) {
   const isScanner = !isTicketManager && !!(myMemberEntry && roleHasCap(myMemberEntry.role, 'checkin.gate_staff'));
   const effectiveIsMember = isMember || !!myMemberEntry;
 
-  // Effective RBAC role key for this user on this event — mirrors EventService.getEventUserRole:
-  // owner -> top seeded role key, staff -> their assigned role key, confirmed booking -> 'member'.
   const myRoleKey = isOwner ? (availableRoles || [])[0]?.key : (myMemberEntry?.role || (effectiveIsMember ? 'member' : null));
 
-  // Evaluates a gallery/discussion permission bucket. New shape ({public, roles}) is checked
-  // dynamically against availableRoles; legacy shape ({owner,admin,moderator,member,public})
-  // keeps its original behavior unchanged until an admin re-saves via the new roles modal.
-  const checkRoleBucket = (bucket, bypass) => {
+  const checkRoleBucket = (bucket: any, bypass: boolean) => {
     if (bucket && Array.isArray(bucket.roles)) {
       return !!bypass || bucket.public === true || (!!myRoleKey && bucket.roles.includes(myRoleKey));
     }
@@ -721,15 +669,13 @@ export function EventPage({ ev, st, go }) {
     );
   };
 
-  // Gallery/Discussion tabs visible to owners, admins, moderators, AND confirmed joiners
   const canViewGallery = galleryEnabled && checkRoleBucket(galleryViewRoles, isTicketManager);
   const canUploadToGallery = galleryEnabled && checkRoleBucket(galleryUploadRoles, isTicketManager);
   const canAccessDiscussion = effectiveIsMember ||
     checkRoleBucket(discussionThreadRoles, isTicketManager) ||
     checkRoleBucket(discussionReplyRoles, isTicketManager);
 
-  // Tab State
-  const [tab, setTab] = useState(ev?.initialTab || "about"); // about | members | gallery | discussion | ticketing | invite | settings
+  const [tab, setTab] = useState(ev?.initialTab || "about");
 
   useEffect(() => {
     if (ev?.initialTab) {
@@ -761,93 +707,10 @@ export function EventPage({ ev, st, go }) {
     ...(isTicketManager ? [["settings", "Advance setting"]] : [])
   ];
 
-  // Gallery items state
-  const [galleryItems, setGalleryItems] = useState([]);
-  const [viewerItem, setViewerItem] = useState(null);
-  const [zoomScale, setZoomScale] = useState(1);
-  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [handModeActive, setHandModeActive] = useState(true);
-  const [inviteLinks, setInviteLinks] = useState({ view: null, join: [] });
+  const [inviteLinks, setInviteLinks] = useState<{ view: string | null; join: string[] }>({ view: null, join: [] });
   const [inviteLoading, setInviteLoading] = useState({ view: false, join: false });
-  const [guestSearch, setGuestSearch] = useState("");
-  const [memberSearch, setMemberSearch] = useState("");
-  const [memberRoleFilter, setMemberRoleFilter] = useState("all");
 
-  const galleryInputRef = useRef(null);
-
-  // ── Ticketing & Coupons State ──
-  const [tcTab, setTcTab] = useState("tickets"); // tickets | coupons | referrals
-  const [tcLoading, setTcLoading] = useState(false);
-  const [ticketTypes, setTicketTypes] = useState([]);
-  const [tcCoupons, setTcCoupons] = useState([]);
-  const [tcReferrals, setTcReferrals] = useState([]);
-  const [affiliates, setAffiliates] = useState([]);
-  const [ticketSearch, setTicketSearch] = useState("");
-  const [couponSearch, setCouponSearch] = useState("");
-  const [referralSearch, setReferralSearch] = useState("");
-
-  // Member response modal — shows the questionnaire answers a member submitted at
-  // registration, opened from the "Response" button on their row in the Members tab.
-  const [responseMember, setResponseMember] = useState(null);
-
-  // Ticket modal state
-  const [ticketModalOpen, setTicketModalOpen] = useState(false);
-  const [editingTicket, setEditingTicket] = useState(null);
-  const [ticketForm, setTicketForm] = useState({ name: "", description: "", price: "", currency: "INR", capacity: "", max_per_booking: "", sale_start: "", sale_end: "", early_bird_price: "", early_bird_currency: "INR", early_bird_ends_at: "", visibility: "public" });
-
-  // Coupon modal state
-  const [couponModalOpen, setCouponModalOpen] = useState(false);
-  const [editingCoupon, setEditingCoupon] = useState(null);
-  const [couponForm, setCouponForm] = useState({ code: "", discount_type: "percent", discount_value: "", currency: "INR", valid_from: "", valid_to: "", max_total: "", max_per_user: "", status: "active" });
-
-  // Referral modal state
-  const [referralModalOpen, setReferralModalOpen] = useState(false);
-  const [editingReferral, setEditingReferral] = useState(null);
-  const [referralForm, setReferralForm] = useState({ code: "", affiliate_id: "", commission_rule: "" });
-
-  const fetchTicketTypes = async () => {
-    try {
-      const res = await fetch(`${apiBase}/api/events/${e.id}/ticket-types`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} });
-      const data = await res.json();
-      if (data.success) setTicketTypes(data.data || []);
-    } catch (err) { console.error(err); }
-  };
-
-  const fetchTcCoupons = async () => {
-    try {
-      const res = await fetch(`${apiBase}/api/events/${e.id}/coupons`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} });
-      const data = await res.json();
-      if (data.success) setTcCoupons(data.data || []);
-    } catch (err) { console.error(err); }
-  };
-
-  const fetchTcReferrals = async () => {
-    try {
-      const res = await fetch(`${apiBase}/api/events/${e.id}/referrals`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} });
-      const data = await res.json();
-      if (data.success) setTcReferrals(data.data || []);
-    } catch (err) { console.error(err); }
-  };
-
-  const fetchAffiliates = async () => {
-    try {
-      const res = await fetch(`${apiBase}/api/events/affiliates`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} });
-      const data = await res.json();
-      if (data.success) setAffiliates(data.data || []);
-    } catch (err) { console.error(err); }
-  };
-
-  useEffect(() => {
-    if (tab === "ticketing" && isTicketManager && isPaidEvent) {
-      setTcLoading(true);
-      Promise.all([fetchTicketTypes(), fetchTcCoupons(), fetchTcReferrals(), fetchAffiliates()])
-        .finally(() => setTcLoading(false));
-    }
-  }, [tab, e.id]);
-
-  const generateInviteLink = async (purpose) => {
+  const generateInviteLink = async (purpose: 'view' | 'join') => {
     setInviteLoading(prev => ({ ...prev, [purpose]: true }));
     try {
       const res = await fetch(`${apiBase}/api/events/${e.id}/invites`, {
@@ -860,9 +723,6 @@ export function EventPage({ ev, st, go }) {
       });
       const data = await res.json();
       if (data.success) {
-        // 'view' links are durable/reusable — a single link per event, generating
-        // again just returns the same one. 'join' links are single-use, each click
-        // mints a fresh one, so keep a running list.
         if (purpose === 'view') {
           setInviteLinks(prev => ({ ...prev, view: data.data.url }));
         } else {
@@ -879,8 +739,6 @@ export function EventPage({ ev, st, go }) {
     }
   };
 
-  // Restore the durable 'view' link (if one was already generated) when the Invite tab
-  // opens, so it persists across reloads instead of requiring the host to regenerate it.
   useEffect(() => {
     if (tab === "invite" && isTicketManager && eventVisibility === "unlisted" && inviteLinks.view === null) {
       fetch(`${apiBase}/api/events/${e.id}/invites/view`, {
@@ -896,7 +754,7 @@ export function EventPage({ ev, st, go }) {
     }
   }, [tab, isTicketManager, eventVisibility, e.id]);
 
-  const copyInviteLink = (url) => {
+  const copyInviteLink = (url: string) => {
     if (navigator.clipboard) navigator.clipboard.writeText(url);
     if (window.toast) window.toast("Link copied! ✓", "success");
   };
@@ -904,7 +762,6 @@ export function EventPage({ ev, st, go }) {
   const handleLeaveEvent = async () => {
     if (!confirm("Are you sure you want to leave this event?")) return;
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch(`${apiBase}/api/events/${e.id}/leave`, {
         method: 'POST',
         headers: {
@@ -918,7 +775,7 @@ export function EventPage({ ev, st, go }) {
           st.unregister(e.id);
         }
         if (st.setMyTickets) {
-          st.setMyTickets(prev => prev.filter(t => t.eventId !== e.id && t.ev !== e.title));
+          st.setMyTickets((prev: any[]) => prev.filter((t: any) => t.eventId !== e.id && t.ev !== e.title));
         }
         if (st.fetchJoinedEvents) {
           st.fetchJoinedEvents();
@@ -933,12 +790,8 @@ export function EventPage({ ev, st, go }) {
     }
   };
 
-
-
-  // Translates a legacy {owner,admin,moderator,member,public} bucket into the new dynamic
-  // {public, roles: string[]} shape the first time it's edited via the roles modal below.
-  const legacyBucketToRoleKeys = (bucket) => {
-    const keys = [];
+  const legacyBucketToRoleKeys = (bucket: any) => {
+    const keys: string[] = [];
     if (bucket?.owner) keys.push('event_owner', 'event_manager');
     if (bucket?.admin) keys.push('co_host');
     if (bucket?.moderator) keys.push('checkin_lead', 'gate_staff', 'session_gate_staff', 'ticket_scanner');
@@ -947,7 +800,7 @@ export function EventPage({ ev, st, go }) {
     return keys.filter(k => validKeys.has(k));
   };
 
-  const getRolesSummary = (bucket) => {
+  const getRolesSummary = (bucket: any) => {
     if (!bucket) return "No one";
     if (bucket.public) return "Public";
     if (Array.isArray(bucket.roles)) {
@@ -958,7 +811,6 @@ export function EventPage({ ev, st, go }) {
       const last = names.pop();
       return names.join(", ") + " and " + last + " only";
     }
-    // Legacy shape — unchanged summary logic until re-saved via the new roles modal
     const selected = [];
     if (bucket.owner) selected.push("Host");
     if (bucket.admin) selected.push("Co-Host");
@@ -972,215 +824,92 @@ export function EventPage({ ev, st, go }) {
     return selected.join(", ") + " and " + last + " only";
   };
 
-  const renderRolesModal = (isOpen, onClose, bucket, setBucket, titleText, onSave) => {
-    if (!isOpen) return null;
-    const isNewShape = Array.isArray(bucket?.roles);
-    const current = isNewShape ? bucket : { public: !!bucket?.public, roles: legacyBucketToRoleKeys(bucket) };
-
-    const togglePublic = () => {
-      const next = { ...current, public: !current.public };
-      setBucket(next);
-      if (onSave) onSave(next);
-    };
-
-    const toggleRole = (key) => {
-      const roles = current.roles.includes(key) ? current.roles.filter(k => k !== key) : [...current.roles, key];
-      const next = { public: current.public, roles };
-      setBucket(next);
-      if (onSave) onSave(next);
-    };
-
-    return (
-      <div className="modal-overlay" style={{
-        position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-        background: "rgba(0, 0, 0, 0.5)", display: "flex",
-        alignItems: "center", justifyContent: "center", zIndex: 10000
-      }}>
-        <div className="modal-content" style={{
-          background: "var(--surface)", border: "1px solid var(--border)",
-          borderRadius: "var(--r-lg)", width: "90%", maxWidth: "380px",
-          padding: "24px", boxShadow: "var(--sh-xl)", color: "var(--ink)"
-        }}>
-          <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700 }}>{titleText}</h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20, maxHeight: "50vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: "1px solid var(--border-3)" }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>Public (Everyone)</div>
-                <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Opens this to everyone, including non-members — overrides role selection below.</div>
-              </div>
-              <Toggle on={current.public} onClick={togglePublic} />
-            </div>
-            {(availableRoles || []).map(r => (
-              <div key={r.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", opacity: current.public ? 0.5 : 1 }}>
-                <span style={{ fontSize: 14, fontWeight: 600 }}>{r.display_name}</span>
-                <Toggle on={current.public ? true : current.roles.includes(r.key)} onClick={() => { if (!current.public) toggleRole(r.key); }} />
-              </div>
-            ))}
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button className="hbtn hbtn--primary hbtn--sm" onClick={onClose}>Done</button>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  const [responseMember, setResponseMember] = useState<any>(null);
 
   return (
     <div className="scroll">
       <div className="view-enter">
-        {/* Banner section */}
-        <div className="detail-cover" style={{
-          height: 200,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          background: e.cover && (e.cover.startsWith("linear-gradient") || e.cover.startsWith("radial-gradient") || e.cover.startsWith("var(")) ? e.cover : `url(${e.cover}) center/cover no-repeat`
-        }}>
-          {!e.cover && <Grain />}
-          <div className="scrim" />
-          <button className="detail-back" style={{ top: 20, left: 20 }} onClick={() => (e.id === "new" && e.__draft) ? go("edit-event", { __draft: e.__draft, id: e.__draft.id }) : go("back")}><I.arrowL />Back</button>
-        </div>
+        <EventHeaderSection
+          e={e}
+          ev={ev}
+          st={st}
+          go={go}
+          attendees={attendees}
+          bookingStatusProp={bookingStatusProp}
+          registrationOpen={registrationOpen}
+          isScheduled={isScheduled}
+          regToggleLoading={regToggleLoading}
+          isHostOrCoHost={isHostOrCoHost}
+          effectiveIsMember={effectiveIsMember}
+          isSaved={isSaved}
+          toggleWishlist={toggleWishlist}
+          handleToggleRegistration={handleToggleRegistration}
+          handleLeaveEvent={handleLeaveEvent}
+          currentEvent={currentEvent}
+          tabs={tabs as Array<[string, string]>}
+          tab={tab}
+          setTab={setTab}
+        />
 
-        {/* Group details header container */}
-        <div className="grp-detail">
-          <div className="grp-head">
-            {/* Custom visual event icon box */}
-            <div className="gicon-lg" style={{
-              background: "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "28px",
-              boxShadow: "0 8px 24px rgba(59, 130, 246, 0.25)"
-            }}>
-              📅
-            </div>
+        <div className="grp-cols" style={{ marginTop: 20, gridTemplateColumns: tab === "about" ? "1fr 300px" : "1fr", paddingBottom: 80 }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            {tab === "about" && (
+              <EventAboutTab
+                e={e}
+                currentEvent={currentEvent}
+                registrationOpen={registrationOpen}
+                isHostOrCoHost={isHostOrCoHost}
+                isPending={isPending}
+              />
+            )}
 
-            <div className="gh-meta">
-              <div className="nm">{e.title}</div>
-              <div className="sub">
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <I.users /> {attendees.length} members
-                </span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#1f9d57", fontWeight: 600 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#2bb673" }} />
-                  {e.online ? "Online" : "In-person"}
-                </span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  🎫 {e.price}
-                </span>
-                <span className="fchip on" style={{ pointerEvents: "none", padding: "4px 11px", fontSize: 12 }}>
-                  {e.cat || "Event"}
-                </span>
-                {e.hostName && (
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <I.users /> Hosted by {e.hostName}{e.hostType === 'group' ? ' (Group)' : ''}
-                  </span>
-                )}
-              </div>
-            </div>
+            {tab === "dashboard" && (
+              <EventDashboard ev={currentEvent || e} st={st} go={go} embedded={true} />
+            )}
 
-            <div className="gh-act">
-              {!bookingStatusProp && !registrationOpen && (
-                <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => toggleWishlist && toggleWishlist(e.id, e.wishlistCount)}>
-                  {isSaved ? <I.heartF /> : <I.heart />} {isSaved ? "Wishlisted" : "Wishlist"}
-                </button>
-              )}
-              <div style={{ position: "relative" }}>
-                <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => setShowShareSheet(!showShareSheet)}>
-                  <I.share /> Share
-                </button>
-                {showShareSheet && (
-                  <>
-                    <div style={{ position: "fixed", inset: 0, zIndex: 9998 }} onClick={() => setShowShareSheet(false)} />
-                    <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 8, display: "flex", gap: 8, padding: 8, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "var(--sh-md)", zIndex: 9999 }}>
-                      {(() => {
-                        const link = encodeURIComponent(`${window.location.origin}${window.location.pathname}#event=${e.id}`);
-                        const msg = encodeURIComponent(`Join me at ${e.title} on Samaagum! ${decodeURIComponent(link)}`);
-                        const subject = encodeURIComponent(`Invitation to ${e.title}`);
-                        const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=&su=${subject}&body=${msg}`;
-                        const btnStyle = { display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: "50%", background: "var(--surface-2)", transition: "all 0.2s" };
-                        return (
-                          <>
-                            <a href={`https://wa.me/?text=${msg}`} target="_blank" style={btnStyle} title="WhatsApp">
-                              <svg viewBox="0 0 24 24" width="20" height="20" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.888-.788-1.489-1.761-1.663-2.06-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a5.8 5.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.82 9.82 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.81 11.81 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.88 11.88 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.82 11.82 0 0 0-3.48-8.413Z"/></svg>
-                            </a>
-                            <a href={`https://www.facebook.com/sharer/sharer.php?u=${link}`} target="_blank" style={btnStyle} title="Facebook">
-                              <svg viewBox="0 0 24 24" width="20" height="20" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                            </a>
-                            <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${link}`} target="_blank" style={btnStyle} title="LinkedIn">
-                              <svg viewBox="0 0 24 24" width="20" height="20" fill="#0A66C2"><path d="M22.23 0H1.77C.79 0 0 .77 0 1.72v20.56C0 23.23.79 24 1.77 24h20.46c.98 0 1.77-.77 1.77-1.72V1.72C24 .77 23.21 0 22.23 0zM7.12 20.45H3.56V9h3.56v11.45zM5.34 7.43c-1.14 0-2.06-.92-2.06-2.06 0-1.14.92-2.06 2.06-2.06s2.06.92 2.06 2.06c0 1.14-.92 2.06-2.06 2.06zM20.45 20.45h-3.56v-5.6c0-1.34-.03-3.06-1.87-3.06-1.87 0-2.16 1.46-2.16 2.96v5.7h-3.56V9h3.42v1.56h.05c.48-.9 1.63-1.84 3.36-1.84 3.59 0 4.25 2.36 4.25 5.43v6.3z"/></svg>
-                            </a>
-                            <a href={gmailUrl} target="_blank" style={btnStyle} title="Email (Gmail)">
-                              <svg viewBox="0 0 24 24" width="20" height="20" fill="#EA4335"><path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/></svg>
-                            </a>
-                            <button style={btnStyle} title="Copy Link" onClick={async () => {
-                              try {
-                                await navigator.clipboard.writeText(decodeURIComponent(link));
-                                alert("Link copied!");
-                              } catch (err) {
-                                console.error(err);
-                              }
-                              setShowShareSheet(false);
-                            }}>
-                              <I.copy style={{ width: 16, height: 16, color: "var(--ink-2)" }} />
-                            </button>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </>
-                )}
-              </div>
-              {isHostOrCoHost && (
-                <>
-                  {/* Registration Open/Close toggle — host only */}
-                  <div style={{
-                    display: "flex", alignItems: "center", gap: 8,
-                    background: registrationOpen ? "rgba(31,157,87,0.10)" : "rgba(239,68,68,0.10)",
-                    border: `1px solid ${registrationOpen ? "rgba(31,157,87,0.3)" : "rgba(239,68,68,0.3)"}`,
-                    borderRadius: "var(--r-full, 9999px)",
-                    padding: "5px 12px 5px 8px",
-                    cursor: regToggleLoading ? "wait" : "pointer",
-                    transition: "all 0.25s",
-                    userSelect: "none"
-                  }} onClick={handleToggleRegistration} title={registrationOpen ? "Click to close registration" : "Click to open registration"}>
-                    <span style={{
-                      width: 32, height: 18, borderRadius: 9, background: registrationOpen ? "#1f9d57" : "#ef4444",
-                      display: "inline-flex", alignItems: "center", position: "relative",
-                      transition: "background 0.25s", flexShrink: 0
-                    }}>
-                      <span style={{
-                        position: "absolute", width: 14, height: 14, borderRadius: "50%", background: "#fff",
-                        top: 2, left: registrationOpen ? 16 : 2,
-                        transition: "left 0.22s", boxShadow: "0 1px 4px rgba(0,0,0,0.18)"
-                      }} />
-                    </span>
-                    <span style={{ fontSize: 12.5, fontWeight: 700, color: registrationOpen ? "#1f9d57" : "#ef4444" }}>
-                      {regToggleLoading ? "…" : (isScheduled ? `Scheduled (${registrationOpen ? 'Open' : 'Closed'})` : (registrationOpen ? "Registration Open" : "Registration Closed"))}
-                    </span>
-                  </div>
-                  <button className="hbtn hbtn--soft hbtn--sm" onClick={() => (e.id === "new" && e.__draft) ? go("edit-event", { __draft: e.__draft, id: e.__draft.id }) : go("edit-event", currentEvent || e)}>
-                    <I.edit style={{ width: 14 }} /> Edit Event
-                  </button>
-                </>
-              )}
-              {effectiveIsMember && !isHostOrCoHost && (
-                <button className="hbtn hbtn--sm" style={{ background: "#e5484d", color: "#fff" }} onClick={handleLeaveEvent}>
-                  Leave Event
-                </button>
-              )}
-            </div>
-          </div>
+            {tab === "members" && (
+              <EventMembersTab
+                e={e}
+                hostStats={hostStats}
+                eventMembers={eventMembers}
+                availableRoles={availableRoles}
+                isTicketManager={isTicketManager}
+                isAdmin={isAdmin}
+                isModerator={isModerator}
+                isHostOrCoHost={isHostOrCoHost}
+                isOwner={isOwner}
+                ME={ME}
+                apiBase={apiBase}
+                token={token}
+                go={go}
+                getQuestionLabel={(fieldId) => getQuestionLabel(currentEvent.formFields || [], fieldId)}
+                fetchEventMembers={fetchEventMembers}
+                fetchHostStats={fetchHostStats}
+                handleHostRequestAction={handleHostRequestAction}
+                handleRemoveEventMember={handleRemoveEventMember}
+                setResponseMember={setResponseMember}
+                Avatar={Avatar}
+              />
+            )}
 
-          {/* Tab Navigation */}
-          <div className="grp-tabs">
-            {tabs.map(([k, l]) => (
-              <button key={k} className={`grp-tab ${tab === k ? "on" : ""}`} onClick={() => setTab(k)}>
-                {l}
-              </button>
-            ))}
-          </div>
-
+            {tab === "gallery" && (
+              <EventGalleryTab
+                e={e}
+                galleryItems={galleryItems}
+                galleryEnabled={galleryEnabled}
+                galleryVideoOnly={galleryVideoOnly}
+                galleryImageOnly={galleryImageOnly}
+                canUploadToGallery={canUploadToGallery}
+                isTicketManager={isTicketManager}
+                isScanner={isScanner}
+                isOwner={isOwner}
+                isAdmin={isAdmin}
+                isModerator={isModerator}
+                ME={ME}
+                apiBase={apiBase}
+                token={token}
+                fetchEventGallery={fetchEventGallery}
+              />
           {/* Grp Columns (Main content split) */}
           <div className="grp-cols" style={{ marginTop: 20, gridTemplateColumns: tab === "about" ? "1fr 300px" : "1fr" }}>
             <div style={{ minWidth: 0, flex: 1 }}>
@@ -2636,457 +2365,221 @@ export function EventPage({ ev, st, go }) {
                 </div>
               </div>
             )}
+
+            {tab === "discussion" && discussionEnabled && (
+              <DiscussionPanel
+                entityType="event"
+                entityId={e.id}
+                token={token}
+                currentUserId={currentUserId}
+                isOwner={isOwner}
+                isAdmin={isAdmin}
+                isModerator={isModerator}
+                isMember={effectiveIsMember}
+                myRoleKey={myRoleKey}
+                availableRoles={availableRoles}
+                isTicketManager={isTicketManager}
+                isScanner={isScanner}
+                forumsEnabled={discussionEnabled}
+                threadPerm={discussionThreadRoles}
+                replyPerm={discussionReplyRoles}
+                approvalRequired={discussionApprovalRequired}
+                ME={ME}
+              />
+            )}
+
+            {tab === "ticketing" && isTicketManager && isPaidEvent && (
+              <EventTicketingTab
+                e={e}
+                apiBase={apiBase}
+                token={token}
+                isTicketManager={isTicketManager}
+                isPaidEvent={isPaidEvent}
+              />
+            )}
+
+            {tab === "invite" && (
+              <EventInviteTab
+                eventVisibility={eventVisibility}
+                eventJoinEligibility={eventJoinEligibility}
+                inviteLinks={inviteLinks}
+                inviteLoading={inviteLoading}
+                generateInviteLink={generateInviteLink}
+                copyInviteLink={copyInviteLink}
+              />
+            )}
+
+            {tab === "settings" && (
+              <EventSettingsTab
+                galleryEnabled={galleryEnabled}
+                setGalleryEnabled={setGalleryEnabled}
+                galleryUploadRoles={galleryUploadRoles}
+                setGalleryUploadRoles={setGalleryUploadRoles}
+                galleryViewRoles={galleryViewRoles}
+                setGalleryViewRoles={setGalleryViewRoles}
+                galleryApprovalRequired={galleryApprovalRequired}
+                setGalleryApprovalRequired={setGalleryApprovalRequired}
+                galleryVideoOnly={galleryVideoOnly}
+                setGalleryVideoOnly={setGalleryVideoOnly}
+                galleryImageOnly={galleryImageOnly}
+                setGalleryImageOnly={setGalleryImageOnly}
+                discussionEnabled={discussionEnabled}
+                setDiscussionEnabled={setDiscussionEnabled}
+                discussionThreadRoles={discussionThreadRoles}
+                setDiscussionThreadRoles={setDiscussionThreadRoles}
+                discussionReplyRoles={discussionReplyRoles}
+                setDiscussionReplyRoles={setDiscussionReplyRoles}
+                discussionApprovalRequired={discussionApprovalRequired}
+                setDiscussionApprovalRequired={setDiscussionApprovalRequired}
+                getRolesSummary={getRolesSummary}
+                saveEventSettings={saveEventSettings}
+                setUploadRolesModalOpen={setUploadRolesModalOpen}
+                setViewRolesModalOpen={setViewRolesModalOpen}
+                setThreadRolesModalOpen={setThreadRolesModalOpen}
+                setReplyRolesModalOpen={setReplyRolesModalOpen}
+              />
+            )}
           </div>
 
+          {tab === "about" && (
+            <EventSidebar
+              e={e}
+              currentEvent={currentEvent}
+              isMember={isMember}
+              confirmedCount={confirmedCount}
+              hostStats={hostStats}
+              attendees={attendees}
+              city={city}
+              go={go}
+              ME={ME}
+              Avatar={Avatar}
+            />
+          )}
         </div>
       </div>
 
-      {/* Roles Selection Modals */}
-      {renderRolesModal(uploadRolesModalOpen, () => setUploadRolesModalOpen(false), galleryUploadRoles, (nextUpload) => {
-        const nextVal = typeof nextUpload === 'function' ? nextUpload(galleryUploadRoles) : nextUpload;
-        setGalleryUploadRoles(nextVal);
-        const currentView = Array.isArray(galleryViewRoles?.roles) 
-          ? galleryViewRoles 
-          : { public: !!galleryViewRoles?.public, roles: legacyBucketToRoleKeys(galleryViewRoles) };
-        const nextView = {
-          public: !!(currentView.public || nextVal.public),
-          roles: Array.from(new Set([...(currentView.roles || []), ...(nextVal.roles || [])]))
-        };
-        setGalleryViewRoles(nextView);
-      }, "Who can upload?", (next) => {
-        const currentView = Array.isArray(galleryViewRoles?.roles) 
-          ? galleryViewRoles 
-          : { public: !!galleryViewRoles?.public, roles: legacyBucketToRoleKeys(galleryViewRoles) };
-        const nextView = {
-          public: !!(currentView.public || next.public),
-          roles: Array.from(new Set([...(currentView.roles || []), ...(next.roles || [])]))
-        };
-        saveEventSettings({
-          gallery: {
-            enabled: galleryEnabled,
-            uploadRoles: next,
-            viewRoles: nextView,
-            approvalRequired: galleryApprovalRequired,
-            videoOnly: galleryVideoOnly,
-            imageOnly: galleryImageOnly
-          }
-        });
-      })}
-      {renderRolesModal(viewRolesModalOpen, () => setViewRolesModalOpen(false), galleryViewRoles, setGalleryViewRoles, "Who can view?", (next) => {
-        saveEventSettings({
-          gallery: {
-            enabled: galleryEnabled,
-            uploadRoles: galleryUploadRoles,
-            viewRoles: next,
-            approvalRequired: galleryApprovalRequired,
-            videoOnly: galleryVideoOnly,
-            imageOnly: galleryImageOnly
-          }
-        });
-      })}
-      {renderRolesModal(threadRolesModalOpen, () => setThreadRolesModalOpen(false), discussionThreadRoles, setDiscussionThreadRoles, "Who can create new thread?", (next) => {
-        saveEventSettings({
-          discussion: {
-            enabled: discussionEnabled,
-            threadRoles: next,
-            replyRoles: discussionReplyRoles,
-            approvalRequired: discussionApprovalRequired
-          }
-        });
-      })}
-      {renderRolesModal(replyRolesModalOpen, () => setReplyRolesModalOpen(false), discussionReplyRoles, setDiscussionReplyRoles, "Who can reply on thread?", (next) => {
-        saveEventSettings({
-          discussion: {
-            enabled: discussionEnabled,
-            threadRoles: discussionThreadRoles,
-            replyRoles: next,
-            approvalRequired: discussionApprovalRequired
-          }
-        });
-      })}
+      <EventRolesModal
+        isOpen={uploadRolesModalOpen}
+        onClose={() => setUploadRolesModalOpen(false)}
+        bucket={galleryUploadRoles}
+        setBucket={(nextUpload) => {
+          const nextVal = typeof nextUpload === 'function' ? nextUpload(galleryUploadRoles) : nextUpload;
+          setGalleryUploadRoles(nextVal);
+          const currentView = Array.isArray(galleryViewRoles?.roles)
+            ? galleryViewRoles
+            : { public: !!galleryViewRoles?.public, roles: legacyBucketToRoleKeys(galleryViewRoles) };
+          const nextView = {
+            public: !!(currentView.public || nextVal.public),
+            roles: Array.from(new Set([...(currentView.roles || []), ...(nextVal.roles || [])]))
+          };
+          setGalleryViewRoles(nextView);
+        }}
+        titleText="Who can upload?"
+        onSave={(next) => {
+          const currentView = Array.isArray(galleryViewRoles?.roles)
+            ? galleryViewRoles
+            : { public: !!galleryViewRoles?.public, roles: legacyBucketToRoleKeys(galleryViewRoles) };
+          const nextView = {
+            public: !!(currentView.public || next.public),
+            roles: Array.from(new Set([...(currentView.roles || []), ...(next.roles || [])]))
+          };
+          saveEventSettings({
+            gallery: {
+              enabled: galleryEnabled,
+              uploadRoles: next,
+              viewRoles: nextView,
+              approvalRequired: galleryApprovalRequired,
+              videoOnly: galleryVideoOnly,
+              imageOnly: galleryImageOnly
+            }
+          });
+        }}
+        availableRoles={availableRoles || []}
+      />
 
-      {/* Member Response Modal — questionnaire answers for a member, opened from the
-          "Response" button on their row in the Members tab. */}
-      {responseMember && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setResponseMember(null)}>
-          <div style={{ background: "var(--surface)", width: "min(480px,95vw)", maxHeight: "80vh", overflowY: "auto", borderRadius: "var(--r-xl)", boxShadow: "var(--sh-xl)", display: "flex", flexDirection: "column" }} onClick={ev => ev.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: "1px solid var(--border)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <Avatar name={responseMember.name} userId={responseMember.id} img={responseMember.picture} size={34} />
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 15 }}>{responseMember.name}</div>
-                  {responseMember.email && <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{responseMember.email}</div>}
-                </div>
-              </div>
-              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => setResponseMember(null)} style={{ border: "none" }}>✕</button>
-            </div>
-            <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
-              {responseMember.answers && Object.keys(responseMember.answers).length > 0 ? (
-                Object.entries(responseMember.answers).filter(([k]) => !['ticketTypeId', 'qty', 'ticketName', 'isQuestionnaireSubmit', 'registration_location'].includes(k)).map(([key, val]) => {
-                  const label = getQuestionLabel(key);
-                  return (
-                    <div key={key}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>{label}</div>
-                      <div style={{ fontSize: 14, color: "var(--ink)", background: "var(--field)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px" }}>{String(val)}</div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div style={{ textAlign: "center", padding: "24px 0", color: "var(--ink-3)", fontSize: 13.5 }}>
-                  This member didn't submit any questionnaire responses.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <EventRolesModal
+        isOpen={viewRolesModalOpen}
+        onClose={() => setViewRolesModalOpen(false)}
+        bucket={galleryViewRoles}
+        setBucket={setGalleryViewRoles}
+        titleText="Who can view?"
+        onSave={(next) => {
+          saveEventSettings({
+            gallery: {
+              enabled: galleryEnabled,
+              uploadRoles: galleryUploadRoles,
+              viewRoles: next,
+              approvalRequired: galleryApprovalRequired,
+              videoOnly: galleryVideoOnly,
+              imageOnly: galleryImageOnly
+            }
+          });
+        }}
+        availableRoles={availableRoles || []}
+      />
 
-      {/* Gallery Image Popup Modal */}
-      {viewerItem && (
-        <div 
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 20000,
-            background: "rgba(0, 0, 0, 0.95)",
-            backdropFilter: "blur(8px)",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#fff",
-            userSelect: "none"
-          }}
-          onClick={() => {
-            setViewerItem(null);
-            setZoomScale(1);
-            setPanOffset({ x: 0, y: 0 });
-          }}
-        >
-          {/* Header */}
-          <div 
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              padding: "16px 24px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              background: "linear-gradient(to bottom, rgba(0,0,0,0.8), transparent)",
-              zIndex: 10
-            }}
-            onClick={ev => ev.stopPropagation()}
-          >
-            <div style={{ fontSize: 14, color: "#ccc" }}>
-              {viewerItem.uploadedBy ? `Uploaded by ${viewerItem.uploadedBy}` : "Image Preview"}
-            </div>
-            <button 
-              onClick={() => {
-                setViewerItem(null);
-                setZoomScale(1);
-                setPanOffset({ x: 0, y: 0 });
-              }}
-              style={{
-                background: "rgba(255,255,255,0.1)",
-                color: "#fff",
-                border: "none",
-                borderRadius: "50%",
-                width: 36,
-                height: 36,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 16,
-                fontWeight: "bold",
-                transition: "background 0.2s"
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.2)"}
-              onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
-            >
-              ✕
-            </button>
-          </div>
+      <EventRolesModal
+        isOpen={threadRolesModalOpen}
+        onClose={() => setThreadRolesModalOpen(false)}
+        bucket={discussionThreadRoles}
+        setBucket={(nextThread) => {
+          const nextVal = typeof nextThread === 'function' ? nextThread(discussionThreadRoles) : nextThread;
+          setDiscussionThreadRoles(nextVal);
+          const currentReply = Array.isArray(discussionReplyRoles?.roles)
+            ? discussionReplyRoles
+            : { public: !!discussionReplyRoles?.public, roles: legacyBucketToRoleKeys(discussionReplyRoles) };
+          const nextReply = {
+            public: !!(currentReply.public || nextVal.public),
+            roles: Array.from(new Set([...(currentReply.roles || []), ...(nextVal.roles || [])]))
+          };
+          setDiscussionReplyRoles(nextReply);
+        }}
+        titleText="Who can create new thread?"
+        onSave={(next) => {
+          const currentReply = Array.isArray(discussionReplyRoles?.roles)
+            ? discussionReplyRoles
+            : { public: !!discussionReplyRoles?.public, roles: legacyBucketToRoleKeys(discussionReplyRoles) };
+          const nextReply = {
+            public: !!(currentReply.public || next.public),
+            roles: Array.from(new Set([...(currentReply.roles || []), ...(next.roles || [])]))
+          };
+          saveEventSettings({
+            discussion: {
+              enabled: discussionEnabled,
+              threadRoles: next,
+              replyRoles: nextReply,
+              approvalRequired: discussionApprovalRequired
+            }
+          });
+        }}
+        availableRoles={availableRoles || []}
+      />
 
-          {/* Navigation Controls */}
-          {(() => {
-            const approvedItems = galleryItems.filter(item => item.approved && item.type !== "video");
-            const currentIndex = approvedItems.findIndex(item => item.id === viewerItem.id);
-            
-            const handlePrev = (evt) => {
-              evt.stopPropagation();
-              if (currentIndex > 0) {
-                setViewerItem(approvedItems[currentIndex - 1]);
-                setZoomScale(1);
-                setPanOffset({ x: 0, y: 0 });
-              }
-            };
-            
-            const handleNext = (evt) => {
-              evt.stopPropagation();
-              if (currentIndex < approvedItems.length - 1) {
-                setViewerItem(approvedItems[currentIndex + 1]);
-                setZoomScale(1);
-                setPanOffset({ x: 0, y: 0 });
-              }
-            };
+      <EventRolesModal
+        isOpen={replyRolesModalOpen}
+        onClose={() => setReplyRolesModalOpen(false)}
+        bucket={discussionReplyRoles}
+        setBucket={setDiscussionReplyRoles}
+        titleText="Who can reply on thread?"
+        onSave={(next) => {
+          saveEventSettings({
+            discussion: {
+              enabled: discussionEnabled,
+              threadRoles: discussionThreadRoles,
+              replyRoles: next,
+              approvalRequired: discussionApprovalRequired
+            }
+          });
+        }}
+        availableRoles={availableRoles || []}
+      />
 
-            return (
-              <>
-                {currentIndex > 0 && (
-                  <button
-                    onClick={handlePrev}
-                    style={{
-                      position: "absolute",
-                      left: 24,
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      background: "rgba(0,0,0,0.5)",
-                      color: "#fff",
-                      border: "1px solid rgba(255,255,255,0.2)",
-                      borderRadius: "50%",
-                      width: 48,
-                      height: 48,
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 20,
-                      zIndex: 10,
-                      transition: "background 0.2s"
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.8)"}
-                    onMouseLeave={e => e.currentTarget.style.background = "rgba(0,0,0,0.5)"}
-                  >
-                    ⟨
-                  </button>
-                )}
-                {currentIndex < approvedItems.length - 1 && (
-                  <button
-                    onClick={handleNext}
-                    style={{
-                      position: "absolute",
-                      right: 24,
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      background: "rgba(0,0,0,0.5)",
-                      color: "#fff",
-                      border: "1px solid rgba(255,255,255,0.2)",
-                      borderRadius: "50%",
-                      width: 48,
-                      height: 48,
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 20,
-                      zIndex: 10,
-                      transition: "background 0.2s"
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.8)"}
-                    onMouseLeave={e => e.currentTarget.style.background = "rgba(0,0,0,0.5)"}
-                  >
-                    ⟩
-                  </button>
-                )}
-              </>
-            );
-          })()}
-
-          {/* Viewport for pan & zoom */}
-          <div 
-            style={{
-              width: "80vw",
-              height: "70vh",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              overflow: "hidden",
-              position: "relative",
-              cursor: handModeActive ? (isDragging ? "grabbing" : "grab") : "zoom-in"
-            }}
-            onClick={ev => {
-              ev.stopPropagation();
-              if (!handModeActive) {
-                // If not in hand mode, clicking zooms in or resets
-                setZoomScale(prev => prev > 1 ? 1 : 2.5);
-                setPanOffset({ x: 0, y: 0 });
-              }
-            }}
-            onMouseDown={evt => {
-              if (!handModeActive) return;
-              evt.preventDefault();
-              setIsDragging(true);
-              setDragStart({ x: evt.clientX - panOffset.x, y: evt.clientY - panOffset.y });
-            }}
-            onMouseMove={evt => {
-              if (!isDragging) return;
-              setPanOffset({
-                x: evt.clientX - dragStart.x,
-                y: evt.clientY - dragStart.y
-              });
-            }}
-            onMouseUp={() => setIsDragging(false)}
-            onMouseLeave={() => setIsDragging(false)}
-            onTouchStart={evt => {
-              if (!handModeActive || evt.touches.length !== 1) return;
-              const touch = evt.touches[0];
-              setIsDragging(true);
-              setDragStart({ x: touch.clientX - panOffset.x, y: touch.clientY - panOffset.y });
-            }}
-            onTouchMove={evt => {
-              if (!isDragging || evt.touches.length !== 1) return;
-              const touch = evt.touches[0];
-              setPanOffset({
-                x: touch.clientX - dragStart.x,
-                y: touch.clientY - dragStart.y
-              });
-            }}
-            onTouchEnd={() => setIsDragging(false)}
-          >
-            <img 
-              src={viewerItem.url} 
-              alt="Preview"
-              draggable="false"
-              style={{
-                maxWidth: "100%",
-                maxHeight: "100%",
-                objectFit: "contain",
-                transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})`,
-                transition: isDragging ? "none" : "transform 0.15s ease-out",
-                pointerEvents: "none"
-              }}
-            />
-          </div>
-
-          {/* Controls Bar at bottom */}
-          <div 
-            style={{
-              position: "absolute",
-              bottom: 24,
-              display: "flex",
-              gap: 12,
-              background: "rgba(0,0,0,0.85)",
-              border: "1px solid rgba(255,255,255,0.15)",
-              borderRadius: 30,
-              padding: "8px 20px",
-              zIndex: 10,
-              alignItems: "center"
-            }}
-            onClick={ev => ev.stopPropagation()}
-          >
-            {/* Hand tool toggle */}
-            <button
-              onClick={() => setHandModeActive(!handModeActive)}
-              title={handModeActive ? "Switch to click-to-zoom mode" : "Switch to drag-to-pan mode (Hand Tool)"}
-              style={{
-                background: handModeActive ? "var(--primary, #7c3aed)" : "transparent",
-                color: "#fff",
-                border: "none",
-                borderRadius: "50%",
-                width: 36,
-                height: 36,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 16,
-                transition: "all 0.2s"
-              }}
-            >
-              🖐️
-            </button>
-
-            <span style={{ width: 1, height: 20, background: "rgba(255,255,255,0.2)" }} />
-
-            {/* Zoom Out */}
-            <button
-              onClick={() => setZoomScale(prev => Math.max(prev - 0.5, 0.5))}
-              title="Zoom Out"
-              style={{
-                background: "transparent",
-                color: "#fff",
-                border: "none",
-                borderRadius: "50%",
-                width: 36,
-                height: 36,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 16,
-                fontWeight: "bold",
-                transition: "background 0.2s"
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
-              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-            >
-              ➖
-            </button>
-
-            {/* Scale Value */}
-            <span style={{ minWidth: 48, textAlign: "center", fontSize: 13, fontWeight: 600 }}>
-              {Math.round(zoomScale * 100)}%
-            </span>
-
-            {/* Zoom In */}
-            <button
-              onClick={() => setZoomScale(prev => Math.min(prev + 0.5, 6))}
-              title="Zoom In"
-              style={{
-                background: "transparent",
-                color: "#fff",
-                border: "none",
-                borderRadius: "50%",
-                width: 36,
-                height: 36,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 16,
-                fontWeight: "bold",
-                transition: "background 0.2s"
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
-              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-            >
-              ➕
-            </button>
-
-            <span style={{ width: 1, height: 20, background: "rgba(255,255,255,0.2)" }} />
-
-            {/* Reset */}
-            <button
-              onClick={() => {
-                setZoomScale(1);
-                setPanOffset({ x: 0, y: 0 });
-              }}
-              title="Reset View"
-              style={{
-                background: "transparent",
-                color: "#fff",
-                border: "none",
-                borderRadius: "50%",
-                width: 36,
-                height: 36,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 14,
-                transition: "background 0.2s"
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
-              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-            >
-              🔄
-            </button>
-          </div>
-        </div>
-      )}
+      <EventMemberResponseModal
+        member={responseMember}
+        onClose={() => setResponseMember(null)}
+        getQuestionLabel={(fieldId) => getQuestionLabel(currentEvent.formFields || [], fieldId)}
+        Avatar={Avatar}
+      />
     </div>
   );
 }

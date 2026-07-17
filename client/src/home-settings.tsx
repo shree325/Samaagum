@@ -293,7 +293,7 @@ export function SettingsPage({ st, go, activeTabParam }) {
         ME.name = fullName;
         ME.messaging_restriction = profile.messagingRestriction;
         if (profile.img !== undefined) ME.img = profile.img;
-        
+
         // Save privacy preferences on success
         localStorage.setItem("samaagum_privacy_prefs", JSON.stringify(privacy));
         ME.privacy = privacy;
@@ -396,7 +396,9 @@ export function SettingsPage({ st, go, activeTabParam }) {
 
           {/* Settings Main Panels */}
           <main style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", padding: 40, boxShadow: "var(--sh-sm)" }}>
-            {activeTab !== "account" && activeTab !== "session" && activeTab !== "billing" ? (
+            {activeTab === "notification" ? (
+              <NotificationSettingsPanel />
+            ) : activeTab !== "account" && activeTab !== "session" && activeTab !== "billing" && activeTab !== "notification" ? (
               // Empty state for other sections
               <div style={{ textAlign: "center", padding: "64px 0", color: "var(--ink-3)" }}>
                 <div style={{ fontSize: "48px", marginBottom: 16 }}>⚙️</div>
@@ -1188,5 +1190,491 @@ export function SettingsPage({ st, go, activeTabParam }) {
     </div>
   );
 }
+
+const IN_APP_CATEGORIES = [
+  {
+    id: "messages",
+    title: "1. Messages",
+    description: "Control notifications related to private messaging.",
+    items: [
+      { type: "MESSAGE_RECEIVED", label: "New Direct Messages", description: "Receive notifications whenever someone sends you a new message." }
+    ]
+  },
+  {
+    id: "membership",
+    title: "2. Membership & Approval Requests",
+    description: "Notifications related to joining groups and events.",
+    items: [
+      { type: "JOIN_REQUESTS", label: "Someone Requests to Join My Group", description: "Receive notifications when users request to join your group.", requiresRole: true },
+      { type: "EVENT_JOIN_REQUESTS", label: "Someone Requests to Join My Event", description: "Receive notifications when users request to join your event.", requiresRole: true },
+      { type: "MEMBERSHIP_APPROVED", label: "My Membership Request Approved", description: "Receive notifications when your membership request is approved." },
+      { type: "MEMBERSHIP_DECLINED", label: "My Membership Request Declined", description: "Receive notifications when your membership request is declined." },
+      { type: "REGISTRATION_APPROVED", label: "Event Registration Approved", description: "Receive notifications when your event registration is approved." },
+      { type: "REGISTRATION_DECLINED", label: "Event Registration Declined", description: "Receive notifications when your event registration is declined." }
+    ]
+  },
+  {
+    id: "reminders",
+    title: "3. Upcoming Events",
+    description: "Event reminders.",
+    items: [
+      { type: "EVENT_REMINDER_24H", label: "Upcoming Event Reminders", description: "Receive reminders for upcoming events you are attending." }
+    ]
+  },
+  {
+    id: "updates",
+    title: "4. Event Updates",
+    description: "Notifications about events you are attending.",
+    items: [
+      { type: "EVENT_UPDATED", label: "Event Updated", description: "Receive notifications when details of an event you are attending are updated." },
+      { type: "EVENT_CANCELLED", label: "Event Cancelled", description: "Receive notifications when an event you are attending is cancelled." }
+    ]
+  },
+  {
+    id: "group_activity",
+    title: "5. Group Activity",
+    description: "Notifications from groups you belong to.",
+    items: [
+      { type: "NEW_GROUP_EVENTS", label: "New Group Events", description: "Receive notifications when new events are created in your groups." },
+      { type: "NEW_DISCUSSION_POSTS", label: "New Discussion Posts", description: "Receive notifications when new discussion posts are created." },
+      { type: "DISCUSSION_REPLIES", label: "Replies & Discussion Activity", description: "Receive notifications for discussion activity." }
+    ]
+  },
+  {
+    id: "connections",
+    title: "6. Connections",
+    description: "Networking notifications.",
+    items: [
+      { type: "CONNECTION_ACCEPTED", label: "Connection Accepted", description: "Receive notifications when someone accepts your connection request." }
+    ]
+  },
+  {
+    id: "subscription_alerts",
+    title: "7. Subscription Alerts",
+    description: "Alerts about your subscription status.",
+    items: [
+      { type: "SUBSCRIPTION_EXPIRING", label: "Subscription Expiring Alerts", description: "Receive in-app alerts 5 days before your subscription expires." }
+    ]
+  }
+];
+
+const EMAIL_CATEGORIES = [
+  {
+    id: "email_registrations",
+    title: "1. Tickets & Registrations",
+    description: "Ticket deliveries and registrations.",
+    items: [
+      { type: "TICKET_BOOKED", label: "Ticket Booked Successfully", description: "Receive emails with your ticket when you book an event." },
+      { type: "TICKET_CONFIRMED", label: "Ticket Confirmed", description: "Receive emails when your registration is confirmed." },
+      { type: "REGISTRATION_APPROVED", label: "Event Registration Approved", description: "Receive emails with your QR check-in ticket when your registration is approved." }
+    ]
+  },
+  {
+    id: "email_checkin",
+    title: "2. Check-Ins",
+    description: "Event check-in receipts.",
+    items: [
+      { type: "EVENT_CHECKIN", label: "Event Check-In Receipts", description: "Receive emails confirming your successful check-in at an event." }
+    ]
+  },
+  {
+    id: "email_billing",
+    title: "3. Subscription & Billing",
+    description: "Subscription status alerts.",
+    items: [
+      { type: "SUBSCRIPTION_EXPIRING", label: "Subscription Expiring Alerts", description: "Receive warnings 5 days before your subscription expires." },
+      { type: "SUBSCRIPTION_ACTIVE", label: "Subscription Activated", description: "Receive confirmation emails when your subscription is activated." }
+    ]
+  }
+];
+
+function NotificationSettingsPanel() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState(""); // "", "saving", "saved", "error"
+  const [inAppEnabled, setInAppEnabled] = useState(true);
+  const [emailEnabled, setEmailEnabled] = useState(true);
+  const [preferences, setPreferences] = useState({});
+  const [lastModified, setLastModified] = useState(null);
+  const [hasGroups, setHasGroups] = useState(false);
+  const [activeTab, setActiveTab] = useState<'app' | 'email'>('app');
+
+  const api = window.location.port === "8080" ? "http://localhost:3000" : window.location.origin;
+  const token = localStorage.getItem('token');
+
+  // Load preferences
+  useEffect(() => {
+    fetch(`${api}/api/notification-preferences`, {
+      headers: { ...(token ? { "Authorization": `Bearer ${token}` } : {}) }
+    })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success) {
+          setInAppEnabled(res.inAppEnabled);
+          setEmailEnabled(res.emailEnabled ?? true);
+          setPreferences(res.preferences || {});
+          setLastModified(res.lastModified);
+        }
+      })
+      .catch(err => console.error("Error loading notification preferences", err))
+      .finally(() => setLoading(false));
+    fetch(`${api}/api/groups/my-managed`, {
+      headers: { ...(token ? { "Authorization": `Bearer ${token}` } : {}) }
+    })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.data && res.data.length > 0) {
+          setHasGroups(true);
+        }
+      })
+      .catch(() => { });
+  }, []);
+
+  const savePreferences = async (updatedInApp, updatedEmail, updatedPrefs) => {
+    setSaving(true);
+    setSaveStatus("saving");
+    try {
+      const payload = {} as any;
+      if (updatedInApp !== undefined) {
+        payload.inAppEnabled = updatedInApp;
+      }
+      if (updatedEmail !== undefined) {
+        payload.emailEnabled = updatedEmail;
+      }
+      if (updatedPrefs !== undefined) {
+        payload.preferences = updatedPrefs;
+      }
+
+      const res = await fetch(`${api}/api/notification-preferences`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setInAppEnabled(data.inAppEnabled);
+        setEmailEnabled(data.emailEnabled ?? true);
+        setPreferences(data.preferences);
+        setLastModified(data.lastModified);
+        setSaveStatus("saved");
+        setTimeout(() => setSaveStatus(""), 2000);
+      } else {
+        setSaveStatus("error");
+      }
+    } catch (e) {
+      setSaveStatus("error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleGlobalToggle = () => {
+    const nextVal = !inAppEnabled;
+    setInAppEnabled(nextVal);
+    savePreferences(nextVal, undefined, undefined);
+  };
+
+  const handleGlobalEmailToggle = () => {
+    const nextVal = !emailEnabled;
+    setEmailEnabled(nextVal);
+    savePreferences(undefined, nextVal, undefined);
+  };
+
+  const handleToggle = (type, channel) => {
+    const key = `${type}:${channel}`;
+    const nextVal = !preferences[key];
+    setPreferences(prev => ({ ...prev, [key]: nextVal }));
+    savePreferences(undefined, undefined, [{ type, channel, enabled: nextVal }]);
+  };
+
+  const handleCategoryToggle = (categoryItems, channel, allEnabled) => {
+    const nextVal = !allEnabled;
+    const updates = categoryItems.map(item => ({
+      type: item.type,
+      channel,
+      enabled: nextVal
+    }));
+    setPreferences(prev => {
+      const updated = { ...prev };
+      updates.forEach(u => {
+        updated[`${u.type}:${channel}`] = u.enabled;
+      });
+      return updated;
+    });
+    savePreferences(undefined, undefined, updates);
+  };
+
+  if (loading) {
+    return (
+      <div style={{ color: "var(--ink-3)", fontSize: "14px", display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ display: "inline-block", width: 16, height: 16, border: "2px solid var(--border)", borderTopColor: "var(--accent-2)", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+        Loading notification settings...
+      </div>
+    );
+  }
+
+  const currentCategories = activeTab === 'app' ? IN_APP_CATEGORIES : EMAIL_CATEGORIES;
+  const isEnabled = activeTab === 'app' ? inAppEnabled : emailEnabled;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      {/* Header and status */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <h2 style={{ fontFamily: "var(--font-display)", fontSize: "20px", fontWeight: 600, color: "var(--ink)", marginBottom: 8 }}>
+            Notification Preferences
+          </h2>
+          <p style={{ fontSize: "14px", color: "var(--ink-3)" }}>
+            Choose how you want to be notified of activity on Samaagum.
+          </p>
+        </div>
+        <div>
+          {saveStatus === "saving" && <span style={{ fontSize: "12px", color: "var(--ink-3)" }}>Saving changes...</span>}
+          {saveStatus === "saved" && <span style={{ fontSize: "12px", color: "rgb(34, 197, 94)", fontWeight: 500 }}>Saved successfully!</span>}
+          {saveStatus === "error" && <span style={{ fontSize: "12px", color: "rgb(239, 68, 68)", fontWeight: 500 }}>Error saving changes</span>}
+        </div>
+      </div>
+
+      {/* Tabs Selector */}
+      <div style={{ display: "flex", borderBottom: "1px solid var(--border)", gap: 16 }}>
+        <button
+          onClick={() => setActiveTab('app')}
+          style={{
+            padding: "12px 16px",
+            background: "none",
+            border: "none",
+            borderBottom: activeTab === 'app' ? "2px solid var(--accent-2)" : "2px solid transparent",
+            color: activeTab === 'app' ? "var(--accent-2)" : "var(--ink-3)",
+            fontWeight: 600,
+            cursor: "pointer",
+            fontSize: "14px",
+            transition: "all var(--t-fast)"
+          }}
+        >
+          In-App Notifications
+        </button>
+        <button
+          onClick={() => setActiveTab('email')}
+          style={{
+            padding: "12px 16px",
+            background: "none",
+            border: "none",
+            borderBottom: activeTab === 'email' ? "2px solid var(--accent-2)" : "2px solid transparent",
+            color: activeTab === 'email' ? "var(--accent-2)" : "var(--ink-3)",
+            fontWeight: 600,
+            cursor: "pointer",
+            fontSize: "14px",
+            transition: "all var(--t-fast)"
+          }}
+        >
+          Email Notifications
+        </button>
+      </div>
+
+      {/* Global In-App Switch (Only shown when activeTab is 'app') */}
+      {activeTab === 'app' && (
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "20px",
+          borderRadius: "var(--r-md)",
+          border: "1px solid var(--border)",
+          background: "rgba(109, 94, 252, 0.03)"
+        }}>
+          <div>
+            <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>Enable In-App Notifications</div>
+            <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Turn on or off all in-app notifications on this account. Critical security alerts will always be shown.</div>
+          </div>
+          <div
+            onClick={handleGlobalToggle}
+            role="switch"
+            aria-checked={inAppEnabled}
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); handleGlobalToggle(); } }}
+            style={{
+              background: inAppEnabled ? "var(--accent-2)" : "var(--border-3, #ccc)",
+              width: "44px",
+              height: "24px",
+              borderRadius: "12px",
+              position: "relative",
+              cursor: "pointer",
+              transition: "background var(--t-fast)",
+              display: "inline-block",
+              boxSizing: "border-box",
+              flexShrink: 0
+            }}
+          >
+            <span style={{
+              width: "18px",
+              height: "18px",
+              borderRadius: "50%",
+              background: "#fff",
+              position: "absolute",
+              top: "3px",
+              left: inAppEnabled ? "23px" : "3px",
+              transition: "left var(--t-fast)"
+            }} />
+          </div>
+        </div>
+      )}
+
+      {/* Global Email Switch (Only shown when activeTab is 'email') */}
+      {activeTab === 'email' && (
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "20px",
+          borderRadius: "var(--r-md)",
+          border: "1px solid var(--border)",
+          background: "rgba(109, 94, 252, 0.03)"
+        }}>
+          <div>
+            <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>Enable Email Notifications</div>
+            <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Turn on or off all email notifications on this account. Invoice and transaction receipts will always be sent.</div>
+          </div>
+          <div
+            onClick={handleGlobalEmailToggle}
+            role="switch"
+            aria-checked={emailEnabled}
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); handleGlobalEmailToggle(); } }}
+            style={{
+              background: emailEnabled ? "var(--accent-2)" : "var(--border-3, #ccc)",
+              width: "44px",
+              height: "24px",
+              borderRadius: "12px",
+              position: "relative",
+              cursor: "pointer",
+              transition: "background var(--t-fast)",
+              display: "inline-block",
+              boxSizing: "border-box",
+              flexShrink: 0
+            }}
+          >
+            <span style={{
+              width: "18px",
+              height: "18px",
+              borderRadius: "50%",
+              background: "#fff",
+              position: "absolute",
+              top: "3px",
+              left: emailEnabled ? "23px" : "3px",
+              transition: "left var(--t-fast)"
+            }} />
+          </div>
+        </div>
+      )}
+
+      {/* Custom Categories toggles - hidden when corresponding global setting is disabled */}
+      {isEnabled && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+          {currentCategories.map(cat => {
+            const items = cat.items;
+            const allEnabled = items.every(item => preferences[`${item.type}:${activeTab}`] !== false);
+
+            return (
+              <div key={cat.id} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {/* Category Header with Master Switch */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border)", paddingBottom: 12 }}>
+                  <div>
+                    <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--ink)" }}>{cat.title}</h3>
+                    <div style={{ fontSize: "12px", color: "var(--ink-3)", marginTop: 2 }}>{cat.description}</div>
+                  </div>
+                  <button
+                    onClick={() => handleCategoryToggle(items, activeTab, allEnabled)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "var(--accent-2)",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer"
+                    }}
+                  >
+                    {allEnabled ? "Mute All" : "Unmute All"}
+                  </button>
+                </div>
+
+                {/* Items List */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  {items.map(item => {
+                    const enabled = preferences[`${item.type}:${activeTab}`] !== false;
+                    const isRoleRestricted = item.requiresRole && !hasGroups;
+
+                    return (
+                      <div key={item.type} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ maxWidth: "80%" }}>
+                          <div style={{ fontSize: "14px", fontWeight: 500, color: "var(--ink)", display: "flex", alignItems: "center", gap: 8 }}>
+                            {item.label}
+                            {isRoleRestricted && (
+                              <span style={{
+                                fontSize: "11px",
+                                color: "var(--ink-3)",
+                                background: "var(--surface-2)",
+                                padding: "2px 6px",
+                                borderRadius: "var(--r-sm)",
+                                fontWeight: 400
+                              }}>
+                                Not owning/moderating groups
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: "12px", color: "var(--ink-3)", marginTop: 4 }}>{item.description}</div>
+                        </div>
+                        <div
+                          onClick={() => { if (!isRoleRestricted) handleToggle(item.type, activeTab); }}
+                          role="switch"
+                          aria-checked={enabled}
+                          tabIndex={isRoleRestricted ? -1 : 0}
+                          onKeyDown={(e) => { if ((e.key === ' ' || e.key === 'Enter') && !isRoleRestricted) { e.preventDefault(); handleToggle(item.type, activeTab); } }}
+                          style={{
+                            background: enabled && !isRoleRestricted ? "var(--accent-2)" : "var(--border-3, #ccc)",
+                            width: "44px",
+                            height: "24px",
+                            borderRadius: "12px",
+                            position: "relative",
+                            cursor: isRoleRestricted ? "not-allowed" : "pointer",
+                            opacity: isRoleRestricted ? 0.5 : 1,
+                            transition: "background var(--t-fast)",
+                            display: "inline-block",
+                            boxSizing: "border-box",
+                            flexShrink: 0
+                          }}
+                        >
+                          <span style={{
+                            width: "18px",
+                            height: "18px",
+                            borderRadius: "50%",
+                            background: "#fff",
+                            position: "absolute",
+                            top: "3px",
+                            left: enabled && !isRoleRestricted ? "23px" : "3px",
+                            transition: "left var(--t-fast)"
+                          }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {lastModified && (
+        <div style={{ fontSize: "12px", color: "var(--ink-3)", borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+          Last modified: {new Date(lastModified).toLocaleString()}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 

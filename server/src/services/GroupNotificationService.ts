@@ -44,9 +44,16 @@ export class GroupNotificationService {
       const text = `New discussion <b>"${postTitle}"</b> created in <b>${groupName}</b> by <b>${actorName}</b>`;
       const memberIds = await this.getGroupMembers(groupId, actorId);
 
-      if (memberIds.length === 0) return;
+      const { notificationService } = require('./NotificationService');
+      const filteredMemberIds: string[] = [];
+      for (const mId of memberIds) {
+        if (await notificationService.shouldDeliver(mId, 'NEW_DISCUSSION_POSTS')) {
+          filteredMemberIds.push(mId);
+        }
+      }
+      if (filteredMemberIds.length === 0) return;
 
-      const notificationsData = memberIds.map(userId => ({
+      const notificationsData = filteredMemberIds.map(userId => ({
         tenant_id: '00000000-0000-0000-0000-000000000000',
         user_id: userId,
         channel: 'socket',
@@ -60,7 +67,7 @@ export class GroupNotificationService {
         skipDuplicates: true
       });
 
-      for (const userId of memberIds) {
+      for (const userId of filteredMemberIds) {
         sendNotificationToUser(userId, 'group.notification', {
           type: 'group_new_post',
           text,
@@ -89,9 +96,17 @@ export class GroupNotificationService {
       }
 
       const memberIds = await this.getGroupMembers(groupId, actorId);
-      if (memberIds.length === 0) return;
+      
+      const { notificationService } = require('./NotificationService');
+      const filteredMemberIds: string[] = [];
+      for (const mId of memberIds) {
+        if (await notificationService.shouldDeliver(mId, 'DISCUSSION_REPLIES')) {
+          filteredMemberIds.push(mId);
+        }
+      }
+      if (filteredMemberIds.length === 0) return;
 
-      const notificationsData = memberIds.map(userId => ({
+      const notificationsData = filteredMemberIds.map(userId => ({
         tenant_id: '00000000-0000-0000-0000-000000000000',
         user_id: userId,
         channel: 'socket',
@@ -105,7 +120,7 @@ export class GroupNotificationService {
         skipDuplicates: true
       });
 
-      for (const userId of memberIds) {
+      for (const userId of filteredMemberIds) {
         sendNotificationToUser(userId, 'group.notification', {
           type: 'group_post_activity',
           text,
@@ -151,13 +166,22 @@ export class GroupNotificationService {
 
       if (recipientIds.size === 0) return;
 
+      const { notificationService } = require('./NotificationService');
+      const filteredRecipientIds: string[] = [];
+      for (const rId of Array.from(recipientIds)) {
+        if (await notificationService.shouldDeliver(rId, 'MEMBERSHIP_APPROVED')) {
+          filteredRecipientIds.push(rId);
+        }
+      }
+      if (filteredRecipientIds.length === 0) return;
+
       const providerRef = JSON.stringify({
         joinedUserId: actorId,
         joinedUserName: actorName,
         groupName: groupName
       });
 
-      const notificationsData = Array.from(recipientIds).map(userId => ({
+      const notificationsData = filteredRecipientIds.map(userId => ({
         tenant_id: '00000000-0000-0000-0000-000000000000',
         user_id: userId,
         channel: 'socket',
@@ -171,7 +195,7 @@ export class GroupNotificationService {
         skipDuplicates: true
       });
 
-      for (const userId of recipientIds) {
+      for (const userId of filteredRecipientIds) {
         sendNotificationToUser(userId, 'group.notification', {
           type: 'group_user_joined',
           text,
@@ -219,6 +243,15 @@ export class GroupNotificationService {
 
       if (recipientIds.size === 0) return;
 
+      const { notificationService } = require('./NotificationService');
+      const filteredRecipientIds: string[] = [];
+      for (const rId of Array.from(recipientIds)) {
+        if (await notificationService.shouldDeliver(rId, 'MEMBERSHIP_APPROVED')) {
+          filteredRecipientIds.push(rId);
+        }
+      }
+      if (filteredRecipientIds.length === 0) return;
+
       const providerRef = JSON.stringify({
         joinedUserId: joinedUserId,
         joinedUserName: joinedUserName,
@@ -226,7 +259,7 @@ export class GroupNotificationService {
         approverName: approverName
       });
 
-      const notificationsData = Array.from(recipientIds).map(userId => ({
+      const notificationsData = filteredRecipientIds.map(userId => ({
         tenant_id: '00000000-0000-0000-0000-000000000000',
         user_id: userId,
         channel: 'socket',
@@ -240,7 +273,7 @@ export class GroupNotificationService {
         skipDuplicates: true
       });
 
-      for (const userId of recipientIds) {
+      for (const userId of filteredRecipientIds) {
         sendNotificationToUser(userId, 'group.notification', {
           type: 'group_user_joined',
           text,
@@ -258,6 +291,10 @@ export class GroupNotificationService {
    */
   static async notifyJoinRequestRejected(groupId: string, groupName: string, targetUserId: string): Promise<void> {
     try {
+      const { notificationService } = require('./NotificationService');
+      const deliver = await notificationService.shouldDeliver(targetUserId, 'MEMBERSHIP_DECLINED');
+      if (!deliver) return;
+
       const text = `Your request to join the group <b>${groupName}</b> was declined`;
 
       const providerRef = JSON.stringify({

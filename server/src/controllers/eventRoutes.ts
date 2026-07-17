@@ -7,6 +7,7 @@ import { EventExportController } from '../controllers/EventExportController';
 import prisma from '../config/prisma';
 import QRCode from 'qrcode';
 import { sendEmail, generateTicketHtml, formatCurrency } from '../utils/email';
+import { notificationService } from '../services/NotificationService';
 
 // Best-effort JWT decode for routes that are public but want to personalize the response
 // (e.g. visibility gating, booking status) when a caller happens to be logged in.
@@ -1449,6 +1450,35 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                 } catch (jsonErr) {}
             }
 
+            const templateKey = action === 'accept' ? 'event_request_accepted' : 'event_request_declined';
+            const prefType = action === 'accept' ? 'REGISTRATION_APPROVED' : 'REGISTRATION_DECLINED';
+
+            const canDeliverInApp = await notificationService.shouldDeliver(guestId, prefType as any, 'app');
+            if (canDeliverInApp) {
+              await prisma.notification_log.create({
+                  data: {
+                      tenant_id: booking.tenant_id,
+                      user_id: guestId,
+                      channel: 'app',
+                      template_key: templateKey,
+                      status: 'queued',
+                      provider_ref: JSON.stringify({
+                          eventId: id,
+                          eventTitle: event?.title || ''
+                      })
+                  }
+              });
+
+              const chatNamespace = (fastify as any).io?.of('/chat');
+              if (chatNamespace) {
+                  chatNamespace.to(`user:${guestId}`).emit('group.notification', {
+                      type: action === 'accept' ? 'event' : 'system',
+                      text: action === 'accept' 
+                          ? `Your request to join <b>${event?.title}</b> was accepted! 🎉` 
+                          : `Your request to join <b>${event?.title}</b> was declined`,
+                      eventId: id
+                  });
+              }
             // Notify Buyer of approval status
             const buyerUser = await prisma.users.findUnique({ where: { id: guestId || '' }, include: { profiles: true } });
             if (buyerUser?.primary_email) {
@@ -1488,7 +1518,7 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
             MyEventsRealtimeService.syncUser(request.user.id).catch(() => {});
 
             // Send ticket email if request was accepted
-            if (action === 'accept' && guestId) {
+            if (action === 'accept' && guestId && (await notificationService.shouldDeliver(guestId, 'REGISTRATION_APPROVED', 'email'))) {
                 try {
                     const guestUser = await prisma.users.findUnique({ where: { id: guestId } });
                     if (guestUser?.primary_email) {
@@ -1646,7 +1676,7 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
             (async () => {
                 try {
                     const bookerUserId = booking?.booker_user_id;
-                    if (bookerUserId) {
+                    if (bookerUserId && (await notificationService.shouldDeliver(bookerUserId, 'EVENT_CHECKIN', 'email'))) {
                         const guestUser = await prisma.users.findUnique({ where: { id: bookerUserId } });
                         if (guestUser?.primary_email && attendee.ticket_id) {
                             const tk = await prisma.tickets.findUnique({ where: { id: attendee.ticket_id } });
@@ -1821,7 +1851,7 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
             (async () => {
                 try {
                     const bookerUserId = booking?.booker_user_id;
-                    if (bookerUserId) {
+                    if (bookerUserId && (await notificationService.shouldDeliver(bookerUserId, 'EVENT_CHECKIN', 'email'))) {
                         const guestUser = await prisma.users.findUnique({ where: { id: bookerUserId } });
                         if (guestUser?.primary_email) {
                             const eventForEmail = await prisma.events.findUnique({ where: { id } });
