@@ -476,7 +476,7 @@ export function GroupDetail({ group, st, go }) {
       .catch(err => console.error("Error fetching global chat settings in home-group:", err));
   }, []);
 
-  const g = fullGroup || group || GROUPS[0];
+  const g = fullGroup || group || {};
   const forumsEnabled = !g.settings?.forums || g.settings.forums.enabled !== false;
   const gallerySettings = g.settings?.gallery || {};
   const galleryEnabled = gallerySettings.enabled !== false;
@@ -1681,6 +1681,8 @@ export function GroupDetail({ group, st, go }) {
     displayLocation = g.settings.city;
   }
 
+  if (!g.id) return null;
+
   if (accessDenied) {
     return (
       <div className="scroll">
@@ -2698,7 +2700,7 @@ export function MyGroups({ go, param }) {
             {g.settings?.isDraft && <span className="type-pill" style={{ padding: "2px 6px", fontSize: 10 }}>Draft</span>}
             {g.settings?.isArchived && <span className="type-pill" style={{ padding: "2px 6px", fontSize: 10, background: "var(--surface-2)", color: "var(--ink-3)" }}>Archived</span>}
           </div>
-          <p style={{ fontSize: 12.5, color: "var(--ink-2)", margin: "8px 0 16px", flex: 1, lineBreak: "anywhere" }}>{g.description || g.desc}</p>
+          <p style={{ fontSize: 12.5, color: "var(--ink-2)", margin: "8px 0 16px", flex: 1, lineBreak: "anywhere", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{g.description || g.desc}</p>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "var(--ink-3)", borderTop: "1px solid var(--border)", paddingTop: 10 }}>
             <span>{g.members?.toLocaleString() || 1} members</span>
             {tab === "created" ? (

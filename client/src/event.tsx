@@ -1,100 +1,42 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { I, Avatar, Grain } from './home-icons';
+import { I, Avatar } from './home-icons';
 import { EventDashboard } from './event-dashboard';
 import DiscussionPanel from './discussion-panel';
-import { OnlineMeetingCard } from './OnlineMeetingCard';
+import { isRealEventId, normalizeEventData, getQuestionLabel } from './event-utils';
+import { EventRolesModal } from './EventRolesModal';
+import { EventMemberResponseModal } from './EventMemberResponseModal';
+import { EventSidebar } from './EventSidebar';
+import { EventInviteTab } from './EventInviteTab';
+import { EventAboutTab } from './EventAboutTab';
+import { EventSettingsTab } from './EventSettingsTab';
+import { EventHeaderSection } from './EventHeaderSection';
+import { EventMembersTab } from './EventMembersTab';
+import { EventGalleryTab } from './EventGalleryTab';
+import { EventTicketingTab } from './EventTicketingTab';
 
-function Toggle({ on, onClick }) { return <button type="button" className={`tg ${on ? "on" : ""}`} onClick={onClick} />; }
+// Mock featured event structure if no ev is provided
+const FEATURED: any = {
+  id: "ev-feat",
+  title: "Featured Gatherings",
+  cover: "",
+  cat: "General",
+  registration_mode: "free",
+  location_type: "online",
+  attendees: []
+};
 
-// Demo/placeholder events (e.g. FEATURED, id "ev-feat") aren't real DB rows —
-// their id isn't a UUID, so backend calls with it 500. Treat any non-UUID id
-// like the "new" preview mode instead of hitting the API.
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-function isRealEventId(id) { return typeof id === "string" && UUID_RE.test(id); }
+// Dummy context user for fallback purposes
+const ME = (window as any).ME || { name: "User", id: "me-id", role: "admin" };
 
-export function EventPage({ ev, st, go }) {
-  let e = ev || FEATURED;
-
-  // Normalize if it's a database event
-  if (e && (e.starts_at || typeof e.venue === 'object' || typeof e.venue === 'string')) {
-    const startsAt = e.starts_at ? new Date(e.starts_at) : null;
-    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-    const month = startsAt ? months[startsAt.getMonth()] : (e.month || "TBD");
-    const day = startsAt ? startsAt.getDate().toString() : (e.day || "TBD");
-    const time = startsAt ? startsAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : (e.time || "Time TBD");
-    const dateStr = startsAt ? startsAt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : (e.date || "Date TBD");
-
-    let venueObj: any = {};
-    if (typeof e.venue === 'string') {
-      const trimmed = e.venue.trim();
-      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-        try {
-          venueObj = JSON.parse(e.venue);
-        } catch (err) {
-          console.error("Error parsing venue JSON", err);
-          venueObj = { name: e.venue, address: e.venue };
-        }
-      } else {
-        venueObj = { name: e.venue, address: e.venue };
-      }
-    } else if (typeof e.venue === 'object' && e.venue !== null) {
-      venueObj = e.venue;
-    }
-
-    let meta: any = {};
-    if (venueObj && venueObj.meta) {
-      if (typeof venueObj.meta === 'string') {
-        try {
-          meta = JSON.parse(venueObj.meta);
-        } catch (err) {
-          console.error("Error parsing meta JSON", err);
-        }
-      } else if (typeof venueObj.meta === 'object') {
-        meta = venueObj.meta;
-      }
-    }
-
-    let priceVal = '—';
-    if (e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') {
-        priceVal = 'Free';
-    } else if (e.tickets && e.tickets.length > 0) {
-        const prices = e.tickets.map((t: any) => t.price_minor ? t.price_minor / 100 : (t.price_amount_minor ? t.price_amount_minor / 100 : 0));
-        const minPrice = Math.min(...prices);
-        const maxPrice = Math.max(...prices);
-        if (minPrice === maxPrice) {
-            priceVal = minPrice === 0 ? 'Free' : `₹${minPrice.toFixed(0)}`;
-        } else {
-            priceVal = `₹${minPrice.toFixed(0)} - ₹${maxPrice.toFixed(0)}`;
-        }
-    } else if (e.price) {
-        priceVal = e.price;
-    }
-
-    e = {
-      ...e,
-      desc: e.description || e.desc,
-      cover: e.cover || meta.cover || "",
-      cat: meta.category || e.cat || "General",
-      type: (e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : 'Paid',
-      online: e.location_type === 'online',
-      month,
-      day,
-      date: dateStr,
-      time,
-      venue: e.location_type === 'online' ? 'Online' : (venueObj.name || venueObj.address || 'Venue TBD'),
-      city: e.city || (e.location_type === 'online' ? 'Online' : (venueObj.address ? (typeof venueObj.address === 'string' ? venueObj.address.split(',').pop().trim() : '') : '')),
-      going: e.going || 0,
-      cap: e.capacity_total || e.cap || 9999,
-      price: priceVal,
-      host: typeof e.host === 'object' && e.host !== null ? (e.host.name || "Organizer") : (e.hostName || e.host || ME.name || "Organizer"),
-      hostBy: typeof e.host === 'object' && e.host !== null ? (e.host.name || "Organizer") : (e.hostName || e.hostBy || ME.name || "Organizer"),
-      hostPhoto: typeof e.host === 'object' && e.host !== null ? (e.host.photo || "") : (e.hostPhoto || ""),
-      hostBanner: typeof e.host === 'object' && e.host !== null ? (e.host.banner || "") : (e.hostBanner || ""),
-      hostType: e.hostType || null,
-      attendees: e.attendees || [],
-      instructions: e.instruction || e.instructions || meta.instructions || "",
-      formFields: e.formFields || meta.formFields || [],
-      gallery: meta.gallery || e.gallery || {
+export function EventPage({ ev, st, go }: { ev: any; st: any; go: (view: string, params?: any) => void }) {
+  let initialNormalized = ev || FEATURED;
+  if (initialNormalized && (initialNormalized.starts_at || typeof initialNormalized.venue === 'object' || typeof initialNormalized.venue === 'string')) {
+    initialNormalized = normalizeEventData(initialNormalized, ME, st.city);
+  } else if (initialNormalized && typeof initialNormalized.venue === 'object' && initialNormalized.venue !== null) {
+    initialNormalized = {
+      ...initialNormalized,
+      venue: initialNormalized.venue.name || initialNormalized.venue.address || 'Venue TBD',
+      gallery: initialNormalized.venue.meta?.gallery || {
         enabled: false,
         uploadRoles: { owner: true, admin: true, moderator: true, public: false },
         viewRoles: { owner: true, admin: true, moderator: true, public: true },
@@ -103,43 +45,20 @@ export function EventPage({ ev, st, go }) {
         imageOnly: false
       }
     };
-  } else if (e) {
-    if (typeof e.venue === 'object' && e.venue !== null) {
-      e = {
-        ...e,
-        venue: e.venue.name || e.venue.address || 'Venue TBD',
-        gallery: e.venue.meta?.gallery || {
-          enabled: false,
-          uploadRoles: { owner: true, admin: true, moderator: true, public: false },
-          viewRoles: { owner: true, admin: true, moderator: true, public: true },
-          approvalRequired: false,
-          videoOnly: false,
-          imageOnly: false
-        }
-      };
-    }
   }
 
   const { wishlisted, toggleWishlist, city } = st;
-  const isSaved = wishlisted ? wishlisted.has(e.id) : false;
+  const isSaved = wishlisted ? wishlisted.has(initialNormalized.id) : false;
 
-  const [currentEvent, setCurrentEvent] = useState(e);
-  const [showShareSheet, setShowShareSheet] = useState(false);
-  // Once fetchEventDetails() resolves with the real server record (including the resolved
-  // hostName/location_type), let it override the initial prop-derived snapshot so the header
-  // (title/host/online-in-person/price badges) reflects the latest saved state, not just
-  // whatever was passed in via navigation.
-  e = { ...e, ...currentEvent };
+  const [currentEvent, setCurrentEvent] = useState(initialNormalized);
+  const e = { ...initialNormalized, ...currentEvent };
   const attendees = currentEvent.attendees || [];
-  const getQuestionLabel = (fieldId) => {
-    const field = (currentEvent.formFields || []).find(f => f.id === fieldId);
-    return field?.question || field?.label || fieldId;
-  };
-  const [hostStats, setHostStats] = useState(null);
-  const [eventMembers, setEventMembers] = useState(null);
-  const [availableRoles, setAvailableRoles] = useState(null);
 
-  // isOwner checks both prop (e.created_by) and the richer server-fetched currentEvent.created_by
+  const [hostStats, setHostStats] = useState<any>(null);
+  const [eventMembers, setEventMembers] = useState<any[] | null>(null);
+  const [availableRoles, setAvailableRoles] = useState<any[] | null>(null);
+  const isSavingRef = useRef(false);
+
   const isOwner = (
     (e.created_by && e.created_by === ME.id) ||
     (currentEvent.created_by && currentEvent.created_by === ME.id) ||
@@ -147,7 +66,6 @@ export function EventPage({ ev, st, go }) {
   );
   const isAdmin = ME.role && ME.role.toLowerCase().includes("admin");
   const isModerator = ME.role && ME.role.toLowerCase().includes("moderator");
-  // Booking status — passed from home-app router or fetched from server
   const bookingStatusProp = currentEvent.bookingStatus || e.bookingStatus || null;
   const isJoined = bookingStatusProp === 'confirmed' || bookingStatusProp === 'pending_payment';
   const isPending = bookingStatusProp === 'pending_approval';
@@ -155,10 +73,9 @@ export function EventPage({ ev, st, go }) {
 
   const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
 
-  const saveEventSettings = async (updatedVenueMeta) => {
+  const saveEventSettings = async (updatedVenueMeta: any) => {
     try {
       const token = localStorage.getItem('token');
-      // Use the preserved raw venue object — NOT the display string
       const rawVenue = currentEvent.venue_raw;
       const currentVenue = (typeof rawVenue === 'object' && rawVenue !== null) ? rawVenue : {};
       const currentMeta = currentVenue.meta || {};
@@ -189,9 +106,8 @@ export function EventPage({ ev, st, go }) {
       });
       const data = await res.json();
       if (data.success) {
-        // Update currentEvent.venue_raw locally so the sync useEffect
-        // reads the new values without a full refetch (which would reset toggles)
-        setCurrentEvent(prev => ({
+        isSavingRef.current = true;
+        setCurrentEvent((prev: any) => ({
           ...prev,
           venue_raw: newVenue
         }));
@@ -207,76 +123,7 @@ export function EventPage({ ev, st, go }) {
 
   const fetchEventDetails = async () => {
     if (e.id === "new" || !isRealEventId(e.id)) {
-      // Mock/Preview mode: populate state directly from the preview object
-      let venueObj: any = {};
-      if (typeof e.venue === 'string') {
-        try { venueObj = e.venue.trim().startsWith('{') ? JSON.parse(e.venue) : { name: e.venue, address: e.venue }; }
-        catch (err) { venueObj = { name: e.venue, address: e.venue }; }
-      } else if (typeof e.venue === 'object' && e.venue !== null) {
-        venueObj = e.venue;
-      }
-      const meta = venueObj.meta || {};
-      const dateObj = e.starts_at ? new Date(e.starts_at) : new Date();
-      const month = e.month || dateObj.toLocaleString("en-US", { month: "short" }).toUpperCase();
-      const day = e.day || dateObj.getDate();
-      const dateStr = e.date || dateObj.toLocaleDateString();
-      const time = e.time || dateObj.toLocaleTimeString();
-
-      let priceVal = '—';
-      if (e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') {
-          priceVal = 'Free';
-      } else if (e.tickets && e.tickets.length > 0) {
-          const prices = e.tickets.map((t: any) => t.price_minor ? t.price_minor / 100 : (t.price_amount_minor ? t.price_amount_minor / 100 : 0));
-          const minPrice = Math.min(...prices);
-          const maxPrice = Math.max(...prices);
-          if (minPrice === maxPrice) {
-              priceVal = minPrice === 0 ? 'Free' : `₹${minPrice.toFixed(0)}`;
-          } else {
-              priceVal = `₹${minPrice.toFixed(0)} - ₹${maxPrice.toFixed(0)}`;
-          }
-      } else if (e.price) {
-          priceVal = e.price;
-      }
-
-      const normalized = {
-        ...e,
-        desc: e.description || e.desc,
-        cover: e.cover || meta.cover || "",
-        cat: meta.category || e.cat || "General",
-        type: (e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : 'Paid',
-        online: e.location_type === 'online',
-        online_link: e.online_link || null,
-        month,
-        day,
-        date: dateStr,
-        time,
-        venue: e.location_type === 'online' ? 'Online' : (venueObj.name || venueObj.address || 'Venue TBD'),
-        city: e.city || (e.location_type === 'online' ? 'Online' : (venueObj.address ? (typeof venueObj.address === 'string' ? venueObj.address.split(',').pop().trim() : '') : '')),
-        going: e.going || 0,
-        cap: e.capacity_total || e.cap || 9999,
-        price: priceVal,
-        host: e.hostName || e.host || ME.name || "Organizer",
-        hostBy: e.hostName || e.hostBy || ME.name || "Organizer",
-        hostType: e.hostType || null,
-        attendees: e.attendees || [],
-        instructions: e.instruction || e.instructions || meta.instructions || "",
-        formFields: e.formFields || meta.formFields || [],
-        bookingStatus: e.bookingStatus,
-        bookingId: e.bookingId,
-        attendeeId: e.attendeeId,
-        ticketId: e.ticketId,
-        qrToken: e.qrToken,
-        checkinStatus: e.checkinStatus,
-        gallery: meta.gallery || e.gallery || {
-          enabled: false,
-          uploadRoles: { owner: true, admin: true, moderator: true, public: false },
-          viewRoles: { owner: true, admin: true, moderator: true, public: true },
-          approvalRequired: false,
-          videoOnly: false,
-          imageOnly: false
-        },
-        venue_raw: venueObj
-      };
+      const normalized = normalizeEventData(e, ME, st.city);
       setCurrentEvent(normalized);
       return;
     }
@@ -288,72 +135,14 @@ export function EventPage({ ev, st, go }) {
       });
       const data = await res.json();
       if (data.success && data.data) {
-        let ev = data.data.event;
-        const venueObj = ev.venue || {};
-        const meta = venueObj.meta || {};
-        const dateObj = ev.starts_at ? new Date(ev.starts_at) : new Date();
-        const month = dateObj.toLocaleString("en-US", { month: "short" }).toUpperCase();
-        const day = dateObj.getDate();
-        const dateStr = dateObj.toLocaleDateString();
-        const time = dateObj.toLocaleTimeString();
-
-        let priceVal = '—';
-        if (ev.registration_mode === 'free' || ev.registration_mode === 'free_rsvp') {
-            priceVal = 'Free';
-        } else if (data.data.tickets && data.data.tickets.length > 0) {
-            const prices = data.data.tickets.map((t: any) => t.price_minor ? t.price_minor / 100 : (t.price_amount_minor ? t.price_amount_minor / 100 : 0));
-            const minPrice = Math.min(...prices);
-            const maxPrice = Math.max(...prices);
-            if (minPrice === maxPrice) {
-                priceVal = minPrice === 0 ? 'Free' : `₹${minPrice.toFixed(0)}`;
-            } else {
-                priceVal = `₹${minPrice.toFixed(0)} - ₹${maxPrice.toFixed(0)}`;
-            }
-        } else if (ev.price) {
-            priceVal = ev.price;
-        }
-
-        const normalized = {
-          ...ev,
-          desc: ev.description || ev.desc,
-          cover: ev.cover || meta.cover || "",
-          cat: meta.category || ev.cat || "General",
-          type: (ev.registration_mode === 'free' || ev.registration_mode === 'free_rsvp') ? 'Free' : 'Paid',
-          online: ev.location_type === 'online',
-          online_link: ev.online_link || null,
-          month,
-          day,
-          date: dateStr,
-          time,
-          venue: ev.location_type === 'online' ? 'Online' : (venueObj.name || venueObj.address || 'Venue TBD'),
-          city: ev.city || (ev.location_type === 'online' ? 'Online' : (venueObj.address ? (typeof venueObj.address === 'string' ? venueObj.address.split(',').pop().trim() : '') : '')),
-          going: ev.going || 0,
-          cap: ev.capacity_total || ev.cap || 9999,
-          price: priceVal,
-          host: typeof ev.host === 'object' && ev.host !== null ? (ev.host.name || "Organizer") : (ev.hostName || ev.host || ME.name || "Organizer"),
-          hostBy: typeof ev.host === 'object' && ev.host !== null ? (ev.host.name || "Organizer") : (ev.hostName || ev.hostBy || ME.name || "Organizer"),
-          hostPhoto: typeof ev.host === 'object' && ev.host !== null ? (ev.host.photo || "") : (ev.hostPhoto || ""),
-          hostBanner: typeof ev.host === 'object' && ev.host !== null ? (ev.host.banner || "") : (ev.hostBanner || ""),
-          hostType: ev.hostType || null,
-          attendees: data.data.attendees || [],
-          instructions: ev.instruction || ev.instructions || meta.instructions || "",
-          formFields: ev.formFields || meta.formFields || [],
-          bookingStatus: data.data.bookingStatus,
-          bookingId: data.data.bookingId,
-          attendeeId: data.data.attendeeId,
-          ticketId: data.data.ticketId,
-          qrToken: data.data.qrToken,
-          checkinStatus: data.data.checkinStatus,
-          gallery: meta.gallery || ev.gallery || {
-            enabled: false,
-            uploadRoles: { owner: true, admin: true, moderator: true, public: false },
-            viewRoles: { owner: true, admin: true, moderator: true, public: true },
-            approvalRequired: false,
-            videoOnly: false,
-            imageOnly: false
-          },
-          venue_raw: venueObj  // preserve full venue object including meta
-        };
+        const normalized = normalizeEventData(data.data.event, ME, st.city);
+        normalized.attendees = data.data.attendees || [];
+        normalized.bookingStatus = data.data.bookingStatus;
+        normalized.bookingId = data.data.bookingId;
+        normalized.attendeeId = data.data.attendeeId;
+        normalized.ticketId = data.data.ticketId;
+        normalized.qrToken = data.data.qrToken;
+        normalized.checkinStatus = data.data.checkinStatus;
         setCurrentEvent(normalized);
       }
     } catch (err) {
@@ -393,7 +182,7 @@ export function EventPage({ ev, st, go }) {
     }
   };
 
-  const handleHostRequestAction = async (bookingId, action) => {
+  const handleHostRequestAction = async (bookingId: string, action: 'accept' | 'decline') => {
     if (e.id === "new" || !isRealEventId(e.id)) return;
     try {
       const token = localStorage.getItem('token');
@@ -420,6 +209,7 @@ export function EventPage({ ev, st, go }) {
     }
   };
 
+  const [galleryItems, setGalleryItems] = useState<any[]>([]);
   const fetchEventGallery = async () => {
     if (e.id === "new" || !isRealEventId(e.id)) return;
     try {
@@ -436,7 +226,7 @@ export function EventPage({ ev, st, go }) {
     }
   };
 
-  const handleRemoveEventMember = async (userId) => {
+  const handleRemoveEventMember = async (userId: string) => {
     if (!userId) return;
     if (!confirm('Are you sure you want to remove this member from the event?')) return;
     try {
@@ -483,9 +273,9 @@ export function EventPage({ ev, st, go }) {
   }, [e.id, isOwner, isAdmin, isModerator]);
 
   useEffect(() => {
-    if (!e?.id || !window.io) return;
+    if (!e?.id || !(window as any).io) return;
     const socketUrl = apiBase ? `${apiBase}/groups` : "/groups";
-    const socket = window.io(socketUrl, { transports: ['websocket'] });
+    const socket = (window as any).io(socketUrl, { transports: ['websocket'] });
     socket.emit('join_event', e.id);
     socket.on('dashboard_updated', () => {
       fetchEventDetails();
@@ -493,7 +283,6 @@ export function EventPage({ ev, st, go }) {
       if (isOwner || isAdmin || isModerator) {
         fetchHostStats();
       }
-      // Also refresh the parent's joinedEvents list so My Events page updates
       if (st.fetchJoinedEvents) st.fetchJoinedEvents();
     });
     socket.on('gallery_updated', () => {
@@ -514,7 +303,6 @@ export function EventPage({ ev, st, go }) {
     imageOnly: false
   };
 
-  // Gallery Settings states in the Advance Settings panel
   const [galleryEnabled, setGalleryEnabled] = useState(initialGallery.enabled);
   const [galleryUploadRoles, setGalleryUploadRoles] = useState(initialGallery.uploadRoles);
   const [galleryViewRoles, setGalleryViewRoles] = useState(initialGallery.viewRoles);
@@ -525,7 +313,6 @@ export function EventPage({ ev, st, go }) {
   const [uploadRolesModalOpen, setUploadRolesModalOpen] = useState(false);
   const [viewRolesModalOpen, setViewRolesModalOpen] = useState(false);
 
-  // Discussion states
   const [discussionEnabled, setDiscussionEnabled] = useState(false);
   const [discussionThreadRoles, setDiscussionThreadRoles] = useState<any>({ roles: ['event_owner'] });
   const [discussionReplyRoles, setDiscussionReplyRoles] = useState<any>({ roles: ['event_owner'] });
@@ -533,36 +320,29 @@ export function EventPage({ ev, st, go }) {
   const [threadRolesModalOpen, setThreadRolesModalOpen] = useState(false);
   const [replyRolesModalOpen, setReplyRolesModalOpen] = useState(false);
 
-  // Registration open/closed toggle (host-only)
-  const regStatusRaw = currentEvent?.registrationStatus || currentEvent?.registration_status || e.registrationStatus || e.registration_status || 'OPEN';
-  const regOpensAtRaw = currentEvent?.registrationOpensAt || currentEvent?.registration_opens_at || e.registrationOpensAt || e.registration_opens_at;
-  const regClosesAtRaw = currentEvent?.registrationClosesAt || currentEvent?.registration_closes_at || e.registrationClosesAt || e.registration_closes_at;
-
   const [registrationOpen, setRegistrationOpen] = useState(false);
   const [isScheduled, setIsScheduled] = useState(false);
   const [regToggleLoading, setRegToggleLoading] = useState(false);
   const [refreshRegStatus, setRefreshRegStatus] = useState(0);
 
-  // Sync from server once event details are loaded
   useEffect(() => {
     const s = currentEvent?.registrationStatus || currentEvent?.registration_status || e.registrationStatus || e.registration_status || 'OPEN';
     const opensAt = currentEvent?.registrationOpensAt || currentEvent?.registration_opens_at || e.registrationOpensAt || e.registration_opens_at;
     const closesAt = currentEvent?.registrationClosesAt || currentEvent?.registration_closes_at || e.registrationClosesAt || e.registration_closes_at;
 
     let eff = s !== 'CLOSED';
-    let timer = null;
+    let timer: any = null;
 
     if (s === 'SCHEDULED') {
       const now = new Date();
       const o = opensAt ? new Date(opensAt) : null;
       const c = closesAt ? new Date(closesAt) : null;
-      
+
       if (o && now < o) {
         eff = false;
         const ms = o.getTime() - now.getTime();
         if (ms <= 2147483647) timer = setTimeout(() => setRefreshRegStatus(prev => prev + 1), ms);
       } else if (c && now < c) {
-        // Between open and close
         const ms = c.getTime() - now.getTime();
         if (ms <= 2147483647) timer = setTimeout(() => setRefreshRegStatus(prev => prev + 1), ms);
       } else if (c && now >= c) {
@@ -578,7 +358,7 @@ export function EventPage({ ev, st, go }) {
         eff = false;
       }
     }
-    
+
     if (timer) return () => clearTimeout(timer);
     setRegistrationOpen(eff);
     setIsScheduled(s === 'SCHEDULED' && eff !== false);
@@ -602,7 +382,7 @@ export function EventPage({ ev, st, go }) {
       if (data.success) {
         setRegistrationOpen(!registrationOpen);
         setIsScheduled(false);
-        setCurrentEvent(prev => ({
+        setCurrentEvent((prev: any) => ({
           ...prev,
           registration_status: newStatus,
           registrationStatus: newStatus
@@ -620,6 +400,10 @@ export function EventPage({ ev, st, go }) {
   };
 
   useEffect(() => {
+    if (isSavingRef.current) {
+      isSavingRef.current = false;
+      return;
+    }
     if (currentEvent && currentEvent.venue_raw) {
       const meta = currentEvent.venue_raw.meta || {};
       const disc = meta.discussion || {};
@@ -639,12 +423,12 @@ export function EventPage({ ev, st, go }) {
   }, [currentEvent]);
 
   const token = localStorage.getItem('token');
-  let currentUserId = null;
+  let currentUserId: string | null = null;
   if (token) {
     try { currentUserId = JSON.parse(atob(token.split('.')[1])).id; } catch (err) { }
   }
 
-  const roleHasCap = (roleKey, cap) => (availableRoles || []).find(r => r.key === roleKey)?.capabilities?.includes(cap);
+  const roleHasCap = (roleKey: string, cap: string) => (availableRoles || []).find(r => r.key === roleKey)?.capabilities?.includes(cap);
 
   const myMemberEntry = eventMembers ? eventMembers.find(m => m.id === currentUserId || (window.ME && m.id === window.ME.id)) : null;
   const isHostOrCoHost = isOwner || !!(myMemberEntry && roleHasCap(myMemberEntry.role, 'event.manage'));
@@ -652,14 +436,9 @@ export function EventPage({ ev, st, go }) {
   const isScanner = !isTicketManager && !!(myMemberEntry && roleHasCap(myMemberEntry.role, 'checkin.gate_staff'));
   const effectiveIsMember = isMember || !!myMemberEntry;
 
-  // Effective RBAC role key for this user on this event — mirrors EventService.getEventUserRole:
-  // owner -> top seeded role key, staff -> their assigned role key, confirmed booking -> 'member'.
   const myRoleKey = isOwner ? (availableRoles || [])[0]?.key : (myMemberEntry?.role || (effectiveIsMember ? 'member' : null));
 
-  // Evaluates a gallery/discussion permission bucket. New shape ({public, roles}) is checked
-  // dynamically against availableRoles; legacy shape ({owner,admin,moderator,member,public})
-  // keeps its original behavior unchanged until an admin re-saves via the new roles modal.
-  const checkRoleBucket = (bucket, bypass) => {
+  const checkRoleBucket = (bucket: any, bypass: boolean) => {
     if (bucket && Array.isArray(bucket.roles)) {
       return !!bypass || bucket.public === true || (!!myRoleKey && bucket.roles.includes(myRoleKey));
     }
@@ -674,15 +453,13 @@ export function EventPage({ ev, st, go }) {
     );
   };
 
-  // Gallery/Discussion tabs visible to owners, admins, moderators, AND confirmed joiners
   const canViewGallery = galleryEnabled && checkRoleBucket(galleryViewRoles, isTicketManager);
   const canUploadToGallery = galleryEnabled && checkRoleBucket(galleryUploadRoles, isTicketManager);
   const canAccessDiscussion = effectiveIsMember ||
     checkRoleBucket(discussionThreadRoles, isTicketManager) ||
     checkRoleBucket(discussionReplyRoles, isTicketManager);
 
-  // Tab State
-  const [tab, setTab] = useState(ev?.initialTab || "about"); // about | members | gallery | discussion | ticketing | invite | settings
+  const [tab, setTab] = useState(ev?.initialTab || "about");
 
   useEffect(() => {
     if (ev?.initialTab) {
@@ -714,93 +491,10 @@ export function EventPage({ ev, st, go }) {
     ...(isTicketManager ? [["settings", "Advance setting"]] : [])
   ];
 
-  // Gallery items state
-  const [galleryItems, setGalleryItems] = useState([]);
-  const [viewerItem, setViewerItem] = useState(null);
-  const [zoomScale, setZoomScale] = useState(1);
-  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [handModeActive, setHandModeActive] = useState(true);
-  const [inviteLinks, setInviteLinks] = useState({ view: null, join: [] });
+  const [inviteLinks, setInviteLinks] = useState<{ view: string | null; join: string[] }>({ view: null, join: [] });
   const [inviteLoading, setInviteLoading] = useState({ view: false, join: false });
-  const [guestSearch, setGuestSearch] = useState("");
-  const [memberSearch, setMemberSearch] = useState("");
-  const [memberRoleFilter, setMemberRoleFilter] = useState("all");
 
-  const galleryInputRef = useRef(null);
-
-  // ── Ticketing & Coupons State ──
-  const [tcTab, setTcTab] = useState("tickets"); // tickets | coupons | referrals
-  const [tcLoading, setTcLoading] = useState(false);
-  const [ticketTypes, setTicketTypes] = useState([]);
-  const [tcCoupons, setTcCoupons] = useState([]);
-  const [tcReferrals, setTcReferrals] = useState([]);
-  const [affiliates, setAffiliates] = useState([]);
-  const [ticketSearch, setTicketSearch] = useState("");
-  const [couponSearch, setCouponSearch] = useState("");
-  const [referralSearch, setReferralSearch] = useState("");
-
-  // Member response modal — shows the questionnaire answers a member submitted at
-  // registration, opened from the "Response" button on their row in the Members tab.
-  const [responseMember, setResponseMember] = useState(null);
-
-  // Ticket modal state
-  const [ticketModalOpen, setTicketModalOpen] = useState(false);
-  const [editingTicket, setEditingTicket] = useState(null);
-  const [ticketForm, setTicketForm] = useState({ name: "", description: "", price: "", currency: "INR", capacity: "", max_per_booking: "", sale_start: "", sale_end: "", early_bird_price: "", early_bird_currency: "INR", early_bird_ends_at: "", visibility: "public" });
-
-  // Coupon modal state
-  const [couponModalOpen, setCouponModalOpen] = useState(false);
-  const [editingCoupon, setEditingCoupon] = useState(null);
-  const [couponForm, setCouponForm] = useState({ code: "", discount_type: "percent", discount_value: "", currency: "INR", valid_from: "", valid_to: "", max_total: "", max_per_user: "", status: "active" });
-
-  // Referral modal state
-  const [referralModalOpen, setReferralModalOpen] = useState(false);
-  const [editingReferral, setEditingReferral] = useState(null);
-  const [referralForm, setReferralForm] = useState({ code: "", affiliate_id: "", commission_rule: "" });
-
-  const fetchTicketTypes = async () => {
-    try {
-      const res = await fetch(`${apiBase}/api/events/${e.id}/ticket-types`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} });
-      const data = await res.json();
-      if (data.success) setTicketTypes(data.data || []);
-    } catch (err) { console.error(err); }
-  };
-
-  const fetchTcCoupons = async () => {
-    try {
-      const res = await fetch(`${apiBase}/api/events/${e.id}/coupons`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} });
-      const data = await res.json();
-      if (data.success) setTcCoupons(data.data || []);
-    } catch (err) { console.error(err); }
-  };
-
-  const fetchTcReferrals = async () => {
-    try {
-      const res = await fetch(`${apiBase}/api/events/${e.id}/referrals`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} });
-      const data = await res.json();
-      if (data.success) setTcReferrals(data.data || []);
-    } catch (err) { console.error(err); }
-  };
-
-  const fetchAffiliates = async () => {
-    try {
-      const res = await fetch(`${apiBase}/api/events/affiliates`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} });
-      const data = await res.json();
-      if (data.success) setAffiliates(data.data || []);
-    } catch (err) { console.error(err); }
-  };
-
-  useEffect(() => {
-    if (tab === "ticketing" && isTicketManager && isPaidEvent) {
-      setTcLoading(true);
-      Promise.all([fetchTicketTypes(), fetchTcCoupons(), fetchTcReferrals(), fetchAffiliates()])
-        .finally(() => setTcLoading(false));
-    }
-  }, [tab, e.id]);
-
-  const generateInviteLink = async (purpose) => {
+  const generateInviteLink = async (purpose: 'view' | 'join') => {
     setInviteLoading(prev => ({ ...prev, [purpose]: true }));
     try {
       const res = await fetch(`${apiBase}/api/events/${e.id}/invites`, {
@@ -813,9 +507,6 @@ export function EventPage({ ev, st, go }) {
       });
       const data = await res.json();
       if (data.success) {
-        // 'view' links are durable/reusable — a single link per event, generating
-        // again just returns the same one. 'join' links are single-use, each click
-        // mints a fresh one, so keep a running list.
         if (purpose === 'view') {
           setInviteLinks(prev => ({ ...prev, view: data.data.url }));
         } else {
@@ -832,8 +523,6 @@ export function EventPage({ ev, st, go }) {
     }
   };
 
-  // Restore the durable 'view' link (if one was already generated) when the Invite tab
-  // opens, so it persists across reloads instead of requiring the host to regenerate it.
   useEffect(() => {
     if (tab === "invite" && isTicketManager && eventVisibility === "unlisted" && inviteLinks.view === null) {
       fetch(`${apiBase}/api/events/${e.id}/invites/view`, {
@@ -849,7 +538,7 @@ export function EventPage({ ev, st, go }) {
     }
   }, [tab, isTicketManager, eventVisibility, e.id]);
 
-  const copyInviteLink = (url) => {
+  const copyInviteLink = (url: string) => {
     if (navigator.clipboard) navigator.clipboard.writeText(url);
     if (window.toast) window.toast("Link copied! ✓", "success");
   };
@@ -857,7 +546,6 @@ export function EventPage({ ev, st, go }) {
   const handleLeaveEvent = async () => {
     if (!confirm("Are you sure you want to leave this event?")) return;
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch(`${apiBase}/api/events/${e.id}/leave`, {
         method: 'POST',
         headers: {
@@ -871,7 +559,7 @@ export function EventPage({ ev, st, go }) {
           st.unregister(e.id);
         }
         if (st.setMyTickets) {
-          st.setMyTickets(prev => prev.filter(t => t.eventId !== e.id && t.ev !== e.title));
+          st.setMyTickets((prev: any[]) => prev.filter((t: any) => t.eventId !== e.id && t.ev !== e.title));
         }
         if (st.fetchJoinedEvents) {
           st.fetchJoinedEvents();
@@ -886,12 +574,8 @@ export function EventPage({ ev, st, go }) {
     }
   };
 
-
-
-  // Translates a legacy {owner,admin,moderator,member,public} bucket into the new dynamic
-  // {public, roles: string[]} shape the first time it's edited via the roles modal below.
-  const legacyBucketToRoleKeys = (bucket) => {
-    const keys = [];
+  const legacyBucketToRoleKeys = (bucket: any) => {
+    const keys: string[] = [];
     if (bucket?.owner) keys.push('event_owner', 'event_manager');
     if (bucket?.admin) keys.push('co_host');
     if (bucket?.moderator) keys.push('checkin_lead', 'gate_staff', 'session_gate_staff', 'ticket_scanner');
@@ -900,7 +584,7 @@ export function EventPage({ ev, st, go }) {
     return keys.filter(k => validKeys.has(k));
   };
 
-  const getRolesSummary = (bucket) => {
+  const getRolesSummary = (bucket: any) => {
     if (!bucket) return "No one";
     if (bucket.public) return "Public";
     if (Array.isArray(bucket.roles)) {
@@ -911,7 +595,6 @@ export function EventPage({ ev, st, go }) {
       const last = names.pop();
       return names.join(", ") + " and " + last + " only";
     }
-    // Legacy shape — unchanged summary logic until re-saved via the new roles modal
     const selected = [];
     if (bucket.owner) selected.push("Host");
     if (bucket.admin) selected.push("Co-Host");
@@ -925,2004 +608,308 @@ export function EventPage({ ev, st, go }) {
     return selected.join(", ") + " and " + last + " only";
   };
 
-  const renderRolesModal = (isOpen, onClose, bucket, setBucket, titleText, onSave) => {
-    if (!isOpen) return null;
-    const isNewShape = Array.isArray(bucket?.roles);
-    const current = isNewShape ? bucket : { public: !!bucket?.public, roles: legacyBucketToRoleKeys(bucket) };
-
-    const togglePublic = () => {
-      const next = { ...current, public: !current.public };
-      setBucket(next);
-      if (onSave) onSave(next);
-    };
-
-    const toggleRole = (key) => {
-      const roles = current.roles.includes(key) ? current.roles.filter(k => k !== key) : [...current.roles, key];
-      const next = { public: current.public, roles };
-      setBucket(next);
-      if (onSave) onSave(next);
-    };
-
-    return (
-      <div className="modal-overlay" style={{
-        position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-        background: "rgba(0, 0, 0, 0.5)", display: "flex",
-        alignItems: "center", justifyContent: "center", zIndex: 10000
-      }}>
-        <div className="modal-content" style={{
-          background: "var(--surface)", border: "1px solid var(--border)",
-          borderRadius: "var(--r-lg)", width: "90%", maxWidth: "380px",
-          padding: "24px", boxShadow: "var(--sh-xl)", color: "var(--ink)"
-        }}>
-          <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700 }}>{titleText}</h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20, maxHeight: "50vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: "1px solid var(--border-3)" }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>Public (Everyone)</div>
-                <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Opens this to everyone, including non-members — overrides role selection below.</div>
-              </div>
-              <Toggle on={current.public} onClick={togglePublic} />
-            </div>
-            {(availableRoles || []).map(r => (
-              <div key={r.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", opacity: current.public ? 0.5 : 1 }}>
-                <span style={{ fontSize: 14, fontWeight: 600 }}>{r.display_name}</span>
-                <Toggle on={current.public ? true : current.roles.includes(r.key)} onClick={() => { if (!current.public) toggleRole(r.key); }} />
-              </div>
-            ))}
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button className="hbtn hbtn--primary hbtn--sm" onClick={onClose}>Done</button>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  const [responseMember, setResponseMember] = useState<any>(null);
 
   return (
     <div className="scroll">
       <div className="view-enter">
-        {/* Banner section */}
-        <div className="detail-cover" style={{
-          height: 200,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          background: e.cover && (e.cover.startsWith("linear-gradient") || e.cover.startsWith("radial-gradient") || e.cover.startsWith("var(")) ? e.cover : `url(${e.cover}) center/cover no-repeat`
-        }}>
-          {!e.cover && <Grain />}
-          <div className="scrim" />
-          <button className="detail-back" style={{ top: 20, left: 20 }} onClick={() => (e.id === "new" && e.__draft) ? go("edit-event", { __draft: e.__draft, id: e.__draft.id }) : go("back")}><I.arrowL />Back</button>
-        </div>
-
-        {/* Group details header container */}
-        <div className="grp-detail">
-          <div className="grp-head">
-            {/* Custom visual event icon box */}
-            <div className="gicon-lg" style={{
-              background: "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "28px",
-              boxShadow: "0 8px 24px rgba(59, 130, 246, 0.25)"
-            }}>
-              📅
-            </div>
-
-            <div className="gh-meta">
-              <div className="nm">{e.title}</div>
-              <div className="sub">
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <I.users /> {attendees.length} members
-                </span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#1f9d57", fontWeight: 600 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#2bb673" }} />
-                  {e.online ? "Online" : "In-person"}
-                </span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  🎫 {e.price}
-                </span>
-                <span className="fchip on" style={{ pointerEvents: "none", padding: "4px 11px", fontSize: 12 }}>
-                  {e.cat || "Event"}
-                </span>
-                {e.hostName && (
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <I.users /> Hosted by {e.hostName}{e.hostType === 'group' ? ' (Group)' : ''}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="gh-act">
-              {!bookingStatusProp && !registrationOpen && (
-                <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => toggleWishlist && toggleWishlist(e.id, e.wishlistCount)}>
-                  {isSaved ? <I.heartF /> : <I.heart />} {isSaved ? "Wishlisted" : "Wishlist"}
-                </button>
-              )}
-              <div style={{ position: "relative" }}>
-                <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => setShowShareSheet(!showShareSheet)}>
-                  <I.share /> Share
-                </button>
-                {showShareSheet && (
-                  <>
-                    <div style={{ position: "fixed", inset: 0, zIndex: 9998 }} onClick={() => setShowShareSheet(false)} />
-                    <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 8, display: "flex", gap: 8, padding: 8, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "var(--sh-md)", zIndex: 9999 }}>
-                      {(() => {
-                        const link = encodeURIComponent(`${window.location.origin}${window.location.pathname}#event=${e.id}`);
-                        const msg = encodeURIComponent(`Join me at ${e.title} on Samaagum! ${decodeURIComponent(link)}`);
-                        const subject = encodeURIComponent(`Invitation to ${e.title}`);
-                        const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=&su=${subject}&body=${msg}`;
-                        const btnStyle = { display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: "50%", background: "var(--surface-2)", transition: "all 0.2s" };
-                        return (
-                          <>
-                            <a href={`https://wa.me/?text=${msg}`} target="_blank" style={btnStyle} title="WhatsApp">
-                              <svg viewBox="0 0 24 24" width="20" height="20" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.888-.788-1.489-1.761-1.663-2.06-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a5.8 5.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.82 9.82 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.81 11.81 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.88 11.88 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.82 11.82 0 0 0-3.48-8.413Z"/></svg>
-                            </a>
-                            <a href={`https://www.facebook.com/sharer/sharer.php?u=${link}`} target="_blank" style={btnStyle} title="Facebook">
-                              <svg viewBox="0 0 24 24" width="20" height="20" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                            </a>
-                            <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${link}`} target="_blank" style={btnStyle} title="LinkedIn">
-                              <svg viewBox="0 0 24 24" width="20" height="20" fill="#0A66C2"><path d="M22.23 0H1.77C.79 0 0 .77 0 1.72v20.56C0 23.23.79 24 1.77 24h20.46c.98 0 1.77-.77 1.77-1.72V1.72C24 .77 23.21 0 22.23 0zM7.12 20.45H3.56V9h3.56v11.45zM5.34 7.43c-1.14 0-2.06-.92-2.06-2.06 0-1.14.92-2.06 2.06-2.06s2.06.92 2.06 2.06c0 1.14-.92 2.06-2.06 2.06zM20.45 20.45h-3.56v-5.6c0-1.34-.03-3.06-1.87-3.06-1.87 0-2.16 1.46-2.16 2.96v5.7h-3.56V9h3.42v1.56h.05c.48-.9 1.63-1.84 3.36-1.84 3.59 0 4.25 2.36 4.25 5.43v6.3z"/></svg>
-                            </a>
-                            <a href={gmailUrl} target="_blank" style={btnStyle} title="Email (Gmail)">
-                              <svg viewBox="0 0 24 24" width="20" height="20" fill="#EA4335"><path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/></svg>
-                            </a>
-                            <button style={btnStyle} title="Copy Link" onClick={async () => {
-                              try {
-                                await navigator.clipboard.writeText(decodeURIComponent(link));
-                                alert("Link copied!");
-                              } catch (err) {
-                                console.error(err);
-                              }
-                              setShowShareSheet(false);
-                            }}>
-                              <I.copy style={{ width: 16, height: 16, color: "var(--ink-2)" }} />
-                            </button>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </>
-                )}
-              </div>
-              {isHostOrCoHost && (
-                <>
-                  {/* Registration Open/Close toggle — host only */}
-                  <div style={{
-                    display: "flex", alignItems: "center", gap: 8,
-                    background: registrationOpen ? "rgba(31,157,87,0.10)" : "rgba(239,68,68,0.10)",
-                    border: `1px solid ${registrationOpen ? "rgba(31,157,87,0.3)" : "rgba(239,68,68,0.3)"}`,
-                    borderRadius: "var(--r-full, 9999px)",
-                    padding: "5px 12px 5px 8px",
-                    cursor: regToggleLoading ? "wait" : "pointer",
-                    transition: "all 0.25s",
-                    userSelect: "none"
-                  }} onClick={handleToggleRegistration} title={registrationOpen ? "Click to close registration" : "Click to open registration"}>
-                    <span style={{
-                      width: 32, height: 18, borderRadius: 9, background: registrationOpen ? "#1f9d57" : "#ef4444",
-                      display: "inline-flex", alignItems: "center", position: "relative",
-                      transition: "background 0.25s", flexShrink: 0
-                    }}>
-                      <span style={{
-                        position: "absolute", width: 14, height: 14, borderRadius: "50%", background: "#fff",
-                        top: 2, left: registrationOpen ? 16 : 2,
-                        transition: "left 0.22s", boxShadow: "0 1px 4px rgba(0,0,0,0.18)"
-                      }} />
-                    </span>
-                    <span style={{ fontSize: 12.5, fontWeight: 700, color: registrationOpen ? "#1f9d57" : "#ef4444" }}>
-                      {regToggleLoading ? "…" : (isScheduled ? `Scheduled (${registrationOpen ? 'Open' : 'Closed'})` : (registrationOpen ? "Registration Open" : "Registration Closed"))}
-                    </span>
-                  </div>
-                  <button className="hbtn hbtn--soft hbtn--sm" onClick={() => (e.id === "new" && e.__draft) ? go("edit-event", { __draft: e.__draft, id: e.__draft.id }) : go("edit-event", currentEvent || e)}>
-                    <I.edit style={{ width: 14 }} /> Edit Event
-                  </button>
-                </>
-              )}
-              {effectiveIsMember && !isHostOrCoHost && (
-                <button className="hbtn hbtn--sm" style={{ background: "#e5484d", color: "#fff" }} onClick={handleLeaveEvent}>
-                  Leave Event
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Tab Navigation */}
-          <div className="grp-tabs">
-            {tabs.map(([k, l]) => (
-              <button key={k} className={`grp-tab ${tab === k ? "on" : ""}`} onClick={() => setTab(k)}>
-                {l}
-              </button>
-            ))}
-          </div>
-
-          {/* Grp Columns (Main content split) */}
-          <div className="grp-cols" style={{ marginTop: 20, gridTemplateColumns: tab === "about" ? "1fr 300px" : "1fr" }}>
-            <div style={{ minWidth: 0, flex: 1 }}>
-
-              {/* Tab 1: About */}
-              {tab === "about" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-
-                  {/* Archived banner */}
-                  {currentEvent?.status === 'cancelled' && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(107,114,128,0.12)", border: "1px solid rgba(107,114,128,0.35)", borderRadius: "var(--r-md)", padding: "14px 16px" }}>
-                      <span style={{ fontSize: 22 }}>🗄️</span>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: "var(--ink)" }}>This event has been archived</div>
-                        <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>This event was cancelled and is no longer active. It now appears in the Archived section of My Events.</div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Registration closed banner — visible to non-host members/visitors */}
-                  {!registrationOpen && !isHostOrCoHost && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "var(--r-md)", padding: "14px 16px" }}>
-                      <span style={{ fontSize: 22 }}>🔒</span>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: "#ef4444" }}>Registration is currently closed</div>
-                        <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>The host has temporarily closed registration. Add to your wishlist to get notified when it reopens.</div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Pending approval banner */}
-                  {isPending && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.35)", borderRadius: "var(--r-md)", padding: "14px 16px" }}>
-                      <span style={{ fontSize: 22 }}>⏳</span>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: "#92400e" }}>Your request is pending approval</div>
-                        <div style={{ fontSize: 12, color: "#b45309", marginTop: 2 }}>The host will review and accept or decline your request. You'll be notified.</div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="ev-block">
-                    <div className="ev-when">
-                      <div className="ev-fact"><span className="ico"><I.cal /></span><div><div className="k">Date & Time</div><div className="v">{e.date}</div><div className="v2">{e.time}</div></div></div>
-                      <div className="ev-fact"><span className="ico">{e.online ? <I.online /> : <I.pin />}</span><div><div className="k">{e.online ? "Online Link" : "Venue"}</div><div className="v">{e.venue}</div><div className="v2">{e.city}</div></div></div>
-                    </div>
-                  </div>
-
-                  <div className="ev-block">
-                    <h3>About this event</h3>
-                    <div className="ev-about">
-                      <p>{e.desc || "No description provided."}</p>
-                    </div>
-                  </div>
-
-                  {e.online ? (
-                    <div className="ev-block">
-                      <h3>Location</h3>
-                      <div className="ev-map" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-2)', color: 'var(--ink-2)', fontSize: 16, fontWeight: 500, height: 120, border: '1px solid var(--border)', borderRadius: 'var(--r-md)' }}>
-                        <span style={{ marginRight: 8, fontSize: 24 }}>🌐</span> Online Event
-                      </div>
-                    </div>
-                  ) : e.venue ? (
-                    <div className="ev-block">
-                      <h3>Location</h3>
-                      <div className="ev-map">
-                        <iframe
-                          title="Event location map"
-                          width="100%"
-                          height="100%"
-                          style={{ border: 0, display: "block" }}
-                          src={`https://maps.google.com/maps?q=${encodeURIComponent(`${e.venue}${e.city ? ", " + e.city : ""}`)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
-                          allowFullScreen
-                        />
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 13.5, color: "var(--ink-2)" }}>
-                        <I.pin style={{ color: "var(--accent-2)" }} /> {e.venue}{e.city ? `, ${e.city}` : ""}
-                        <a
-                          className="hbtn hbtn--ghost hbtn--sm"
-                          style={{ marginLeft: "auto", textDecoration: "none" }}
-                          href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${e.venue}${e.city ? ", " + e.city : ""}`)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          Get directions
-                        </a>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {e.instructions && (
-                    <div className="ev-block" style={{ background: "var(--field)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "16px" }}>
-                      <h3 style={{ marginTop: 0, fontSize: 15, fontWeight: 700 }}>📢 Special Instructions</h3>
-                      <p style={{ margin: "8px 0 0", fontSize: 13.5, lineHeight: 1.5, color: "var(--ink)" }}>{e.instructions}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Tab: Dashboard — Premium Event Control Center */}
-              {tab === "dashboard" && (
-                <EventDashboard ev={currentEvent || e} st={st} go={go} embedded={true} />
-              )}
-
-              {/* Tab 2: Members — consolidated (pending requests + confirmed list) */}
-              {tab === "members" && (() => {
-                const confirmedAttendees = hostStats?.confirmed || attendees || [];
-                const pendingRequests = hostStats?.requests || [];
-
-                return (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-
-                    {/* Pending join requests — host only */}
-                    {/* Pending join requests — host only */}
-                    {(isTicketManager || isAdmin || isModerator) && pendingRequests.length > 0 && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
-                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#6d5efc", flexShrink: 0 }} />
-                          <span style={{ fontWeight: 700, fontSize: 16, color: "var(--ink)" }}>Pending Approvals ({pendingRequests.length})</span>
-                        </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                          {pendingRequests.map((r) => (
-                            <div key={r.id || r.bookingId} style={{
-                              padding: "16px 20px",
-                              border: "1px solid var(--border)",
-                              borderRadius: "var(--r-md)",
-                              background: "var(--surface)",
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 12
-                            }}>
-                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
-                                  onClick={() => r.userId && go("profile", { id: r.userId })}>
-                                  <Avatar name={r.name || "User"} userId={r.userId} img={r.picture} size={38} />
-                                  <div>
-                                    <div style={{ fontWeight: 700, fontSize: 14.5, color: "var(--ink)" }}>{r.name || "Unknown"}</div>
-                                    <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 2 }}>{r.email || ""}</div>
-                                  </div>
-                                </div>
-                                <div style={{ display: "flex", gap: 8 }}>
-                                  <button className="hbtn hbtn--ghost hbtn--sm"
-                                    style={{ color: "#ef4444", background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: "20px", padding: "6px 16px", fontSize: 13, fontWeight: 600 }}
-                                    onClick={() => handleHostRequestAction(r.bookingId, 'decline')}>
-                                    Decline
-                                  </button>
-                                  <button className="hbtn hbtn--primary hbtn--sm"
-                                    style={{ background: "linear-gradient(135deg,#ff6b4a,#ff4d8d)", border: "none", borderRadius: "20px", padding: "6px 18px", fontSize: 13, fontWeight: 600, color: "#fff" }}
-                                    onClick={() => handleHostRequestAction(r.bookingId, 'accept')}>
-                                    Approve
-                                  </button>
-                                </div>
-                              </div>
-                              {/* Questionnaire answers box */}
-                              {r.answers && Object.keys(r.answers).length > 0 && (
-                                <div style={{
-                                  padding: "16px",
-                                  background: "var(--bg-2)",
-                                  border: "1px solid var(--border)",
-                                  borderRadius: "var(--r-md)",
-                                  display: "flex",
-                                  flexDirection: "column",
-                                  gap: 12
-                                }}>
-                                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                                    Questionnaire Answers
-                                  </div>
-                                  {Object.entries(r.answers).filter(([k]) => !['ticketTypeId', 'qty', 'ticketName', 'isQuestionnaireSubmit', 'registration_location'].includes(k)).map(([key, val]) => {
-                                    const label = getQuestionLabel(key);
-                                    return (
-                                      <div key={key} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                                        <div style={{ fontSize: 13, color: "var(--ink-2)", fontWeight: 500 }}>Q: {label}</div>
-                                        <div style={{ fontSize: 13, color: "var(--ink)", fontWeight: 600 }}>A: {String(val)}</div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Confirmed members */}
-                    <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
-                          Members
-                          {eventMembers && eventMembers.filter(m => m.state === 'active').length > 0 && (
-                            <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: "var(--ink-3)", background: "var(--border)", padding: "2px 8px", borderRadius: 999 }}>
-                              {eventMembers.filter(m => m.state === 'active').length}
-                            </span>
-                          )}
-                        </h3>
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <select
-                            className="cinput"
-                            value={memberRoleFilter}
-                            onChange={ev => setMemberRoleFilter(ev.target.value)}
-                            style={{ fontSize: 12, background: "var(--field)", border: "1px solid var(--border)", padding: "6px 28px 6px 12px", height: "auto", minHeight: "32px" }}
-                          >
-                            <option value="all">All Roles</option>
-                            {(availableRoles || []).map(r => (
-                              <option key={r.key} value={r.key}>{r.display_name}</option>
-                            ))}
-                          </select>
-                          <input
-                            className="cinput"
-                            placeholder="Search members…"
-                            value={memberSearch}
-                            onChange={ev => setMemberSearch(ev.target.value)}
-                            style={{ width: 170, fontSize: 12, background: "var(--field)", border: "1px solid var(--border)", minHeight: "32px" }}
-                          />
-                        </div>
-                      </div>
-                      {!eventMembers ? (
-                        <div style={{ textAlign: "center", padding: "36px 20px", color: "var(--ink-3)" }}>Loading members...</div>
-                      ) : eventMembers.filter(m => m.state === 'active').length === 0 ? (
-                        <div style={{ textAlign: "center", padding: "36px 20px", color: "var(--ink-3)", border: "1px dashed var(--border)", borderRadius: "var(--r-md)" }}>
-                          No confirmed members yet.
-                        </div>
-                      ) : (
-                        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", overflow: "hidden" }}>
-                          {eventMembers
-                            .filter(m => m.state === 'active')
-                            .filter(m => memberRoleFilter === 'all' || m.role === memberRoleFilter)
-                            .filter(m => !memberSearch || (m.name || m.display_name || "").toLowerCase().includes(memberSearch.toLowerCase()))
-                            .map((a, i, arr) => {
-                              const name = a.name || a.display_name || "Member";
-                              const userId = a.id;
-                              const email = a.email || "";
-                              const isLast = i === arr.length - 1;
-
-                              const roleMeta = (key) => (availableRoles || []).find(r => r.key === key);
-                              const ROLE_BADGE_COLORS = ['#9333ea', '#2563eb', '#ea580c', '#0891b2', '#4338ca', '#be185d'];
-
-                              const handleRoleChange = async (newRole) => {
-                                try {
-                                  const token = localStorage.getItem('token');
-                                  const res = await fetch(`${apiBase}/api/events/${e.id}/memberships/${userId}/role`, {
-                                    method: 'PATCH',
-                                    headers: {
-                                      'Content-Type': 'application/json',
-                                      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                                    },
-                                    body: JSON.stringify({ role: newRole })
-                                  });
-                                  const data = await res.json();
-                                  if (data.success) {
-                                    if (window.toast) window.toast("Role updated successfully!", "success");
-                                    fetchEventMembers();
-                                  } else {
-                                    if (window.toast) window.toast(data.message || "Failed to update role", "error");
-                                  }
-                                } catch (err) {
-                                  if (window.toast) window.toast("Error updating role", "error");
-                                }
-                              };
-
-                              // Calculate if current user can change this person's role
-                              const myRoleKey = isOwner ? (availableRoles || [])[0]?.key : (eventMembers.find(m => m.id === ME?.id)?.role || 'member');
-                              const myLevel = roleMeta(myRoleKey)?.hierarchy_level ?? Infinity;
-                              const theirLevel = roleMeta(a.role)?.hierarchy_level ?? Infinity;
-                              const canChangeRole = isHostOrCoHost && myLevel < theirLevel;
-                              const canRemoveMember = userId !== ME?.id && (isOwner || (isHostOrCoHost && myLevel < theirLevel));
-
-                              // Questionnaire answers this member submitted at registration
-                              // (sourced from their booking's notes, via dashboard-stats).
-                              const memberBooking = (hostStats?.confirmed || []).find(c => c.userId === userId);
-                              const memberAnswers = memberBooking?.answers || null;
-                              const hasAnswers = memberAnswers && Object.keys(memberAnswers).length > 0;
-                              const statsLoaded = !!hostStats;
-
-                              return (
-                                <div key={userId || name + i}
-                                  style={{
-                                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                                    padding: "11px 16px",
-                                    borderBottom: isLast ? "none" : "1px solid var(--border)",
-                                    cursor: userId ? "pointer" : "default",
-                                    transition: "background 0.15s"
-                                  }}
-                                  onClick={() => userId && go("profile", { id: userId })}
-                                  onMouseEnter={ev => { if (userId) ev.currentTarget.style.background = "var(--field)"; }}
-                                  onMouseLeave={ev => { ev.currentTarget.style.background = ""; }}
-                                >
-                                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                    <Avatar name={name} userId={userId} img={a.picture} size={32} />
-                                    <div>
-                                      <div style={{ fontWeight: 600, fontSize: 13.5 }}>{name}</div>
-                                      {email && <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{email}</div>}
-                                    </div>
-                                  </div>
-                                  <div style={{ display: "flex", alignItems: "center", gap: 8 }} onClick={ev => ev.stopPropagation()}>
-                                    {canChangeRole ? (
-                                      <select
-                                        className="cselect"
-                                        value={a.role}
-                                        onChange={(e) => handleRoleChange(e.target.value)}
-                                        style={{ fontSize: 12, padding: "4px 24px 4px 8px", background: "var(--field)", border: "1px solid var(--border)" }}
-                                      >
-                                        {(availableRoles || []).filter(r => r.hierarchy_level > myLevel).map(r => (
-                                          <option key={r.key} value={r.key}>{r.display_name}</option>
-                                        ))}
-                                      </select>
-                                    ) : (
-                                      <span style={{ fontSize: 11, fontWeight: 600, color: a.role === 'member' ? "#1f9d57" : (ROLE_BADGE_COLORS[(availableRoles || []).findIndex(r => r.key === a.role) % ROLE_BADGE_COLORS.length] || "#1f9d57"), background: "rgba(0,0,0,0.05)", padding: "3px 8px", borderRadius: 999 }}>
-                                        {roleMeta(a.role)?.display_name || 'Member'}
-                                      </span>
-                                    )}
-                                    {canRemoveMember && (
-                                      <button
-                                        className="hbtn hbtn--soft hbtn--sm"
-                                        style={{ fontSize: 11.5, padding: "4px 10px", color: "#ef4444" }}
-                                        onClick={(ev) => { ev.stopPropagation(); handleRemoveEventMember(userId); }}
-                                      >
-                                        Remove
-                                      </button>
-                                    )}
-                                    {(isHostOrCoHost || isAdmin || isModerator) && (
-                                      <button
-                                        className="hbtn hbtn--soft hbtn--sm"
-                                        style={{ fontSize: 11.5, padding: "4px 10px" }}
-                                        onClick={() => setResponseMember({ ...a, name, email, answers: memberAnswers })}
-                                      >
-                                        Response{!statsLoaded ? "…" : (hasAnswers ? "" : " (none)")}
-                                      </button>
-                                    )}
-                                    {userId && <I.arrowR style={{ width: 14, color: "var(--ink-3)" }} />}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Tab 3: Gallery */}
-              {tab === "gallery" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Media Gallery</h3>
-                      <div style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 4 }}>Images & videos</div>
-                    </div>
-                    {canUploadToGallery && (
-                      <div>
-                        <input
-                          type="file"
-                          ref={galleryInputRef}
-                          style={{ display: "none" }}
-                          accept={galleryVideoOnly ? "video/*" : (galleryImageOnly ? "image/*" : "image/*,video/*")}
-                          onChange={(evt) => {
-                            const file = evt.target.files?.[0];
-                            if (!file) return;
-
-                            // Validate media type
-                            const isVideo = file.type.startsWith("video/");
-                            const isImage = file.type.startsWith("image/");
-
-                            if (galleryVideoOnly && !isVideo) {
-                              alert("Only video uploads are allowed for this gallery.");
-                              return;
-                            }
-                            if (galleryImageOnly && !isImage) {
-                              alert("Only image uploads are allowed for this gallery.");
-                              return;
-                            }
-
-                            const reader = new FileReader();
-                            reader.onload = async (uploadEvt) => {
-                              try {
-                                const token = localStorage.getItem('token');
-                                const res = await fetch(`${apiBase}/api/events/${e.id}/gallery`, {
-                                  method: 'POST',
-                                  headers: {
-                                    'Content-Type': 'application/json',
-                                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                                  },
-                                  body: JSON.stringify({
-                                    url: uploadEvt.target.result,
-                                    type: isVideo ? "video" : "image"
-                                  })
-                                });
-                                const data = await res.json();
-                                if (data.success) {
-                                  fetchEventGallery();
-                                  if (!data.data.approved) {
-                                    alert("Upload successful! Your media is pending approval from organizers.");
-                                  } else {
-                                    alert("Upload successful!");
-                                  }
-                                } else {
-                                  alert(data.message || "Failed to upload media.");
-                                }
-                              } catch (err) {
-                                console.error(err);
-                                alert("An error occurred during upload.");
-                              }
-                            };
-                            reader.readAsDataURL(file);
-                          }}
-                        />
-                        <button 
-                          onClick={() => galleryInputRef.current?.click()}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 6,
-                            background: "rgba(124, 58, 237, 0.1)",
-                            color: "var(--primary, #7c3aed)",
-                            border: "none",
-                            padding: "8px 16px",
-                            borderRadius: 999,
-                            fontWeight: 600,
-                            fontSize: 14,
-                            cursor: "pointer",
-                            transition: "background 0.2s"
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = "rgba(124, 58, 237, 0.15)"}
-                          onMouseLeave={(e) => e.currentTarget.style.background = "rgba(124, 58, 237, 0.1)"}
-                        >
-                          <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Add Media
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Pending Approval Section */}
-                  {(isTicketManager || isScanner || isOwner || isAdmin || isModerator) && galleryItems.some(item => !item.approved) && (
-                    <div style={{ background: "rgba(120,90,255,.05)", border: "1px solid rgba(120,90,255,.15)", borderRadius: "var(--r-md)", padding: "16px" }}>
-                      <h4 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: "var(--accent-2)" }}>Pending Approval</h4>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 12 }}>
-                        {galleryItems.filter(item => !item.approved).map(item => (
-                          <div key={item.id} style={{ borderRadius: "var(--r-md)", overflow: "hidden", height: 110, border: "1px solid var(--border)", position: "relative", background: "var(--surface)" }}>
-                            {item.type === "video" ? (
-                              <video src={item.url} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted />
-                            ) : (
-                              <div style={{ width: "100%", height: "100%", background: `url(${item.url}) center/cover no-repeat` }} />
-                            )}
-                            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "rgba(0,0,0,0.6)", padding: "6px", display: "flex", gap: "6px", justifyContent: "space-between" }}>
-                              <button
-                                className="hbtn hbtn--primary"
-                                style={{ padding: "2px 6px", fontSize: 10, height: 20 }}
-                                onClick={async () => {
-                                  try {
-                                    const token = localStorage.getItem('token');
-                                    const res = await fetch(`${apiBase}/api/events/${e.id}/gallery/${item.id}/approve`, {
-                                      method: 'PATCH',
-                                      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-                                    });
-                                    const data = await res.json();
-                                    if (data.success) {
-                                      fetchEventGallery();
-                                    }
-                                  } catch (err) {
-                                    console.error(err);
-                                  }
-                                }}
-                              >
-                                Approve
-                              </button>
-                              <button
-                                className="hbtn"
-                                style={{ padding: "2px 6px", fontSize: 10, height: 20, background: "#e5484d", color: "#fff" }}
-                                onClick={async () => {
-                                  try {
-                                    const token = localStorage.getItem('token');
-                                    const res = await fetch(`${apiBase}/api/events/${e.id}/gallery/${item.id}`, {
-                                      method: 'DELETE',
-                                      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-                                    });
-                                    const data = await res.json();
-                                    if (data.success) {
-                                      fetchEventGallery();
-                                    }
-                                  } catch (err) {
-                                    console.error(err);
-                                  }
-                                }}
-                              >
-                                Reject
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Approved Gallery Section */}
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12 }}>
-                    {galleryItems.filter(item => item.approved).map(item => (
-                      <div key={item.id} style={{ borderRadius: "var(--r-md)", overflow: "hidden", height: 130, border: "1px solid var(--border)", position: "relative", background: "var(--surface)" }}>
-                        {item.type === "video" ? (
-                          <video src={item.url} style={{ width: "100%", height: "100%", objectFit: "cover" }} controls />
-                        ) : (
-                          <div 
-                            onClick={() => {
-                              setViewerItem(item);
-                              setZoomScale(1);
-                              setPanOffset({ x: 0, y: 0 });
-                              setHandModeActive(true);
-                            }}
-                            style={{ cursor: "pointer", width: "100%", height: "100%", background: item.url && (item.url.startsWith("linear-gradient") || item.url.startsWith("radial-gradient") || item.url.startsWith("var(")) ? item.url : `url(${item.url}) center/cover no-repeat` }} 
-                          />
-                        )}
-
-                        {/* Delete button for allowed users */}
-                        {(isTicketManager || isScanner || isOwner || isAdmin || isModerator || item.uploadedBy === ME.name) && (
-                          <button
-                            style={{
-                              position: "absolute", top: 6, right: 6,
-                              background: "rgba(0, 0, 0, 0.6)", color: "#fff",
-                              border: "none", borderRadius: "50%",
-                              width: 24, height: 24, display: "flex",
-                              alignItems: "center", justifyContent: "center",
-                              cursor: "pointer", fontSize: 12
-                            }}
-                            onClick={async () => {
-                              if (confirm("Are you sure you want to delete this media?")) {
-                                try {
-                                  const token = localStorage.getItem('token');
-                                  const res = await fetch(`${apiBase}/api/events/${e.id}/gallery/${item.id}`, {
-                                    method: 'DELETE',
-                                    headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-                                  });
-                                  const data = await res.json();
-                                  if (data.success) {
-                                    fetchEventGallery();
-                                  }
-                                } catch (err) {
-                                  console.error(err);
-                                }
-                              }
-                            }}
-                          >
-                            ✕
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  {galleryItems.filter(item => item.approved).length === 0 && (
-                    <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--ink-3)", border: "1px dashed var(--border)", borderRadius: "var(--r-md)" }}>
-                      No media uploaded yet.
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Tab: Discussion */}
-              {tab === "discussion" && discussionEnabled && (
-                <DiscussionPanel
-                  entityType="event"
-                  entityId={e.id}
-                  token={token}
-                  currentUserId={currentUserId}
-                  isOwner={isOwner}
-                  isAdmin={isAdmin}
-                  isModerator={isModerator}
-                  isMember={effectiveIsMember}
-                  myRoleKey={myRoleKey}
-                  availableRoles={availableRoles}
-                  isTicketManager={isTicketManager}
-                  isScanner={isScanner}
-                  forumsEnabled={discussionEnabled}
-                  threadPerm={discussionThreadRoles}
-                  replyPerm={discussionReplyRoles}
-                  approvalRequired={discussionApprovalRequired}
-                  ME={ME}
-                />
-              )}
-
-              {/* Tab: Ticketing & Coupons */}
-              {tab === "ticketing" && isTicketManager && isPaidEvent && (() => {
-                const TC_ACCENT = "var(--accent-2)";
-                const fieldStyle = { display: "flex", flexDirection: "column" as const, gap: 4 };
-                const labelStyle = { fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase" as const, letterSpacing: "0.05em" };
-
-                // ── Helper: submit ticket ──
-                const handleTicketSubmit = async () => {
-                  if (!ticketForm.name.trim()) { if (window.toast) window.toast("Ticket name is required", "warning"); return; }
-                  if (!ticketForm.description.trim()) { if (window.toast) window.toast("Description is required", "warning"); return; }
-                  if (!ticketForm.price || String(ticketForm.price).trim() === "") { if (window.toast) window.toast("Price is required", "warning"); return; }
-                  try {
-                    const url = editingTicket
-                      ? `${apiBase}/api/events/${e.id}/ticket-types/${editingTicket.id}`
-                      : `${apiBase}/api/events/${e.id}/ticket-types`;
-                    const method = editingTicket ? "PUT" : "POST";
-                    const res = await fetch(url, { method, headers: { "Content-Type": "application/json", ...(token ? { "Authorization": `Bearer ${token}` } : {}) }, body: JSON.stringify(ticketForm) });
-                    const data = await res.json();
-                    if (data.success) {
-                      if (window.toast) window.toast(editingTicket ? "Ticket updated ✓" : "Ticket created ✓", "success");
-                      setTicketModalOpen(false); setEditingTicket(null);
-                      setTicketForm({ name: "", description: "", price: "", currency: "INR", capacity: "", max_per_booking: "", sale_start: "", sale_end: "", early_bird_price: "", early_bird_currency: "INR", early_bird_ends_at: "", visibility: "public" });
-                      await fetchTicketTypes();
-                    } else { if (window.toast) window.toast(data.message || "Error saving ticket", "error"); }
-                  } catch (err) { if (window.toast) window.toast("Network error", "error"); }
-                };
-
-                // ── Helper: delete ticket ──
-                const handleTicketDelete = async (tt) => {
-                  if (!confirm(`Delete ticket "${tt.name}"?`)) return;
-                  try {
-                    const res = await fetch(`${apiBase}/api/events/${e.id}/ticket-types/${tt.id}`, { method: "DELETE", headers: token ? { "Authorization": `Bearer ${token}` } : {} });
-                    const data = await res.json();
-                    if (data.success) { if (window.toast) window.toast("Ticket deleted", "success"); await fetchTicketTypes(); }
-                    else { if (window.toast) window.toast(data.message || "Error deleting ticket", "error"); }
-                  } catch (err) { if (window.toast) window.toast("Network error", "error"); }
-                };
-
-                // ── Helper: submit coupon ──
-                const handleCouponSubmit = async () => {
-                  if (!couponForm.code.trim()) { if (window.toast) window.toast("Coupon code is required", "warning"); return; }
-                  if (!couponForm.discount_value || String(couponForm.discount_value).trim() === "") { if (window.toast) window.toast("Discount value is required", "warning"); return; }
-                  try {
-                    const url = editingCoupon
-                      ? `${apiBase}/api/events/${e.id}/coupons/${editingCoupon.id}`
-                      : `${apiBase}/api/events/${e.id}/coupons`;
-                    const method = editingCoupon ? "PUT" : "POST";
-                    const res = await fetch(url, { method, headers: { "Content-Type": "application/json", ...(token ? { "Authorization": `Bearer ${token}` } : {}) }, body: JSON.stringify(couponForm) });
-                    const data = await res.json();
-                    if (data.success) {
-                      if (window.toast) window.toast(editingCoupon ? "Coupon updated ✓" : "Coupon created ✓", "success");
-                      setCouponModalOpen(false); setEditingCoupon(null);
-                      setCouponForm({ code: "", discount_type: "percent", discount_value: "", currency: "INR", valid_from: "", valid_to: "", max_total: "", max_per_user: "", status: "active" });
-                      await fetchTcCoupons();
-                    } else { if (window.toast) window.toast(data.message || "Error saving coupon", "error"); }
-                  } catch (err) { if (window.toast) window.toast("Network error", "error"); }
-                };
-
-                // ── Helper: delete coupon ──
-                const handleCouponDelete = async (c) => {
-                  if (!confirm(`Delete coupon "${c.code}"?`)) return;
-                  try {
-                    const res = await fetch(`${apiBase}/api/events/${e.id}/coupons/${c.id}`, { method: "DELETE", headers: token ? { "Authorization": `Bearer ${token}` } : {} });
-                    const data = await res.json();
-                    if (data.success) { if (window.toast) window.toast("Coupon deleted", "success"); await fetchTcCoupons(); }
-                    else { if (window.toast) window.toast(data.message || "Error deleting coupon", "error"); }
-                  } catch (err) { if (window.toast) window.toast("Network error", "error"); }
-                };
-
-                // ── Helper: submit referral ──
-                const handleReferralSubmit = async () => {
-                  if (!referralForm.code.trim()) { if (window.toast) window.toast("Referral code is required", "warning"); return; }
-                  if (!referralForm.affiliate_id) { if (window.toast) window.toast("Affiliate is required", "warning"); return; }
-                  try {
-                    const url = editingReferral
-                      ? `${apiBase}/api/events/${e.id}/referrals/${editingReferral.id}`
-                      : `${apiBase}/api/events/${e.id}/referrals`;
-                    const method = editingReferral ? "PUT" : "POST";
-                    const res = await fetch(url, { method, headers: { "Content-Type": "application/json", ...(token ? { "Authorization": `Bearer ${token}` } : {}) }, body: JSON.stringify(referralForm) });
-                    const data = await res.json();
-                    if (data.success) {
-                      if (window.toast) window.toast(editingReferral ? "Referral updated ✓" : "Referral created ✓", "success");
-                      setReferralModalOpen(false); setEditingReferral(null);
-                      setReferralForm({ code: "", affiliate_id: "", commission_rule: "" });
-                      await fetchTcReferrals();
-                    } else { if (window.toast) window.toast(data.message || "Error saving referral", "error"); }
-                  } catch (err) { if (window.toast) window.toast("Network error", "error"); }
-                };
-
-                // ── Helper: delete referral ──
-                const handleReferralDelete = async (r) => {
-                  if (!confirm(`Delete referral link "${r.code}"?`)) return;
-                  try {
-                    const res = await fetch(`${apiBase}/api/events/${e.id}/referrals/${r.id}`, { method: "DELETE", headers: token ? { "Authorization": `Bearer ${token}` } : {} });
-                    const data = await res.json();
-                    if (data.success) { if (window.toast) window.toast("Referral deleted", "success"); await fetchTcReferrals(); }
-                    else { if (window.toast) window.toast(data.message || "Error deleting referral", "error"); }
-                  } catch (err) { if (window.toast) window.toast("Network error", "error"); }
-                };
-
-                const fmtPrice = (minor, currency) => minor != null ? `${currency || "INR"} ${(minor / 100).toFixed(2)}` : "—";
-                const fmtDate = (d) => d ? new Date(d).toLocaleDateString() : "—";
-
-                const filteredTickets = ticketTypes.filter(t => t.name?.toLowerCase().includes(ticketSearch.toLowerCase()));
-                const filteredCoupons = tcCoupons.filter(c => c.code?.toLowerCase().includes(couponSearch.toLowerCase()));
-                const filteredReferrals = tcReferrals.filter(r =>
-                  r.code?.toLowerCase().includes(referralSearch.toLowerCase()) ||
-                  r.affiliate_name?.toLowerCase().includes(referralSearch.toLowerCase())
-                );
-
-                return (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-                    {/* Section Header */}
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                      <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>🎟 Ticketing & Coupons</h3>
-                      {tcLoading && <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Loading...</span>}
-                    </div>
-
-                    {/* Inner Sub-Tab Bar */}
-                    <div style={{ display: "flex", gap: 0, background: "var(--bg-2)", borderRadius: "var(--r-md)", padding: 4, marginBottom: 20, border: "1px solid var(--border)" }}>
-                      {[["tickets", "🎫 Tickets"], ["coupons", "🏷 Coupons"], ["referrals", "🔗 Referrals"]].map(([key, label]) => (
-                        <button
-                          key={key}
-                          onClick={() => setTcTab(key)}
-                          style={{
-                            flex: 1, padding: "8px 0", fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer",
-                            borderRadius: "var(--r-sm)", transition: "all 0.15s",
-                            background: tcTab === key ? TC_ACCENT : "transparent",
-                            color: tcTab === key ? "#fff" : "var(--ink-3)"
-                          }}
-                        >{label}</button>
-                      ))}
-                    </div>
-
-                    {/* ── Tickets Sub-Tab ── */}
-                    {tcTab === "tickets" && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                        {/* Search + Add */}
-                        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                          <input className="cinput" placeholder="Search tickets..." value={ticketSearch} onChange={ev => setTicketSearch(ev.target.value)} style={{ flex: 1, height: 38 }} />
-                          <button className="hbtn hbtn--primary hbtn--sm" onClick={() => { setEditingTicket(null); setTicketForm({ name: "", description: "", price: "", currency: "INR", capacity: "", max_per_booking: "", sale_start: "", sale_end: "", early_bird_price: "", early_bird_currency: "INR", early_bird_ends_at: "", visibility: "public" }); setTicketModalOpen(true); }}>+ Add Ticket</button>
-                        </div>
-
-                        {/* List */}
-                        {filteredTickets.length === 0 ? (
-                          <div style={{ textAlign: "center", padding: "48px 20px", color: "var(--ink-3)", border: "1px dashed var(--border)", borderRadius: "var(--r-md)" }}>
-                            <div style={{ fontSize: 32, marginBottom: 8 }}>🎫</div>
-                            <div style={{ fontSize: 14, fontWeight: 600 }}>No ticket types yet</div>
-                            <div style={{ fontSize: 12, marginTop: 4 }}>Create your first ticket type to get started.</div>
-                          </div>
-                        ) : (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                            {filteredTickets.map(tt => (
-                              <div key={tt.id} style={{ border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "14px 16px", background: "var(--surface)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                                    <span style={{ fontSize: 14, fontWeight: 700 }}>{tt.name}</span>
-                                    <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 999, background: tt.visibility === "public" ? "rgba(34,197,94,0.15)" : "rgba(139,92,246,0.15)", color: tt.visibility === "public" ? "#16a34a" : "#7c3aed", fontWeight: 600, textTransform: "capitalize" }}>{tt.visibility}</span>
-                                  </div>
-                                  <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--ink-3)", flexWrap: "wrap" }}>
-                                    <span>💰 {fmtPrice(tt.price_amount_minor, tt.price_currency)}</span>
-                                    {tt.capacity && <span>👥 Cap: {tt.capacity}</span>}
-                                    {tt.sale_start && <span>📅 {fmtDate(tt.sale_start)} – {fmtDate(tt.sale_end)}</span>}
-                                    <span>Created {fmtDate(tt.created_at)}</span>
-                                  </div>
-                                </div>
-                                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                                  <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => {
-                                    setEditingTicket(tt);
-                                    setTicketForm({ name: tt.name || "", description: tt.description || "", price: tt.price_amount_minor != null ? String(tt.price_amount_minor / 100) : "", currency: tt.price_currency || "INR", capacity: tt.capacity ? String(tt.capacity) : "", max_per_booking: tt.max_per_booking ? String(tt.max_per_booking) : "", sale_start: tt.sale_start ? tt.sale_start.replace("Z", "").slice(0, 16) : "", sale_end: tt.sale_end ? tt.sale_end.replace("Z", "").slice(0, 16) : "", early_bird_price: tt.early_bird_price_amount_minor != null ? String(tt.early_bird_price_amount_minor / 100) : "", early_bird_currency: tt.early_bird_price_currency || "INR", early_bird_ends_at: tt.early_bird_ends_at ? tt.early_bird_ends_at.replace("Z", "").slice(0, 16) : "", visibility: tt.visibility || "public" });
-                                    setTicketModalOpen(true);
-                                  }}>Edit</button>
-                                  <button className="hbtn hbtn--ghost hbtn--sm" style={{ color: "#ef4444" }} onClick={() => handleTicketDelete(tt)}>Delete</button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* ── Coupons Sub-Tab ── */}
-                    {tcTab === "coupons" && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                          <input className="cinput" placeholder="Search coupons..." value={couponSearch} onChange={ev => setCouponSearch(ev.target.value)} style={{ flex: 1, height: 38 }} />
-                          <button className="hbtn hbtn--primary hbtn--sm" onClick={() => { setEditingCoupon(null); setCouponForm({ code: "", discount_type: "percent", discount_value: "", currency: "INR", valid_from: "", valid_to: "", max_total: "", max_per_user: "", status: "active" }); setCouponModalOpen(true); }}>+ Add Coupon</button>
-                        </div>
-
-                        {filteredCoupons.length === 0 ? (
-                          <div style={{ textAlign: "center", padding: "48px 20px", color: "var(--ink-3)", border: "1px dashed var(--border)", borderRadius: "var(--r-md)" }}>
-                            <div style={{ fontSize: 32, marginBottom: 8 }}>🏷</div>
-                            <div style={{ fontSize: 14, fontWeight: 600 }}>No coupons yet</div>
-                            <div style={{ fontSize: 12, marginTop: 4 }}>Create discount coupons for your attendees.</div>
-                          </div>
-                        ) : (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                            {filteredCoupons.map(c => (
-                              <div key={c.id} style={{ border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "14px 16px", background: "var(--surface)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                                    <span style={{ fontSize: 14, fontWeight: 700, fontFamily: "monospace", background: "var(--bg-2)", padding: "2px 8px", borderRadius: 6 }}>{c.code}</span>
-                                    <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 999, background: c.status === "active" ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: c.status === "active" ? "#16a34a" : "#ef4444", fontWeight: 600, textTransform: "capitalize" }}>{c.status}</span>
-                                  </div>
-                                  <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--ink-3)", flexWrap: "wrap" }}>
-                                    <span>💸 {c.discount_type === "percent" ? `${c.discount_percent}% off` : fmtPrice(c.discount_amount_minor, c.discount_currency)}</span>
-                                    {c.valid_from && <span>📅 {fmtDate(c.valid_from)} – {fmtDate(c.valid_to)}</span>}
-                                    {c.max_total && <span>🔢 Max {c.max_total} uses</span>}
-                                  </div>
-                                </div>
-                                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                                  <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => {
-                                    setEditingCoupon(c);
-                                    setCouponForm({ code: c.code || "", discount_type: c.discount_type || "percent", discount_value: c.discount_type === "percent" ? String(c.discount_percent || "") : String((c.discount_amount_minor || 0) / 100), currency: c.discount_currency || "INR", valid_from: c.valid_from ? c.valid_from.replace("Z", "").slice(0, 16) : "", valid_to: c.valid_to ? c.valid_to.replace("Z", "").slice(0, 16) : "", max_total: c.max_total ? String(c.max_total) : "", max_per_user: c.max_per_user ? String(c.max_per_user) : "", status: c.status || "active" });
-                                    setCouponModalOpen(true);
-                                  }}>Edit</button>
-                                  <button className="hbtn hbtn--ghost hbtn--sm" style={{ color: "#ef4444" }} onClick={() => handleCouponDelete(c)}>Delete</button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* ── Referrals Sub-Tab ── */}
-                    {tcTab === "referrals" && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                          <input className="cinput" placeholder="Search referrals..." value={referralSearch} onChange={ev => setReferralSearch(ev.target.value)} style={{ flex: 1, height: 38 }} />
-                          <button className="hbtn hbtn--primary hbtn--sm" onClick={() => { setEditingReferral(null); setReferralForm({ code: "", affiliate_id: affiliates[0]?.id || "", commission_rule: "" }); setReferralModalOpen(true); }}>+ Add Referral</button>
-                        </div>
-
-                        {filteredReferrals.length === 0 ? (
-                          <div style={{ textAlign: "center", padding: "48px 20px", color: "var(--ink-3)", border: "1px dashed var(--border)", borderRadius: "var(--r-md)" }}>
-                            <div style={{ fontSize: 32, marginBottom: 8 }}>🔗</div>
-                            <div style={{ fontSize: 14, fontWeight: 600 }}>No referral links yet</div>
-                            <div style={{ fontSize: 12, marginTop: 4 }}>Create affiliate referral links to track registrations.</div>
-                          </div>
-                        ) : (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                            {filteredReferrals.map(r => (
-                              <div key={r.id} style={{ border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "14px 16px", background: "var(--surface)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                                    <span style={{ fontSize: 14, fontWeight: 700, fontFamily: "monospace", background: "var(--bg-2)", padding: "2px 8px", borderRadius: 6 }}>{r.code}</span>
-                                  </div>
-                                  <div style={{ display: "flex", gap: 16, fontSize: 12, color: "var(--ink-3)", flexWrap: "wrap" }}>
-                                    <span>👤 {r.affiliate_name}</span>
-                                    <span>📅 Created {fmtDate(r.created_at)}</span>
-                                  </div>
-                                </div>
-                                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                                  <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => {
-                                    setEditingReferral(r);
-                                    setReferralForm({ code: r.code || "", affiliate_id: r.affiliate_id || "", commission_rule: r.commission_rule ? (typeof r.commission_rule === "string" ? r.commission_rule : JSON.stringify(r.commission_rule, null, 2)) : "" });
-                                    setReferralModalOpen(true);
-                                  }}>Edit</button>
-                                  <button className="hbtn hbtn--ghost hbtn--sm" style={{ color: "#ef4444" }} onClick={() => handleReferralDelete(r)}>Delete</button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* ══════════════════════════════════════════════
-                        MODALS
-                        ══════════════════════════════════════════════ */}
-
-                    {/* Ticket Type Modal */}
-                    {ticketModalOpen && (
-                      <div style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <div style={{ background: "var(--surface)", width: "min(560px,95vw)", maxHeight: "88vh", overflowY: "auto", borderRadius: "var(--r-xl)", boxShadow: "var(--sh-xl)", display: "flex", flexDirection: "column" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: "1px solid var(--border)" }}>
-                            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{editingTicket ? "Edit Ticket" : "Create Ticket"}</h2>
-                            <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => setTicketModalOpen(false)} style={{ border: "none" }}>✕</button>
-                          </div>
-                          <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
-                            <div style={fieldStyle}><label style={labelStyle}>Ticket Name *</label><input className="cinput" value={ticketForm.name} onChange={ev => setTicketForm(f => ({...f, name: ev.target.value}))} placeholder="e.g. General Admission" /></div>
-                            <div style={fieldStyle}><label style={labelStyle}>Description *</label><textarea className="cinput" value={ticketForm.description} onChange={ev => setTicketForm(f => ({...f, description: ev.target.value}))} placeholder="What's included..." rows={2} style={{ resize: "vertical" }} /></div>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                              <div style={fieldStyle}><label style={labelStyle}>Price *</label><input className="cinput" type="number" min="0" step="0.01" value={ticketForm.price} onChange={ev => setTicketForm(f => ({...f, price: ev.target.value}))} placeholder="0.00" /></div>
-                              <div style={fieldStyle}><label style={labelStyle}>Currency</label><input className="cinput" value={ticketForm.currency} onChange={ev => setTicketForm(f => ({...f, currency: ev.target.value}))} placeholder="INR" /></div>
-                            </div>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                              <div style={fieldStyle}><label style={labelStyle}>Capacity</label><input className="cinput" type="number" min="1" value={ticketForm.capacity} onChange={ev => setTicketForm(f => ({...f, capacity: ev.target.value}))} placeholder="Unlimited" /></div>
-                              <div style={fieldStyle}><label style={labelStyle}>Max per Booking</label><input className="cinput" type="number" min="1" value={ticketForm.max_per_booking} onChange={ev => setTicketForm(f => ({...f, max_per_booking: ev.target.value}))} placeholder="No limit" /></div>
-                            </div>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                              <div style={fieldStyle}><label style={labelStyle}>Sale Start</label><input className="cinput" type="datetime-local" value={ticketForm.sale_start} onChange={ev => setTicketForm(f => ({...f, sale_start: ev.target.value}))} /></div>
-                              <div style={fieldStyle}><label style={labelStyle}>Sale End</label><input className="cinput" type="datetime-local" value={ticketForm.sale_end} onChange={ev => setTicketForm(f => ({...f, sale_end: ev.target.value}))} /></div>
-                            </div>
-
-                            <div style={fieldStyle}>
-                              <label style={labelStyle}>Visibility</label>
-                              <div style={{ display: "flex", gap: 16 }}>
-                                {["public", "private"].map(v => (
-                                  <label key={v} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-                                    <input type="radio" name="tt_vis" value={v} checked={ticketForm.visibility === v} onChange={() => setTicketForm(f => ({...f, visibility: v}))} style={{ accentColor: TC_ACCENT }} />
-                                    {v.charAt(0).toUpperCase() + v.slice(1)}
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                          <div style={{ display: "flex", gap: 10, padding: "16px 24px", borderTop: "1px solid var(--border)", background: "var(--bg-2)" }}>
-                            <button className="hbtn hbtn--ghost" style={{ flex: 1 }} onClick={() => setTicketModalOpen(false)}>Cancel</button>
-                            <button className="hbtn hbtn--primary" style={{ flex: 1 }} onClick={handleTicketSubmit}>{editingTicket ? "Save Changes" : "Create Ticket"}</button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Coupon Modal */}
-                    {couponModalOpen && (
-                      <div style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <div style={{ background: "var(--surface)", width: "min(520px,95vw)", maxHeight: "88vh", overflowY: "auto", borderRadius: "var(--r-xl)", boxShadow: "var(--sh-xl)", display: "flex", flexDirection: "column" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: "1px solid var(--border)" }}>
-                            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{editingCoupon ? "Edit Coupon" : "New Coupon"}</h2>
-                            <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => setCouponModalOpen(false)} style={{ border: "none" }}>✕</button>
-                          </div>
-                          <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
-                            <div style={fieldStyle}><label style={labelStyle}>Coupon Code *</label><input className="cinput" value={couponForm.code} onChange={ev => setCouponForm(f => ({...f, code: ev.target.value.toUpperCase()}))} placeholder="e.g. EARLY20" style={{ textTransform: "uppercase", fontFamily: "monospace", letterSpacing: "0.1em" }} /></div>
-                            <div style={fieldStyle}>
-                              <label style={labelStyle}>Discount Type *</label>
-                              <div style={{ display: "flex", gap: 16 }}>
-                                {[["percent", "Percentage (%)"], ["flat", "Fixed Amount"]].map(([v, l]) => (
-                                  <label key={v} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-                                    <input type="radio" name="coup_type" value={v} checked={couponForm.discount_type === v} onChange={() => setCouponForm(f => ({...f, discount_type: v}))} style={{ accentColor: TC_ACCENT }} />
-                                    {l}
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
-                            <div style={{ display: "grid", gridTemplateColumns: couponForm.discount_type === "flat" ? "1fr 1fr" : "1fr", gap: 12 }}>
-                              <div style={fieldStyle}><label style={labelStyle}>Discount Value *</label><input className="cinput" type="number" min="0" step="0.01" value={couponForm.discount_value} onChange={ev => setCouponForm(f => ({...f, discount_value: ev.target.value}))} placeholder={couponForm.discount_type === "percent" ? "e.g. 20" : "e.g. 500"} /></div>
-                              {couponForm.discount_type === "flat" && <div style={fieldStyle}><label style={labelStyle}>Currency</label><input className="cinput" value={couponForm.currency} onChange={ev => setCouponForm(f => ({...f, currency: ev.target.value}))} placeholder="INR" /></div>}
-                            </div>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                              <div style={fieldStyle}><label style={labelStyle}>Valid From</label><input className="cinput" type="datetime-local" value={couponForm.valid_from} onChange={ev => setCouponForm(f => ({...f, valid_from: ev.target.value}))} /></div>
-                              <div style={fieldStyle}><label style={labelStyle}>Valid To</label><input className="cinput" type="datetime-local" value={couponForm.valid_to} onChange={ev => setCouponForm(f => ({...f, valid_to: ev.target.value}))} /></div>
-                            </div>
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                              <div style={fieldStyle}><label style={labelStyle}>Max Total Uses</label><input className="cinput" type="number" min="1" value={couponForm.max_total} onChange={ev => setCouponForm(f => ({...f, max_total: ev.target.value}))} placeholder="Unlimited" /></div>
-                              <div style={fieldStyle}><label style={labelStyle}>Max Per User</label><input className="cinput" type="number" min="1" value={couponForm.max_per_user} onChange={ev => setCouponForm(f => ({...f, max_per_user: ev.target.value}))} placeholder="Unlimited" /></div>
-                            </div>
-                            <div style={fieldStyle}>
-                              <label style={labelStyle}>Status</label>
-                              <div style={{ display: "flex", gap: 16 }}>
-                                {["active", "inactive"].map(v => (
-                                  <label key={v} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-                                    <input type="radio" name="coup_status" value={v} checked={couponForm.status === v} onChange={() => setCouponForm(f => ({...f, status: v}))} style={{ accentColor: TC_ACCENT }} />
-                                    {v.charAt(0).toUpperCase() + v.slice(1)}
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                          <div style={{ display: "flex", gap: 10, padding: "16px 24px", borderTop: "1px solid var(--border)", background: "var(--bg-2)" }}>
-                            <button className="hbtn hbtn--ghost" style={{ flex: 1 }} onClick={() => setCouponModalOpen(false)}>Cancel</button>
-                            <button className="hbtn hbtn--primary" style={{ flex: 1 }} onClick={handleCouponSubmit}>{editingCoupon ? "Save Changes" : "Create Coupon"}</button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Referral Modal */}
-                    {referralModalOpen && (
-                      <div style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <div style={{ background: "var(--surface)", width: "min(480px,95vw)", borderRadius: "var(--r-xl)", boxShadow: "var(--sh-xl)", display: "flex", flexDirection: "column" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: "1px solid var(--border)" }}>
-                            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{editingReferral ? "Edit Referral Link" : "New Referral Link"}</h2>
-                            <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => setReferralModalOpen(false)} style={{ border: "none" }}>✕</button>
-                          </div>
-                          <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
-                            <div style={fieldStyle}><label style={labelStyle}>Referral Code *</label><input className="cinput" value={referralForm.code} onChange={ev => setReferralForm(f => ({...f, code: ev.target.value.toUpperCase()}))} placeholder="e.g. JOHN2024" style={{ textTransform: "uppercase", fontFamily: "monospace", letterSpacing: "0.1em" }} /></div>
-                            <div style={fieldStyle}>
-                              <label style={labelStyle}>Affiliate *</label>
-                              {affiliates.length === 0 ? (
-                                <div style={{ fontSize: 13, color: "var(--ink-3)", padding: 12, border: "1px dashed var(--border)", borderRadius: "var(--r-md)", textAlign: "center" }}>No affiliates found in your account.</div>
-                              ) : (
-                                <select className="cselect" value={referralForm.affiliate_id} onChange={ev => setReferralForm(f => ({...f, affiliate_id: ev.target.value}))} style={{ background: "var(--field)", border: "1px solid var(--border)" }}>
-                                  <option value="">Select affiliate...</option>
-                                  {affiliates.map(a => <option key={a.id} value={a.id}>{a.name} {a.email ? `(${a.email})` : ""}</option>)}
-                                </select>
-                              )}
-                            </div>
-                            <div style={fieldStyle}><label style={labelStyle}>Commission Rule (JSON / Text)</label><textarea className="cinput" value={referralForm.commission_rule} onChange={ev => setReferralForm(f => ({...f, commission_rule: ev.target.value}))} placeholder='{"type":"percent","value":10} or "10% per booking"' rows={3} style={{ resize: "vertical", fontFamily: "monospace", fontSize: 12 }} /></div>
-                          </div>
-                          <div style={{ display: "flex", gap: 10, padding: "16px 24px", borderTop: "1px solid var(--border)", background: "var(--bg-2)" }}>
-                            <button className="hbtn hbtn--ghost" style={{ flex: 1 }} onClick={() => setReferralModalOpen(false)}>Cancel</button>
-                            <button className="hbtn hbtn--primary" style={{ flex: 1 }} onClick={handleReferralSubmit}>{editingReferral ? "Save Changes" : "Create Referral"}</button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {/* Tab 4: Invite */}
-
-              {tab === "invite" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Invite Guests</h3>
-
-                  {eventVisibility === "unlisted" && (
-                    <div className="ticket-box" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
-                      <div>
-                        <div style={{ fontWeight: 600 }}>Shareable view link</div>
-                        <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4 }}>This event is unlisted, so it won't show on Discover. This link lets anyone open the event page to view it — it can be shared and opened any number of times, but it only unlocks viewing, not joining.</div>
-                      </div>
-                      {!inviteLinks.view && (
-                        <button type="button" className="hbtn hbtn--primary" disabled={inviteLoading.view} onClick={() => generateInviteLink('view')} style={{ alignSelf: "flex-start" }}>
-                          {inviteLoading.view ? "Generating..." : "+ Generate view link"}
-                        </button>
-                      )}
-                      {inviteLinks.view && (
-                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                          <input className="cinput" readOnly value={inviteLinks.view} onFocus={ev => ev.target.select()} style={{ flex: 1, background: "var(--field)", border: "1px solid var(--border)", fontSize: 12 }} />
-                          <button type="button" className="hbtn hbtn--ghost hbtn--sm" onClick={() => copyInviteLink(inviteLinks.view)}>Copy</button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {eventJoinEligibility === "invite" && (
-                    <div className="ticket-box" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
-                      <div>
-                        <div style={{ fontWeight: 600 }}>One-time join link</div>
-                        <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4 }}>Join eligibility is set to invite-only. Generate a link for a guest — it unlocks the join flow and can be used once.</div>
-                      </div>
-                      <button type="button" className="hbtn hbtn--primary" disabled={inviteLoading.join} onClick={() => generateInviteLink('join')} style={{ alignSelf: "flex-start" }}>
-                        {inviteLoading.join ? "Generating..." : "+ Generate join link"}
-                      </button>
-                      {inviteLinks.join.length > 0 && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                          {inviteLinks.join.map((url, i) => (
-                            <div key={url + i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                              <input className="cinput" readOnly value={url} onFocus={ev => ev.target.select()} style={{ flex: 1, background: "var(--field)", border: "1px solid var(--border)", fontSize: 12 }} />
-                              <button type="button" className="hbtn hbtn--ghost hbtn--sm" onClick={() => copyInviteLink(url)}>Copy</button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {eventVisibility !== "unlisted" && eventJoinEligibility !== "invite" && (
-                    <div className="ticket-box" style={{ padding: 20, fontSize: 13, color: "var(--ink-3)" }}>
-                      This event is publicly visible with open join eligibility — no invite links are needed.
-                    </div>
-                  )}
-                </div>
-              )}
-
-
-              {/* Tab: Settings */}
-              {tab === "settings" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Gallery Settings</h3>
-
-                  {/* Gallery Settings Section */}
-                  <div style={{ border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: 20, background: "var(--surface)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 600 }}>Enable Gallery</div>
-                        <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>Allow media uploads and sharing.</div>
-                      </div>
-                      <Toggle on={galleryEnabled} onClick={() => {
-                        const next = !galleryEnabled;
-                        setGalleryEnabled(next);
-                        let nextUploadRoles = galleryUploadRoles;
-                        let nextViewRoles = galleryViewRoles;
-                        if (next) {
-                          nextUploadRoles = { roles: ['event_owner'] };
-                          nextViewRoles = { roles: ['event_owner'] };
-                          setGalleryUploadRoles(nextUploadRoles);
-                          setGalleryViewRoles(nextViewRoles);
-                        }
-                        saveEventSettings({
-                          gallery: {
-                            enabled: next,
-                            uploadRoles: nextUploadRoles,
-                            viewRoles: nextViewRoles,
-                            approvalRequired: galleryApprovalRequired,
-                            videoOnly: galleryVideoOnly,
-                            imageOnly: galleryImageOnly
-                          }
-                        });
-                      }} />
-                    </div>
-
-                    {galleryEnabled && (
-                      <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border-2)", display: "flex", flexDirection: "column", gap: 14, animation: "slideDown 0.3s ease-out" }}>
-
-                        {/* Who can upload? */}
-                        <div
-                          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "6px 0" }}
-                          onClick={() => setUploadRolesModalOpen(true)}
-                        >
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 600 }}>Who can upload?</div>
-                            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Click to customize upload permissions</div>
-                          </div>
-                          <span style={{ fontSize: 12.5, color: "var(--accent-2)", fontWeight: 600 }}>
-                            {getRolesSummary(galleryUploadRoles)}
-                          </span>
-                        </div>
-
-                        {/* Who can view? */}
-                        <div
-                          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "6px 0", borderTop: "1px solid var(--border-3)", paddingTop: 12 }}
-                          onClick={() => setViewRolesModalOpen(true)}
-                        >
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 600 }}>Who can view?</div>
-                            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Click to customize view permissions</div>
-                          </div>
-                          <span style={{ fontSize: 12.5, color: "var(--accent-2)", fontWeight: 600 }}>
-                            {getRolesSummary(galleryViewRoles)}
-                          </span>
-                        </div>
-
-                        {/* Permission required toggle */}
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid var(--border-3)", paddingTop: 12 }}>
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 600 }}>Permission is required</div>
-                            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Event managers and check-in staff must approve uploads before they appear in the gallery.</div>
-                          </div>
-                          <Toggle on={galleryApprovalRequired} onClick={() => {
-                            const next = !galleryApprovalRequired;
-                            setGalleryApprovalRequired(next);
-                            saveEventSettings({
-                              gallery: {
-                                enabled: galleryEnabled,
-                                uploadRoles: galleryUploadRoles,
-                                viewRoles: galleryViewRoles,
-                                approvalRequired: next,
-                                videoOnly: galleryVideoOnly,
-                                imageOnly: galleryImageOnly
-                              }
-                            });
-                          }} />
-                        </div>
-
-                        {/* Media support switches: Video only and Image only */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: 10, borderTop: "1px solid var(--border-3)", paddingTop: 12 }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.03em" }}>Media Support</div>
-
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <div>
-                              <div style={{ fontSize: 13, fontWeight: 600 }}>Video only</div>
-                              <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Restrict uploads to video formats only.</div>
-                            </div>
-                            <Toggle
-                              on={galleryVideoOnly}
-                              onClick={() => {
-                                const targetVal = !galleryVideoOnly;
-                                setGalleryVideoOnly(targetVal);
-                                const nextImageOnly = targetVal ? false : galleryImageOnly;
-                                if (targetVal) {
-                                  setGalleryImageOnly(false);
-                                }
-                                saveEventSettings({
-                                  gallery: {
-                                    enabled: galleryEnabled,
-                                    uploadRoles: galleryUploadRoles,
-                                    viewRoles: galleryViewRoles,
-                                    approvalRequired: galleryApprovalRequired,
-                                    videoOnly: targetVal,
-                                    imageOnly: nextImageOnly
-                                  }
-                                });
-                              }}
-                            />
-                          </div>
-
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
-                            <div>
-                              <div style={{ fontSize: 13, fontWeight: 600 }}>Image only</div>
-                              <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Restrict uploads to image formats only.</div>
-                            </div>
-                            <Toggle
-                              on={galleryImageOnly}
-                              onClick={() => {
-                                const targetVal = !galleryImageOnly;
-                                setGalleryImageOnly(targetVal);
-                                const nextVideoOnly = targetVal ? false : galleryVideoOnly;
-                                if (targetVal) {
-                                  setGalleryVideoOnly(false);
-                                }
-                                saveEventSettings({
-                                  gallery: {
-                                    enabled: galleryEnabled,
-                                    uploadRoles: galleryUploadRoles,
-                                    viewRoles: galleryViewRoles,
-                                    approvalRequired: galleryApprovalRequired,
-                                    videoOnly: nextVideoOnly,
-                                    imageOnly: targetVal
-                                  }
-                                });
-                              }}
-                            />
-                          </div>
-                        </div>
-
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Discussion Settings Section */}
-                  <h3 style={{ margin: "20px 0 0", fontSize: 16, fontWeight: 700 }}>Discussion Settings</h3>
-                  <div style={{ border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: 20, background: "var(--surface)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 600 }}>Enable Discussion</div>
-                        <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>Allow members to post and reply to threads.</div>
-                      </div>
-                      <Toggle on={discussionEnabled} onClick={() => {
-                        const next = !discussionEnabled;
-                        setDiscussionEnabled(next);
-                        let nextThreadRoles = discussionThreadRoles;
-                        let nextReplyRoles = discussionReplyRoles;
-                        if (next) {
-                          nextThreadRoles = { roles: ['event_owner'] };
-                          nextReplyRoles = { roles: ['event_owner'] };
-                          setDiscussionThreadRoles(nextThreadRoles);
-                          setDiscussionReplyRoles(nextReplyRoles);
-                        }
-                        saveEventSettings({
-                          discussion: {
-                            enabled: next,
-                            threadRoles: nextThreadRoles,
-                            replyRoles: nextReplyRoles,
-                            approvalRequired: discussionApprovalRequired
-                          }
-                        });
-                      }} />
-                    </div>
-
-                    {discussionEnabled && (
-                      <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border-2)", display: "flex", flexDirection: "column", gap: 14, animation: "slideDown 0.3s ease-out" }}>
-
-                        {/* Who can create new thread? */}
-                        <div
-                          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "6px 0" }}
-                          onClick={() => setThreadRolesModalOpen(true)}
-                        >
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 600 }}>Who can create new thread?</div>
-                            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Click to customize creation permissions</div>
-                          </div>
-                          <span style={{ fontSize: 12.5, color: "var(--accent-2)", fontWeight: 600 }}>
-                            {getRolesSummary(discussionThreadRoles)}
-                          </span>
-                        </div>
-
-                        {/* Who can reply? */}
-                        <div
-                          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "6px 0", borderTop: "1px solid var(--border-3)", paddingTop: 12 }}
-                          onClick={() => setReplyRolesModalOpen(true)}
-                        >
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 600 }}>Who can reply on thread?</div>
-                            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>Click to customize reply permissions</div>
-                          </div>
-                          <span style={{ fontSize: 12.5, color: "var(--accent-2)", fontWeight: 600 }}>
-                            {getRolesSummary(discussionReplyRoles)}
-                          </span>
-                        </div>
-
-                        {/* Is approval required toggle */}
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid var(--border-3)", paddingTop: 12 }}>
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 600 }}>Approval required to create a thread?</div>
-                            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>New threads must be approved by an event manager or check-in staff before they become visible.</div>
-                          </div>
-                          <Toggle on={discussionApprovalRequired} onClick={() => {
-                            const next = !discussionApprovalRequired;
-                            setDiscussionApprovalRequired(next);
-                            saveEventSettings({
-                              discussion: {
-                                enabled: discussionEnabled,
-                                threadRoles: discussionThreadRoles,
-                                replyRoles: discussionReplyRoles,
-                                approvalRequired: next
-                              }
-                            });
-                          }} />
-                        </div>
-
-                      </div>
-                    )}
-                  </div>
-
-                </div>
-              )}
-
-            </div>
-
-            {/* Ticket sidebar — only for confirmed members / staff, not pending or non-joined visitors */}
+        <EventHeaderSection
+          e={e}
+          ev={ev}
+          st={st}
+          go={go}
+          attendees={attendees}
+          bookingStatusProp={bookingStatusProp}
+          registrationOpen={registrationOpen}
+          isScheduled={isScheduled}
+          regToggleLoading={regToggleLoading}
+          isHostOrCoHost={isHostOrCoHost}
+          effectiveIsMember={effectiveIsMember}
+          isSaved={isSaved}
+          toggleWishlist={toggleWishlist}
+          handleToggleRegistration={handleToggleRegistration}
+          handleLeaveEvent={handleLeaveEvent}
+          currentEvent={currentEvent}
+          tabs={tabs as Array<[string, string]>}
+          tab={tab}
+          setTab={setTab}
+        />
+
+        <div className="grp-cols" style={{ marginTop: 20, gridTemplateColumns: tab === "about" ? "1fr 300px" : "1fr", paddingBottom: 80 }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
             {tab === "about" && (
-              <div className="ev-aside" style={{ width: 280, marginLeft: 20 }}>
-                {isMember && (
-                  <div className="ticket-box">
-                    {e.online ? (
-                      <OnlineMeetingCard url={e.online_link} banner={e.cover} status={currentEvent.status} isPast={e.ends_at ? new Date(e.ends_at) < new Date() : (e.starts_at ? new Date(e.starts_at) < new Date() : false)} />
-                    ) : (
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "20px 16px" }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", color: "var(--accent-2)", letterSpacing: "0.05em", marginBottom: 12 }}>
-                          Your Event Ticket
-                        </div>
-                        <div style={{ padding: 10, background: "#fff", borderRadius: "var(--r-md)", boxShadow: "0 4px 12px rgba(0,0,0,0.06)", width: 140, height: 140, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          {window.TicketQR && <window.TicketQR token={e.qrToken || e.attendeeId || e.id || "test"} size={120} />}
-                        </div>
-                        <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 10, textAlign: "center" }}>
-                          Scan QR at entry gate
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+              <EventAboutTab
+                e={e}
+                currentEvent={currentEvent}
+                registrationOpen={registrationOpen}
+                isHostOrCoHost={isHostOrCoHost}
+                isPending={isPending}
+              />
+            )}
 
-                <div className="ev-block" style={{ marginTop: 16 }}>
-                  <h3 style={{ fontSize: 14, marginTop: 0 }}>{confirmedCount} attending</h3>
-                  <div className="att-grid">
-                    {(hostStats?.confirmed || attendees || []).slice(0, 8).map((a, i) => {
-                      const name = typeof a === 'object' ? (a.name || a.display_name) : a;
-                      const userId = typeof a === 'object' ? (a.userId || a.id || a.bookingId) : undefined;
-                      const picture = typeof a === 'object' ? a.picture : undefined;
-                      return (
-                        <div
-                          key={userId || i}
-                          className="att"
-                          style={{ cursor: userId ? "pointer" : "default" }}
-                          onClick={() => userId && go("profile", { id: userId })}
-                        >
-                          <Avatar name={name || "Guest"} userId={userId} img={picture} size={28} />
-                          <span className="nm">{name || "Guest"}</span>
-                        </div>
-                      );
-                    })}
-                    {confirmedCount > 8 && (
-                      <div className="att" style={{ paddingRight: 14 }}>
-                        <div className="av" style={{ width: 28, height: 28, fontSize: 11, background: "var(--surface-2)", color: "var(--ink-2)" }}>
-                          +{confirmedCount - 8}
-                        </div>
-                        <span className="nm">more</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
+            {tab === "dashboard" && (
+              <EventDashboard ev={currentEvent || e} st={st} go={go} embedded={true} />
+            )}
 
-                <div className="host-card" style={{ marginTop: 16 }}>
-                  <div className="hh"><Avatar name={e.hostBy || e.host} userId={e.hostUserId} img={e.hostPhoto} size={46} /><div><div className="n">{e.host}</div><div className="r">{e.hostType === 'group' ? 'Group' : 'Organizer'}</div></div></div>
-                  <div className="hb">Curating the best gatherings in {e.city || city}. Follow to never miss an update.</div>
-                </div>
-              </div>
+            {tab === "members" && (
+              <EventMembersTab
+                e={e}
+                hostStats={hostStats}
+                eventMembers={eventMembers}
+                availableRoles={availableRoles}
+                isTicketManager={isTicketManager}
+                isAdmin={isAdmin}
+                isModerator={isModerator}
+                isHostOrCoHost={isHostOrCoHost}
+                isOwner={isOwner}
+                ME={ME}
+                apiBase={apiBase}
+                token={token}
+                go={go}
+                getQuestionLabel={(fieldId) => getQuestionLabel(currentEvent.formFields || [], fieldId)}
+                fetchEventMembers={fetchEventMembers}
+                fetchHostStats={fetchHostStats}
+                handleHostRequestAction={handleHostRequestAction}
+                handleRemoveEventMember={handleRemoveEventMember}
+                setResponseMember={setResponseMember}
+                Avatar={Avatar}
+              />
+            )}
+
+            {tab === "gallery" && (
+              <EventGalleryTab
+                e={e}
+                galleryItems={galleryItems}
+                galleryEnabled={galleryEnabled}
+                galleryVideoOnly={galleryVideoOnly}
+                galleryImageOnly={galleryImageOnly}
+                canUploadToGallery={canUploadToGallery}
+                isTicketManager={isTicketManager}
+                isScanner={isScanner}
+                isOwner={isOwner}
+                isAdmin={isAdmin}
+                isModerator={isModerator}
+                ME={ME}
+                apiBase={apiBase}
+                token={token}
+                fetchEventGallery={fetchEventGallery}
+              />
+            )}
+
+            {tab === "discussion" && discussionEnabled && (
+              <DiscussionPanel
+                entityType="event"
+                entityId={e.id}
+                token={token}
+                currentUserId={currentUserId}
+                isOwner={isOwner}
+                isAdmin={isAdmin}
+                isModerator={isModerator}
+                isMember={effectiveIsMember}
+                myRoleKey={myRoleKey}
+                availableRoles={availableRoles}
+                isTicketManager={isTicketManager}
+                isScanner={isScanner}
+                forumsEnabled={discussionEnabled}
+                threadPerm={discussionThreadRoles}
+                replyPerm={discussionReplyRoles}
+                approvalRequired={discussionApprovalRequired}
+                ME={ME}
+              />
+            )}
+
+            {tab === "ticketing" && isTicketManager && isPaidEvent && (
+              <EventTicketingTab
+                e={e}
+                apiBase={apiBase}
+                token={token}
+                isTicketManager={isTicketManager}
+                isPaidEvent={isPaidEvent}
+              />
+            )}
+
+            {tab === "invite" && (
+              <EventInviteTab
+                eventVisibility={eventVisibility}
+                eventJoinEligibility={eventJoinEligibility}
+                inviteLinks={inviteLinks}
+                inviteLoading={inviteLoading}
+                generateInviteLink={generateInviteLink}
+                copyInviteLink={copyInviteLink}
+              />
+            )}
+
+            {tab === "settings" && (
+              <EventSettingsTab
+                galleryEnabled={galleryEnabled}
+                setGalleryEnabled={setGalleryEnabled}
+                galleryUploadRoles={galleryUploadRoles}
+                setGalleryUploadRoles={setGalleryUploadRoles}
+                galleryViewRoles={galleryViewRoles}
+                setGalleryViewRoles={setGalleryViewRoles}
+                galleryApprovalRequired={galleryApprovalRequired}
+                setGalleryApprovalRequired={setGalleryApprovalRequired}
+                galleryVideoOnly={galleryVideoOnly}
+                setGalleryVideoOnly={setGalleryVideoOnly}
+                galleryImageOnly={galleryImageOnly}
+                setGalleryImageOnly={setGalleryImageOnly}
+                discussionEnabled={discussionEnabled}
+                setDiscussionEnabled={setDiscussionEnabled}
+                discussionThreadRoles={discussionThreadRoles}
+                setDiscussionThreadRoles={setDiscussionThreadRoles}
+                discussionReplyRoles={discussionReplyRoles}
+                setDiscussionReplyRoles={setDiscussionReplyRoles}
+                discussionApprovalRequired={discussionApprovalRequired}
+                setDiscussionApprovalRequired={setDiscussionApprovalRequired}
+                getRolesSummary={getRolesSummary}
+                saveEventSettings={saveEventSettings}
+                setUploadRolesModalOpen={setUploadRolesModalOpen}
+                setViewRolesModalOpen={setViewRolesModalOpen}
+                setThreadRolesModalOpen={setThreadRolesModalOpen}
+                setReplyRolesModalOpen={setReplyRolesModalOpen}
+              />
             )}
           </div>
 
+          {tab === "about" && (
+            <EventSidebar
+              e={e}
+              currentEvent={currentEvent}
+              isMember={isMember}
+              confirmedCount={confirmedCount}
+              hostStats={hostStats}
+              attendees={attendees}
+              city={city}
+              go={go}
+              ME={ME}
+              Avatar={Avatar}
+            />
+          )}
         </div>
       </div>
 
-      {/* Roles Selection Modals */}
-      {renderRolesModal(uploadRolesModalOpen, () => setUploadRolesModalOpen(false), galleryUploadRoles, (nextUpload) => {
-        const nextVal = typeof nextUpload === 'function' ? nextUpload(galleryUploadRoles) : nextUpload;
-        setGalleryUploadRoles(nextVal);
-        const currentView = Array.isArray(galleryViewRoles?.roles) 
-          ? galleryViewRoles 
-          : { public: !!galleryViewRoles?.public, roles: legacyBucketToRoleKeys(galleryViewRoles) };
-        const nextView = {
-          public: !!(currentView.public || nextVal.public),
-          roles: Array.from(new Set([...(currentView.roles || []), ...(nextVal.roles || [])]))
-        };
-        setGalleryViewRoles(nextView);
-      }, "Who can upload?", (next) => {
-        const currentView = Array.isArray(galleryViewRoles?.roles) 
-          ? galleryViewRoles 
-          : { public: !!galleryViewRoles?.public, roles: legacyBucketToRoleKeys(galleryViewRoles) };
-        const nextView = {
-          public: !!(currentView.public || next.public),
-          roles: Array.from(new Set([...(currentView.roles || []), ...(next.roles || [])]))
-        };
-        saveEventSettings({
-          gallery: {
-            enabled: galleryEnabled,
-            uploadRoles: next,
-            viewRoles: nextView,
-            approvalRequired: galleryApprovalRequired,
-            videoOnly: galleryVideoOnly,
-            imageOnly: galleryImageOnly
-          }
-        });
-      })}
-      {renderRolesModal(viewRolesModalOpen, () => setViewRolesModalOpen(false), galleryViewRoles, setGalleryViewRoles, "Who can view?", (next) => {
-        saveEventSettings({
-          gallery: {
-            enabled: galleryEnabled,
-            uploadRoles: galleryUploadRoles,
-            viewRoles: next,
-            approvalRequired: galleryApprovalRequired,
-            videoOnly: galleryVideoOnly,
-            imageOnly: galleryImageOnly
-          }
-        });
-      })}
-      {renderRolesModal(threadRolesModalOpen, () => setThreadRolesModalOpen(false), discussionThreadRoles, setDiscussionThreadRoles, "Who can create new thread?", (next) => {
-        saveEventSettings({
-          discussion: {
-            enabled: discussionEnabled,
-            threadRoles: next,
-            replyRoles: discussionReplyRoles,
-            approvalRequired: discussionApprovalRequired
-          }
-        });
-      })}
-      {renderRolesModal(replyRolesModalOpen, () => setReplyRolesModalOpen(false), discussionReplyRoles, setDiscussionReplyRoles, "Who can reply on thread?", (next) => {
-        saveEventSettings({
-          discussion: {
-            enabled: discussionEnabled,
-            threadRoles: discussionThreadRoles,
-            replyRoles: next,
-            approvalRequired: discussionApprovalRequired
-          }
-        });
-      })}
+      <EventRolesModal
+        isOpen={uploadRolesModalOpen}
+        onClose={() => setUploadRolesModalOpen(false)}
+        bucket={galleryUploadRoles}
+        setBucket={(nextUpload) => {
+          const nextVal = typeof nextUpload === 'function' ? nextUpload(galleryUploadRoles) : nextUpload;
+          setGalleryUploadRoles(nextVal);
+          const currentView = Array.isArray(galleryViewRoles?.roles)
+            ? galleryViewRoles
+            : { public: !!galleryViewRoles?.public, roles: legacyBucketToRoleKeys(galleryViewRoles) };
+          const nextView = {
+            public: !!(currentView.public || nextVal.public),
+            roles: Array.from(new Set([...(currentView.roles || []), ...(nextVal.roles || [])]))
+          };
+          setGalleryViewRoles(nextView);
+        }}
+        titleText="Who can upload?"
+        onSave={(next) => {
+          const currentView = Array.isArray(galleryViewRoles?.roles)
+            ? galleryViewRoles
+            : { public: !!galleryViewRoles?.public, roles: legacyBucketToRoleKeys(galleryViewRoles) };
+          const nextView = {
+            public: !!(currentView.public || next.public),
+            roles: Array.from(new Set([...(currentView.roles || []), ...(next.roles || [])]))
+          };
+          saveEventSettings({
+            gallery: {
+              enabled: galleryEnabled,
+              uploadRoles: next,
+              viewRoles: nextView,
+              approvalRequired: galleryApprovalRequired,
+              videoOnly: galleryVideoOnly,
+              imageOnly: galleryImageOnly
+            }
+          });
+        }}
+        availableRoles={availableRoles || []}
+      />
 
-      {/* Member Response Modal — questionnaire answers for a member, opened from the
-          "Response" button on their row in the Members tab. */}
-      {responseMember && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setResponseMember(null)}>
-          <div style={{ background: "var(--surface)", width: "min(480px,95vw)", maxHeight: "80vh", overflowY: "auto", borderRadius: "var(--r-xl)", boxShadow: "var(--sh-xl)", display: "flex", flexDirection: "column" }} onClick={ev => ev.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: "1px solid var(--border)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <Avatar name={responseMember.name} userId={responseMember.id} img={responseMember.picture} size={34} />
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 15 }}>{responseMember.name}</div>
-                  {responseMember.email && <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{responseMember.email}</div>}
-                </div>
-              </div>
-              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => setResponseMember(null)} style={{ border: "none" }}>✕</button>
-            </div>
-            <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
-              {responseMember.answers && Object.keys(responseMember.answers).length > 0 ? (
-                Object.entries(responseMember.answers).filter(([k]) => !['ticketTypeId', 'qty', 'ticketName', 'isQuestionnaireSubmit', 'registration_location'].includes(k)).map(([key, val]) => {
-                  const label = getQuestionLabel(key);
-                  return (
-                    <div key={key}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>{label}</div>
-                      <div style={{ fontSize: 14, color: "var(--ink)", background: "var(--field)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px" }}>{String(val)}</div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div style={{ textAlign: "center", padding: "24px 0", color: "var(--ink-3)", fontSize: 13.5 }}>
-                  This member didn't submit any questionnaire responses.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <EventRolesModal
+        isOpen={viewRolesModalOpen}
+        onClose={() => setViewRolesModalOpen(false)}
+        bucket={galleryViewRoles}
+        setBucket={setGalleryViewRoles}
+        titleText="Who can view?"
+        onSave={(next) => {
+          saveEventSettings({
+            gallery: {
+              enabled: galleryEnabled,
+              uploadRoles: galleryUploadRoles,
+              viewRoles: next,
+              approvalRequired: galleryApprovalRequired,
+              videoOnly: galleryVideoOnly,
+              imageOnly: galleryImageOnly
+            }
+          });
+        }}
+        availableRoles={availableRoles || []}
+      />
 
-      {/* Gallery Image Popup Modal */}
-      {viewerItem && (
-        <div 
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 20000,
-            background: "rgba(0, 0, 0, 0.95)",
-            backdropFilter: "blur(8px)",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#fff",
-            userSelect: "none"
-          }}
-          onClick={() => {
-            setViewerItem(null);
-            setZoomScale(1);
-            setPanOffset({ x: 0, y: 0 });
-          }}
-        >
-          {/* Header */}
-          <div 
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              padding: "16px 24px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              background: "linear-gradient(to bottom, rgba(0,0,0,0.8), transparent)",
-              zIndex: 10
-            }}
-            onClick={ev => ev.stopPropagation()}
-          >
-            <div style={{ fontSize: 14, color: "#ccc" }}>
-              {viewerItem.uploadedBy ? `Uploaded by ${viewerItem.uploadedBy}` : "Image Preview"}
-            </div>
-            <button 
-              onClick={() => {
-                setViewerItem(null);
-                setZoomScale(1);
-                setPanOffset({ x: 0, y: 0 });
-              }}
-              style={{
-                background: "rgba(255,255,255,0.1)",
-                color: "#fff",
-                border: "none",
-                borderRadius: "50%",
-                width: 36,
-                height: 36,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 16,
-                fontWeight: "bold",
-                transition: "background 0.2s"
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.2)"}
-              onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
-            >
-              ✕
-            </button>
-          </div>
+      <EventRolesModal
+        isOpen={threadRolesModalOpen}
+        onClose={() => setThreadRolesModalOpen(false)}
+        bucket={discussionThreadRoles}
+        setBucket={(nextThread) => {
+          const nextVal = typeof nextThread === 'function' ? nextThread(discussionThreadRoles) : nextThread;
+          setDiscussionThreadRoles(nextVal);
+          const currentReply = Array.isArray(discussionReplyRoles?.roles)
+            ? discussionReplyRoles
+            : { public: !!discussionReplyRoles?.public, roles: legacyBucketToRoleKeys(discussionReplyRoles) };
+          const nextReply = {
+            public: !!(currentReply.public || nextVal.public),
+            roles: Array.from(new Set([...(currentReply.roles || []), ...(nextVal.roles || [])]))
+          };
+          setDiscussionReplyRoles(nextReply);
+        }}
+        titleText="Who can create new thread?"
+        onSave={(next) => {
+          const currentReply = Array.isArray(discussionReplyRoles?.roles)
+            ? discussionReplyRoles
+            : { public: !!discussionReplyRoles?.public, roles: legacyBucketToRoleKeys(discussionReplyRoles) };
+          const nextReply = {
+            public: !!(currentReply.public || next.public),
+            roles: Array.from(new Set([...(currentReply.roles || []), ...(next.roles || [])]))
+          };
+          saveEventSettings({
+            discussion: {
+              enabled: discussionEnabled,
+              threadRoles: next,
+              replyRoles: nextReply,
+              approvalRequired: discussionApprovalRequired
+            }
+          });
+        }}
+        availableRoles={availableRoles || []}
+      />
 
-          {/* Navigation Controls */}
-          {(() => {
-            const approvedItems = galleryItems.filter(item => item.approved && item.type !== "video");
-            const currentIndex = approvedItems.findIndex(item => item.id === viewerItem.id);
-            
-            const handlePrev = (evt) => {
-              evt.stopPropagation();
-              if (currentIndex > 0) {
-                setViewerItem(approvedItems[currentIndex - 1]);
-                setZoomScale(1);
-                setPanOffset({ x: 0, y: 0 });
-              }
-            };
-            
-            const handleNext = (evt) => {
-              evt.stopPropagation();
-              if (currentIndex < approvedItems.length - 1) {
-                setViewerItem(approvedItems[currentIndex + 1]);
-                setZoomScale(1);
-                setPanOffset({ x: 0, y: 0 });
-              }
-            };
+      <EventRolesModal
+        isOpen={replyRolesModalOpen}
+        onClose={() => setReplyRolesModalOpen(false)}
+        bucket={discussionReplyRoles}
+        setBucket={setDiscussionReplyRoles}
+        titleText="Who can reply on thread?"
+        onSave={(next) => {
+          saveEventSettings({
+            discussion: {
+              enabled: discussionEnabled,
+              threadRoles: discussionThreadRoles,
+              replyRoles: next,
+              approvalRequired: discussionApprovalRequired
+            }
+          });
+        }}
+        availableRoles={availableRoles || []}
+      />
 
-            return (
-              <>
-                {currentIndex > 0 && (
-                  <button
-                    onClick={handlePrev}
-                    style={{
-                      position: "absolute",
-                      left: 24,
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      background: "rgba(0,0,0,0.5)",
-                      color: "#fff",
-                      border: "1px solid rgba(255,255,255,0.2)",
-                      borderRadius: "50%",
-                      width: 48,
-                      height: 48,
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 20,
-                      zIndex: 10,
-                      transition: "background 0.2s"
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.8)"}
-                    onMouseLeave={e => e.currentTarget.style.background = "rgba(0,0,0,0.5)"}
-                  >
-                    ⟨
-                  </button>
-                )}
-                {currentIndex < approvedItems.length - 1 && (
-                  <button
-                    onClick={handleNext}
-                    style={{
-                      position: "absolute",
-                      right: 24,
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      background: "rgba(0,0,0,0.5)",
-                      color: "#fff",
-                      border: "1px solid rgba(255,255,255,0.2)",
-                      borderRadius: "50%",
-                      width: 48,
-                      height: 48,
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 20,
-                      zIndex: 10,
-                      transition: "background 0.2s"
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.8)"}
-                    onMouseLeave={e => e.currentTarget.style.background = "rgba(0,0,0,0.5)"}
-                  >
-                    ⟩
-                  </button>
-                )}
-              </>
-            );
-          })()}
-
-          {/* Viewport for pan & zoom */}
-          <div 
-            style={{
-              width: "80vw",
-              height: "70vh",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              overflow: "hidden",
-              position: "relative",
-              cursor: handModeActive ? (isDragging ? "grabbing" : "grab") : "zoom-in"
-            }}
-            onClick={ev => {
-              ev.stopPropagation();
-              if (!handModeActive) {
-                // If not in hand mode, clicking zooms in or resets
-                setZoomScale(prev => prev > 1 ? 1 : 2.5);
-                setPanOffset({ x: 0, y: 0 });
-              }
-            }}
-            onMouseDown={evt => {
-              if (!handModeActive) return;
-              evt.preventDefault();
-              setIsDragging(true);
-              setDragStart({ x: evt.clientX - panOffset.x, y: evt.clientY - panOffset.y });
-            }}
-            onMouseMove={evt => {
-              if (!isDragging) return;
-              setPanOffset({
-                x: evt.clientX - dragStart.x,
-                y: evt.clientY - dragStart.y
-              });
-            }}
-            onMouseUp={() => setIsDragging(false)}
-            onMouseLeave={() => setIsDragging(false)}
-            onTouchStart={evt => {
-              if (!handModeActive || evt.touches.length !== 1) return;
-              const touch = evt.touches[0];
-              setIsDragging(true);
-              setDragStart({ x: touch.clientX - panOffset.x, y: touch.clientY - panOffset.y });
-            }}
-            onTouchMove={evt => {
-              if (!isDragging || evt.touches.length !== 1) return;
-              const touch = evt.touches[0];
-              setPanOffset({
-                x: touch.clientX - dragStart.x,
-                y: touch.clientY - dragStart.y
-              });
-            }}
-            onTouchEnd={() => setIsDragging(false)}
-          >
-            <img 
-              src={viewerItem.url} 
-              alt="Preview"
-              draggable="false"
-              style={{
-                maxWidth: "100%",
-                maxHeight: "100%",
-                objectFit: "contain",
-                transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})`,
-                transition: isDragging ? "none" : "transform 0.15s ease-out",
-                pointerEvents: "none"
-              }}
-            />
-          </div>
-
-          {/* Controls Bar at bottom */}
-          <div 
-            style={{
-              position: "absolute",
-              bottom: 24,
-              display: "flex",
-              gap: 12,
-              background: "rgba(0,0,0,0.85)",
-              border: "1px solid rgba(255,255,255,0.15)",
-              borderRadius: 30,
-              padding: "8px 20px",
-              zIndex: 10,
-              alignItems: "center"
-            }}
-            onClick={ev => ev.stopPropagation()}
-          >
-            {/* Hand tool toggle */}
-            <button
-              onClick={() => setHandModeActive(!handModeActive)}
-              title={handModeActive ? "Switch to click-to-zoom mode" : "Switch to drag-to-pan mode (Hand Tool)"}
-              style={{
-                background: handModeActive ? "var(--primary, #7c3aed)" : "transparent",
-                color: "#fff",
-                border: "none",
-                borderRadius: "50%",
-                width: 36,
-                height: 36,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 16,
-                transition: "all 0.2s"
-              }}
-            >
-              🖐️
-            </button>
-
-            <span style={{ width: 1, height: 20, background: "rgba(255,255,255,0.2)" }} />
-
-            {/* Zoom Out */}
-            <button
-              onClick={() => setZoomScale(prev => Math.max(prev - 0.5, 0.5))}
-              title="Zoom Out"
-              style={{
-                background: "transparent",
-                color: "#fff",
-                border: "none",
-                borderRadius: "50%",
-                width: 36,
-                height: 36,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 16,
-                fontWeight: "bold",
-                transition: "background 0.2s"
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
-              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-            >
-              ➖
-            </button>
-
-            {/* Scale Value */}
-            <span style={{ minWidth: 48, textAlign: "center", fontSize: 13, fontWeight: 600 }}>
-              {Math.round(zoomScale * 100)}%
-            </span>
-
-            {/* Zoom In */}
-            <button
-              onClick={() => setZoomScale(prev => Math.min(prev + 0.5, 6))}
-              title="Zoom In"
-              style={{
-                background: "transparent",
-                color: "#fff",
-                border: "none",
-                borderRadius: "50%",
-                width: 36,
-                height: 36,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 16,
-                fontWeight: "bold",
-                transition: "background 0.2s"
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
-              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-            >
-              ➕
-            </button>
-
-            <span style={{ width: 1, height: 20, background: "rgba(255,255,255,0.2)" }} />
-
-            {/* Reset */}
-            <button
-              onClick={() => {
-                setZoomScale(1);
-                setPanOffset({ x: 0, y: 0 });
-              }}
-              title="Reset View"
-              style={{
-                background: "transparent",
-                color: "#fff",
-                border: "none",
-                borderRadius: "50%",
-                width: 36,
-                height: 36,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 14,
-                transition: "background 0.2s"
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
-              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-            >
-              🔄
-            </button>
-          </div>
-        </div>
-      )}
+      <EventMemberResponseModal
+        member={responseMember}
+        onClose={() => setResponseMember(null)}
+        getQuestionLabel={(fieldId) => getQuestionLabel(currentEvent.formFields || [], fieldId)}
+        Avatar={Avatar}
+      />
     </div>
   );
 }
