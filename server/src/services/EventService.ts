@@ -1020,6 +1020,10 @@ export class EventService {
               where: { line_item_id: { in: liIds } },
               data: { status: 'confirmed' }
             });
+            await tx.attendees.updateMany({
+              where: { booking_id: { in: bookingIds }, status: 'pending' },
+              data: { status: 'approved' }
+            });
           });
 
           try {
@@ -1856,6 +1860,27 @@ export class EventService {
     await this.forumPostsRepo.updateLockStatus(postId, locked);
   }
 
+  /**
+   * Resolves the canonical list of user IDs for all attendees of an event.
+   * If an attendee has a claimed user_id, it is used. Otherwise it falls back to the booking's booker_user_id.
+   */
+  static async getEventParticipantUserIds(eventId: string, includePending = false): Promise<string[]> {
+    const statuses = includePending ? ['approved', 'checked_in', 'pending'] : ['approved', 'checked_in'];
+    const attendees = await prisma.attendees.findMany({
+      where: {
+        bookings: { event_id: eventId, status: { not: 'cancelled' } },
+        status: { in: statuses as any[] }
+      },
+      select: {
+        user_id: true,
+        bookings: { select: { booker_user_id: true } }
+      }
+    });
+
+    const userIds = attendees.map(a => a.user_id || a.bookings.booker_user_id).filter(Boolean) as string[];
+    return [...new Set(userIds)];
+  }
+
   static async getEventMembers(eventId: string) {
     const topRoleKey = await this.getTopEventRoleKey();
     const assignments = await prisma.event_team_assignments.findMany({
@@ -1866,10 +1891,19 @@ export class EventService {
       }
     });
 
-    const bookings = await prisma.bookings.findMany({
-      where: { event_id: eventId, status: { in: ['confirmed', 'pending_approval', 'pending_payment'] } },
+    const attendees = await prisma.attendees.findMany({
+      where: { 
+        bookings: { event_id: eventId, status: { not: 'cancelled' } },
+        status: { in: ['approved', 'checked_in', 'pending'] }
+      },
       include: {
-        users: { select: { id: true, first_name: true, last_name: true, primary_email: true, profile_image_data: true, profiles: { select: { display_name: true } } } }
+        users_attendees_user_idTousers: { select: { id: true, first_name: true, last_name: true, primary_email: true, profile_image_data: true, profiles: { select: { display_name: true } } } },
+        bookings: { 
+          select: { 
+            booker_user_id: true,
+            users: { select: { id: true, first_name: true, last_name: true, primary_email: true, profile_image_data: true, profiles: { select: { display_name: true } } } }
+          }
+        }
       }
     });
 
@@ -1891,18 +1925,22 @@ export class EventService {
       }
     }
 
-    for (const b of bookings) {
-      if (!memberMap.has(b.booker_user_id) && b.users) {
-        const u = b.users;
+    for (const att of attendees) {
+      // Resolve the true user record: attendee's own user (if claimed) OR the buyer's user
+      const resolvedUser = att.users_attendees_user_idTousers || att.bookings.users;
+      const resolvedUserId = att.user_id || att.bookings.booker_user_id;
+
+      if (resolvedUserId && !memberMap.has(resolvedUserId) && resolvedUser) {
+        const u = resolvedUser;
         const picture = u.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
-        memberMap.set(b.booker_user_id, {
+        memberMap.set(resolvedUserId, {
           id: u.id,
           name: u.first_name ? `${u.first_name} ${u.last_name || ''}`.trim() : 'Unknown',
           display_name: u.profiles?.display_name || u.first_name,
           picture,
           email: u.primary_email,
           role: 'member',
-          state: b.status === 'pending_approval' ? 'pending' : 'active'
+          state: att.status === 'pending' ? 'pending' : 'active'
         });
       }
     }
@@ -2033,6 +2071,26 @@ export class EventService {
         const liIds = lineItems.map(li => li.id);
         if (liIds.length > 0) {
           await tx.tickets.updateMany({ where: { line_item_id: { in: liIds } }, data: { status: 'cancelled' } });
+        }
+      }
+
+      // Also update any attendee records for this user in this event to 'rejected'
+      // This handles cases where they were added as a guest by someone else
+      const attendeesToReject = await tx.attendees.findMany({
+        where: { user_id: targetUserId, bookings: { event_id: eventId } }
+      });
+      
+      for (const att of attendeesToReject) {
+        await tx.attendees.update({
+          where: { id: att.id },
+          data: { status: 'rejected' }
+        });
+        // Also cancel their specific ticket
+        if (att.ticket_id) {
+          await tx.tickets.update({
+            where: { id: att.ticket_id },
+            data: { status: 'cancelled' }
+          });
         }
       }
     });
@@ -2323,23 +2381,28 @@ export class EventService {
 
       if (promoted) {
         try {
-          // Notify the waitlisted user of their promotion
+          // Notify the waitlisted users of their promotion
           if (newStatus === 'confirmed') {
-            sendNotificationToUser(wb.booker_user_id, 'group.notification', {
-              type: 'event',
-              text: `You have been moved from the waitlist. Your ticket has been confirmed for <b>${event.title}</b>! 🎉`,
-              eventId: event.id
-            });
-            await prisma.notification_log.create({
-              data: {
-                user_id: wb.booker_user_id,
-                tenant_id: event.tenant_id,
-                channel: 'app',
-                template_key: 'event_waitlist_promoted',
-                status: 'queued',
-                provider_ref: JSON.stringify({ eventId: event.id, eventTitle: event.title })
-              }
-            }).catch(() => {});
+            const atts = await prisma.attendees.findMany({ where: { booking_id: wb.id } });
+            const notifyIds = [...new Set(atts.map(a => a.user_id || wb.booker_user_id).filter(Boolean))] as string[];
+
+            for (const nId of notifyIds) {
+              sendNotificationToUser(nId, 'group.notification', {
+                type: 'event',
+                text: `You have been moved from the waitlist. Your ticket has been confirmed for <b>${event.title}</b>! 🎉`,
+                eventId: event.id
+              });
+              await prisma.notification_log.create({
+                data: {
+                  user_id: nId,
+                  tenant_id: event.tenant_id,
+                  channel: 'app',
+                  template_key: 'event_waitlist_promoted',
+                  status: 'queued',
+                  provider_ref: JSON.stringify({ eventId: event.id, eventTitle: event.title })
+                }
+              }).catch(() => {});
+            }
 
             // Fetch the buyer's email and name
             const buyerUser = await prisma.users.findUnique({ where: { id: wb.booker_user_id }, include: { profiles: true } });
@@ -2361,22 +2424,27 @@ export class EventService {
               }
             }
           } else {
-            // pending_approval — notify user
-            sendNotificationToUser(wb.booker_user_id, 'group.notification', {
-              type: 'registration',
-              text: `A seat opened up for <b>${event.title}</b>. Your join request is now pending host approval.`,
-              eventId: event.id
-            });
-            await prisma.notification_log.create({
-              data: {
-                user_id: wb.booker_user_id,
-                tenant_id: event.tenant_id,
-                channel: 'app',
-                template_key: 'event_waitlist_to_pending',
-                status: 'queued',
-                provider_ref: JSON.stringify({ eventId: event.id, eventTitle: event.title })
-              }
-            }).catch(() => {});
+            // pending_approval — notify users
+            const atts = await prisma.attendees.findMany({ where: { booking_id: wb.id } });
+            const notifyIds = [...new Set(atts.map(a => a.user_id || wb.booker_user_id).filter(Boolean))] as string[];
+
+            for (const nId of notifyIds) {
+              sendNotificationToUser(nId, 'group.notification', {
+                type: 'registration',
+                text: `A seat opened up for <b>${event.title}</b>. Your join request is now pending host approval.`,
+                eventId: event.id
+              });
+              await prisma.notification_log.create({
+                data: {
+                  user_id: nId,
+                  tenant_id: event.tenant_id,
+                  channel: 'app',
+                  template_key: 'event_waitlist_to_pending',
+                  status: 'queued',
+                  provider_ref: JSON.stringify({ eventId: event.id, eventTitle: event.title })
+                }
+              }).catch(() => {});
+            }
 
             // Notify host in real-time with group.notification (triggers toast + notification badge)
             if (ownerUserId) {
@@ -2478,21 +2546,26 @@ export class EventService {
 
     for (const b of waitlistedBookings) {
       try {
-        sendNotificationToUser(b.booker_user_id, 'group.notification', {
-          type: 'waitlist_closed',
-          text: `The waitlist for <b>${event.title}</b> has been closed by the host. You have been removed from the waitlist.`,
-          eventId: event.id
-        });
-        await prisma.notification_log.create({
-          data: {
-            user_id: b.booker_user_id,
-            tenant_id: event.tenant_id,
-            channel: 'app',
-            template_key: 'event_waitlist_closed',
-            status: 'queued',
-            provider_ref: JSON.stringify({ eventId: event.id, eventTitle: event.title })
-          }
-        }).catch(() => {});
+        const atts = await prisma.attendees.findMany({ where: { booking_id: b.id } });
+        const notifyIds = [...new Set(atts.map(a => a.user_id || b.booker_user_id).filter(Boolean))] as string[];
+        
+        for (const nId of notifyIds) {
+          sendNotificationToUser(nId, 'group.notification', {
+            type: 'waitlist_closed',
+            text: `The waitlist for <b>${event.title}</b> has been closed by the host. You have been removed from the waitlist.`,
+            eventId: event.id
+          });
+          await prisma.notification_log.create({
+            data: {
+              user_id: nId,
+              tenant_id: event.tenant_id,
+              channel: 'app',
+              template_key: 'event_waitlist_closed',
+              status: 'queued',
+              provider_ref: JSON.stringify({ eventId: event.id, eventTitle: event.title })
+            }
+          }).catch(() => {});
+        }
       } catch {}
     }
 
@@ -2582,10 +2655,38 @@ export class EventService {
       where: { event_id: eventId, user_id: userId }
     });
 
-    const bookings = await prisma.bookings.findMany({
-      where: { event_id: eventId, booker_user_id: userId }
-    });
     let canceledConfirmedCount = 0;
+
+    // 1. Cancel attendance for the user if they are a specific attendee (e.g. a guest)
+    const userAttendees = await prisma.attendees.findMany({
+      where: { 
+        bookings: { event_id: eventId },
+        user_id: userId,
+        status: { in: ['pending', 'approved', 'checked_in', 'waitlisted'] }
+      }
+    });
+
+    for (const att of userAttendees) {
+      if (att.status === 'approved' || att.status === 'checked_in') canceledConfirmedCount++;
+      await prisma.$transaction(async (tx) => {
+        await tx.attendees.update({
+          where: { id: att.id },
+          data: { status: 'rejected' }
+        });
+        if (att.ticket_id) {
+          await tx.tickets.update({
+            where: { id: att.ticket_id },
+            data: { status: 'cancelled' }
+          });
+        }
+      });
+    }
+
+    // 2. If the user is the booker of any bookings, cancel those entirely
+    const bookings = await prisma.bookings.findMany({
+      where: { event_id: eventId, booker_user_id: userId, status: { not: 'cancelled' } }
+    });
+    
     for (const b of bookings) {
       if (b.status === 'confirmed' || b.status === 'pending_approval') {
         canceledConfirmedCount++;
@@ -2602,6 +2703,10 @@ export class EventService {
         await tx.tickets.updateMany({
           where: { line_item_id: { in: liIds } },
           data: { status: 'cancelled' }
+        });
+        await tx.attendees.updateMany({
+          where: { booking_id: b.id, status: { not: 'rejected' } },
+          data: { status: 'rejected' }
         });
       });
     }

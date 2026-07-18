@@ -688,7 +688,7 @@ export function MyTickets({ st, go }) {
                     <span>{t.online ? <I.online style={{ width: 14, height: 14 }} /> : <I.pin style={{ width: 14, height: 14 }} />} {t.venue}</span>
                   </div>
                   <div className="tkt-foot">
-                    <span className="tkt-id">#{t.id}</span>
+                    <span className="tkt-id">#{t.ticketId}</span>
                     <span style={{ fontSize: 13, fontWeight: 700, color: t.paid === "Free" ? "#1f9d57" : "var(--ink)" }}>{t.paid}</span>
                   </div>
                 </div>
@@ -709,13 +709,29 @@ export function AllTickets({ st, go }) {
   const joinedEvents = st.joinedEvents || [];
   const tickets = dropSupersededLocalTickets(st.myTickets || [], joinedEvents);
 
+  const unpackTicketsFromEvent = (j) => {
+    const norm = normalizeJoinedEvent(j);
+    if (norm.allAttendees && norm.allAttendees.length > 0) {
+      return norm.allAttendees.map((att, index) => ({
+        ...norm,
+        attendee: att.name || norm.attendee,
+        qrToken: att.tickets?.qr_token || att.ticket_id || norm.qrToken,
+        ticketId: norm.allAttendees.length > 1 ? `${norm.ticketId}-${index + 1}` : norm.ticketId,
+        id: att.id || norm.id // Use attendee id to ensure unique keys in the list
+      }));
+    }
+    return [norm];
+  };
+
   const confirmedJoined = joinedEvents
     .filter(j => j.bookingStatus === "confirmed")
-    .map(normalizeJoinedEvent);
+    .flatMap(unpackTicketsFromEvent);
   const pendingPaymentJoined = joinedEvents
     .filter(j => j.bookingStatus === "pending_payment")
-    .map(normalizeJoinedEvent);
-  const pendingJoined = joinedEvents.filter(j => j.bookingStatus === "pending_approval");
+    .flatMap(unpackTicketsFromEvent);
+  const pendingJoined = joinedEvents
+    .filter(j => j.bookingStatus === "pending_approval")
+    .flatMap(j => (j.allAttendees && j.allAttendees.length > 0) ? j.allAttendees.map(att => ({ ...j, _attId: att.id })) : [j]);
 
   // Every real/synthetic ticket the user holds — newest first, voided ones dropped.
   // Real, backend-sourced tickets (confirmedJoined, each carrying a genuine qr_token) are
@@ -752,7 +768,7 @@ export function AllTickets({ st, go }) {
               const venueStr = p.location_type === 'online' ? 'Online' : getVenueStr(p.venue);
               return (
                 <div
-                  key={p.id}
+                  key={p._attId || p.id}
                   className="tkt-row"
                   style={{ display: "flex", alignItems: "center", gap: 16, padding: 16, border: "1px solid var(--border)", borderRadius: "var(--r-md)", background: "var(--surface)", cursor: "pointer" }}
                   onClick={() => go("event", { ...p, bookingStatus: 'pending_approval' })}
@@ -791,7 +807,7 @@ export function AllTickets({ st, go }) {
                     <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 6, flexWrap: "wrap" }}>
                       <span className="pill" style={{ background: "var(--field)", color: "var(--ink-2)", fontSize: 11 }}>{t.tier}</span>
                       <span style={{ fontSize: 12, color: "var(--ink-3)", display: "flex", alignItems: "center", gap: 4 }}><I.user style={{ width: 12, height: 12 }} /> {t.attendee || ME.name}</span>
-                      <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>#{t.id}</span>
+                      <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}>#{t.ticketId}</span>
                     </div>
                   </div>
                   <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -935,7 +951,7 @@ export function TicketDetail({ tkt, st, go }) {
           <button className="back" onClick={() => go("events")}><I.arrowL /></button>
           <div>
             <div className="flow-title">Ticket</div>
-            <div className="flow-sub">#{t.id}</div>
+            <div className="flow-sub">#{t.ticketId}</div>
           </div>
         </div>
 
@@ -961,11 +977,6 @@ export function TicketDetail({ tkt, st, go }) {
               <div className="qr-container" style={{ display: "flex", flexDirection: "column", alignItems: "center", margin: "20px 0 24px" }}>
                 <div className="qr-box" style={{ padding: 14, background: "#fff", borderRadius: "var(--r-md)", boxShadow: "var(--sh-sm)", width: 200, height: 200 }}><TicketQR token={verifyToken || "test"} size={172} /></div>
                 <div className="qr-caption" style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 12, textAlign: "center" }}>Show this at the gate for scanning</div>
-                {verifyToken && (
-                  <div style={{ marginTop: 8, fontSize: 11, color: "var(--ink-3)", fontFamily: "monospace", letterSpacing: "0.02em", wordBreak: "break-all", textAlign: "center", padding: "0 10px" }}>
-                    Token: {verifyToken}
-                  </div>
-                )}
               </div>
             )}
 

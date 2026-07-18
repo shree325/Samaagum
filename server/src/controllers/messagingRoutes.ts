@@ -842,30 +842,25 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       }) : [];
       const forumPostsMap = new Map<string, string>(forumPosts.map((fp: any) => [fp.id, fp.scope_id]));
 
-      // Pre-fetch bookings for event join requests
+      // Pre-fetch attendees for event join requests
       const eventJoinLogs = logs.filter(l => l.template_key === 'event_join_request' && l.provider_ref);
-      const bookingQueries = eventJoinLogs.map(l => {
+      const attendeeIds = eventJoinLogs.map(l => {
         try {
           const data = JSON.parse(l.provider_ref || '{}');
-          return { eventId: data.eventId, bookerUserId: data.requesterId };
+          return data.attendeeId;
         } catch (e) {
           return null;
         }
-      }).filter(Boolean) as { eventId: string, bookerUserId: string }[];
+      }).filter(Boolean) as string[];
 
-      const bookings = bookingQueries.length > 0 ? await prisma.bookings.findMany({
-        where: {
-          OR: bookingQueries.map(q => ({
-            event_id: q.eventId,
-            booker_user_id: q.bookerUserId
-          }))
-        },
-        select: { event_id: true, booker_user_id: true, status: true }
-      }) : [];
+      const attendees = attendeeIds.length > 0 ? await (prisma.attendees as any).findMany({
+        where: { id: { in: attendeeIds } },
+        select: { id: true, status: true }
+      }) as Array<any> : [];
 
-      const bookingStatusMap = new Map<string, string>();
-      for (const b of bookings) {
-        bookingStatusMap.set(`${b.event_id}:${b.booker_user_id}`, b.status);
+      const attendeeStatusMap = new Map<string, string>();
+      for (const a of attendees) {
+        attendeeStatusMap.set(a.id, a.status);
       }
 
       // Pre-fetch events for event reminders
@@ -1012,24 +1007,25 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         if (l.template_key === 'event_join_request' && l.provider_ref) {
           try {
             const data = JSON.parse(l.provider_ref);
-            const bStatus = bookingStatusMap.get(`${data.eventId}:${data.requesterId}`);
+            const aStatus = attendeeStatusMap.get(data.attendeeId);
             let actedVal: string | null = null;
-            if (bStatus === 'confirmed' || bStatus === 'pending_payment') actedVal = 'accepted';
-            else if (bStatus === 'cancelled') actedVal = 'declined';
+            if (aStatus === 'approved' || aStatus === 'checked_in') actedVal = 'accepted';
+            else if (aStatus === 'rejected') actedVal = 'declined';
 
             return {
               id: l.id,
-              who: data.requesterName || "A user",
+              who: data.attendeeName || data.requesterName || "A user",
               type: "registration",
               unread: l.status !== 'read',
               acted: actedVal,
               day: dayLabel,
               time: timeStr,
-              text: `<b>${data.requesterName}</b> requested to join <b>${data.eventTitle}</b>`,
+              text: `<b>${data.attendeeName || data.requesterName || "A user"}</b> requested to join <b>${data.eventTitle}</b>`,
               action: "event_request",
               eventId: data.eventId,
               eventTitle: data.eventTitle,
-              requesterId: data.requesterId,
+              requesterId: data.requesterId, // Still useful if we want to know the buyer
+              attendeeId: data.attendeeId,
               answers: data.answers || {},
               questionLabels: data.questionLabels || {}
             };
@@ -2004,6 +2000,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
               name: attName,
               email: attEmail,
               gender: attGender,
+              status: (initialBookingStatus === 'pending_approval' ? 'pending' : (initialBookingStatus === 'waitlisted' ? 'waitlisted' : 'approved')),
               checkin_status: 'not_checked_in',
               notes: JSON.stringify({
                 ...(typeof answers === 'object' && answers !== null ? answers : {}),
@@ -2023,6 +2020,10 @@ export async function messagingRoutes(fastify: FastifyInstance) {
                 state: 'issued'
               }
             });
+          } else if (assignedUserId && assignedUserId !== userId) {
+            // If assigned to an existing user who isn't the booker, sync their dashboard in the background
+            const { MyEventsRealtimeService } = require('../services/MyEventsRealtimeService');
+            MyEventsRealtimeService.syncUser(assignedUserId).catch(() => {});
           }
 
           createdTickets.push(tk);
@@ -2030,6 +2031,10 @@ export async function messagingRoutes(fastify: FastifyInstance) {
 
         return { booking: bk, tickets: createdTickets };
       });
+
+      // Also sync the booker's dashboard
+      const { MyEventsRealtimeService } = require('../services/MyEventsRealtimeService');
+      MyEventsRealtimeService.syncUser(userId).catch(() => {});
 
       // Auto-remove from wishlist if successful
       await EventService.removeWishlist(eventId, userId).catch(() => {});
@@ -2145,36 +2150,43 @@ export async function messagingRoutes(fastify: FastifyInstance) {
 
       const deliver = await notificationService.shouldDeliver(ownerUserId, 'EVENT_JOIN_REQUESTS');
       if (deliver) {
-        const notif = await prisma.notification_log.create({
-            data: {
-              tenant_id: event.tenant_id,
-              user_id: ownerUserId,
-              channel: 'app',
-              template_key: 'event_join_request',
-              status: 'queued',
-              provider_ref: JSON.stringify({
-                eventId,
-                eventTitle: event.title,
-                requesterId: userId,
-                requesterName,
+        // Create one notification per attendee so the host can accept/decline each independently from the inbox
+        const dbAttendeesForPending = await prisma.attendees.findMany({ where: { ticket_id: { in: tickets.map((t: any) => t.id) } } });
+        for (const att of dbAttendeesForPending) {
+          const attendeeName = att.name || requesterName;
+          const notif = await prisma.notification_log.create({
+              data: {
+                tenant_id: event.tenant_id,
+                user_id: ownerUserId,
+                channel: 'app',
+                template_key: 'event_join_request',
+                status: 'queued',
+                provider_ref: JSON.stringify({
+                  eventId,
+                  eventTitle: event.title,
+                  requesterId: userId, // The buyer
+                  requesterName,
+                  attendeeId: att.id,
+                  attendeeName,
+                  answers: filteredAnswers,
+                  questionLabels
+                })
+              }
+            });
+
+            // Trigger socket emit if available
+            const chatNamespace = (fastify as any).io?.of('/chat');
+            if (chatNamespace) {
+              chatNamespace.to(`user:${ownerUserId}`).emit('group.notification', {
+                id: notif.id,
+                type: 'registration',
+                text: `<b>${attendeeName}</b> requested to join <b>${event.title}</b>`,
+                eventId: eventId,
                 answers: filteredAnswers,
                 questionLabels
-              })
+              });
             }
-          });
-
-          // Trigger socket emit if available
-          const chatNamespace = (fastify as any).io?.of('/chat');
-          if (chatNamespace) {
-            chatNamespace.to(`user:${ownerUserId}`).emit('group.notification', {
-              id: notif.id,
-              type: 'registration',
-              text: `<b>${requesterName}</b> requested to join <b>${event.title}</b>`,
-              eventId: eventId,
-              answers: filteredAnswers,
-              questionLabels
-            });
-          }
+        }
       }
 
         const groupsNamespace = (fastify as any).io?.of('/groups');
@@ -2317,7 +2329,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       }
 
       const data = JSON.parse(log.provider_ref || '{}');
-      const { eventId, eventTitle, requesterId, requesterName } = data;
+      const { eventId, eventTitle, requesterId, requesterName, attendeeId } = data;
 
       // Mark the original join request notification as read/acted
       await prisma.notification_log.update({
@@ -2325,32 +2337,54 @@ export async function messagingRoutes(fastify: FastifyInstance) {
         data: { status: 'read' }
       });
 
-      // Update the database booking, line items and tickets status
-      const booking = await prisma.bookings.findFirst({
-        where: {
-          event_id: eventId,
-          booker_user_id: requesterId,
-          status: 'pending_approval'
-        }
+      const attendee = await prisma.attendees.findUnique({
+        where: { id: attendeeId },
+        include: { bookings: true }
       });
 
-      if (booking) {
-        const nextStatus = action === 'accept' ? 'confirmed' : 'cancelled';
-        const nextTicketStatus = action === 'accept' ? 'confirmed' : 'cancelled';
+      const booking = attendee?.bookings ?? null;
+
+      if (attendee && booking) {
+        const nextAttendeeStatus = action === 'accept' ? 'approved' : 'rejected';
+        let nextBookingStatus = booking.status;
+        let isCash = booking.payment_method === 'cash';
+        let cashAlreadyPaid = isCash && !!booking.payment_proof_url;
 
         await prisma.$transaction(async (tx) => {
-          await tx.bookings.update({
-            where: { id: booking.id },
-            data: { status: nextStatus }
+          // Update specific attendee
+          await (tx.attendees as any).update({
+            where: { id: attendee.id },
+            data: { status: nextAttendeeStatus }
           });
-          const lineItems = await tx.booking_line_items.findMany({
+
+          // Check if all attendees in this booking are approved/rejected
+          const allAttendees = await (tx.attendees as any).findMany({
             where: { booking_id: booking.id }
-          });
-          const liIds = lineItems.map(li => li.id);
-          await tx.tickets.updateMany({
-            where: { line_item_id: { in: liIds } },
-            data: { status: nextTicketStatus }
-          });
+          }) as Array<any>;
+          
+          const stillPending = allAttendees.some((a: any) => a.status === 'pending');
+          if (!stillPending) {
+            const anyApproved = allAttendees.some((a: any) => a.status === 'approved' || a.status === 'checked_in');
+            if (anyApproved) {
+              nextBookingStatus = (isCash && !cashAlreadyPaid) ? 'pending_payment' : 'confirmed';
+            } else {
+              nextBookingStatus = 'cancelled';
+            }
+            await tx.bookings.update({
+              where: { id: booking.id },
+              data: { status: nextBookingStatus }
+            });
+          }
+
+          if (attendee.ticket_id) {
+            const nextTicketStatus = action === 'accept' 
+              ? ((isCash && !cashAlreadyPaid) ? 'reserved' : 'confirmed')
+              : 'cancelled';
+            await tx.tickets.update({
+              where: { id: attendee.ticket_id },
+              data: { status: nextTicketStatus }
+            });
+          }
         });
         
         if (action === 'decline') {
@@ -2560,3 +2594,5 @@ export async function messagingRoutes(fastify: FastifyInstance) {
     }
   });
 }// trigger restart
+
+
