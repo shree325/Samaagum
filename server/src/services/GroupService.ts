@@ -999,6 +999,28 @@ export class GroupService {
         const activeUsers = await this.usersRepo.findAll({ id: { in: userIds } });
         const usersMap = new Map(activeUsers.map(u => [u.id, u]));
 
+        const profiles = await prisma.profiles.findMany({
+            where: { user_id: { in: userIds } }
+        });
+        const profilesMap = new Map(profiles.map(p => [p.user_id, p]));
+
+        let connections: any[] = [];
+        if (requestingUser?.id) {
+            connections = await prisma.connections.findMany({
+                where: {
+                    OR: [
+                        { requester_user_id: requestingUser.id, addressee_user_id: { in: userIds } },
+                        { requester_user_id: { in: userIds }, addressee_user_id: requestingUser.id }
+                    ]
+                }
+            });
+        }
+        const connectionsMap = new Map<string, string>();
+        for (const conn of connections) {
+            const peerId = conn.requester_user_id === requestingUser.id ? conn.addressee_user_id : conn.requester_user_id;
+            connectionsMap.set(peerId, conn.state);
+        }
+
         const roleAssignments = await this.roleAssignmentsRepo.findAll({
             scope_entity_id: groupId,
             user_id: { in: userIds }
@@ -1014,13 +1036,16 @@ export class GroupService {
 
         return members.map(m => {
             const u = usersMap.get(m.user_id);
+            const prof = profilesMap.get(m.user_id);
             const username = u?.primary_email ? u.primary_email.split('@')[0] : 'unknown';
             const displayName = u ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : username;
             const profilePhoto = u?.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
             return {
                 ...m,
                 users: u ? { id: u.id, first_name: u.first_name, last_name: u.last_name, primary_email: u.primary_email, display_name: displayName || username, username, profilePhoto } : null,
-                roles: rolesByUser[m.user_id] || ['group_member']
+                roles: rolesByUser[m.user_id] || ['group_member'],
+                messagingRestriction: prof?.messaging_restriction || 'anyone',
+                connectionState: connectionsMap.get(m.user_id) || 'none'
             };
         });
     }

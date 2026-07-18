@@ -325,7 +325,7 @@ export function Topbar({ go, counts, dark, onToggleTheme, city, onCity, chatSett
           <I.pin style={{ color:"var(--accent-2)" }} /> {city} <I.chevD style={{ color:"var(--ink-3)" }} />
         </button>
       )}
-      <div className="tb-spacer" />
+      <div className="tb-spacer" style={{ flex: 1 }} />
       <div style={{ position:"relative" }}>
         <button className="tb-icon" onClick={()=>setCreateOpen(v=>!v)} title="Create"><I.plus/></button>
         <Popover open={createOpen} onClose={()=>setCreateOpen(false)} style={{ top:"calc(100% + 8px)", right:0, width:280 }}>

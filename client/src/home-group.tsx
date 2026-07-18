@@ -1211,6 +1211,56 @@ export function GroupDetail({ group, st, go }) {
     }
   };
 
+  const handleMessageMember = async (m: any) => {
+    const targetId = m.users?.id || m.id || m.user_id;
+    if (!targetId) return;
+
+    const token = localStorage.getItem('token');
+    let currentUserId: string | null = null;
+    if (token) {
+      try { currentUserId = JSON.parse(atob(token.split('.')[1])).id; } catch (e) { }
+    }
+    if (currentUserId === targetId) {
+      alert("You cannot message yourself.");
+      return;
+    }
+
+    const restriction = m.messagingRestriction || 'anyone';
+    const isConnected = m.connectionState === 'accepted';
+
+    if (restriction === 'no_one') return;
+
+    if (restriction === 'only_connected' && !isConnected) {
+      alert("Only connected users can message this member.");
+      return;
+    }
+
+    try {
+      const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+      const tkn = localStorage.getItem('token');
+      const res = await fetch(`${apiBase}/api/messaging/conversations/direct`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(tkn ? { 'Authorization': `Bearer ${tkn}` } : {})
+        },
+        body: JSON.stringify({ targetId })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data?.id) {
+          localStorage.setItem('active_chat_conv_id', json.data.id);
+        }
+        go("messages");
+      } else {
+        const json = await res.json();
+        alert(json.message || json.error || "Unable to start messaging.");
+      }
+    } catch (e) {
+      alert("Failed to connect. Please try again.");
+    }
+  };
+
   const [dashboardStats, setDashboardStats] = useState({
     totalPosts: 0,
     pinnedPosts: 0,
@@ -2413,27 +2463,53 @@ export function GroupDetail({ group, st, go }) {
                     const mUsername = typeof m === 'object' ? `@${m.users?.username || m.username || 'unknown'}` : '';
                     const targetRole = typeof m === 'object' ? (m.role || (m.roles ? getHighestRole(m.roles) : (i === 0 ? "group_owner" : i < 3 ? "group_moderator" : "group_member"))) : "group_member";
                     const mRole = targetRole.replace('group_', '');
+                    const token = localStorage.getItem('token');
+                    let currentUserId: string | null = null;
+                    if (token) {
+                      try { currentUserId = JSON.parse(atob(token.split('.')[1])).id; } catch (e) { }
+                    }
+                    const targetUserId = m.users?.id || m.id || m.user_id;
+                    const isSelf = currentUserId === targetUserId;
+                    const restriction = m.messagingRestriction || 'anyone';
+                    const showMessageIcon = restriction !== 'no_one' && !isSelf;
                     return (
                       <div
                         key={m.id || mName}
                         className="member-row"
-                        onClick={() => {
-                          const targetUser = typeof m === 'object' && m.users ? m.users : (typeof m === 'object' ? m : { id: m.id, name: mName, username: mUsername.replace('@', '') });
-                          if (targetUser && targetUser.id) {
-                            go("public-profile", targetUser);
-                          }
-                        }}
-                        style={{ cursor: "pointer" }}
+                        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}
                       >
-                        <Avatar name={mName} userId={m.id || m.user_id} img={m.profilePhoto || m.users?.profilePhoto} size={32} />
-                        <div className="mi">
-                          <div className="n" style={{ display: "flex", alignItems: "center", gap: 5 }}>{mName} {mRole === 'owner' && <I.crown className="crown" />}</div>
-                          <div className="r" style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                            <span style={{ color: "var(--ink-2)" }}>{mUsername}</span>
-                            <span>·</span>
-                            <span style={{ textTransform: "capitalize" }}>{mRole}</span>
+                        <div
+                          onClick={() => {
+                            const targetUser = typeof m === 'object' && m.users ? m.users : (typeof m === 'object' ? m : { id: m.id, name: mName, username: mUsername.replace('@', '') });
+                            if (targetUser && targetUser.id) {
+                              go("public-profile", targetUser);
+                            }
+                          }}
+                          style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}
+                        >
+                          <Avatar name={mName} userId={m.id || m.user_id} img={m.profilePhoto || m.users?.profilePhoto} size={32} />
+                          <div className="mi" style={{ flex: 1, minWidth: 0 }}>
+                            <div className="n" style={{ display: "flex", alignItems: "center", gap: 5 }}>{mName} {mRole === 'owner' && <I.crown className="crown" />}</div>
+                            <div className="r" style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                              <span style={{ color: "var(--ink-2)" }}>{mUsername}</span>
+                              <span>·</span>
+                              <span style={{ textTransform: "capitalize" }}>{mRole}</span>
+                            </div>
                           </div>
                         </div>
+                        {showMessageIcon && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMessageMember(m);
+                            }}
+                            className="hbtn hbtn--ghost hbtn--sm"
+                            style={{ padding: 6, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", minWidth: 28, height: 28, color: "var(--ink-2)" }}
+                            title="Message Member"
+                          >
+                            <I.chat style={{ width: 15, height: 15 }} />
+                          </button>
+                        )}
                       </div>
                     );
                   })}
