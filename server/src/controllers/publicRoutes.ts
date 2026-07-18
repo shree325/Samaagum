@@ -375,7 +375,7 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
         data: {
           id: user.id,
           user_id: user.id,
-          displayName: [user.first_name, user.last_name].filter(Boolean).join(' ') || profile?.display_name || '',
+          displayName: [user.first_name, user.last_name].filter(Boolean).join(' ') || profile?.display_name || profile?.user_name || user.primary_email?.split('@')[0] || 'User',
           headline: finalHeadline,
           bio: finalBio,
           email: finalEmail,

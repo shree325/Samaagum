@@ -446,7 +446,7 @@ export function JoinEventPage({ ev, st, go }) {
                                      if (e.hostType === 'group' && (e.hosted_by_entity_id || e.host_entity_id)) {
                                          go("group", { id: e.hosted_by_entity_id || e.host_entity_id });
                                      } else if (e.hostUserId) {
-                                         go("public-profile", { id: e.hostUserId });
+                                         go("public-profile", { id: e.hostUserId, displayName: e.hostBy || e.host, profilePhoto: e.hostPhoto });
                                      }
                                  }}
                              >
@@ -529,7 +529,16 @@ export function JoinEventPage({ ev, st, go }) {
                                         const userId = typeof n === 'object' ? n.id : undefined;
                                         const picture = typeof n === 'object' ? n.picture : undefined;
                                         return (
-                                            <div key={name} className="att">
+                                            <div 
+                                                key={userId || name} 
+                                                className="att"
+                                                style={{ cursor: userId ? 'pointer' : 'default' }}
+                                                onClick={() => {
+                                                    if (userId) {
+                                                        go("public-profile", { id: userId, displayName: name, profilePhoto: picture });
+                                                    }
+                                                }}
+                                            >
                                                 <Avatar name={name} userId={userId} img={picture} size={28} />
                                                 <span className="nm">{name}</span>
                                             </div>
@@ -869,7 +878,17 @@ export function JoinEventPage({ ev, st, go }) {
                                 }}
                             />
 
-                            <div className="host-card">
+                            <div 
+                                className="host-card"
+                                style={{ cursor: (e.hostUserId || e.hosted_by_entity_id || e.host_entity_id) ? 'pointer' : 'default' }}
+                                onClick={() => {
+                                    if (e.hostType === 'group' && (e.hosted_by_entity_id || e.host_entity_id)) {
+                                        go("group", { id: e.hosted_by_entity_id || e.host_entity_id });
+                                    } else if (e.hostUserId) {
+                                        go("public-profile", { id: e.hostUserId, displayName: e.hostBy || e.host, profilePhoto: e.hostPhoto });
+                                    }
+                                }}
+                            >
                                 <div className="hh"><Avatar name={e.hostBy || e.host} userId={e.hostUserId} img={e.hostPhoto} size={46} /><div><div className="n">{e.host}</div><div className="r">Organizer · 24 events</div></div></div>
                                 <div className="hb">Curating the best gatherings in {e.city || city}. Follow to never miss a drop.</div>
                             </div>

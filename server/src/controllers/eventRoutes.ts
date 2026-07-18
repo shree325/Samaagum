@@ -526,9 +526,28 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
             }
 
             const confirmedAttendees = await prisma.attendees.findMany({
-                where: { bookings: { event_id: id, status: { in: ['confirmed', 'pending_payment'] } } }
+                where: { bookings: { event_id: id, status: { in: ['confirmed', 'pending_payment'] } } },
+                include: {
+                    users_attendees_user_idTousers: {
+                        include: {
+                            profiles: true
+                        }
+                    }
+                }
             });
-            const attendeeNames = confirmedAttendees.map(a => a.name);
+            const attendeeDetails = confirmedAttendees.map(a => {
+                const user = a.users_attendees_user_idTousers;
+                const profile = user?.profiles;
+                let picture = null;
+                if (profile?.profile_image_data) {
+                    picture = `data:image/png;base64,${profile.profile_image_data.toString('base64')}`;
+                }
+                return {
+                    id: a.user_id,
+                    name: a.name,
+                    picture: picture
+                };
+            });
 
             // Resolve the entity owner to expose created_by on the event
             let ownerUserId: string | null = null;
@@ -572,7 +591,7 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                     ticketId,
                     qrToken,
                     checkinStatus,
-                    attendees: attendeeNames,
+                    attendees: attendeeDetails,
                     virtualMeeting: virtualMeetingData
                 }
             });
