@@ -53,12 +53,12 @@ export function Hero() {
             Now live in 100+ cities
           </span>
           <h1 style={{ fontSize: "clamp(36px, 5vw, 56px)", fontWeight: 800, lineHeight: 1.1, color: "var(--ink)", margin: "0 0 20px" }}>
-            Discover Communities.<br />
+            Discover Groups.<br />
             Build Friendships.<br />
             Create <span style={{ background: "linear-gradient(135deg, var(--primary), #ff4d8d)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Memories.</span>
           </h1>
           <p style={{ fontSize: 16.5, color: "var(--ink-2)", lineHeight: 1.6, margin: "0 0 32px", maxWidth: 500 }}>
-            Join local communities, attend amazing events, participate in rich discussions, and meet people who share your true interests. All in one place.
+            Join local groups, attend amazing events, participate in rich discussions, and meet people who share your true interests. All in one place.
           </p>
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
             <CTAButton
@@ -76,7 +76,7 @@ export function Hero() {
               size="lg"
               trackingName="Hero Secondary CTA Clicked"
             >
-              Explore Communities
+              Explore Groups
             </CTAButton>
           </div>
         </div>

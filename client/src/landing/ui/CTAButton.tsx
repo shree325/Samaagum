@@ -46,7 +46,7 @@ export function CTAButton({
     </button>
   );
 }
-export const I_arrow = (p = {}) => (
+export const I_arrow = (p: React.SVGProps<SVGSVGElement> = {}) => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" {...p}>
     <path
       d="M5 12h14M13 6l6 6-6 6"

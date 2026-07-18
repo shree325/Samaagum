@@ -1990,8 +1990,18 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
   );
 
   const initialTickets = editEv?.tickets
-    ? editEv.tickets.map((t: any) => ({ n: t.name, cap: String(t.capacity || ""), price: String((t.price_minor || 0) / 100) }))
-    : [{ n: "Early Bird", cap: "50", price: "499" }];
+    ? editEv.tickets.map((t: any) => ({
+        n: t.name,
+        desc: t.description || "",
+        price: String(t.price_minor != null ? t.price_minor / 100 : (t.price_amount_minor != null ? t.price_amount_minor / 100 : 0)),
+        currency: t.price_currency || t.currency || "INR",
+        cap: String(t.capacity || ""),
+        max_per_booking: String(t.max_per_booking || ""),
+        sale_start: t.sale_start ? (typeof t.sale_start === 'string' ? t.sale_start.replace("Z", "").slice(0, 16) : new Date(t.sale_start).toISOString().slice(0, 16)) : "",
+        sale_end: t.sale_end ? (typeof t.sale_end === 'string' ? t.sale_end.replace("Z", "").slice(0, 16) : new Date(t.sale_end).toISOString().slice(0, 16)) : "",
+        visibility: t.visibility || "public"
+      }))
+    : [{ n: "Early Bird", desc: "", price: "499", currency: "INR", cap: "50", max_per_booking: "", sale_start: "", sale_end: "", visibility: "public" }];
   const [tickets, setTickets] = useState(draft?.tickets ?? initialTickets);
 
   useEffect(() => {
@@ -2548,7 +2558,18 @@ function CreateEventForm({ go, mobile, st, editEv, hostGroupId, hostGroupName }:
         allow_image_proof: allowImageProof
       },
       tickets: (type === 'paid' || type === 'cash')
-        ? tickets.map((t, i) => ({ name: t.n, capacity: parseInt(t.cap) || null, price_minor: parseInt(t.price) * 100, sort_order: i }))
+        ? tickets.map((t, i) => ({
+            name: t.n,
+            description: t.desc || null,
+            price_minor: Math.round(parseFloat(t.price) * 100) || 0,
+            currency: t.currency || 'INR',
+            capacity: parseInt(t.cap) || null,
+            max_per_booking: parseInt(t.max_per_booking) || null,
+            sale_start: t.sale_start ? new Date(t.sale_start).toISOString() : null,
+            sale_end: t.sale_end ? new Date(t.sale_end).toISOString() : null,
+            visibility: t.visibility || 'public',
+            sort_order: i
+          }))
         : [{ name: 'Free Admission', price_minor: 0, capacity: capacityEnabled && capacity ? parseInt(capacity) : null, sort_order: 0 }]
     };
 
@@ -4492,10 +4513,87 @@ function TicketSettingsModal({ open, onClose, type, setType, tickets, setTickets
   const allowedRegistrationModes = entitlements.event_allowed_registration_modes || ["free"];
   const canUseCash = allowedRegistrationModes.includes("cash");
   const canUsePaid = allowedRegistrationModes.includes("paid");
-  
+
+  const [subModalOpen, setSubModalOpen] = useState(false);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [ticketForm, setTicketForm] = useState({
+    n: "",
+    desc: "",
+    price: "",
+    currency: "INR",
+    cap: "",
+    max_per_booking: "",
+    sale_start: "",
+    sale_end: "",
+    visibility: "public"
+  });
+
   const triggerUpgrade = (feat: string) => {
     setUpgradeFeature(feat);
     setUpgradeModalOpen(true);
+  };
+
+  const openCreateModal = () => {
+    setTicketForm({
+      n: "",
+      desc: "",
+      price: "",
+      currency: "INR",
+      cap: "",
+      max_per_booking: "",
+      sale_start: "",
+      sale_end: "",
+      visibility: "public"
+    });
+    setEditingIndex(null);
+    setSubModalOpen(true);
+  };
+
+  const openEditModal = (index: number) => {
+    const t = tickets[index];
+    setTicketForm({
+      n: t.n || "",
+      desc: t.desc || "",
+      price: t.price || "",
+      currency: t.currency || "INR",
+      cap: t.cap || "",
+      max_per_booking: t.max_per_booking || "",
+      sale_start: t.sale_start || "",
+      sale_end: t.sale_end || "",
+      visibility: t.visibility || "public"
+    });
+    setEditingIndex(index);
+    setSubModalOpen(true);
+  };
+
+  const handleTicketSubmit = () => {
+    if (!ticketForm.n.trim()) {
+      if (window.toast) window.toast("Ticket name is required.", "warning");
+      return;
+    }
+    if (!ticketForm.price.trim() && type === "paid") {
+      if (window.toast) window.toast("Price is required for paid tickets.", "warning");
+      return;
+    }
+
+    const newTicket = {
+      n: ticketForm.n,
+      desc: ticketForm.desc,
+      price: ticketForm.price,
+      currency: ticketForm.currency,
+      cap: ticketForm.cap,
+      max_per_booking: ticketForm.max_per_booking,
+      sale_start: ticketForm.sale_start,
+      sale_end: ticketForm.sale_end,
+      visibility: ticketForm.visibility
+    };
+
+    if (editingIndex !== null) {
+      setTickets(ts => ts.map((t, idx) => idx === editingIndex ? newTicket : t));
+    } else {
+      setTickets(ts => [...ts, newTicket]);
+    }
+    setSubModalOpen(false);
   };
 
   return (
@@ -4590,33 +4688,48 @@ function TicketSettingsModal({ open, onClose, type, setType, tickets, setTickets
           {(type === "paid" || type === "cash") && (
             <div className="cfield" style={{ marginBottom: 0, display: "flex", flexDirection: "column", gap: 12 }}>
               <label style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)", display: "block" }}>Ticket Tiers</label>
-              <div style={{ display: "flex", gap: 8, paddingLeft: 2 }}>
-                <div style={{ flex: 2, fontSize: 11, fontWeight: 600, color: "var(--ink-3)" }}>Tier Name</div>
-                <div style={{ flex: 1, fontSize: 11, fontWeight: 600, color: "var(--ink-3)" }}>Capacity</div>
-                <div style={{ flex: 1, fontSize: 11, fontWeight: 600, color: "var(--ink-3)" }}>Price (₹)</div>
-                {tickets.length > 1 && <div style={{ width: 36 }} />}
+              
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, background: "var(--bg-2)", border: "1px solid var(--border)", borderRadius: "12px", padding: "16px" }}>
+                {tickets.length === 0 ? (
+                  <div style={{ padding: "12px", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>
+                    No tickets created yet.
+                  </div>
+                ) : (
+                  tickets.map((t, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "8px" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>{t.n || "Untitled Ticket"}</span>
+                        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                          {type === "paid" ? `${t.currency || "INR"} ${t.price || "0"}` : "Free"} &middot; {t.cap ? `Qty: ${t.cap}` : "Unlimited capacity"}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          type="button"
+                          className="hbtn hbtn--ghost hbtn--sm"
+                          onClick={() => openEditModal(i)}
+                          style={{ border: "1px solid var(--border)", padding: "0 12px", height: 32, display: "flex", alignItems: "center", gap: 4 }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="hbtn hbtn--ghost hbtn--sm"
+                          onClick={() => setTickets(ts => ts.filter((_, j) => j !== i))}
+                          style={{ border: "1px solid var(--border)", padding: "0 10px", height: 32, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--danger)" }}
+                        >
+                          <I.x style={{ width: 14, height: 14 }} />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
-              {tickets.map((t, i) => (
-                <div key={i} className="ticket-row" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input className="cinput" placeholder="e.g. General Admission" value={t.n} onChange={e => setTk(i, "n", e.target.value)} style={{ flex: 2, background: "var(--field)", border: "1px solid var(--border)" }} />
-                  <input className="cinput" placeholder="Qty" value={t.cap} onChange={e => setTk(i, "cap", e.target.value)} style={{ flex: 1, background: "var(--field)", border: "1px solid var(--border)" }} />
-                  <input className="cinput" placeholder="Price" value={t.price} onChange={e => setTk(i, "price", e.target.value)} style={{ flex: 1, background: "var(--field)", border: "1px solid var(--border)" }} />
-                  {tickets.length > 1 && (
-                    <button
-                      type="button"
-                      className="hbtn hbtn--ghost hbtn--sm"
-                      onClick={() => setTickets(ts => ts.filter((_, j) => j !== i))}
-                      style={{ padding: "0 10px", height: 42, border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center" }}
-                    >
-                      <I.x style={{ width: 14, height: 14 }} />
-                    </button>
-                  )}
-                </div>
-              ))}
+
               <button
                 type="button"
                 className="add-row"
-                onClick={() => setTickets(ts => [...ts, { n: "", cap: "", price: "" }])}
+                onClick={openCreateModal}
                 style={{ marginTop: 4, display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", border: "none", color: "var(--accent-2)", fontWeight: 600, cursor: "pointer" }}
               >
                 ➕ Add ticket type
@@ -4656,6 +4769,73 @@ function TicketSettingsModal({ open, onClose, type, setType, tickets, setTickets
             </div>
           )}
         </div>
+
+        {subModalOpen && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ background: "var(--surface)", width: "min(520px,95vw)", maxHeight: "90vh", overflowY: "auto", borderRadius: "20px", boxShadow: "var(--sh-xl)", display: "flex", flexDirection: "column" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px", borderBottom: "1px solid var(--border)" }}>
+                <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{editingIndex !== null ? "Edit ticket" : "Create ticket"}</h2>
+                <button type="button" className="hbtn hbtn--ghost hbtn--sm" onClick={() => setSubModalOpen(false)} style={{ border: "none" }}>✕</button>
+              </div>
+              <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>Ticket Name *</label>
+                  <input className="cinput" value={ticketForm.n} onChange={ev => setTicketForm(f => ({...f, n: ev.target.value}))} placeholder="e.g. General Admission" />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>Description</label>
+                  <textarea className="cinput" value={ticketForm.desc} onChange={ev => setTicketForm(f => ({...f, desc: ev.target.value}))} placeholder="What's included..." rows={2} style={{ resize: "vertical" }} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>Price *</label>
+                    <input className="cinput" type="number" min="0" step="0.01" value={ticketForm.price} onChange={ev => setTicketForm(f => ({...f, price: ev.target.value}))} placeholder="0.00" />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>Currency</label>
+                    <input className="cinput" value={ticketForm.currency} onChange={ev => setTicketForm(f => ({...f, currency: ev.target.value}))} placeholder="INR" />
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>Capacity</label>
+                    <input className="cinput" type="number" min="1" value={ticketForm.cap} onChange={ev => setTicketForm(f => ({...f, cap: ev.target.value}))} placeholder="Unlimited" />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>Max per Booking</label>
+                    <input className="cinput" type="number" min="1" value={ticketForm.max_per_booking} onChange={ev => setTicketForm(f => ({...f, max_per_booking: ev.target.value}))} placeholder="No limit" />
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>Sale Start</label>
+                    <input className="cinput" type="datetime-local" value={ticketForm.sale_start} onChange={ev => setTicketForm(f => ({...f, sale_start: ev.target.value}))} />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>Sale End</label>
+                    <input className="cinput" type="datetime-local" value={ticketForm.sale_end} onChange={ev => setTicketForm(f => ({...f, sale_end: ev.target.value}))} />
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>Visibility</label>
+                  <div style={{ display: "flex", gap: 16 }}>
+                    {["public", "private"].map(v => (
+                      <label key={v} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+                        <input type="radio" name="sub_tt_vis" value={v} checked={ticketForm.visibility === v} onChange={() => setTicketForm(f => ({...f, visibility: v}))} />
+                        {v.charAt(0).toUpperCase() + v.slice(1)}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 10, padding: "16px 24px", borderTop: "1px solid var(--border)", background: "var(--bg-2)" }}>
+                <button type="button" className="hbtn hbtn--ghost" style={{ flex: 1 }} onClick={() => setSubModalOpen(false)}>{editingIndex !== null ? "Discard" : "Cancel"}</button>
+                <button type="button" className="hbtn hbtn--primary" style={{ flex: 1 }} onClick={handleTicketSubmit}>{editingIndex !== null ? "Save" : "Create"}</button>
+              </div>
+            </div>
+          </div>
+        )}
         {/* Footer */}
         <div style={{ padding: "16px 24px", background: "var(--bg-2)", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end" }}>
           <button

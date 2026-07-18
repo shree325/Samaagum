@@ -22,15 +22,15 @@ export function Search() {
           Search for groups, topics, or events happening around you.
         </p>
 
-        <form onSubmit={handleSearchSubmit} style={{ position: "relative", marginBottom: 20 }}>
+        <form onSubmit={handleSearchSubmit} onClick={() => navigateToApp(APP_ROUTES.discover())} style={{ position: "relative", marginBottom: 20, cursor: "pointer" }}>
           <input
             type="text"
-            placeholder="Search communities, topics, events..."
+            placeholder="Search groups, topics, events..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onClick={() => {
-              navigateToApp(APP_ROUTES.discover());
-            }}
+            readOnly
+            onClick={() => navigateToApp(APP_ROUTES.discover())}
+            onFocus={() => navigateToApp(APP_ROUTES.discover())}
             style={{
               width: "100%",
               padding: "16px 20px 16px 52px",
@@ -41,10 +41,9 @@ export function Search() {
               background: "var(--card-bg)",
               color: "var(--ink)",
               outline: "none",
+              cursor: "pointer",
               transition: "border-color 0.2s"
             }}
-            onFocus={(e) => (e.target.style.borderColor = "var(--primary)")}
-            onBlur={(e) => (e.target.style.borderColor = "var(--card-border)")}
           />
           <svg
             width="20"

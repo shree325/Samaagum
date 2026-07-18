@@ -216,6 +216,18 @@ export function DashboardApp() {
     };
   }, []);
   const [city, setCity] = useState(() => {
+    const hash = window.location.hash;
+    let urlLoc = "";
+    if (hash.includes('?')) {
+      const params = new URLSearchParams(hash.split('?')[1]);
+      urlLoc = params.get('location') || "";
+    } else {
+      const params = new URLSearchParams(window.location.search);
+      urlLoc = params.get('location') || "";
+    }
+    if (urlLoc) {
+      return urlLoc.split(',')[0].trim();
+    }
     if (window.ME?.location) return window.ME.location;
     const manual = localStorage.getItem('samaagum_selected_city');
     if (manual) { try { return JSON.parse(manual).city_name || "Global"; } catch { return manual; } }
@@ -1461,7 +1473,7 @@ useEffect(() => {
           ? <MobileTop go={go} counts={counts} city={city} chatSettings={chatSettings} hasScannerEvents={scannerEvents.length > 0} />
           : token
             ? <Topbar go={go} counts={counts} dark={t.dark} onToggleTheme={() => setTweak("dark", !t.dark)} city={city} onCity={() => setCityOpen(true)} chatSettings={chatSettings} />
-            : <GuestTopbar city={city} onCity={() => setCityOpen(true)} onCreateClick={() => requireAuth({ reason: 'create' }, () => go('create-event'))} />
+            : <GuestTopbar go={go} city={city} onCity={() => setCityOpen(true)} onCreateClick={() => requireAuth({ reason: 'create' }, () => go('create-event'))} />
         }
         {renderView()}
         {mobile && token && <TabBar view={cur.view} go={go} counts={counts} chatSettings={chatSettings} />}

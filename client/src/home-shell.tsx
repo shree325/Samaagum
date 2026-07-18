@@ -626,23 +626,220 @@ export function GuestSidebar({ view, go }) {
 
 /* ---------------- Guest Topbar ---------------- */
 /* Shown to unauthenticated users — search + location + Login / Sign up. */
-export function GuestTopbar({ city, onCity, onCreateClick }) {
+export function GuestTopbar({ go, city, onCity, onCreateClick }) {
   const AUTH_PATH = '/pages/Samaagum Auth.html';
+
+  // Search states
+  const [searchQuery, setSearchQuery] = useState(() => {
+    const hash = window.location.hash;
+    if (hash.includes('?')) {
+      const params = new URLSearchParams(hash.split('?')[1]);
+      return params.get('query') || "";
+    }
+    const params = new URLSearchParams(window.location.search);
+    return params.get('query') || "";
+  });
+  const [searchResults, setSearchResults] = useState({ events: [], groups: [] });
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchContainerRef = useRef(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  const triggerSearch = async (q: string) => {
+    if (!q.trim()) {
+      setSearchResults({ events: [], groups: [] });
+      setSearchOpen(false);
+      return;
+    }
+    setSearchOpen(true);
+    setSearchLoading(true);
+    try {
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+      const res = await fetch(`${apiBase}/api/public/global-search?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      if (data.success) {
+        setSearchResults(data.data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      triggerSearch(searchQuery);
+    }
+  }, []);
+
+  const handleSearchChange = (e) => {
+    const q = e.target.value;
+    setSearchQuery(q);
+    triggerSearch(q);
+  };
+
+  const handleResultClick = (type, item) => {
+    setSearchOpen(false);
+    setSearchQuery("");
+    if (type === "group") {
+      go("group", { id: item.id, entity_id: item.id, name: item.name });
+    } else if (type === "event") {
+      go("event", { id: item.id, entity_id: item.id, title: item.title });
+    }
+  };
 
   return (
     <header className="topbar">
-      {/* Search — read-only placeholder; search is usable for discovery */}
-      <div className="tb-search" style={{ position: 'relative' }}>
+      {/* Search — usable for discovery */}
+      <div className="tb-search" ref={searchContainerRef} style={{ position: 'relative' }}>
         <span className="ic"><I.search /></span>
         <input
           placeholder="Search events, groups, people…"
-          readOnly
-          onClick={() => {
-            /* Guest can search — clicking focuses input. Nothing blocked. */
-          }}
+          value={searchQuery}
+          onChange={handleSearchChange}
+          onFocus={() => { if (searchQuery.trim()) setSearchOpen(true); }}
           style={{ cursor: 'text' }}
         />
         <kbd>/</kbd>
+
+        {searchOpen && (
+          <div 
+            style={{
+              position: "absolute",
+              top: "calc(100% + 8px)",
+              left: 0,
+              right: 0,
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: "12px",
+              boxShadow: "0 8px 30px rgba(0, 0, 0, 0.15)",
+              zIndex: 10000,
+              padding: "12px",
+              maxHeight: "360px",
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px"
+            }}
+          >
+            {searchLoading ? (
+              <div style={{ padding: "12px", textAlign: "center", color: "var(--ink-3)", fontSize: "14px" }}>
+                Searching...
+              </div>
+            ) : (searchResults.events.length === 0 && searchResults.groups.length === 0) ? (
+              <div style={{ padding: "12px", textAlign: "center", color: "var(--ink-3)", fontSize: "14px" }}>
+                No results found
+              </div>
+            ) : (
+              <>
+                {searchResults.events.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--ink-3)", padding: "4px 8px", letterSpacing: "0.5px" }}>
+                      Events
+                    </div>
+                    {searchResults.events.map(ev => {
+                      const noImageUrl = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200"><rect width="100%" height="100%" fill="%23f3f4f6" /><circle cx="100" cy="90" r="45" fill="none" stroke="%230f4c81" stroke-width="4"/><line x1="68" y1="58" x2="132" y2="122" stroke="%230f4c81" stroke-width="4"/><path d="M82 78h36v26H82zm7-8h22l2 4H87z" fill="none" stroke="%230f4c81" stroke-width="3" stroke-linejoin="round"/><circle cx="100" cy="91" r="7" fill="none" stroke="%230f4c81" stroke-width="3"/><text x="100" y="165" font-family="sans-serif" font-size="14" font-weight="bold" fill="%230f4c81" text-anchor="middle">NO IMAGE</text></svg>';
+                      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                      const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+                      const coverUrl = ev.cover 
+                        ? (ev.cover.startsWith("http") || ev.cover.startsWith("data:") || ev.cover.startsWith("linear-gradient") || ev.cover.startsWith("var(")
+                            ? ev.cover 
+                            : `${apiBase}/${ev.cover.startsWith('/') ? ev.cover.substring(1) : ev.cover}`)
+                        : noImageUrl;
+                      const coverBg = `url("${coverUrl}") center/cover no-repeat`;
+                      return (
+                        <button
+                          key={ev.id}
+                          onClick={() => handleResultClick("event", ev)}
+                          style={{
+                            width: "100%",
+                            textAlign: "left",
+                            background: "none",
+                            border: "none",
+                            padding: "8px",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            color: "var(--ink)",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "12px",
+                            transition: "background 0.2s"
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = "var(--border)"}
+                          onMouseLeave={(e) => e.currentTarget.style.background = "none"}
+                        >
+                          <div style={{ width: "60px", height: "34px", borderRadius: "6px", background: coverBg, flexShrink: 0 }} />
+                          <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+                            <span style={{ fontSize: "13.5px", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.title}</span>
+                            <span style={{ fontSize: "11px", color: "var(--ink-3)", marginTop: "2px" }}>{ev.attendeeCount || 0} {ev.attendeeCount === 1 ? 'attendee' : 'attendees'}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {searchResults.groups.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--ink-3)", padding: "4px 8px", letterSpacing: "0.5px" }}>
+                      Groups
+                    </div>
+                    {searchResults.groups.map(grp => {
+                      const noImageUrl = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200"><rect width="100%" height="100%" fill="%23f3f4f6" /><circle cx="100" cy="90" r="45" fill="none" stroke="%230f4c81" stroke-width="4"/><line x1="68" y1="58" x2="132" y2="122" stroke="%230f4c81" stroke-width="4"/><path d="M82 78h36v26H82zm7-8h22l2 4H87z" fill="none" stroke="%230f4c81" stroke-width="3" stroke-linejoin="round"/><circle cx="100" cy="91" r="7" fill="none" stroke="%230f4c81" stroke-width="3"/><text x="100" y="165" font-family="sans-serif" font-size="14" font-weight="bold" fill="%230f4c81" text-anchor="middle">NO IMAGE</text></svg>';
+                      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                      const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+                      const iconUrl = grp.icon 
+                        ? (grp.icon.startsWith("http") || grp.icon.startsWith("data:") || grp.icon.startsWith("linear-gradient") || grp.icon.startsWith("var(")
+                            ? grp.icon 
+                            : `${apiBase}/${grp.icon.startsWith('/') ? grp.icon.substring(1) : grp.icon}`)
+                        : noImageUrl;
+                      const iconBg = `url("${iconUrl}") center/cover no-repeat`;
+                      return (
+                        <button
+                          key={grp.id}
+                          onClick={() => handleResultClick("group", grp)}
+                          style={{
+                            width: "100%",
+                            textAlign: "left",
+                            background: "none",
+                            border: "none",
+                            padding: "8px",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            color: "var(--ink)",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "12px",
+                            transition: "background 0.2s"
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = "var(--border)"}
+                          onMouseLeave={(e) => e.currentTarget.style.background = "none"}
+                        >
+                          <div style={{ width: "60px", height: "34px", borderRadius: "6px", background: iconBg, flexShrink: 0 }} />
+                          <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+                            <span style={{ fontSize: "13.5px", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{grp.name}</span>
+                            <span style={{ fontSize: "11px", color: "var(--ink-3)", marginTop: "2px" }}>{grp.memberCount || 0} {grp.memberCount === 1 ? 'member' : 'members'}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {window.featureSettings?.location_active !== false && (

@@ -68,7 +68,7 @@ export function Navbar() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    window.location.href = `${AUTH_PATH}#discover?query=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}`;
+    window.location.href = `/pages/Samaagum Home.html#discover?query=${encodeURIComponent(query)}&location=${encodeURIComponent(location)}`;
   };
 
   return (
@@ -76,7 +76,7 @@ export function Navbar() {
       <div className="nav-inner" style={{ maxWidth: 1280, display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "0 24px" }}>
         
         {/* Left: Search pill */}
-        <form onSubmit={handleSearch} style={{
+        <form onSubmit={handleSearch} onClick={() => window.location.href = "/pages/Samaagum Home.html#discover"} style={{
           display: "flex",
           alignItems: "center",
           background: "var(--card-bg)",
@@ -86,12 +86,16 @@ export function Navbar() {
           width: "100%",
           maxWidth: 420,
           boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+          cursor: "pointer"
         }}>
           <input
             type="text"
             placeholder="Search events..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            readOnly
+            onClick={() => window.location.href = "/pages/Samaagum Home.html#discover"}
+            onFocus={() => window.location.href = "/pages/Samaagum Home.html#discover"}
             style={{
               background: "transparent",
               border: "none",
@@ -100,6 +104,7 @@ export function Navbar() {
               fontSize: 13.5,
               width: "50%",
               padding: "4px 0",
+              cursor: "pointer"
             }}
           />
           <div style={{ height: 18, width: 1, background: "var(--card-border)", margin: "0 12px" }} />
@@ -108,6 +113,9 @@ export function Navbar() {
             placeholder="Location"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
+            readOnly
+            onClick={() => window.location.href = "/pages/Samaagum Home.html#discover"}
+            onFocus={() => window.location.href = "/pages/Samaagum Home.html#discover"}
             style={{
               background: "transparent",
               border: "none",
@@ -116,6 +124,7 @@ export function Navbar() {
               fontSize: 13.5,
               width: "35%",
               padding: "4px 0",
+              cursor: "pointer"
             }}
           />
           <button type="submit" style={{

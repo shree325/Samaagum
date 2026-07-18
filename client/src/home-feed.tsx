@@ -123,25 +123,37 @@ function ErrorBlock({ message, onRetry }: { message: string, onRetry: () => void
 
 /* Hero Carousel */
 export function HeroCarousel({ events, go, wishlisted, wishlistCounts, toggleWishlist, registered }: any) {
-  const [index, setIndex] = useState(0);
+  const total = events?.length || 0;
+  // If there are multiple events, clone first at the end and last at the start for circular looping
+  const slides = events && events.length > 1 ? [events[events.length - 1], ...events, events[0]] : (events || []);
+  
+  const [index, setIndex] = useState(slides.length > 1 ? 1 : 0);
   const [hover, setHover] = useState(false);
+  const [transitionEnabled, setTransitionEnabled] = useState(true);
   const touchStart = useRef(0);
 
+  const nextSlide = () => {
+    if (slides.length <= 1) return;
+    setIndex((prev) => (prev >= slides.length - 1 ? prev : prev + 1));
+  };
+
+  const prevSlide = () => {
+    if (slides.length <= 1) return;
+    setIndex((prev) => (prev <= 0 ? prev : prev - 1));
+  };
+
   useEffect(() => {
-    if (events.length <= 1 || hover) return;
+    if (slides.length <= 1 || hover) return;
     const timer = setInterval(() => {
       const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
       if (!mediaQuery.matches) {
-        setIndex((prev) => (prev + 1) % events.length);
+        nextSlide();
       }
     }, 5000);
     return () => clearInterval(timer);
-  }, [events, hover]);
+  }, [slides, hover, index]);
 
   if (!events || events.length === 0) return null;
-
-  const nextSlide = () => setIndex((prev) => (prev + 1) % events.length);
-  const prevSlide = () => setIndex((prev) => (prev - 1 + events.length) % events.length);
 
   const handleTouchStart = (e: any) => {
     touchStart.current = e.touches[0].clientX;
@@ -158,6 +170,26 @@ export function HeroCarousel({ events, go, wishlisted, wishlistCounts, toggleWis
     else if (e.key === 'ArrowLeft') prevSlide();
   };
 
+  const handleTransitionEnd = () => {
+    if (slides.length <= 1) return;
+    if (index === slides.length - 1) {
+      setTransitionEnabled(false);
+      setIndex(1);
+    } else if (index === 0) {
+      setTransitionEnabled(false);
+      setIndex(slides.length - 2);
+    }
+  };
+
+  useEffect(() => {
+    if (!transitionEnabled) {
+      const raf = requestAnimationFrame(() => {
+        setTransitionEnabled(true);
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+  }, [transitionEnabled]);
+
   return (
     <div
       className="hero-carousel"
@@ -171,8 +203,15 @@ export function HeroCarousel({ events, go, wishlisted, wishlistCounts, toggleWis
       aria-label="Featured events carousel"
       aria-roledescription="carousel"
     >
-      <div className="hero-track" style={{ transform: `translateX(-${index * 100}%)` }}>
-        {events.map((ev: any, idx: number) => {
+      <div 
+        className="hero-track" 
+        onTransitionEnd={handleTransitionEnd}
+        style={{ 
+          transform: `translateX(-${index * 100}%)`,
+          transition: transitionEnabled ? 'transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)' : 'none'
+        }}
+      >
+        {slides.map((ev: any, idx: number) => {
           const coverBg = ev.cover && (ev.cover.startsWith("linear-gradient") || ev.cover.startsWith("radial-gradient") || ev.cover.startsWith("var("))
             ? ev.cover
             : (ev.cover ? `url(${ev.cover}) center/cover no-repeat` : 'var(--sunset)');
@@ -196,7 +235,7 @@ export function HeroCarousel({ events, go, wishlisted, wishlistCounts, toggleWis
 
           return (
             <div
-              key={ev.id}
+              key={`${ev.id}-${idx}`}
               className="hero-slide"
               aria-hidden={idx !== index}
               onClick={() => go('event', ev)}
@@ -268,14 +307,17 @@ export function HeroCarousel({ events, go, wishlisted, wishlistCounts, toggleWis
           <button className="hero-nav-btn next" aria-label="Next slide" onClick={(e) => { e.stopPropagation(); nextSlide(); }}><I.arrowR /></button>
 
           <div className="hero-dots">
-            {events.map((_: any, idx: number) => (
-              <button
-                key={idx}
-                className={`hero-dot ${idx === index ? 'active' : ''}`}
-                aria-label={`Go to slide ${idx + 1}`}
-                onClick={(e) => { e.stopPropagation(); setIndex(idx); }}
-              />
-            ))}
+            {events.map((_: any, idx: number) => {
+              const realActiveIdx = index === 0 ? events.length - 1 : (index === slides.length - 1 ? 0 : index - 1);
+              return (
+                <button
+                  key={idx}
+                  className={`hero-dot ${idx === realActiveIdx ? 'active' : ''}`}
+                  aria-label={`Go to slide ${idx + 1}`}
+                  onClick={(e) => { e.stopPropagation(); setIndex(idx + 1); }}
+                />
+              );
+            })}
           </div>
         </>
       )}
