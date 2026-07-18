@@ -6,6 +6,8 @@ import { Empty, FilterChip, SectionBar } from './home-shell';
 import { apiBase } from './home-subscription';
 import { I, Grain, Avatar } from './home-icons';
 import { Communities, Events } from './landing-features';
+import { useLocation } from 'react-router-dom';
+
 
 /* ============================================================
    Samaagum Home — Home feed + Discover
@@ -791,16 +793,22 @@ export function HomeFeed({ st, go }: any) {
 
 /* ---------------- Discover (browse) ---------------- */
 export function Discover({ st, go, param }) {
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search || (window.location.hash.includes('?') ? window.location.hash.split('?')[1] : ''));
+  const urlCategory = searchParams.get('category');
+  const urlTab = searchParams.get('tab');
+
   // param may be a plain string ("events"/"groups") or an object { tab, category }
-  const initialTab      = (typeof param === 'string' ? param : param?.tab) ?? 'events';
-  const initialCategory = typeof param === 'object' && param !== null ? (param.category ?? null) : null;
+  const initialTab      = (typeof param === 'string' ? param : param?.tab) ?? urlTab ?? 'events';
+  const initialCategory = typeof param === 'object' && param !== null ? (param.category ?? null) : urlCategory;
 
   const [tab, setTab] = useState(initialTab === 'events' ? 'events' : 'groups');
 
   useEffect(() => {
     if (param === 'events' || param === 'groups') setTab(param);
     else if (param?.tab === 'events' || param?.tab === 'groups') setTab(param.tab);
-  }, [param]);
+    else if (urlTab === 'events' || urlTab === 'groups') setTab(urlTab);
+  }, [param, urlTab]);
 
   const { wishlisted, wishlistCounts, toggleWishlist, registered, city, addJoined, addPending } = st;
   const requireAuth = st.requireAuth ?? ((_ctx, action) => action());

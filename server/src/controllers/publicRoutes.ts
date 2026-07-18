@@ -378,7 +378,7 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
           name: g.name,
           desc: g.description || 'Join our group to learn, share, and connect with like-minded individuals.',
           logo: iconUrl || g.icon || '👥',
-          cover: g.cover || bannerUrl || null,
+          cover: bannerUrl || g.cover || null,
           members: memberCount,
           category: g.category || 'General',
           tags: g.settings?.tags || []

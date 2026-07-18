@@ -409,6 +409,10 @@ html, body {
   box-sizing: border-box;
 }
 
+.tb-spacer {
+  flex: 1;
+}
+
 .tb-search {
   display: flex;
   align-items: center;

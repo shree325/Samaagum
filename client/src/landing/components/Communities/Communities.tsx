@@ -6,6 +6,8 @@ import { SkeletonList } from "../../ui/Skeleton";
 import { SectionHeader } from "../../ui/SectionHeader";
 import { CTAButton, I_arrow } from "../../ui/CTAButton";
 
+import { APP_ROUTES } from "../../constants/APP_ROUTES";
+
 const AUTH_PATH = "/pages/Samaagum Auth.html";
 
 export function Communities() {
@@ -48,7 +50,7 @@ export function Communities() {
 
         <div style={{ textAlign: "center", marginTop: 48 }}>
           <CTAButton
-            href={AUTH_PATH}
+            href={APP_ROUTES.discover(undefined, "groups")}
             variant="primary"
             trackingName="View All Groups Clicked"
           >

@@ -12,10 +12,13 @@ export const APP_ROUTES = {
   group: (id: string) =>
     `${HOME_PATH}#/group?id=${encodeURIComponent(id)}`,
 
-  discover: (category?: string) =>
-    category
-      ? `${HOME_PATH}#/discover?category=${encodeURIComponent(category)}`
-      : `${HOME_PATH}#/discover`,
+  discover: (category?: string, tab?: string) => {
+    const params = new URLSearchParams();
+    if (category) params.set('category', category);
+    if (tab) params.set('tab', tab);
+    const qs = params.toString();
+    return qs ? `${HOME_PATH}#/discover?${qs}` : `${HOME_PATH}#/discover`;
+  },
 
   login:  () => `${AUTH_PATH}#login`,
   signup: () => `${AUTH_PATH}#signup`,
