@@ -24,13 +24,27 @@ export interface MyEventsPayload {
 
 export class MyEventsRealtimeService {
     static async getUserPayload(userId: string): Promise<MyEventsPayload> {
-        // Fetch bookings with their related events
+        // Fetch bookings where the user is the booker
         const bookings = await prisma.bookings.findMany({
             where: {
                 booker_user_id: userId,
                 status: { in: ['confirmed', 'pending_approval', 'pending_payment', 'cancelled', 'waitlisted'] as any }
             },
             include: { events: true },
+            orderBy: { created_at: 'desc' }
+        });
+
+        // Fetch attendees where the user is just a guest/attendee
+        const guestAttendees = await prisma.attendees.findMany({
+            where: {
+                user_id: userId,
+                status: { in: ['pending', 'approved', 'checked_in'] },
+                bookings: { status: { not: 'cancelled' } }
+            },
+            include: { 
+                bookings: { include: { events: true } },
+                tickets: true 
+            },
             orderBy: { created_at: 'desc' }
         });
 
@@ -51,6 +65,7 @@ export class MyEventsRealtimeService {
         // Deduplicate by event_id (keep latest booking per event)
         const allEventIds = Array.from(new Set([
             ...bookings.map(b => b.event_id),
+            ...guestAttendees.map(a => a.bookings?.event_id).filter(Boolean) as string[],
             ...assignments.map(a => a.event_id),
             ...wishlistItems.map(w => w.event_id)
         ]));
@@ -128,7 +143,13 @@ export class MyEventsRealtimeService {
             const tickets = ticketsByEvent[eventId] || [];
             
             let attendeeId = null, ticketId = null, qrToken = null, checkinStatus = null;
-            if (bookingId && attendeesByBooking[bookingId]) {
+            if (source === 'guest_attendee' && attendeesByBooking[eventId]) {
+                const a = attendeesByBooking[eventId];
+                attendeeId = a.id;
+                ticketId = a.ticket_id;
+                qrToken = a.tickets?.qr_token || null;
+                checkinStatus = a.checkin_status;
+            } else if (bookingId && attendeesByBooking[bookingId]) {
                 const a = attendeesByBooking[bookingId];
                 attendeeId = a.id;
                 ticketId = a.ticket_id;
@@ -163,6 +184,21 @@ export class MyEventsRealtimeService {
         };
 
         bookings.forEach(b => processEventSync(b.event_id, (b as any).events, b.status, b.id, 'booking'));
+        guestAttendees.forEach(a => {
+            if (a.bookings?.events) {
+                // Map native attendee status directly
+                const mappedStatus = 
+                    a.status === 'pending' ? 'pending_approval' :
+                    a.status === 'approved' ? 'confirmed' :
+                    a.status === 'checked_in' ? 'confirmed' :
+                    a.status === 'rejected' ? 'cancelled' :
+                    a.bookings.status; // fallback
+
+                // We store the attendee in attendeesByBooking keyed by eventId as a hack to reuse it
+                attendeesByBooking[a.bookings.event_id] = a;
+                processEventSync(a.bookings.event_id, a.bookings.events, mappedStatus, a.booking_id, 'guest_attendee');
+            }
+        });
         assignments.forEach(a => processEventSync(a.event_id, (a as any).events, 'confirmed', null, 'assignment'));
         wishlistItems.forEach(w => processEventSync(w.event_id, (w as any).events, null, null, 'wishlist'));
 

@@ -60,7 +60,11 @@ export class TicketRealtimeService {
     static async buildTicketPayload(userId: string, eventId: string): Promise<TicketPayload> {
         const userTickets = await prisma.tickets.findMany({
             where: { 
-                booking_line_items: { bookings: { event_id: eventId, booker_user_id: userId } }
+                booking_line_items: { bookings: { event_id: eventId } },
+                OR: [
+                    { booking_line_items: { bookings: { booker_user_id: userId } } },
+                    { attendees: { some: { user_id: userId } } }
+                ]
             },
             include: {
                 booking_line_items: { include: { ticket_types: true, bookings: true } },

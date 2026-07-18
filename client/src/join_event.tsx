@@ -645,8 +645,8 @@ export function JoinEventPage({ ev, st, go }) {
                                         )}
                                         {localStatus !== 'completed' && (
                                             liveEvent.bookingStatus === 'confirmed' ? (
-                                                <button className="hbtn hbtn--primary hbtn--block" onClick={() => window.location.reload()} style={{ background: "#1f9d57", color: "#fff" }}>
-                                                    <I.check style={{ marginRight: 6 }} /> Ticket Generated • Click to view
+                                                <button className="hbtn hbtn--primary hbtn--block" onClick={() => go("event", liveEvent)} style={{ background: "#1f9d57", color: "#fff" }}>
+                                                    <I.check style={{ marginRight: 6 }} /> Get Ticket
                                                 </button>
                                             ) : liveEvent.bookingStatus === 'waitlisted' ? (
                                                 <button className="hbtn hbtn--soft hbtn--block" style={{ color: "var(--accent-2)" }} onClick={() => go("waitlist", liveEvent)}>

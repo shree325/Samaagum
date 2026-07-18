@@ -47,15 +47,9 @@ export class EventReminderService {
       for (const event of events) {
         const templateKey = `event_reminder_${windowMin}min_${event.id}`;
 
-        // 1. Attendees (bookings)
-        const bookings = await prisma.bookings.findMany({
-          where: {
-            event_id: event.id,
-            status: { in: ['confirmed', 'pending_approval'] },
-          },
-          select: { booker_user_id: true },
-        });
-        const attendees = bookings.map(b => b.booker_user_id).filter(Boolean) as string[];
+        // 1. Attendees
+        const { EventService } = require('./EventService');
+        const attendees = await EventService.getEventParticipantUserIds(event.id, true);
 
         // 2. Team assignments (hosts, co-hosts)
         const team = await prisma.event_team_assignments.findMany({
