@@ -3071,6 +3071,9 @@ model user_notification_preferences {
   @@id([user_id, type, channel])
 }
 
+
+
+
 enum attendee_status {
   pending
   approved
@@ -3078,3 +3081,4 @@ enum attendee_status {
   waitlisted
   checked_in
 }
+
