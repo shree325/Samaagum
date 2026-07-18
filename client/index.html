@@ -6,6 +6,17 @@
 <title>Samaagum — Where your community comes together</title>
 <link rel="stylesheet" href="css/styles.css" />
 <link rel="stylesheet" href="css/landing.css" />
+<script>
+  (function() {
+    var storedTheme = localStorage.getItem('theme');
+    if (storedTheme) {
+      document.documentElement.setAttribute('data-theme', storedTheme);
+    } else {
+      var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.setAttribute('data-theme', systemDark ? 'dark' : 'light');
+    }
+  })();
+</script>
 </head>
 <body class="landing">
   <!-- Handle Google OAuth redirect: ?token=...&auth=google → save token → go to home (or profile setup if new user) -->

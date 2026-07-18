@@ -1,6 +1,7 @@
 import React from "react";
 import { CTAButton, I_arrow } from "../../ui/CTAButton";
 import { useReveal } from "../../hooks/useReveal";
+import { APP_ROUTES } from "../../constants/APP_ROUTES";
 
 const AUTH_PATH = "/pages/Samaagum Auth.html";
 
@@ -74,7 +75,7 @@ export function CTA() {
             <I_arrow style={{ marginLeft: 6 }} />
           </CTAButton>
           <CTAButton
-            href="#search"
+            href={APP_ROUTES.discover(undefined, "groups")}
             variant="ghost"
             size="lg"
             trackingName="CTA Section Secondary Clicked"
