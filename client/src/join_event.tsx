@@ -252,6 +252,7 @@ export function JoinEventPage({ ev, st, go }) {
                 isFull: t.isFull,
                 capacity: t.capacity || null,
                 remaining: t.remaining !== undefined ? t.remaining : null,
+                maxPerBooking: t.max_per_booking || null,
                 desc: t.description || "",
                 salesEndAt: t.sales_end_at || t.salesEndAt || null
             };
@@ -259,8 +260,10 @@ export function JoinEventPage({ ev, st, go }) {
         : (currentType === "Free"
             ? [{ id: "rsvp", n: "General RSVP", d: "Free entry · approval-based", p: "Free", free: true, capacity: null, remaining: null, desc: "Free entry · approval-based", salesEndAt: null }]
             : [{ id: "general", n: "General Admission", d: "Standard entry", p: e.price || "₹500", free: false, capacity: null, remaining: null, desc: "Standard entry", salesEndAt: null }]);
-    const [tier, setTier] = React.useState<string | null>(e.type === "Free" ? (tiers[0]?.id || null) : null);
-    const [qty, setQty] = React.useState(1);
+    const [selectedTickets, setSelectedTickets] = React.useState<Record<string, { ticketId: string; ticketName: string; price: number; qty: number; maxQty: number; remaining: number }>>({});
+    const expandedTickets = Object.values(selectedTickets).flatMap(t => Array(t.qty).fill({ ticketTypeId: t.ticketId, ticketName: t.ticketName, price: t.price }));
+    const totalQty = expandedTickets.length;
+    const totalPrice = Object.values(selectedTickets).reduce((acc, t) => acc + (t.qty * t.price), 0);
     const [showTicketPopup, setShowTicketPopup] = useState(false);
     const [expandedTicketDetails, setExpandedTicketDetails] = useState<Record<string, boolean>>({});
     const [checkoutTransactionId, setCheckoutTransactionId] = useState('');
@@ -281,7 +284,7 @@ export function JoinEventPage({ ev, st, go }) {
         }
     };
 
-    const sel = tier ? tiers.find((t: any) => t.id === tier) : null;
+    const sel = null;
     const evtCap = liveEvent.cap || e.cap;
     const evtGoing = liveEvent.going || e.going;
     const pct = evtCap ? Math.min(100, Math.round((evtGoing / evtCap) * 100)) : 0;
@@ -524,13 +527,13 @@ export function JoinEventPage({ ev, st, go }) {
                             <div className="ev-block">
                                 <h3>{liveEvent.going} attending</h3>
                                 <div className="att-grid">
-                                    {attendees.map(n => {
+                                    {attendees.map((n, i) => {
                                         const name = typeof n === 'object' ? (n.name || n.display_name) : n;
                                         const userId = typeof n === 'object' ? n.id : undefined;
                                         const picture = typeof n === 'object' ? n.picture : undefined;
                                         return (
                                             <div 
-                                                key={userId || name} 
+                                                key={`${userId || name || 'u'}-${i}`} 
                                                 className="att"
                                                 style={{ cursor: userId ? 'pointer' : 'default' }}
                                                 onClick={() => {
@@ -605,64 +608,68 @@ export function JoinEventPage({ ev, st, go }) {
                                     </button>
                                 </div>
                             ) : (
-                                <div className="ticket-box">
-                                    {liveEvent.type !== "Free" && (
-                                        <div style={{ marginBottom: 16, marginTop: 12 }}>
-                                            {!tier ? (
-                                                <button
-                                                    className="hbtn hbtn--soft hbtn--block"
-                                                    onClick={() => setShowTicketPopup(true)}
-                                                    style={{ justifyContent: 'center', fontWeight: 600, height: 46 }}
-                                                >
-                                                    🎟 Select Ticket
-                                                </button>
-                                            ) : (
-                                                <div 
-                                                    onClick={() => setShowTicketPopup(true)}
-                                                    style={{
-                                                        background: 'var(--surface-2)', padding: '12px 14px', borderRadius: 8,
-                                                        border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between',
-                                                        alignItems: 'center', cursor: 'pointer', transition: 'border-color 0.2s', height: 46
-                                                    }}
-                                                    onMouseEnter={ev => ev.currentTarget.style.borderColor = 'var(--accent)'}
-                                                    onMouseLeave={ev => ev.currentTarget.style.borderColor = 'var(--border)'}
-                                                >
-                                                    <div>
-                                                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>{sel?.n}</div>
-                                                        <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>{sel?.p}</div>
-                                                    </div>
-                                                    <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>Change</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                    <div className="ticket-foot" style={liveEvent.type === "Free" ? { paddingTop: 16 } : {}}>
-                                        {liveEvent.type !== "Free" && (
-                                            <div className="qty">
-                                                <span className="lbl">Quantity</span>
-                                                <div className="stepper">
-                                                    <button onClick={() => setQty(q => Math.max(1, q - 1))}>–</button>
-                                                    <span className="n">{qty}</span>
-                                                    <button onClick={() => setQty(q => Math.min(6, q + 1))}>+</button>
-                                                </div>
-                                            </div>
-                                        )}
+                                <div className="ticket-box" style={{
+                                    position: 'relative',
+                                    background: 'var(--surface)',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: 22,
+                                    padding: '28px 24px 24px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    boxShadow: '0 2px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04)',
+                                }}>
+                                    {/* Ticket Icon Badge */}
+                                    <div style={{
+                                        width: 52, height: 52, borderRadius: '50%',
+                                        background: 'linear-gradient(135deg, rgba(168,85,247,0.1), rgba(99,102,241,0.1))',
+                                        border: '1px solid rgba(168,85,247,0.2)',
+                                        boxShadow: '0 4px 12px rgba(168,85,247,0.12)',
+                                        display: 'flex', justifyContent: 'center', alignItems: 'center',
+                                        marginBottom: 18,
+                                    }}>
+                                        <I.ticket style={{ width: 22, height: 22, color: '#a855f7' }} />
+                                    </div>
+
+                                    {/* Heading */}
+                                    <h2 style={{
+                                        color: 'var(--ink)',
+                                        fontSize: 22,
+                                        fontWeight: 700,
+                                        margin: '0 0 6px 0',
+                                        textAlign: 'center',
+                                        letterSpacing: '-0.3px',
+                                        lineHeight: 1.2,
+                                    }}>Ready to Join?</h2>
+
+                                    {/* Subtitle */}
+                                    <p style={{
+                                        color: 'var(--ink-3)',
+                                        fontSize: 13.5,
+                                        margin: '0 0 24px 0',
+                                        textAlign: 'center',
+                                        lineHeight: 1.5,
+                                        maxWidth: 220,
+                                    }}>Book your tickets securely in just a few clicks.</p>
+
+                                    <div style={{ width: '100%' }}>
+                                    <div className="ticket-foot" style={{ padding: 0 }}>
                                         {localStatus === 'completed' && (
-                                            <div style={{ padding: 12, background: "rgba(34, 197, 94, 0.1)", color: "var(--accent-1)", border: "1px solid rgba(34, 197, 94, 0.2)", borderRadius: 8, marginTop: 16, textAlign: "center", fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                                            <div style={{ padding: 12, background: "rgba(34,197,94,0.1)", color: "var(--accent-1)", border: "1px solid rgba(34,197,94,0.2)", borderRadius: 10, textAlign: "center", fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                                                 <I.cal /> EVENT COMPLETED
                                             </div>
                                         )}
                                         {localStatus !== 'completed' && (
                                             liveEvent.bookingStatus === 'confirmed' ? (
-                                                <button className="hbtn hbtn--primary hbtn--block" onClick={() => go("event", liveEvent)} style={{ background: "#1f9d57", color: "#fff" }}>
+                                                <button className="hbtn hbtn--block" onClick={() => go("event", liveEvent)} style={{ background: "#1f9d57", color: "#fff", borderRadius: 14 }}>
                                                     <I.check style={{ marginRight: 6 }} /> Get Ticket
                                                 </button>
                                             ) : liveEvent.bookingStatus === 'waitlisted' ? (
-                                                <button className="hbtn hbtn--soft hbtn--block" style={{ color: "var(--accent-2)" }} onClick={() => go("waitlist", liveEvent)}>
+                                                <button className="hbtn hbtn--soft hbtn--block" style={{ color: "var(--accent-2)", borderRadius: 14 }} onClick={() => go("waitlist", liveEvent)}>
                                                     <I.users /> View Waitlist Status
                                                 </button>
                                             ) : liveEvent.bookingStatus === 'pending_approval' ? (
-                                                <button className="hbtn hbtn--soft hbtn--block" disabled>
+                                                <button className="hbtn hbtn--soft hbtn--block" disabled style={{ borderRadius: 14 }}>
                                                     Pending Approval
                                                 </button>
                                             ) : (
@@ -732,14 +739,51 @@ export function JoinEventPage({ ev, st, go }) {
                                                             })()}
                                                         </div>
                                                     )}
-                                                    <button 
-                                                        className="hbtn hbtn--primary hbtn--block" 
-                                                        disabled={liveEvent.type !== "Free" && !tier}
-                                                        onClick={() => setShowCheckoutModal(true)}
+                                                    <button
+                                                        style={{
+                                                            width: '100%',
+                                                            background: 'linear-gradient(90deg, #FF7A6B 0%, #D95CF5 50%, #6B63FF 100%)',
+                                                            border: 'none',
+                                                            borderRadius: 16,
+                                                            height: 54,
+                                                            fontSize: 15.5,
+                                                            fontWeight: 600,
+                                                            color: '#fff',
+                                                            cursor: 'pointer',
+                                                            boxShadow: '0 4px 20px rgba(169, 92, 245, 0.35)',
+                                                            transition: 'transform 0.18s ease, box-shadow 0.18s ease',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            gap: 8,
+                                                            letterSpacing: '-0.1px',
+                                                        }}
+                                                        onMouseEnter={e => {
+                                                            e.currentTarget.style.transform = 'translateY(-2px)';
+                                                            e.currentTarget.style.boxShadow = '0 8px 28px rgba(169, 92, 245, 0.45)';
+                                                        }}
+                                                        onMouseLeave={e => {
+                                                            e.currentTarget.style.transform = 'translateY(0)';
+                                                            e.currentTarget.style.boxShadow = '0 4px 20px rgba(169, 92, 245, 0.35)';
+                                                        }}
+                                                        onClick={() => {
+                                                            if (liveEvent.type === "Free") {
+                                                                if (tiers.length > 0) {
+                                                                    const t = tiers[0];
+                                                                    setSelectedTickets({
+                                                                        [t.id]: { ticketId: t.id, ticketName: t.n, price: 0, qty: 1, maxQty: 1, remaining: 999 }
+                                                                    });
+                                                                }
+                                                                setShowCheckoutModal(true);
+                                                            } else {
+                                                                setShowTicketPopup(true);
+                                                            }
+                                                        }}
                                                     >
                                                         {liveEvent.cash_enabled && liveEvent.approval_required
                                                             ? (liveEvent.type === "Free" ? "Request to join" : 'Submit Payment Request')
-                                                            : (liveEvent.type === "Free" ? "Request to join" : `Get ${qty > 1 ? qty + " tickets" : "ticket"}`)}
+                                                            : (liveEvent.type === "Free" ? "Request to join" : "Get Tickets")}
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                                                     </button>
                                                     {(() => {
                                                         let settingsObj = liveEvent.settings || {};
@@ -750,7 +794,7 @@ export function JoinEventPage({ ev, st, go }) {
                                                         if (!isCapacityLimited) return null;
                                                         const remaining = evtCap - evtGoing;
                                                         return (
-                                                            <div style={{ fontSize: 12.5, color: "var(--accent-2)", fontWeight: 600, marginTop: 8, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                                                            <div style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 500, marginTop: 10, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
                                                                 {remaining > 0 ? `${remaining} seats left` : "Sold Out"}
                                                             </div>
                                                         );
@@ -758,6 +802,11 @@ export function JoinEventPage({ ev, st, go }) {
                                                 </>
                                             )
                                         )}
+                                        <div style={{ display: "flex", alignItems: "center", gap: 5, justifyContent: "center", marginTop: 14, fontSize: 11.5, color: "var(--ink-3)" }}>
+                                            <I.check style={{ width: 12, height: 12, color: "var(--accent-1)" }} />
+                                            Secure checkout · instant ticket
+                                        </div>
+                                    </div>
                                     </div>
                                 </div>
                             )}
@@ -786,20 +835,17 @@ export function JoinEventPage({ ev, st, go }) {
                                         </div>
                                         {/* Modal Body */}
                                         <div className="scroll" style={{ padding: '16px 20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                            {tiers.map(t => (
+                                            {tiers.map(t => {
+                                                const selQty = selectedTickets[t.id]?.qty || 0;
+                                                const maxPerBookingLimit = t.maxPerBooking || 10;
+                                                const maxAllowed = t.remaining !== null ? Math.min(maxPerBookingLimit, t.remaining) : maxPerBookingLimit;
+                                                return (
                                                 <div 
                                                     key={t.id} 
-                                                    onClick={() => {
-                                                        if (!t.isFull) {
-                                                            setTier(t.id);
-                                                            setShowTicketPopup(false);
-                                                        }
-                                                    }}
                                                     style={{
-                                                        background: 'var(--surface-2)', border: `1px solid ${tier === t.id ? 'var(--accent)' : 'var(--border)'}`,
+                                                        background: 'var(--surface-2)', border: `1px solid var(--border)`,
                                                         borderRadius: 10, padding: '12px 14px', display: 'flex', flexDirection: 'column',
-                                                        gap: 10, transition: 'all 0.2s', opacity: t.isFull ? 0.6 : 1,
-                                                        cursor: t.isFull ? 'not-allowed' : 'pointer'
+                                                        gap: 10, transition: 'all 0.2s', opacity: t.isFull ? 0.6 : 1
                                                     }}
                                                 >
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -823,8 +869,6 @@ export function JoinEventPage({ ev, st, go }) {
                                                                 )}
                                                             </div>
                                                             <div style={{ fontSize: 13, fontWeight: 600, color: '#10b981', marginTop: 2 }}>{t.p}</div>
-                                                        </div>
-                                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                                             <button 
                                                                 onClick={(ev) => {
                                                                     ev.stopPropagation();
@@ -832,11 +876,57 @@ export function JoinEventPage({ ev, st, go }) {
                                                                 }}
                                                                 style={{
                                                                     background: 'transparent', border: 'none', color: 'var(--accent)',
-                                                                    fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '6px 0'
+                                                                    fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '6px 0', marginTop: 4
                                                                 }}
                                                             >
                                                                 {expandedTicketDetails[t.id] ? 'Less Info' : 'More Info'}
                                                             </button>
+                                                        </div>
+                                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                                            {t.isFull ? (
+                                                                <div className="stepper" style={{ background: 'var(--surface)', padding: '4px 8px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 12, opacity: 0.5 }}>
+                                                                    <button style={{ background: 'transparent', border: 'none', fontSize: 18, color: 'var(--ink)', cursor: 'not-allowed' }}>–</button>
+                                                                    <span style={{ fontSize: 15, fontWeight: 600, width: 20, textAlign: 'center' }}>0</span>
+                                                                    <button style={{ background: 'transparent', border: 'none', fontSize: 18, color: 'var(--ink)', cursor: 'not-allowed' }}>+</button>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="stepper" style={{ background: 'var(--surface)', padding: '4px 8px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+                                                                    <button 
+                                                                        style={{ background: 'transparent', border: 'none', fontSize: 18, cursor: selQty > 0 ? 'pointer' : 'not-allowed', color: 'var(--ink)', opacity: selQty > 0 ? 1 : 0.5 }} 
+                                                                        disabled={selQty <= 0}
+                                                                        onClick={() => {
+                                                                            setSelectedTickets(prev => {
+                                                                                const n = { ...prev };
+                                                                                if (n[t.id]) {
+                                                                                    if (n[t.id].qty > 1) {
+                                                                                        n[t.id].qty -= 1;
+                                                                                    } else {
+                                                                                        delete n[t.id];
+                                                                                    }
+                                                                                }
+                                                                                return n;
+                                                                            });
+                                                                        }}
+                                                                    >–</button>
+                                                                    <span style={{ fontSize: 15, fontWeight: 600, width: 20, textAlign: 'center' }}>{selQty}</span>
+                                                                    <button 
+                                                                        style={{ background: 'transparent', border: 'none', fontSize: 18, cursor: selQty < maxAllowed ? 'pointer' : 'not-allowed', color: 'var(--ink)', opacity: selQty < maxAllowed ? 1 : 0.5 }} 
+                                                                        disabled={selQty >= maxAllowed}
+                                                                        onClick={() => {
+                                                                            setSelectedTickets(prev => {
+                                                                                const n = { ...prev };
+                                                                                if (!n[t.id]) {
+                                                                                    n[t.id] = { ticketId: t.id, ticketName: t.n, price: t.priceVal, qty: 0, maxQty: maxAllowed, remaining: t.remaining || 999 };
+                                                                                }
+                                                                                if (n[t.id].qty < maxAllowed) {
+                                                                                    n[t.id].qty += 1;
+                                                                                }
+                                                                                return n;
+                                                                            });
+                                                                        }}
+                                                                    >+</button>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                     {expandedTicketDetails[t.id] && (
@@ -852,7 +942,35 @@ export function JoinEventPage({ ev, st, go }) {
                                                         </div>
                                                     )}
                                                 </div>
-                                            ))}
+                                            )})}
+                                            
+                                            <div style={{ marginTop: 16, borderTop: '1px solid var(--border-2)', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', bottom: 0, background: 'var(--surface)' }}>
+                                                {totalQty > 0 && (
+                                                    <div style={{ fontSize: 13, background: 'var(--surface-2)', padding: 12, borderRadius: 8 }}>
+                                                        {Object.values(selectedTickets).map(stk => (
+                                                            <div key={stk.ticketId} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                                                <span>{stk.ticketName} &times;{stk.qty}</span>
+                                                                <span style={{ fontWeight: 600 }}>{stk.price > 0 ? `₹${(stk.price * stk.qty / 100).toFixed(0)}` : 'Free'}</span>
+                                                            </div>
+                                                        ))}
+                                                        <div style={{ borderTop: '1px dashed var(--border)', marginTop: 8, paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
+                                                            <span>Total Tickets ({totalQty})</span>
+                                                            <span>{totalPrice > 0 ? `₹${(totalPrice / 100).toFixed(0)}` : 'Free'}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                <button 
+                                                    className="hbtn hbtn--primary hbtn--block" 
+                                                    style={{ width: '100%', height: 46, fontSize: 15 }}
+                                                    disabled={totalQty === 0}
+                                                    onClick={() => {
+                                                        setShowTicketPopup(false);
+                                                        setShowCheckoutModal(true);
+                                                    }}
+                                                >
+                                                    Continue {totalQty > 0 ? `• ₹${(totalPrice / 100).toFixed(0)}` : ''}
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -862,15 +980,13 @@ export function JoinEventPage({ ev, st, go }) {
                                 isOpen={showCheckoutModal}
                                 onClose={() => setShowCheckoutModal(false)}
                                 liveEvent={liveEvent}
-                                qty={qty}
+                                expandedTickets={expandedTickets}
                                 st={st}
-                                sel={sel}
                                 onConfirm={(checkoutPayload: any) => {
                                     setShowCheckoutModal(false);
+                                    const grouped = Object.values(selectedTickets).map(t => ({ ticketTypeId: t.ticketId, qty: t.qty, ticketName: t.ticketName }));
                                     register(liveEvent.id, false, { 
-                                        ticketTypeId: tier, 
-                                        qty, 
-                                        ticketName: sel?.n, 
+                                        tickets: grouped,
                                         transactionId: checkoutTransactionId || undefined,
                                         ...checkoutPayload 
                                     }, liveEvent.inviteToken);

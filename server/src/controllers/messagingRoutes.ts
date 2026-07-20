@@ -1842,50 +1842,66 @@ export async function messagingRoutes(fastify: FastifyInstance) {
 
       const answers: any = request.body || {};
 
-      let ticketType: any = null;
-
-      if (answers.ticketTypeId) {
-        ticketType = await prisma.ticket_types.findUnique({
-          where: { id: answers.ticketTypeId }
-        });
-
-        if (!ticketType || ticketType.event_id !== eventId) {
-          return reply.status(400).send({
-            success: false,
-            message: 'Invalid ticket type'
-          });
-        }
-      } else {
-        ticketType = await prisma.ticket_types.findFirst({
-          where: { event_id: eventId }
-        });
-      }
-      if (!ticketType) {
-        ticketType = await prisma.ticket_types.create({
-          data: {
-            tenant_id: event.tenant_id,
-            event_id: eventId,
-            name: 'General RSVP',
-            price_amount_minor: 0,
-            price_currency: 'INR',
-            capacity: event.capacity_total
-          }
-        });
+      let ticketsReq = Array.isArray(answers.tickets) 
+        ? answers.tickets 
+        : [{ ticketTypeId: answers.ticketTypeId, qty: answers.qty ? Number(answers.qty) : 1 }];
+      
+      if (ticketsReq.length === 0) {
+          // Fallback if empty array provided
+          ticketsReq = [{ ticketTypeId: null, qty: 1 }];
       }
 
-      if (ticketType && ticketType.capacity !== null && ticketType.capacity > 0 && !isWaitlisted) {
-        const aggr = await prisma.booking_line_items.aggregate({
-          _sum: { quantity: true },
-          where: {
-            ticket_type_id: ticketType.id,
-            bookings: { status: { in: ['confirmed', 'pending_payment'] } }
+      // Fetch, map and validate all ticket types
+      const resolvedTickets: Array<{ ticketType: any; reqQty: number }> = [];
+      let totalAmountMinor = 0;
+      let totalQty = 0;
+
+      for (const tReq of ticketsReq) {
+          let ticketType: any = null;
+          if (tReq.ticketTypeId) {
+              ticketType = await prisma.ticket_types.findUnique({
+                  where: { id: tReq.ticketTypeId }
+              });
+              if (!ticketType || ticketType.event_id !== eventId) {
+                  return reply.status(400).send({ success: false, message: 'Invalid ticket type' });
+              }
+          } else {
+              ticketType = await prisma.ticket_types.findFirst({
+                  where: { event_id: eventId }
+              });
+              if (!ticketType) {
+                  ticketType = await prisma.ticket_types.create({
+                      data: {
+                          tenant_id: event.tenant_id,
+                          event_id: eventId,
+                          name: 'General RSVP',
+                          price_amount_minor: 0,
+                          price_currency: 'INR',
+                          capacity: event.capacity_total
+                      }
+                  });
+              }
           }
-        });
-        const activeCount = aggr._sum.quantity || 0;
-        const requestedQty = answers.qty ? Number(answers.qty) : 1;
-        if (activeCount + requestedQty > ticketType.capacity) {
-          return reply.status(400).send({ success: false, message: 'This ticket type is sold out or does not have enough capacity' });
-        }
+
+          const reqQty = Number(tReq.qty) || 1;
+          
+          if (ticketType && ticketType.capacity !== null && ticketType.capacity > 0 && !isWaitlisted) {
+              const aggr = await prisma.booking_line_items.aggregate({
+                  _sum: { quantity: true },
+                  where: {
+                      ticket_type_id: ticketType.id,
+                      bookings: { status: { in: ['confirmed', 'pending_payment'] } }
+                  }
+              });
+              const activeCount = aggr._sum.quantity || 0;
+              if (activeCount + reqQty > ticketType.capacity) {
+                  return reply.status(400).send({ success: false, message: `Ticket type "${ticketType.name}" is sold out or does not have enough capacity` });
+              }
+          }
+
+          totalQty += reqQty;
+          totalAmountMinor += (ticketType.price_amount_minor ? Number(ticketType.price_amount_minor) : 0) * reqQty;
+          resolvedTickets.push({ ticketType, reqQty });
       }
 
       const isCash = event.cash_enabled === true;
@@ -1894,8 +1910,6 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       const initialTicketStatus: string = isWaitlisted ? 'waitlisted' : ((approvalRequired || isCash) ? 'reserved' : 'confirmed');
       const initialAttendeeStatus: string = isWaitlisted ? 'waitlisted' : (approvalRequired ? 'pending' : 'approved');
       const paymentMethod = isCash ? 'cash' : 'free';
-      const ticketPriceMinor = ticketType?.price_amount_minor ? Number(ticketType.price_amount_minor) : 0;
-      const requestedQty = answers.qty ? Number(answers.qty) : 1;
 
       // Remove from wishlist if they join
       await EventService.removeWishlist(eventId, userId).catch(err => console.error('Failed to auto-remove from wishlist', err));
@@ -1930,7 +1944,7 @@ export async function messagingRoutes(fastify: FastifyInstance) {
             booker_user_id: userId,
             status: initialBookingStatus as any,
             payment_method: paymentMethod,
-            total_amount_minor: ticketPriceMinor * requestedQty,
+            total_amount_minor: totalAmountMinor,
             total_currency: 'INR',
             hold_expires_at: initialBookingStatus === 'pending_payment'
               ? new Date(Date.now() + ((event as any).payment_hold_hours || 48) * 60 * 60 * 1000)
@@ -1939,94 +1953,101 @@ export async function messagingRoutes(fastify: FastifyInstance) {
           }
         });
 
-        const li = await tx.booking_line_items.create({
-          data: {
-            tenant_id: event.tenant_id,
-            booking_id: bk.id,
-            ticket_type_id: ticketType.id,
-            quantity: requestedQty,
-            unit_price_amount_minor: ticketPriceMinor,
-            unit_price_currency: 'INR'
-          }
-        });
-
         const createdTickets = [];
         const attendeesPayload = Array.isArray(answers.attendees) && answers.attendees.length > 0 
           ? answers.attendees 
-          : Array.from({ length: requestedQty }).map(() => ({ name: requesterName, email: requesterEmail, gender: user?.gender || null }));
+          : Array.from({ length: totalQty }).map(() => ({ name: requesterName, email: requesterEmail, gender: user?.gender || null }));
 
-        for (const att of attendeesPayload) {
-          let assignedUserId: string | null = null;
-          let attName = att.name || requesterName;
-          let attEmail = (att.email || requesterEmail).toLowerCase().trim();
-          let attGender = att.gender || null;
+        let attendeeIndex = 0;
 
-          if (attEmail) {
-            const existingUser = await tx.users.findFirst({
-              where: { primary_email: { equals: attEmail, mode: 'insensitive' } }
+        for (const rTick of resolvedTickets) {
+            const li = await tx.booking_line_items.create({
+                data: {
+                    tenant_id: event.tenant_id,
+                    booking_id: bk.id,
+                    ticket_type_id: rTick.ticketType.id,
+                    quantity: rTick.reqQty,
+                    unit_price_amount_minor: rTick.ticketType.price_amount_minor ? Number(rTick.ticketType.price_amount_minor) : 0,
+                    unit_price_currency: 'INR'
+                }
             });
-            if (existingUser) {
-              assignedUserId = existingUser.id;
-              if (existingUser.id === userId) {
-                  attName = requesterName;
-              }
+
+            for (let i = 0; i < rTick.reqQty; i++) {
+                const att = attendeesPayload[attendeeIndex] || { name: requesterName, email: requesterEmail, gender: user?.gender || null };
+                attendeeIndex++;
+
+                let assignedUserId: string | null = null;
+                let attName = att.name || requesterName;
+                let attEmail = (att.email || requesterEmail).toLowerCase().trim();
+                let attGender = att.gender || null;
+
+                if (attEmail) {
+                    const existingUser = await tx.users.findFirst({
+                        where: { primary_email: { equals: attEmail, mode: 'insensitive' } }
+                    });
+                    if (existingUser) {
+                        assignedUserId = existingUser.id;
+                        if (existingUser.id === userId) {
+                            attName = requesterName;
+                        }
+                    }
+                }
+
+                let tk = await tx.tickets.create({
+                    data: {
+                        tenant_id: event.tenant_id,
+                        line_item_id: li.id,
+                        attendee_name: attName,
+                        attendee_email: attEmail,
+                        attendee_gender: attGender,
+                        qr_token: require('crypto').randomUUID(),
+                        status: initialTicketStatus as any,
+                        claimed_by_user_id: assignedUserId
+                    }
+                });
+
+                tk = await tx.tickets.update({
+                    where: { id: tk.id },
+                    data: { ticket_code: computeTicketCode(event.title, tk.id) }
+                });
+
+                await tx.attendees.create({
+                    data: {
+                        tenant_id: event.tenant_id,
+                        booking_id: bk.id,
+                        ticket_id: tk.id,
+                        user_id: assignedUserId,
+                        name: attName,
+                        email: attEmail,
+                        gender: attGender,
+                        status: (initialBookingStatus === 'pending_approval' ? 'pending' : (initialBookingStatus === 'waitlisted' ? 'waitlisted' : 'approved')),
+                        checkin_status: 'not_checked_in',
+                        notes: JSON.stringify({
+                            ...(typeof answers === 'object' && answers !== null ? answers : {}),
+                            registration_location: registrationLocation
+                        })
+                    } as any
+                });
+
+                if (!assignedUserId && attEmail) {
+                    const crypto = require('crypto');
+                    const token = crypto.randomBytes(32).toString('hex');
+                    await tx.ticket_claims.create({
+                        data: {
+                            tenant_id: event.tenant_id,
+                            ticket_id: tk.id,
+                            token,
+                            state: 'issued'
+                        }
+                    });
+                } else if (assignedUserId && assignedUserId !== userId) {
+                    // If assigned to an existing user who isn't the booker, sync their dashboard in the background
+                    const { MyEventsRealtimeService } = require('../services/MyEventsRealtimeService');
+                    MyEventsRealtimeService.syncUser(assignedUserId).catch(() => {});
+                }
+
+                createdTickets.push(tk);
             }
-          }
-
-          let tk = await tx.tickets.create({
-            data: {
-              tenant_id: event.tenant_id,
-              line_item_id: li.id,
-              attendee_name: attName,
-              attendee_email: attEmail,
-              attendee_gender: attGender,
-              qr_token: require('crypto').randomUUID(),
-              status: initialTicketStatus as any,
-              claimed_by_user_id: assignedUserId
-            }
-          });
-
-          tk = await tx.tickets.update({
-            where: { id: tk.id },
-            data: { ticket_code: computeTicketCode(event.title, tk.id) }
-          });
-
-          await tx.attendees.create({
-            data: {
-              tenant_id: event.tenant_id,
-              booking_id: bk.id,
-              ticket_id: tk.id,
-              user_id: assignedUserId,
-              name: attName,
-              email: attEmail,
-              gender: attGender,
-              status: (initialBookingStatus === 'pending_approval' ? 'pending' : (initialBookingStatus === 'waitlisted' ? 'waitlisted' : 'approved')),
-              checkin_status: 'not_checked_in',
-              notes: JSON.stringify({
-                ...(typeof answers === 'object' && answers !== null ? answers : {}),
-                registration_location: registrationLocation
-              })
-            } as any
-          });
-
-          if (!assignedUserId && attEmail) {
-            const crypto = require('crypto');
-            const token = crypto.randomBytes(32).toString('hex');
-            await tx.ticket_claims.create({
-              data: {
-                tenant_id: event.tenant_id,
-                ticket_id: tk.id,
-                token,
-                state: 'issued'
-              }
-            });
-          } else if (assignedUserId && assignedUserId !== userId) {
-            // If assigned to an existing user who isn't the booker, sync their dashboard in the background
-            const { MyEventsRealtimeService } = require('../services/MyEventsRealtimeService');
-            MyEventsRealtimeService.syncUser(assignedUserId).catch(() => {});
-          }
-
-          createdTickets.push(tk);
         }
 
         return { booking: bk, tickets: createdTickets };
