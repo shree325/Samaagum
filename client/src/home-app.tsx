@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { HashRouter, useNavigate, useLocation } from 'react-router-dom';
-import { Mark, LocationSelector } from './components';
+import { LocationSelector } from './components';
 (window as any).LocationSelector = LocationSelector;
 import { CreateEvent } from './create-event';
 import { CreateGroup } from './home-create';
@@ -1306,6 +1306,7 @@ useEffect(() => {
 
   const renderView = () => {
     const v = cur.view;
+
     if (v === "invite") return <InviteLanding token={cur.param} go={go} />;
     if (v === "event-invite") return <EventInviteLanding token={cur.param} go={go} />;
     if (v === "event-join") return <JoinEventPage ev={cur.param} st={st} go={go} />;
