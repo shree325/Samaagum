@@ -542,7 +542,7 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                         
                         // Map attendee status back to legacy booking status for the UI
                         bookingStatus = myAttendeeAny.status === 'pending' ? 'pending_approval' : 
-                                        myAttendeeAny.status === 'approved' ? 'confirmed' :
+                                        myAttendeeAny.status === 'approved' ? (booking.status === 'pending_payment' ? 'pending_payment' : 'confirmed') :
                                         myAttendeeAny.status === 'rejected' ? 'cancelled' :
                                         myAttendeeAny.status === 'checked_in' ? 'confirmed' :
                                         myAttendeeAny.status === 'waitlisted' ? 'waitlisted' :
@@ -2471,6 +2471,11 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                     });
                 }
 
+                await tx.attendees.updateMany({
+                    where: { booking_id: bookingId },
+                    data: { status: 'approved' }
+                });
+
                 await tx.$executeRawUnsafe(
                     `INSERT INTO event_registration_log (event_id, changed_by, action, booking_id, remarks)
                      VALUES ($1::uuid, $2::uuid, $3, $4::uuid, $5)`,
@@ -2556,6 +2561,11 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                     });
                 }
 
+                await tx.attendees.updateMany({
+                    where: { booking_id: bookingId },
+                    data: { status: 'rejected' }
+                });
+
                 await tx.$executeRawUnsafe(
                     `INSERT INTO event_registration_log (event_id, changed_by, action, booking_id, remarks)
                      VALUES ($1::uuid, $2::uuid, $3, $4::uuid, $5)`,
@@ -2597,6 +2607,11 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                         data: { status: 'cancelled' }
                     });
                 }
+
+                await tx.attendees.updateMany({
+                    where: { booking_id: bookingId },
+                    data: { status: 'rejected' }
+                });
 
                 await tx.$executeRawUnsafe(
                     `INSERT INTO event_registration_log (event_id, changed_by, action, booking_id, remarks)

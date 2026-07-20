@@ -958,7 +958,7 @@ export function DashboardApp() {
           if (res.status === 'confirmed') {
             registerAdd(id);
             setMyTickets(prev => {
-              if (prev.some(t => t.ev === evObj.title)) return prev;
+              if (prev.some(t => t.ev === evObj.title && t.status !== 'cancelled' && t.status !== 'rejected')) return prev;
               return [
                 {
                   id: "BL-" + Math.floor(2000 + Math.random() * 500),
@@ -974,7 +974,7 @@ export function DashboardApp() {
                   attendee: window.ME?.name || ME.name,
                   status: "confirmed"
                 },
-                ...prev
+                ...prev.filter(t => t.ev !== evObj.title)
               ];
             });
             if (window.toast) window.toast("Joined event successfully! 🎉", "success");
@@ -985,7 +985,7 @@ export function DashboardApp() {
           } else if (res.status === 'pending_payment') {
             registerAdd(id);
             setMyTickets(prev => {
-              if (prev.some(t => t.ev === evObj.title)) return prev;
+              if (prev.some(t => t.ev === evObj.title && t.status !== 'cancelled' && t.status !== 'rejected')) return prev;
               return [
                 {
                   id: "BL-" + Math.floor(2000 + Math.random() * 500),
@@ -1001,7 +1001,7 @@ export function DashboardApp() {
                   attendee: window.ME?.name || ME.name,
                   status: "pending_payment"
                 },
-                ...prev
+                ...prev.filter(t => t.ev !== evObj.title)
               ];
             });
             if (window.toast) window.toast("Booking registered! Please pay at the venue.", "info");
@@ -1042,7 +1042,7 @@ export function DashboardApp() {
         if (!isRestricted) {
           registerAdd(id);
           setMyTickets(prev => {
-            if (prev.some(t => t.ev === evObj.title)) return prev;
+            if (prev.some(t => t.ev === evObj.title && t.status !== 'cancelled' && t.status !== 'rejected')) return prev;
             return [
               {
                 id: "BL-" + Math.floor(2000 + Math.random() * 500),
@@ -1058,7 +1058,7 @@ export function DashboardApp() {
                 attendee: window.ME?.name || ME.name,
                 status: "confirmed"
               },
-              ...prev
+              ...prev.filter(t => t.ev !== evObj.title)
             ];
           });
           setTimeout(() => {

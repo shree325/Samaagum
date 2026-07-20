@@ -14,21 +14,21 @@ import { I } from './home-icons';
 
 
 export const NTYPE = {
-  join:        { ico:<I.groups style={{width:14,height:14}}/>, c:"linear-gradient(135deg,#6d5efc,#2a7fff)" },
-  connect:     { ico:<I.user style={{width:14,height:14}}/>,   c:"linear-gradient(135deg,#10b981,#22d3ee)" },
-  event:       { ico:<I.cal style={{width:13,height:13}}/>,    c:"linear-gradient(135deg,#ff6b4a,#ff4d8d)" },
-  message:     { ico:<I.msg style={{width:13,height:13}}/>,    c:"linear-gradient(135deg,#8b5cf6,#e5489d)" },
-  forum:       { ico:<I.comment style={{width:13,height:13}}/>,c:"linear-gradient(135deg,#f59e0b,#ef6f53)" },
-  registration:{ ico:<I.ticket style={{width:13,height:13}}/>, c:"linear-gradient(135deg,#0ea5a4,#3b82f6)" },
-  registration_opened: { ico:<I.ticket style={{width:13,height:13}}/>, c:"linear-gradient(135deg,#0ea5a4,#3b82f6)" },
-  system:      { ico:<I.bell style={{width:13,height:13}}/>,   c:"linear-gradient(135deg,#f59e0b,#ef6f53)" },
-  billing:     { ico:<svg viewBox="0 0 24 24" fill="none" width="13" height="13" stroke="currentColor" strokeWidth="2"><path d="M20 7H4a2 2 0 00-2 2v8a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M22 13h-4v2h4v-2zM4 7V5a2 2 0 012-2h10"/></svg>, c:"linear-gradient(135deg,#f43f5e,#ec4899)" },
-  group_created: { ico:<I.groups style={{width:14,height:14}}/>, c:"linear-gradient(135deg,#6d5efc,#2a7fff)" },
-  group_event_created: { ico:<I.cal style={{width:13,height:13}}/>, c:"linear-gradient(135deg,#ff6b4a,#ff4d8d)" },
-  group_new_post: { ico:<I.comment style={{width:13,height:13}}/>, c:"linear-gradient(135deg,#f59e0b,#ef6f53)" },
-  group_post_activity: { ico:<I.comment style={{width:13,height:13}}/>, c:"linear-gradient(135deg,#10b981,#22d3ee)" },
-  group_gallery: { ico:<I.cal style={{width:13,height:13}}/>, c:"linear-gradient(135deg,#8b5cf6,#e5489d)" },
-  group_user_joined: { ico:<I.user style={{width:14,height:14}}/>, c:"linear-gradient(135deg,#10b981,#22d3ee)" },
+  join: { ico: <I.groups style={{ width: 14, height: 14 }} />, c: "linear-gradient(135deg,#6d5efc,#2a7fff)" },
+  connect: { ico: <I.user style={{ width: 14, height: 14 }} />, c: "linear-gradient(135deg,#10b981,#22d3ee)" },
+  event: { ico: <I.cal style={{ width: 13, height: 13 }} />, c: "linear-gradient(135deg,#ff6b4a,#ff4d8d)" },
+  message: { ico: <I.msg style={{ width: 13, height: 13 }} />, c: "linear-gradient(135deg,#8b5cf6,#e5489d)" },
+  forum: { ico: <I.comment style={{ width: 13, height: 13 }} />, c: "linear-gradient(135deg,#f59e0b,#ef6f53)" },
+  registration: { ico: <I.ticket style={{ width: 13, height: 13 }} />, c: "linear-gradient(135deg,#0ea5a4,#3b82f6)" },
+  registration_opened: { ico: <I.ticket style={{ width: 13, height: 13 }} />, c: "linear-gradient(135deg,#0ea5a4,#3b82f6)" },
+  system: { ico: <I.bell style={{ width: 13, height: 13 }} />, c: "linear-gradient(135deg,#f59e0b,#ef6f53)" },
+  billing: { ico: <svg viewBox="0 0 24 24" fill="none" width="13" height="13" stroke="currentColor" strokeWidth="2"><path d="M20 7H4a2 2 0 00-2 2v8a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" /><path d="M22 13h-4v2h4v-2zM4 7V5a2 2 0 012-2h10" /></svg>, c: "linear-gradient(135deg,#f43f5e,#ec4899)" },
+  group_created: { ico: <I.groups style={{ width: 14, height: 14 }} />, c: "linear-gradient(135deg,#6d5efc,#2a7fff)" },
+  group_event_created: { ico: <I.cal style={{ width: 13, height: 13 }} />, c: "linear-gradient(135deg,#ff6b4a,#ff4d8d)" },
+  group_new_post: { ico: <I.comment style={{ width: 13, height: 13 }} />, c: "linear-gradient(135deg,#f59e0b,#ef6f53)" },
+  group_post_activity: { ico: <I.comment style={{ width: 13, height: 13 }} />, c: "linear-gradient(135deg,#10b981,#22d3ee)" },
+  group_gallery: { ico: <I.cal style={{ width: 13, height: 13 }} />, c: "linear-gradient(135deg,#8b5cf6,#e5489d)" },
+  group_user_joined: { ico: <I.user style={{ width: 14, height: 14 }} />, c: "linear-gradient(135deg,#10b981,#22d3ee)" },
 };
 
 export const API_BASE = window.location.port === "8080" ? "http://localhost:3000" : "";
@@ -40,7 +40,7 @@ export function authHeaders() {
 
 export function NotifRow({ n, st, go, onRead }) {
   const meta = NTYPE[n.type] || NTYPE.system;
-  const avatarTypes = ["connect","message","forum","group_user_joined","group_event_created"];
+  const avatarTypes = ["connect", "message", "forum", "group_user_joined", "group_event_created"];
   const [acted, setActed] = useState(n.acted || null);
   const [loading, setLoading] = useState(null);
 
@@ -158,9 +158,9 @@ export function NotifRow({ n, st, go, onRead }) {
         go("event", { id: n.eventId });
       }
     }}>
-      <div className="nic" style={{ background: avatarTypes.includes(n.type) ? "transparent" : meta.c, color:"#fff" }}>
+      <div className="nic" style={{ background: avatarTypes.includes(n.type) ? "transparent" : meta.c, color: "#fff" }}>
         {avatarTypes.includes(n.type)
-          ? <><Avatar name={n.who} size={42}/><span className="tagico" style={{ background: meta.c }}>{meta.ico}</span></>
+          ? <><Avatar name={n.who} size={42} /><span className="tagico" style={{ background: meta.c }}>{meta.ico}</span></>
           : meta.ico}
       </div>
       <div className="nbody">
@@ -176,7 +176,7 @@ export function NotifRow({ n, st, go, onRead }) {
               onClick={(e) => { e.stopPropagation(); handleConnect("accept"); }}
               style={{ opacity: loading === "accept" ? 0.7 : 1 }}
             >
-              <I.check/>
+              <I.check />
               {loading === "accept" ? "Accepting…" : "Accept"}
             </button>
             <button
@@ -219,7 +219,7 @@ export function NotifRow({ n, st, go, onRead }) {
                 })}
               </div>
             )}
-            
+
             {!acted ? (
               <div className="nacts" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button
@@ -228,7 +228,7 @@ export function NotifRow({ n, st, go, onRead }) {
                   onClick={(e) => { e.stopPropagation(); handleEventRequest("accept"); }}
                   style={{ opacity: loading === "accept" ? 0.7 : 1 }}
                 >
-                  <I.check/>
+                  <I.check />
                   {loading === "accept" ? "Accepting…" : "Accept"}
                 </button>
                 <button
@@ -277,7 +277,7 @@ export function NotifRow({ n, st, go, onRead }) {
                 })}
               </div>
             )}
-            
+
             {!acted ? (
               <div className="nacts" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button
@@ -286,7 +286,7 @@ export function NotifRow({ n, st, go, onRead }) {
                   onClick={(e) => { e.stopPropagation(); handleGroupRequest("accept"); }}
                   style={{ opacity: loading === "accept" ? 0.7 : 1 }}
                 >
-                  <I.check/>
+                  <I.check />
                   {loading === "accept" ? "Accepting…" : "Accept"}
                 </button>
                 <button
@@ -310,12 +310,12 @@ export function NotifRow({ n, st, go, onRead }) {
         {n.action === "connect" && acted && (
           <div style={{ marginTop: 8 }}>
             {acted === "accepted" && (
-              <span style={{ display:"inline-flex", alignItems:"center", gap:6, background:"rgba(34,197,94,0.1)", color:"rgb(34,197,94)", padding:"4px 10px", borderRadius:"var(--r-pill)", fontSize:"12px", fontWeight:600 }}>
-                <I.check style={{width:12,height:12}}/> Connected
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(34,197,94,0.1)", color: "rgb(34,197,94)", padding: "4px 10px", borderRadius: "var(--r-pill)", fontSize: "12px", fontWeight: 600 }}>
+                <I.check style={{ width: 12, height: 12 }} /> Connected
               </span>
             )}
             {acted === "declined" && (
-              <span style={{ display:"inline-flex", alignItems:"center", gap:6, background:"rgba(0,0,0,0.05)", color:"var(--ink-3)", padding:"4px 10px", borderRadius:"var(--r-pill)", fontSize:"12px", fontWeight:600 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(0,0,0,0.05)", color: "var(--ink-3)", padding: "4px 10px", borderRadius: "var(--r-pill)", fontSize: "12px", fontWeight: 600 }}>
                 Request declined
               </span>
             )}
@@ -325,12 +325,12 @@ export function NotifRow({ n, st, go, onRead }) {
         {n.action === "event_request" && acted && (
           <div style={{ marginTop: 8 }}>
             {acted === "accepted" && (
-              <span style={{ display:"inline-flex", alignItems:"center", gap:6, background:"rgba(34,197,94,0.1)", color:"rgb(34,197,94)", padding:"4px 10px", borderRadius:"var(--r-pill)", fontSize:"12px", fontWeight:600 }}>
-                <I.check style={{width:12,height:12}}/> Accepted
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(34,197,94,0.1)", color: "rgb(34,197,94)", padding: "4px 10px", borderRadius: "var(--r-pill)", fontSize: "12px", fontWeight: 600 }}>
+                <I.check style={{ width: 12, height: 12 }} /> Accepted
               </span>
             )}
             {acted === "declined" && (
-              <span style={{ display:"inline-flex", alignItems:"center", gap:6, background:"rgba(0,0,0,0.05)", color:"var(--ink-3)", padding:"4px 10px", borderRadius:"var(--r-pill)", fontSize:"12px", fontWeight:600 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(0,0,0,0.05)", color: "var(--ink-3)", padding: "4px 10px", borderRadius: "var(--r-pill)", fontSize: "12px", fontWeight: 600 }}>
                 Request declined
               </span>
             )}
@@ -340,20 +340,20 @@ export function NotifRow({ n, st, go, onRead }) {
         {n.action === "group_request" && acted && (
           <div style={{ marginTop: 8 }}>
             {acted === "accepted" && (
-              <span style={{ display:"inline-flex", alignItems:"center", gap:6, background:"rgba(34,197,94,0.1)", color:"rgb(34,197,94)", padding:"4px 10px", borderRadius:"var(--r-pill)", fontSize:"12px", fontWeight:600 }}>
-                <I.check style={{width:12,height:12}}/> Accepted
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(34,197,94,0.1)", color: "rgb(34,197,94)", padding: "4px 10px", borderRadius: "var(--r-pill)", fontSize: "12px", fontWeight: 600 }}>
+                <I.check style={{ width: 12, height: 12 }} /> Accepted
               </span>
             )}
             {acted === "declined" && (
-              <span style={{ display:"inline-flex", alignItems:"center", gap:6, background:"rgba(0,0,0,0.05)", color:"var(--ink-3)", padding:"4px 10px", borderRadius:"var(--r-pill)", fontSize:"12px", fontWeight:600 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(0,0,0,0.05)", color: "var(--ink-3)", padding: "4px 10px", borderRadius: "var(--r-pill)", fontSize: "12px", fontWeight: 600 }}>
                 Request declined
               </span>
             )}
           </div>
         )}
 
-        {n.action==="ticket" && <div className="nacts"><button className="hbtn hbtn--soft hbtn--sm" onClick={(e)=>{e.stopPropagation(); go("event", FEATURED);}}><I.ticket/>View ticket</button></div>}
-        {n.action==="view_event" && <div className="nacts"><button className="hbtn hbtn--soft hbtn--sm" onClick={(e)=>{
+        {n.action === "ticket" && <div className="nacts"><button className="hbtn hbtn--soft hbtn--sm" onClick={(e) => { e.stopPropagation(); go("event", FEATURED); }}><I.ticket />View ticket</button></div>}
+        {n.action === "view_event" && <div className="nacts"><button className="hbtn hbtn--soft hbtn--sm" onClick={(e) => {
           e.stopPropagation();
           onRead();
           const evObj = [FEATURED, ...EVENTS].find(ev => ev.id === n.eventId);
@@ -365,9 +365,9 @@ export function NotifRow({ n, st, go, onRead }) {
           } else {
             go("events");
           }
-        }}><I.ticket/>View Event</button></div>}
-        {n.action==="reply"  && <div className="nacts"><button className="hbtn hbtn--soft hbtn--sm" onClick={(e)=>{e.stopPropagation(); go("messages");}}><I.msg/>Reply</button></div>}
-        {n.action==="view"   && <div className="nacts"><button className="hbtn hbtn--ghost hbtn--sm" onClick={(e)=>{
+        }}><I.ticket />View Event</button></div>}
+        {n.action === "reply" && <div className="nacts"><button className="hbtn hbtn--soft hbtn--sm" onClick={(e) => { e.stopPropagation(); go("messages"); }}><I.msg />Reply</button></div>}
+        {n.action === "view" && <div className="nacts"><button className="hbtn hbtn--ghost hbtn--sm" onClick={(e) => {
           e.stopPropagation();
           onRead();
           if (n.groupId && n.postId) {
@@ -376,16 +376,16 @@ export function NotifRow({ n, st, go, onRead }) {
             go("group", { id: n.groupId });
           }
         }}>View</button></div>}
-        {n.action==="view_user" && <div className="nacts"><button className="hbtn hbtn--ghost hbtn--sm" onClick={(e)=>{
+        {n.action === "view_user" && <div className="nacts"><button className="hbtn hbtn--ghost hbtn--sm" onClick={(e) => {
           e.stopPropagation();
           onRead();
           if (n.targetUserId) {
             go("public-profile", { id: n.targetUserId });
           }
         }}>View Profile</button></div>}
-        {n.action==="billing" && <div className="nacts"><button className="hbtn hbtn--soft hbtn--sm" onClick={(e)=>{e.stopPropagation(); go("settings", "billing");}}><svg viewBox="0 0 24 24" fill="none" width="13" height="13" stroke="currentColor" strokeWidth="2" style={{marginRight:6}}><path d="M20 7H4a2 2 0 00-2 2v8a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M22 13h-4v2h4v-2zM4 7V5a2 2 0 012-2h10"/></svg>View Billing</button></div>}
+        {n.action === "billing" && <div className="nacts"><button className="hbtn hbtn--soft hbtn--sm" onClick={(e) => { e.stopPropagation(); go("settings", "billing"); }}><svg viewBox="0 0 24 24" fill="none" width="13" height="13" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}><path d="M20 7H4a2 2 0 00-2 2v8a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" /><path d="M22 13h-4v2h4v-2zM4 7V5a2 2 0 012-2h10" /></svg>View Billing</button></div>}
       </div>
-      {n.unread && !acted && <span className="udot"/>}
+      {n.unread && !acted && <span className="udot" />}
     </div>
   );
 }
@@ -434,28 +434,28 @@ export function ConnRequestCard({ req, onActed }) {
         gap: 12
       }}
     >
-      <div style={{ display:"flex", alignItems:"center", gap:12, flex:1, minWidth:0 }}>
-        <Avatar name={name} size={44}/>
-        <div style={{ minWidth:0 }}>
-          <div style={{ fontWeight:600, color:"var(--ink)", fontSize:"14.5px", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{name}</div>
-          <div style={{ fontSize:"12.5px", color:"var(--ink-3)", marginTop:2 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+        <Avatar name={name} size={44} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 600, color: "var(--ink)", fontSize: "14.5px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
+          <div style={{ fontSize: "12.5px", color: "var(--ink-3)", marginTop: 2 }}>
             {req.requester?.headline || "Sent you a connection request"}
           </div>
-          <div style={{ fontSize:"11px", color:"var(--ink-3)", marginTop:2 }}>
+          <div style={{ fontSize: "11px", color: "var(--ink-3)", marginTop: 2 }}>
             {new Date(req.created_at).toLocaleDateString()}
           </div>
         </div>
       </div>
 
       {!acted ? (
-        <div style={{ display:"flex", gap:8, flexShrink:0 }}>
+        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
           <button
             className="hbtn hbtn--primary hbtn--sm"
             disabled={!!loading}
             onClick={() => handle("accept")}
             style={{ opacity: loading === "accept" ? 0.7 : 1 }}
           >
-            <I.check/>{loading === "accept" ? "…" : "Accept"}
+            <I.check />{loading === "accept" ? "…" : "Accept"}
           </button>
           <button
             className="hbtn hbtn--ghost hbtn--sm"
@@ -467,7 +467,7 @@ export function ConnRequestCard({ req, onActed }) {
           </button>
         </div>
       ) : (
-        <span style={{ fontSize:"12px", color:"var(--ink-3)", flexShrink:0 }}>
+        <span style={{ fontSize: "12px", color: "var(--ink-3)", flexShrink: 0 }}>
           {acted === "accept" ? "✅ Connected" : "Declined"}
         </span>
       )}
@@ -511,12 +511,12 @@ export function Notifications({ st, go, socket }) {
   /* ── Socket event listeners ── */
   useEffect(() => {
     if (!socket) return;
-    const onConnRequest  = () => fetchConnRequests();
+    const onConnRequest = () => fetchConnRequests();
     const onConnAccepted = () => { fetchConnRequests(); if (st.fetchCounts) st.fetchCounts(); };
     const onConnDeclined = () => { fetchConnRequests(); if (st.fetchCounts) st.fetchCounts(); };
     const onMsg = (payload) => {
       const sender = payload.senderName || "Someone";
-      const text   = payload.content || payload.body || "";
+      const text = payload.content || payload.body || "";
       setItems(prev => [{
         id: payload.id || Math.random().toString(),
         type: "message", who: sender, unread: true,
@@ -529,22 +529,22 @@ export function Notifications({ st, go, socket }) {
       setItems(prev => [{
         id: payload.id || Math.random().toString(),
         type: payload.type,
-        who: payload.type === 'registration' 
-          ? (payload.text?.split(' ')[0] || 'Attendee') 
-          : (payload.type === 'join' 
-              ? (payload.text?.split(' ')[0] || 'Member')
-              : (payload.type === 'event_updated'
-                  ? (payload.eventTitle || 'Event')
-                  : (payload.type === 'group_created' ? 'Groups' : (payload.type === 'group_gallery' ? 'Gallery' : 'Forums')))),
+        who: payload.type === 'registration'
+          ? (payload.text?.split(' ')[0] || 'Attendee')
+          : (payload.type === 'join'
+            ? (payload.text?.split(' ')[0] || 'Member')
+            : (payload.type === 'event_updated'
+              ? (payload.eventTitle || 'Event')
+              : (payload.type === 'group_created' ? 'Groups' : (payload.type === 'group_gallery' ? 'Gallery' : 'Forums')))),
         unread: true,
         day: "Today",
         time: "Just now",
         text: payload.text,
-        action: payload.type === 'registration' 
-          ? 'event_request' 
-          : (payload.type === 'join' 
-              ? 'group_request'
-              : ((payload.type === 'event' || payload.type === 'event_updated') ? 'view_event' : 'view')),
+        action: payload.type === 'registration'
+          ? 'event_request'
+          : (payload.type === 'join'
+            ? 'group_request'
+            : ((payload.type === 'event' || payload.type === 'event_updated') ? 'view_event' : 'view')),
         eventId: payload.eventId,
         answers: payload.answers || {},
         questionLabels: payload.questionLabels || {},
@@ -583,7 +583,7 @@ export function Notifications({ st, go, socket }) {
   }, [socket, fetchConnRequests]);
 
   const read = (id) => {
-    setItems(arr => arr.map(n => n.id === id ? {...n, unread: false} : n));
+    setItems(arr => arr.map(n => n.id === id ? { ...n, unread: false } : n));
     fetch(`${API_BASE}/api/messaging/notifications/${id}/read`, { method: 'POST', headers: authHeaders() })
       .then(res => res.json())
       .then(() => { if (st.fetchCounts) st.fetchCounts(); })
@@ -591,27 +591,27 @@ export function Notifications({ st, go, socket }) {
   };
 
   const markAll = () => {
-    setItems(arr => arr.map(n => ({...n, unread: false})));
+    setItems(arr => arr.map(n => ({ ...n, unread: false })));
     fetch(`${API_BASE}/api/messaging/notifications/mark-read`, { method: 'POST', headers: authHeaders() })
       .then(res => res.json())
       .then(() => { if (st.fetchCounts) st.fetchCounts(); })
       .catch(err => console.error("Error marking notifications read:", err));
   };
 
-  const unreadCount  = items.filter(n => n.unread).length;
-  const filtered     = tab === "all" ? items : tab === "unread" ? items.filter(n => n.unread) : items;
-  const days         = [...new Set(filtered.map(n => n.day))];
+  const unreadCount = items.filter(n => n.unread).length;
+  const filtered = tab === "all" ? items : tab === "unread" ? items.filter(n => n.unread) : items;
+  const days = [...new Set(filtered.map(n => n.day))];
 
   return (
     <div className="scroll">
       <div className="view-enter notif-page">
         <div className="notif-head">
           <h1>Notifications</h1>
-          {unreadCount > 0 && <button className="markall" onClick={markAll}><I.check/> Mark all read</button>}
+          {unreadCount > 0 && <button className="markall" onClick={markAll}><I.check /> Mark all read</button>}
         </div>
         <div className="notif-tabs">
-          <FilterChip active={tab === "all"}     onClick={() => setTab("all")}>All</FilterChip>
-          <FilterChip active={tab === "unread"}  onClick={() => setTab("unread")}  count={unreadCount}>Unread</FilterChip>
+          <FilterChip active={tab === "all"} onClick={() => setTab("all")}>All</FilterChip>
+          <FilterChip active={tab === "unread"} onClick={() => setTab("unread")} count={unreadCount}>Unread</FilterChip>
           <FilterChip active={tab === "connections"} onClick={() => setTab("connections")} count={connRequests.length}>
             Connections
           </FilterChip>
@@ -620,10 +620,10 @@ export function Notifications({ st, go, socket }) {
         {/* ── Connection Requests Tab ── */}
         {tab === "connections" && (
           connRequests.length === 0 ? (
-            <Empty icon={<I.user/>} title="No pending connection requests" text="When someone wants to connect with you, you'll see their request here with options to accept or decline." />
+            <Empty icon={<I.user />} title="No pending connection requests" text="When someone wants to connect with you, you'll see their request here with options to accept or decline." />
           ) : (
-            <div style={{ display:"flex", flexDirection:"column", gap:12, padding:"16px 0" }}>
-              <div style={{ fontSize:"13px", color:"var(--ink-3)", marginBottom:4 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "16px 0" }}>
+              <div style={{ fontSize: "13px", color: "var(--ink-3)", marginBottom: 4 }}>
                 {connRequests.length} pending {connRequests.length === 1 ? "request" : "requests"}
               </div>
               {connRequests.map(req => (
@@ -643,7 +643,7 @@ export function Notifications({ st, go, socket }) {
         {/* ── All / Unread Tabs ── */}
         {tab !== "connections" && (
           filtered.length === 0 ? (
-            <Empty icon={<I.check/>} title="You're all caught up" text="No new notifications here. We'll let you know when something happens in your communities." />
+            <Empty icon={<I.check />} title="You're all caught up" text="No new notifications here. We'll let you know when something happens in your communities." />
           ) : days.map(day => (
             <div key={day}>
               <div className="notif-day">{day}</div>

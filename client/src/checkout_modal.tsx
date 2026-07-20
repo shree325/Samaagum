@@ -40,7 +40,12 @@ export function CheckoutModal({
     const handleAttendeeChange = (index: number, field: string, value: string) => {
         setAttendees(prev => {
             const next = [...prev];
-            next[index] = { ...next[index], [field]: value };
+            if (field === 'email') {
+                // Reset member-filled fields when email changes so stale data doesn't linger
+                next[index] = { ...next[index], email: value, status: 'unknown', warningMsg: '' };
+            } else {
+                next[index] = { ...next[index], [field]: value };
+            }
             return next;
         });
     };
@@ -68,9 +73,23 @@ export function CheckoutModal({
                 const next = [...prev];
                 if (data.exists) {
                     if (data.hasTicket) {
-                        next[index] = { ...next[index], name: next[index].name || data.name, gender: next[index].gender || data.gender, status: 'warning', warningMsg: '⚠️ This attendee already appears to have a ticket for this event.' };
+                        // Member found but already has a ticket — still fill in name/gender
+                        next[index] = { 
+                            ...next[index], 
+                            name: data.name || next[index].name, 
+                            gender: data.gender || next[index].gender, 
+                            status: 'warning', 
+                            warningMsg: '⚠️ This attendee already appears to have a ticket for this event.' 
+                        };
                     } else {
-                        next[index] = { ...next[index], name: next[index].name || data.name, gender: next[index].gender || data.gender, status: 'member', warningMsg: '' };
+                        // Member found — always auto-fill name and gender from their profile
+                        next[index] = { 
+                            ...next[index], 
+                            name: data.name || next[index].name, 
+                            gender: data.gender || next[index].gender, 
+                            status: 'member', 
+                            warningMsg: '' 
+                        };
                     }
                 } else {
                     next[index] = { ...next[index], status: 'guest', warningMsg: '' };
@@ -83,12 +102,14 @@ export function CheckoutModal({
     };
 
     useEffect(() => {
+        const handlers: ReturnType<typeof setTimeout>[] = [];
         attendees.forEach((att, index) => {
             const handler = setTimeout(() => {
-                if (att.email) performLookup(att.email, index);
+                if (att.email && att.status === 'unknown') performLookup(att.email, index);
             }, 500);
-            return () => clearTimeout(handler);
+            handlers.push(handler);
         });
+        return () => handlers.forEach(h => clearTimeout(h));
         // eslint-disable-next-line
     }, [attendees.map(a => a.email).join(','), liveEvent.id]);
 
@@ -143,17 +164,43 @@ export function CheckoutModal({
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                                         <div>
                                             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--ink)', marginBottom: 4 }}>Email Address *</label>
-                                            <input className="cinput" type="email" value={att.email} onChange={e => { handleAttendeeChange(index, 'email', e.target.value); handleAttendeeChange(index, 'status', 'unknown'); }} placeholder="attendee@example.com" style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)' }} />
+                                            <input className="cinput" type="email" value={att.email} onChange={e => { handleAttendeeChange(index, 'email', e.target.value); }} placeholder="attendee@example.com" style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)' }} />
                                         </div>
                                         {att.warningMsg && <div style={{ fontSize: 12, color: '#f59e0b', background: 'rgba(245, 158, 11, 0.1)', padding: '6px 10px', borderRadius: 6 }}>{att.warningMsg}</div>}
                                         <div style={{ display: 'flex', gap: 12 }}>
                                             <div style={{ flex: 1 }}>
-                                                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--ink)', marginBottom: 4 }}>Full Name *</label>
-                                                <input className="cinput" type="text" value={att.name} onChange={e => handleAttendeeChange(index, 'name', e.target.value)} placeholder="Full Name" style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)' }} />
+                                                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--ink)', marginBottom: 4 }}>
+                                                    Full Name *
+                                                    {att.status === 'member' && att.name && <span style={{ fontSize: 10, color: '#10b981', marginLeft: 6, fontWeight: 400 }}>auto-filled</span>}
+                                                </label>
+                                                <input 
+                                                    className="cinput" 
+                                                    type="text" 
+                                                    value={att.name} 
+                                                    onChange={e => handleAttendeeChange(index, 'name', e.target.value)} 
+                                                    placeholder="Full Name" 
+                                                    style={{ 
+                                                        width: '100%', padding: '8px 12px', borderRadius: 6, 
+                                                        border: att.status === 'member' && att.name ? '1px solid #10b981' : '1px solid var(--border)',
+                                                        background: att.status === 'member' && att.name ? 'rgba(16,185,129,0.05)' : undefined
+                                                    }} 
+                                                />
                                             </div>
                                             <div style={{ width: 100 }}>
-                                                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--ink)', marginBottom: 4 }}>Gender</label>
-                                                <select className="cinput" value={att.gender} onChange={e => handleAttendeeChange(index, 'gender', e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--field)' }}>
+                                                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--ink)', marginBottom: 4 }}>
+                                                    Gender
+                                                    {att.status === 'member' && att.gender && <span style={{ fontSize: 10, color: '#10b981', marginLeft: 6, fontWeight: 400 }}>auto</span>}
+                                                </label>
+                                                <select 
+                                                    className="cinput" 
+                                                    value={att.gender} 
+                                                    onChange={e => handleAttendeeChange(index, 'gender', e.target.value)} 
+                                                    style={{ 
+                                                        width: '100%', padding: '8px 12px', borderRadius: 6, 
+                                                        border: att.status === 'member' && att.gender ? '1px solid #10b981' : '1px solid var(--border)', 
+                                                        background: att.status === 'member' && att.gender ? 'rgba(16,185,129,0.05)' : 'var(--field)' 
+                                                    }}
+                                                >
                                                     <option value="">-</option>
                                                     <option value="male">M</option>
                                                     <option value="female">F</option>

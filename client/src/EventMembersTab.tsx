@@ -118,7 +118,7 @@ export function EventMembersTab({
                     <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                       Questionnaire Answers
                     </div>
-                    {Object.entries(r.answers).filter(([k]) => !['ticketTypeId', 'qty', 'ticketName', 'isQuestionnaireSubmit', 'registration_location', 'transactionId', 'buyer', 'attendees'].includes(k)).map(([key, val]) => {
+                    {Object.entries(r.answers).filter(([k]) => !['ticketTypeId', 'qty', 'ticketName', 'isQuestionnaireSubmit', 'registration_location', 'transactionId', 'buyer', 'attendees', 'tickets'].includes(k)).map(([key, val]) => {
                       const label = getQuestionLabel(key);
                       return (
                         <div key={key} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -133,6 +133,16 @@ export function EventMembersTab({
                         </div>
                       );
                     })}
+                    {r.answers.tickets && Array.isArray(r.answers.tickets) && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 4 }}>
+                        <div style={{ fontSize: 13, color: "var(--ink-2)", fontWeight: 500 }}>Ticket Type</div>
+                        <div style={{ fontSize: 13, color: "var(--ink)", fontWeight: 600 }}>
+                          {r.answers.tickets.map((t: any, i: number) => (
+                            <div key={i}>{t.ticketName || t.ticketTypeId}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {r.transactionId && (
                       <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 4, paddingTop: 12, borderTop: "1px dashed var(--border)" }}>
                         <div style={{ fontSize: 13, color: "var(--ink-2)", fontWeight: 500 }}>Payment Proof / Transaction ID</div>
@@ -140,7 +150,7 @@ export function EventMembersTab({
                           {typeof r.transactionId === 'string' && (r.transactionId.startsWith('data:image/') || r.transactionId.match(/\.(jpeg|jpg|gif|png)$/) || r.transactionId.startsWith('http')) ? (
                             <img src={r.transactionId} alt="Payment Proof" style={{ maxWidth: 200, maxHeight: 200, borderRadius: 8, marginTop: 4, objectFit: 'contain', background: '#000' }} />
                           ) : (
-                            <>{r.transactionId}</>
+                            String(r.transactionId)
                           )}
                         </div>
                       </div>
