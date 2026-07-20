@@ -44,7 +44,14 @@ export function EventGalleryTab({
 
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
-  const approvedItems = galleryItems.filter(item => item.approved && item.type !== "video");
+  let currentUserId: string | null = null;
+  if (token) {
+    try {
+      currentUserId = JSON.parse(atob(token.split('.')[1])).id;
+    } catch (e) {}
+  }
+
+  const approvedItems = galleryItems.filter(item => (item.approved || (currentUserId && item.uploaderId === currentUserId)) && item.type !== "video");
   const currentIndex = viewerItem ? approvedItems.findIndex(item => item.id === viewerItem.id) : -1;
 
   const handlePrev = (evt: React.MouseEvent) => {
@@ -213,7 +220,7 @@ export function EventGalleryTab({
 
       {/* Approved Gallery Section */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12 }}>
-        {galleryItems.filter(item => item.approved).map(item => (
+        {galleryItems.filter(item => item.approved || (currentUserId && item.uploaderId === currentUserId)).map(item => (
           <div key={item.id} style={{ borderRadius: "var(--r-md)", overflow: "hidden", height: 130, border: "1px solid var(--border)", position: "relative", background: "var(--surface)" }}>
             {item.type === "video" ? (
               <video src={item.url} style={{ width: "100%", height: "100%", objectFit: "cover" }} controls />
@@ -227,6 +234,12 @@ export function EventGalleryTab({
                 }}
                 style={{ cursor: "pointer", width: "100%", height: "100%", background: item.url && (item.url.startsWith("linear-gradient") || item.url.startsWith("radial-gradient") || item.url.startsWith("var(")) ? item.url : `url(${item.url}) center/cover no-repeat` }}
               />
+            )}
+
+            {!item.approved && (
+              <div style={{ position: "absolute", top: 6, left: 6, background: "rgba(0,0,0,0.65)", color: "#fff", borderRadius: 4, fontSize: 10, padding: "2px 6px", fontWeight: 600 }}>
+                Pending
+              </div>
             )}
 
             {/* Delete button for allowed users */}
@@ -263,7 +276,7 @@ export function EventGalleryTab({
           </div>
         ))}
       </div>
-      {galleryItems.filter(item => item.approved).length === 0 && (
+      {galleryItems.filter(item => item.approved || (currentUserId && item.uploaderId === currentUserId)).length === 0 && (
         <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--ink-3)", border: "1px dashed var(--border)", borderRadius: "var(--r-md)" }}>
           No media uploaded yet.
         </div>

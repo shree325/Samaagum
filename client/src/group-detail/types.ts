@@ -8,6 +8,7 @@ export interface Group {
   online?: number;
   posts?: number;
   cat?: string;
+  category?: string;
   cover?: string;
   banner?: string;
   icon?: string | React.ReactNode;

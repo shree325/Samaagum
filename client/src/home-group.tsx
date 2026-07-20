@@ -1773,8 +1773,12 @@ export function GroupDetail({ group, st, go }) {
               <div className="sub">
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><I.users /> {members.length.toLocaleString()} members</span>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#1f9d57", fontWeight: 600 }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#2bb673" }} />{onlineCount} online</span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><I.comment /> {g.posts || 0} posts</span>
-                <span className="fchip on" style={{ pointerEvents: "none", padding: "4px 11px", fontSize: 12 }}>{g.cat || "Community"}</span>
+
+                {(g.category || g.cat) && (
+                  <span className="fchip on" style={{ pointerEvents: "none", padding: "4px 11px", fontSize: 12, textTransform: 'capitalize' }}>
+                    {g.category || g.cat}
+                  </span>
+                )}
               </div>
               {displayLocation && (
                 <div className="sub" style={{ marginTop: 4 }}>
@@ -2391,7 +2395,7 @@ export function GroupDetail({ group, st, go }) {
                           <button className="hbtn hbtn--primary hbtn--sm" onClick={handleJoinClick}>{isPending ? "Pending" : "Join group"}</button>
                         </div>
                       )}
-                      {galleryItems.filter(item => callerIsAdmin || item.status === 'approved').length === 0 ? (
+                      {galleryItems.filter(item => callerIsAdmin || item.status === 'approved' || item.uploaderUserId === currentUserId).length === 0 ? (
                         <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--ink-3)", background: "var(--surface)", borderRadius: "var(--r-md)", border: "1px dashed var(--border)" }}>
                           <I.image style={{ width: 48, height: 48, marginBottom: 16, opacity: 0.3 }} />
                           <h4 style={{ margin: "0 0 8px 0", color: "var(--ink)", fontSize: 16 }}>No media yet</h4>
@@ -2399,7 +2403,7 @@ export function GroupDetail({ group, st, go }) {
                         </div>
                       ) : (
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
-                          {galleryItems.filter(item => callerIsAdmin || item.status === 'approved').map(item => (
+                          {galleryItems.filter(item => callerIsAdmin || item.status === 'approved' || item.uploaderUserId === currentUserId).map(item => (
                             <div key={item.id} style={{ position: "relative", borderRadius: "var(--r-sm)", overflow: "hidden", aspectRatio: "1", background: "var(--surface-2)", border: "1px solid var(--border)", cursor: "pointer" }} onClick={() => openMediaPreview(item)}>
                               {item.type === 'video' ? (
                                 <video src={item.src} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted playsInline preload="metadata" />
@@ -3177,7 +3181,7 @@ export function MemberManagementPanel({ group, st, go }) {
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  {canViewResponses && (
+                  {canViewResponses && m.hasResponses && (
                     <button
                       className="hbtn hbtn--ghost hbtn--sm"
                       onClick={(e) => {

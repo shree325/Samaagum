@@ -708,7 +708,7 @@ export function EventPage({ ev, st, go }: { ev: any; st: any; go: (view: string,
             )}
 
             {tab === "dashboard" && (
-              <EventDashboard ev={currentEvent || e} st={st} go={go} embedded={true} />
+              <EventDashboard ev={currentEvent || e} st={st} go={go} embedded={true} onTabChange={setTab} />
             )}
 
             {tab === "members" && (

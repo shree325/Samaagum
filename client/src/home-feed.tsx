@@ -791,7 +791,7 @@ export function HomeFeed({ st, go }: any) {
 
 /* ---------------- Discover (browse) ---------------- */
 export function Discover({ st, go, param }) {
-  const [tab, setTab] = useState(param === "events" ? "events" : "groups");
+  const [tab, setTab] = useState(param === "groups" ? "groups" : "events");
 
   useEffect(() => {
     if (param === "events" || param === "groups") {
@@ -1115,98 +1115,100 @@ export function Discover({ st, go, param }) {
               </div>
 
               {/* Scrollable Filters Content */}
-              <div className="scroll" style={{ padding: '20px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 20 }}>
-                
-                {/* Timing filters */}
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Timing</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {[
-                      { key: 'today', label: 'Today' },
-                      { key: 'thisWeek', label: 'This Week' },
-                      { key: 'other', label: 'Later / Other' }
-                    ].map(item => {
-                      const isChecked = filterTime[item.key as keyof typeof filterTime];
-                      return (
-                        <div 
-                          key={item.key} 
-                          onClick={() => setFilterTime(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
-                          style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            background: isChecked ? 'rgba(109, 94, 252, 0.15)' : 'var(--surface-2)',
-                            padding: '8px 16px', borderRadius: 8, 
-                            border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
-                            color: isChecked ? 'var(--accent)' : 'var(--ink-2)',
-                            fontWeight: isChecked ? '600' : 'normal',
-                            cursor: 'pointer', fontSize: 13, userSelect: 'none', transition: 'all 0.2s'
-                          }}
-                        >
-                          {item.label}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+              <div className="scroll" style={{ padding: '20px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 20 }}>                {tab === "events" && (
+                  <>
+                    {/* Timing filters */}
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Timing</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {[
+                          { key: 'today', label: 'Today' },
+                          { key: 'thisWeek', label: 'This Week' },
+                          { key: 'other', label: 'Later / Other' }
+                        ].map(item => {
+                          const isChecked = filterTime[item.key as keyof typeof filterTime];
+                          return (
+                            <div 
+                              key={item.key} 
+                              onClick={() => setFilterTime(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                              style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                background: isChecked ? 'rgba(109, 94, 252, 0.15)' : 'var(--surface-2)',
+                                padding: '8px 16px', borderRadius: 8, 
+                                border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
+                                color: isChecked ? 'var(--accent)' : 'var(--ink-2)',
+                                fontWeight: isChecked ? '600' : 'normal',
+                                cursor: 'pointer', fontSize: 13, userSelect: 'none', transition: 'all 0.2s'
+                              }}
+                            >
+                              {item.label}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
 
-                {/* Cost filters */}
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cost</div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {[
-                      { key: 'free', label: 'Free' },
-                      { key: 'paid', label: 'Paid' }
-                    ].map(item => {
-                      const isChecked = filterMode[item.key as keyof typeof filterMode];
-                      return (
-                        <div 
-                          key={item.key} 
-                          onClick={() => setFilterMode(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
-                          style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            background: isChecked ? 'rgba(109, 94, 252, 0.15)' : 'var(--surface-2)',
-                            padding: '8px 16px', borderRadius: 8, 
-                            border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
-                            color: isChecked ? 'var(--accent)' : 'var(--ink-2)',
-                            fontWeight: isChecked ? '600' : 'normal',
-                            cursor: 'pointer', fontSize: 13, userSelect: 'none', transition: 'all 0.2s'
-                          }}
-                        >
-                          {item.label}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                    {/* Cost filters */}
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cost</div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {[
+                          { key: 'free', label: 'Free' },
+                          { key: 'paid', label: 'Paid' }
+                        ].map(item => {
+                          const isChecked = filterMode[item.key as keyof typeof filterMode];
+                          return (
+                            <div 
+                              key={item.key} 
+                              onClick={() => setFilterMode(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                              style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                background: isChecked ? 'rgba(109, 94, 252, 0.15)' : 'var(--surface-2)',
+                                padding: '8px 16px', borderRadius: 8, 
+                                border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
+                                color: isChecked ? 'var(--accent)' : 'var(--ink-2)',
+                                fontWeight: isChecked ? '600' : 'normal',
+                                cursor: 'pointer', fontSize: 13, userSelect: 'none', transition: 'all 0.2s'
+                              }}
+                            >
+                              {item.label}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
 
-                {/* Location Format filters */}
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Location Format</div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {[
-                      { key: 'online', label: 'Online' },
-                      { key: 'inPerson', label: 'In-person' }
-                    ].map(item => {
-                      const isChecked = filterFormat[item.key as keyof typeof filterFormat];
-                      return (
-                        <div 
-                          key={item.key} 
-                          onClick={() => setFilterFormat(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
-                          style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            background: isChecked ? 'rgba(109, 94, 252, 0.15)' : 'var(--surface-2)',
-                            padding: '8px 16px', borderRadius: 8, 
-                            border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
-                            color: isChecked ? 'var(--accent)' : 'var(--ink-2)',
-                            fontWeight: isChecked ? '600' : 'normal',
-                            cursor: 'pointer', fontSize: 13, userSelect: 'none', transition: 'all 0.2s'
-                          }}
-                        >
-                          {item.label}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                    {/* Location Format filters */}
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Location Format</div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {[
+                          { key: 'online', label: 'Online' },
+                          { key: 'inPerson', label: 'In-person' }
+                        ].map(item => {
+                          const isChecked = filterFormat[item.key as keyof typeof filterFormat];
+                          return (
+                            <div 
+                              key={item.key} 
+                              onClick={() => setFilterFormat(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                              style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                background: isChecked ? 'rgba(109, 94, 252, 0.15)' : 'var(--surface-2)',
+                                padding: '8px 16px', borderRadius: 8, 
+                                border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
+                                color: isChecked ? 'var(--accent)' : 'var(--ink-2)',
+                                fontWeight: isChecked ? '600' : 'normal',
+                                cursor: 'pointer', fontSize: 13, userSelect: 'none', transition: 'all 0.2s'
+                              }}
+                            >
+                              {item.label}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {/* Registration / Membership Status */}
                 <div>

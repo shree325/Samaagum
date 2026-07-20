@@ -568,7 +568,7 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                 const profile = user?.profiles;
                 let picture = null;
                 if (profile?.profile_image_data) {
-                    picture = `data:image/png;base64,${profile.profile_image_data.toString('base64')}`;
+                    picture = `data:image/png;base64,${Buffer.from(profile.profile_image_data).toString('base64')}`;
                 }
                 return {
                     id: a.user_id,
@@ -1064,7 +1064,8 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
 
             const confirmedAttendees = await prisma.attendees.findMany({
                 where: { 
-                    bookings: { event_id: id, status: { in: ['confirmed', 'pending_payment'] } }
+                    bookings: { event_id: id, status: { in: ['confirmed', 'pending_payment'] } },
+                    status: { in: ['approved', 'checked_in', 'pending'] }
                 },
                 include: {
                     tickets: true,

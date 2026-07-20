@@ -2,7 +2,7 @@
 import React, { Fragment, useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { Field, Mark, ROLES } from './components';
-import { Toggle, isChecked } from './create_event';
+import { Toggle, isChecked } from './create-event';
 import { AdminApiClient } from './generated/api-client';
 import { Discover } from './home-feed';
 import { Sidebar, Topbar } from './home-shell';

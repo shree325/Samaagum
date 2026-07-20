@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useEffect, useRef, useState } from 'react';
 import { LocationSelector, Wordmark } from './components';
-import { Toggle } from './create_event';
+import { Toggle } from './create-event';
 import { ME } from './home-data';
 import { Discover } from './home-feed';
 import { Avatar } from './home-icons';
@@ -138,6 +138,8 @@ export function Topbar({ go, counts, dark, onToggleTheme, city, onCity, chatSett
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const searchContainerRef = useRef(null);
+  const searchTimeoutRef = useRef(null);
+  const latestSearchQueryRef = useRef("");
 
   useEffect(() => {
     const handleOutsideClick = (e) => {
@@ -146,32 +148,60 @@ export function Topbar({ go, counts, dark, onToggleTheme, city, onCity, chatSett
       }
     };
     document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
   }, []);
 
-  const handleSearchChange = async (e) => {
+  const handleSearchChange = (e) => {
     const q = e.target.value;
     setSearchQuery(q);
+    latestSearchQueryRef.current = q;
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
     if (!q.trim()) {
       setSearchResults({ events: [], groups: [] });
       setSearchOpen(false);
+      setSearchLoading(false);
       return;
     }
+
     setSearchOpen(true);
     setSearchLoading(true);
-    try {
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
-      const res = await fetch(`${apiBase}/api/public/global-search?q=${encodeURIComponent(q)}`);
-      const data = await res.json();
-      if (data.success) {
-        setSearchResults(data.data);
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      if (latestSearchQueryRef.current !== q) return;
+      try {
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const apiBase = isLocalhost ? 'http://localhost:3000' : window.location.origin;
+        // Forward the JWT so the backend can apply visibility filtering for
+        // custom/restricted events the authenticated user is eligible for.
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${apiBase}/api/public/global-search?q=${encodeURIComponent(q)}`, {
+          headers: {
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          }
+        });
+        const data = await res.json();
+        if (latestSearchQueryRef.current === q) {
+          if (data.success) {
+            setSearchResults(data.data);
+          }
+          setSearchLoading(false);
+        }
+      } catch (err) {
+        console.error(err);
+        if (latestSearchQueryRef.current === q) {
+          setSearchLoading(false);
+        }
       }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSearchLoading(false);
-    }
+    }, 250);
   };
 
   const handleResultClick = (type, item) => {
