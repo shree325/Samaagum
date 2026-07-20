@@ -1907,9 +1907,9 @@ export async function messagingRoutes(fastify: FastifyInstance) {
 
       const isCash = event.cash_enabled === true;
       const submittedTransactionId = (answers as any).transactionId || null;
-      const initialBookingStatus: string = isWaitlisted ? 'waitlisted' : (approvalRequired ? 'pending_approval' : (isCash ? 'pending_payment' : 'confirmed'));
+      const initialBookingStatus: string = isWaitlisted ? 'waitlisted' : ((approvalRequired || isCash) ? 'pending_approval' : 'confirmed');
       const initialTicketStatus: string = isWaitlisted ? 'waitlisted' : ((approvalRequired || isCash) ? 'reserved' : 'confirmed');
-      const initialAttendeeStatus: string = isWaitlisted ? 'waitlisted' : (approvalRequired ? 'pending' : 'approved');
+      const initialAttendeeStatus: string = isWaitlisted ? 'waitlisted' : ((approvalRequired || isCash) ? 'pending' : 'approved');
       const paymentMethod = isCash ? 'cash' : 'free';
 
       // Remove from wishlist if they join

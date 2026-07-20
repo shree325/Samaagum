@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ME } from './home-data';
+import { I } from './home-icons';
 
 export function CheckoutModal({ 
     isOpen, 
@@ -12,8 +13,24 @@ export function CheckoutModal({
     const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
     const token = localStorage.getItem('token');
 
-    const [checkoutStep, setCheckoutStep] = useState<"attendee_details" | "review">("attendee_details");
+    const [checkoutStep, setCheckoutStep] = useState<"attendee_details" | "review" | "payment_proof">("attendee_details");
     const [attendees, setAttendees] = useState<any[]>([]);
+    const [checkoutTransactionId, setCheckoutTransactionId] = useState("");
+    
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            if (file.size > 5 * 1024 * 1024) {
+                if (window.toast) window.toast("File is too large (max 5MB)", "warning");
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                setCheckoutTransactionId(ev.target?.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
     
     const qty = expandedTickets ? expandedTickets.length : 1;
 
@@ -133,6 +150,7 @@ export function CheckoutModal({
                         <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, marginBottom: 8 }}>
                             {checkoutStep === "attendee_details" && "Checkout"}
                             {checkoutStep === "review" && "Review Order"}
+                            {checkoutStep === "payment_proof" && "Payment Details"}
                         </h3>
                         {expandedTickets && expandedTickets.length > 0 && (
                             <div style={{ fontSize: 13, color: 'var(--ink-2)', display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -238,7 +256,6 @@ export function CheckoutModal({
                                     ))}
                                 </div>
                             </div>
-
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: 'var(--surface-2)', borderRadius: 12, fontWeight: 700 }}>
                                 <span>Total Price</span>
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
@@ -249,6 +266,76 @@ export function CheckoutModal({
                                     </span>
                                 </div>
                             </div>
+                        </div>
+                    )}
+
+                    {checkoutStep === "payment_proof" && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                            {/* Cash Payment: Show payment instructions & Transaction ID input in payment_proof step */}
+                            {liveEvent.cash_enabled && liveEvent.type !== "Free" && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                    <div style={{ padding: '10px 12px', background: 'rgba(245,158,11,0.1)', color: '#f59e0b', borderRadius: 8, fontSize: 12, lineHeight: 1.5 }}>
+                                        <strong>Cash Payment Required</strong> – Please check the event description for payment details and complete the payment before submitting.
+                                    </div>
+                                    {(() => {
+                                        const settingsObj = liveEvent.settings || {};
+                                        const allowImg = settingsObj.allow_image_proof === true;
+                                        return (
+                                            <>
+                                                {allowImg ? (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                                        <div style={{ fontSize: 13, color: 'var(--ink-2)', fontWeight: 600 }}>Submit Transaction ID or Upload Proof:</div>
+                                                        <input
+                                                            type="text"
+                                                            className="cinput"
+                                                            placeholder="Transaction ID / UTR (required)"
+                                                            value={checkoutTransactionId && !checkoutTransactionId.startsWith('data:') ? checkoutTransactionId : ''}
+                                                            onChange={ev => setCheckoutTransactionId(ev.target.value)}
+                                                            style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--field)', fontSize: 13 }}
+                                                        />
+                                                        <label style={{ 
+                                                            display: 'flex', 
+                                                            alignItems: 'center', 
+                                                            justifyContent: 'center', 
+                                                            gap: 8, 
+                                                            padding: '10px 12px', 
+                                                            background: checkoutTransactionId.startsWith('data:') ? 'var(--green)' : 'var(--surface)', 
+                                                            border: checkoutTransactionId.startsWith('data:') ? 'none' : '1px solid var(--border)', 
+                                                            borderRadius: 8, 
+                                                            fontSize: 13, 
+                                                            fontWeight: 600, 
+                                                            color: checkoutTransactionId.startsWith('data:') ? '#fff' : 'var(--ink-2)', 
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.2s'
+                                                        }}>
+                                                            <I.image style={{ width: 16, height: 16 }} />
+                                                            {checkoutTransactionId.startsWith('data:') ? 'Change Image' : 'Upload Image Proof'}
+                                                            <input
+                                                                type="file"
+                                                                accept="image/*"
+                                                                onChange={handleImageChange}
+                                                                style={{ display: 'none' }}
+                                                            />
+                                                        </label>
+                                                        {checkoutTransactionId.startsWith('data:') && (
+                                                            <div style={{ fontSize: 12, color: 'var(--accent-2)', fontWeight: 600, textAlign: 'center' }}>Image selected</div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <input
+                                                        type="text"
+                                                        className="cinput"
+                                                        placeholder="Transaction ID / UTR (required)"
+                                                        value={checkoutTransactionId}
+                                                        onChange={ev => setCheckoutTransactionId(ev.target.value)}
+                                                        style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--field)', fontSize: 13 }}
+                                                    />
+                                                )}
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -265,7 +352,27 @@ export function CheckoutModal({
                     {checkoutStep === "review" && (
                         <>
                             <button className="hbtn hbtn--ghost" onClick={() => setCheckoutStep("attendee_details")}>Back</button>
-                            <button className="hbtn hbtn--primary" onClick={() => { onConfirm({ buyer: attendees[0], attendees }); }}>
+                            <button className="hbtn hbtn--primary" onClick={() => { 
+                                if (liveEvent.cash_enabled && liveEvent.type !== "Free") {
+                                    setCheckoutStep("payment_proof");
+                                } else {
+                                    onConfirm({ buyer: attendees[0], attendees, transactionId: checkoutTransactionId || undefined }); 
+                                }
+                            }}>
+                                {liveEvent.cash_enabled && liveEvent.type !== "Free" ? "Proceed to Payment" : "Confirm & Proceed"}
+                            </button>
+                        </>
+                    )}
+                    {checkoutStep === "payment_proof" && (
+                        <>
+                            <button className="hbtn hbtn--ghost" onClick={() => setCheckoutStep("review")}>Back</button>
+                            <button className="hbtn hbtn--primary" onClick={() => { 
+                                if (liveEvent.cash_enabled && liveEvent.type !== "Free" && !checkoutTransactionId) {
+                                    if (window.toast) window.toast("Please provide a transaction ID or upload payment proof.", "warning");
+                                    return;
+                                }
+                                onConfirm({ buyer: attendees[0], attendees, transactionId: checkoutTransactionId || undefined }); 
+                            }}>
                                 Confirm & Proceed
                             </button>
                         </>

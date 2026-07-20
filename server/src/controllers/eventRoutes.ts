@@ -1476,7 +1476,7 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                 if (!stillPending) {
                     const anyApproved = allAttendees.some((a: any) => a.status === 'approved' || a.status === 'checked_in');
                     if (anyApproved) {
-                        nextBookingStatus = (isCash && !cashAlreadyPaid) ? 'pending_payment' : 'confirmed';
+                        nextBookingStatus = 'confirmed';
                     } else {
                         nextBookingStatus = 'cancelled'; // All rejected
                     }
@@ -1489,7 +1489,7 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                 // If there's a ticket attached (which there usually is for pending attendees), update its status
                 if (attendee.ticket_id) {
                     const nextTicketStatus = action === 'accept' 
-                        ? ((isCash && !cashAlreadyPaid) ? 'reserved' : 'confirmed')
+                        ? 'confirmed'
                         : 'cancelled';
 
                     await tx.tickets.update({
