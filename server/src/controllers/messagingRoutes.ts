@@ -1858,7 +1858,8 @@ export async function messagingRoutes(fastify: FastifyInstance) {
 
       for (const tReq of ticketsReq) {
           let ticketType: any = null;
-          if (tReq.ticketTypeId) {
+          const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          if (tReq.ticketTypeId && UUID_REGEX.test(tReq.ticketTypeId)) {
               ticketType = await prisma.ticket_types.findUnique({
                   where: { id: tReq.ticketTypeId }
               });

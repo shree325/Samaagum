@@ -192,17 +192,17 @@ export function formStateToApiPayload(s: FormStateToPayloadInput): Record<string
       offline_entry_type:  s.offlineEntryType,
     },
     tickets: (s.type === 'paid' || s.type === 'cash')
-      ? s.tickets.map((t, i) => ({
+      ? s.tickets.map((t: any, i: number) => ({
           id:           t.id,
-          name:         t.name,
-          description:  t.description,
-          capacity:     t.capacity,
-          price_minor:  t.price_minor,
-          price_currency: t.price_currency,
+          name:         t.name || t.n || 'General Admission',
+          description:  t.description || '',
+          capacity:     t.capacity !== undefined ? t.capacity : (t.cap ? parseInt(t.cap) : null),
+          price_minor:  t.price_minor !== undefined ? t.price_minor : (t.price ? Math.round(parseFloat(t.price) * 100) : 0),
+          price_currency: t.price_currency || 'INR',
           max_per_booking: t.max_per_booking,
           sale_start:   t.sale_start,
           sale_end:     t.sale_end,
-          visibility:   t.visibility,
+          visibility:   t.visibility || 'public',
           sort_order:   i,
         }))
       : [{

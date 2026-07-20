@@ -398,6 +398,7 @@ export function useEventForm({ go, st, editEv, hostGroupId }: any) {
     tags, setTags, tagInput, setTagInput, cat, setCat, categoriesList, seoExpanded, setSeoExpanded,
 
     // Modal control flags
+    tzModalOpen, setTzModalOpen, tzSearchQuery, setTzSearchQuery,
     upgradeModalOpen, setUpgradeModalOpen, upgradeFeature, setUpgradeFeature, triggerUpgrade,
     calModalOpen, setCalModalOpen, descModalOpen, setDescModalOpen, instModalOpen, setInstModalOpen,
     aiModalOpen, setAiModalOpen, aiInstModalOpen, setAiInstModalOpen, accessModalOpen, setAccessModalOpen,
