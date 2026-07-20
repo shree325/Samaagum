@@ -56,8 +56,11 @@ export function GroupHeader({
         <div className="sub">
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><I.users /> {membersCount.toLocaleString()} members</span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#1f9d57", fontWeight: 600 }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#2bb673" }} />{onlineCount} online</span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><I.comment /> {g.posts || 0} posts</span>
-          <span className="fchip on" style={{ pointerEvents: "none", padding: "4px 11px", fontSize: 12 }}>{g.cat || "Community"}</span>
+          {(g.category || g.cat) && (
+            <span className="fchip on" style={{ pointerEvents: "none", padding: "4px 11px", fontSize: 12, textTransform: 'capitalize' }}>
+              {g.category || g.cat}
+            </span>
+          )}
         </div>
         {displayLocation && (
           <div className="sub" style={{ marginTop: 4 }}>

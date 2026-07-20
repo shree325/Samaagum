@@ -199,9 +199,12 @@ export function EventSidebar({
             const name = typeof a === 'object' ? (a.name || a.display_name) : a;
             const userId = typeof a === 'object' ? (a.userId || a.id || a.bookingId) : undefined;
             const picture = typeof a === 'object' ? a.picture : undefined;
+            const uniqueKey = typeof a === 'object'
+              ? `${a.id || a.userId || a.bookingId || 'att'}-${i}`
+              : `guest-${i}`;
             return (
               <div
-                key={`${userId || 'u'}-${i}`}
+                key={uniqueKey}
                 className="att"
                 style={{ cursor: userId ? "pointer" : "default" }}
                 onClick={() => userId && go("profile", { id: userId })}

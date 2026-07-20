@@ -4,8 +4,7 @@ import ReactDOM from 'react-dom/client';
 import { HashRouter, useNavigate, useLocation } from 'react-router-dom';
 import { LocationSelector } from './components';
 (window as any).LocationSelector = LocationSelector;
-
-import { CreateEvent } from './create_event';
+import { CreateEvent } from './create-event';
 import { CreateGroup } from './home-create';
 import { EVENTS, FEATURED, GROUPS, ME, MY_TICKETS } from './home-data';
 import { EventDetail } from './home-event';
@@ -1386,7 +1385,7 @@ useEffect(() => {
       />
     );
     if (v === "edit-event") return <CreateEvent editEv={cur.param} go={go} mobile={mobile} st={st} />;
-    if (v === "create-group") return <CreateGroup go={go} mobile={mobile} st={st} />;
+    if (v === "create-group") return <CreateGroup mode={cur.param?.settings?.isDraft ? "edit" : "create"} editGroup={cur.param} go={go} mobile={mobile} st={st} />;
     if (v === "edit-group") return <CreateGroup mode="edit" editGroup={cur.param} go={go} mobile={mobile} st={st} />;
     if (v === "event-dashboard") return <EventDashboard ev={cur.param} st={st} go={go} />;
     if (v === "group-dashboard") return <GroupDashboard group={cur.param} st={st} go={go} />;

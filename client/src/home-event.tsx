@@ -29,7 +29,7 @@ function EventDetail({ ev, st, go }) {
       ...e,
       desc: e.description || e.desc,
       cover: e.cover || meta.cover || "",
-      cat: meta.category || e.cat || "General",
+      cat: e.category || meta.category || e.cat || "General",
       type: (e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : 'Paid',
       online: e.location_type === 'online',
       month,
@@ -264,10 +264,36 @@ function EventDetail({ ev, st, go }) {
         <div className="ev-detail">
           <div className="ev-head">
             <div className="card-top">
-              <div className="tags">
-                <span className="fchip on" style={{ pointerEvents: "none" }}>{e.cat}</span>
-                <span className="fchip" style={{ pointerEvents: "none" }}>{e.online ? <><I.online style={{ width: 14, height: 14 }} /> Online</> : <><I.pin style={{ width: 14, height: 14 }} /> {e.city || city}</>}</span>
-                <span className="fchip" style={{ pointerEvents: "none" }}><I.ticket style={{ width: 14, height: 14 }} /> {e.type || ((e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : (e.cash_enabled ? 'Cash' : 'Paid'))}</span>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+                <div style={{
+                  width: 44, height: 44, borderRadius: 12,
+                  background: "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "22px",
+                  boxShadow: "0 4px 12px rgba(59, 130, 246, 0.2)"
+                }}>
+                  {/* 
+                    NOTE: Inline useState/useEffect causes React hook violations inside mapped items. 
+                    Categories should be fetched once in the parent component and passed down. 
+                    Using a static icon for now to prevent application crashes.
+                  */}
+                  {'📅'}
+                </div>
+                <div className="tags" style={{ margin: 0 }}>
+                  {e.cat && (
+                    <span className="fchip on" style={{ pointerEvents: "none", textTransform: 'capitalize' }}>{e.cat}</span>
+                  )}
+                  <span className="fchip" style={{ pointerEvents: "none" }}>
+                    {e.online ? <><I.online style={{ width: 14, height: 14 }} /> Online</> : <><I.pin style={{ width: 14, height: 14 }} /> {e.city || city}</>}
+                  </span>
+                  <span className="fchip" style={{ pointerEvents: "none" }}>
+                    <I.ticket style={{ width: 14, height: 14 }} /> {e.type || ((e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : (e.cash_enabled ? 'Cash' : 'Paid'))}
+                  </span>
+                </div>
+              </div>
+
               </div>
               <div className="ttl">{e.title}</div>
               <div 
@@ -395,12 +421,12 @@ function EventDetail({ ev, st, go }) {
               <div className="ev-block">
                 <h3>{e.going} attending</h3>
                 <div className="att-grid">
-                  {attendees.map(n => {
+                  {attendees.map((n, index) => {
                     const name = typeof n === 'object' ? (n.name || n.display_name) : n;
                     const userId = typeof n === 'object' ? n.id : undefined;
                     const picture = typeof n === 'object' ? n.picture : undefined;
                     return (
-                      <div key={name} className="att">
+                      <div key={`${name}-${index}`} className="att">
                         <Avatar name={name} userId={userId} img={picture} size={28} />
                         <span className="nm">{name}</span>
                       </div>

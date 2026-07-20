@@ -254,7 +254,6 @@ export function generateTicketHtml({
   <div class="qr-section">
     <img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrToken)}" alt="QR Code" />
     <div class="scan-text">Show this at the gate for scanning</div>
-    <div class="token-text">Token: ${qrToken}</div>
   </div>
   `}
   <div class="divider"></div>

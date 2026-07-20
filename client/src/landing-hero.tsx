@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { PEOPLE, Wordmark, gradFor, initials } from './components';
 import { I, REDUCED, Reveal, clamp, useScrub } from './landing-core';
-import { Communities, Events } from './landing-features';
+import { Groups, Events } from './landing-features';
 import { Networking, Profiles } from './landing-features2';
 
 /* ============================================================
@@ -25,7 +25,7 @@ export function Nav() {
       <div className="nav-inner">
         <a href="#top" className="nav-brand" style={{ textDecoration: "none", color: "inherit" }}><Wordmark size={19} /></a>
         <div className="nav-links">
-          <a href="#communities">Communities</a>
+          <a href="#groups">Groups</a>
           <a href="#events">Events</a>
           <a href="#networking">Networking</a>
           <a href="#profiles">Profiles</a>
@@ -39,7 +39,7 @@ export function Nav() {
       </div>
       {open && (
         <div className="glass-card" style={{ position: "absolute", top: 74, left: 24, right: 24, padding: 16, display: "flex", flexDirection: "column", gap: 4 }}>
-          {["communities", "events", "networking", "profiles", "activity"].map(s => (
+          {["groups", "events", "networking", "profiles", "activity"].map(s => (
             <a key={s} href={`#${s}`} onClick={() => setOpen(false)} style={{ padding: "12px 14px", borderRadius: 12, color: "var(--ink-2)", textDecoration: "none", textTransform: "capitalize", fontWeight: 600 }}>{s}</a>
           ))}
         </div>
@@ -146,8 +146,8 @@ export function Hero() {
       <div className="wrap">
         <div className="hero-inner" ref={innerRef}>
           <Reveal y={14}><span className="eyebrow-pill"><span className="pulse" />Now live in 40+ cities</span></Reveal>
-          <Reveal y={20} delay={80}><h1>Where your community <span className="glow-text">comes together.</span></h1></Reveal>
-          <Reveal y={20} delay={160}><p className="hero-sub">Samaagum is the home for communities, events, networking and rich profiles — one elegant place to find your people and what's happening around you.</p></Reveal>
+          <Reveal y={20} delay={80}><h1>Where your group <span className="glow-text">comes together.</span></h1></Reveal>
+          <Reveal y={20} delay={160}><p className="hero-sub">Samaagum is the home for groups, events, networking and rich profiles — one elegant place to find your people and what's happening around you.</p></Reveal>
           <Reveal y={20} delay={240}>
             <div className="hero-cta">
               <a href={`${AUTH}#signup`} className="btn btn-primary">Get started — it's free {I.arrow()}</a>
@@ -173,7 +173,7 @@ export function TrustStrip() {
   return (
     <section className="section-tight" style={{ paddingTop: 10 }}>
       <div className="wrap center" style={{ marginBottom: 28 }}>
-        <span className="eyebrow" style={{ color: "var(--ink-3)" }}>Home to 12,000+ communities worldwide</span>
+        <span className="eyebrow" style={{ color: "var(--ink-3)" }}>Home to 12,000+ groups worldwide</span>
       </div>
       <div className="marquee">
         <div className="marquee-track">

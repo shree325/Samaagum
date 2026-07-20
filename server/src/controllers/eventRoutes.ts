@@ -1064,7 +1064,8 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
 
             const confirmedAttendees = await prisma.attendees.findMany({
                 where: { 
-                    bookings: { event_id: id, status: { in: ['confirmed', 'pending_payment'] } }
+                    bookings: { event_id: id, status: { in: ['confirmed', 'pending_payment'] } },
+                    status: { in: ['approved', 'checked_in', 'pending'] }
                 },
                 include: {
                     tickets: true,

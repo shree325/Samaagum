@@ -292,16 +292,20 @@ export const GroupRow = React.memo(function GroupRow({ g, rank, onOpen, joined, 
 });
 
 /* ---------------- Person card (horizontal scroll) ---------------- */
-export const PersonCard = React.memo(function PersonCard({ p, connected, onConnect }: any) {
+export const PersonCard = React.memo(function PersonCard({ p, connected, onConnect, onNavigate }: any) {
   return (
-    <div className="pcard rise">
+    <div 
+      className="pcard rise" 
+      onClick={() => onNavigate && onNavigate(p.id || p.name, p)}
+      style={{ cursor: onNavigate ? 'pointer' : 'default' }}
+    >
       <div className="pc-cov" style={{ background: p.cover }} />
       <Avatar name={p.name} size={64} img={p.photo || p.img} />
       <div className="pn">{p.name}</div>
       <div className="ph">{p.role}</div>
       <div className="pmut"><I.users style={{ width:13, height:13 }}/>{p.mutual} mutual connections</div>
       <div className="ptags">{p.tags.map(t => <span key={t} className="ptag">{t}</span>)}</div>
-      <div className="pacts">
+      <div className="pacts" onClick={(e) => e.stopPropagation()}>
         <button className={`hbtn hbtn--sm hbtn--block ${connected?"hbtn--ghost":"hbtn--primary"}`} onClick={()=>onConnect(p)}>
           {connected ? <><I.check/>Requested</> : <>Connect</>}
         </button>

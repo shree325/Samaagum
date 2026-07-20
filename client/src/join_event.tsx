@@ -528,13 +528,13 @@ export function JoinEventPage({ ev, st, go }) {
                             <div className="ev-block">
                                 <h3>{liveEvent.going} attending</h3>
                                 <div className="att-grid">
-                                    {attendees.map((n, i) => {
+                                    {attendees.map((n, index) => {
                                         const name = typeof n === 'object' ? (n.name || n.display_name) : n;
                                         const userId = typeof n === 'object' ? n.id : undefined;
                                         const picture = typeof n === 'object' ? n.picture : undefined;
                                         return (
                                             <div 
-                                                key={`${userId || name || 'u'}-${i}`} 
+                                                key={userId ? `${userId}-${index}` : `${name}-${index}`} 
                                                 className="att"
                                                 style={{ cursor: userId ? 'pointer' : 'default' }}
                                                 onClick={() => {

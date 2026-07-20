@@ -416,7 +416,7 @@ function ExportCsvModal({ ev, onClose }: { ev: any; onClose: () => void }) {
 /* ================================================================
    MAIN COMPONENT
    ================================================================ */
-export function EventDashboard({ ev, st, go, embedded = false }: any) {
+export function EventDashboard({ ev, st, go, embedded = false, onTabChange }: any) {
   const e = ev || st?.createdEvents?.[0] || {};
   const apiBase = window.location.port === '8080' ? 'http://localhost:3000' : '';
   const token = localStorage.getItem('token');
@@ -783,14 +783,28 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
   const revenueToday = useMemo(() => {
     if (isDemoMode) return 12400;
     const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
-    const todayList = confirmed.filter(u => u.amountMinor > 0 && u.createdAt && new Date(u.createdAt).toLocaleDateString('en-CA') === todayStr);
+    const seen = new Set<string>();
+    const unique = confirmed.filter(u => {
+      if (!u.bookingId) return true;
+      if (seen.has(u.bookingId)) return false;
+      seen.add(u.bookingId);
+      return true;
+    });
+    const todayList = unique.filter(u => u.amountMinor > 0 && u.createdAt && new Date(u.createdAt).toLocaleDateString('en-CA') === todayStr);
     return todayList.reduce((sum, u) => sum + (u.amountMinor / 100), 0);
   }, [confirmed, isDemoMode]);
 
   const revenueTimeline = useMemo(() => {
     if (isDemoMode) return demoRevenueGrowth[revenueFilter];
 
-    const paidList = confirmed.filter(u => u.amountMinor > 0);
+    const seen = new Set<string>();
+    const unique = confirmed.filter(u => {
+      if (!u.bookingId) return true;
+      if (seen.has(u.bookingId)) return false;
+      seen.add(u.bookingId);
+      return true;
+    });
+    const paidList = unique.filter(u => u.amountMinor > 0);
     if (!paidList.length) return [];
 
     const now = new Date();
@@ -1179,7 +1193,14 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--ink)' }}>Recent Members</h3>
-            <button className="hbtn hbtn--soft hbtn--sm" style={{ color: '#6366f1', background: 'transparent', border: 'none', fontWeight: 600 }}>
+            <button className="hbtn hbtn--soft hbtn--sm" style={{ color: '#6366f1', background: 'transparent', border: 'none', fontWeight: 600 }}
+              onClick={() => {
+                if (embedded && onTabChange) {
+                  onTabChange('members');
+                } else {
+                  go('event', { ...e, initialTab: 'members' });
+                }
+              }}>
               View all
             </button>
           </div>
@@ -1842,9 +1863,17 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
             key={item.label}
             onClick={() => {
               if (item.action === 'members') {
-                go('event', { ...e, initialTab: 'members' });
+                if (embedded && onTabChange) {
+                  onTabChange('members');
+                } else {
+                  go('event', { ...e, initialTab: 'members' });
+                }
               } else if (item.action === 'invite') {
-                go('event', { ...e, initialTab: 'invite' });
+                if (embedded && onTabChange) {
+                  onTabChange('invite');
+                } else {
+                  go('event', { ...e, initialTab: 'invite' });
+                }
               } else if (item.action === 'gallery') {
                 let isGalleryEnabled = false;
                 if (e.gallery?.enabled) {
@@ -1867,13 +1896,25 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
                 }
 
                 if (isGalleryEnabled) {
-                  go('event', { ...e, initialTab: 'gallery' });
+                  if (embedded && onTabChange) {
+                    onTabChange('gallery');
+                  } else {
+                    go('event', { ...e, initialTab: 'gallery' });
+                  }
                 } else {
                   if (window.toast) window.toast("Enable gallery to view it", "warning");
-                  go('event', { ...e, initialTab: 'settings' });
+                  if (embedded && onTabChange) {
+                    onTabChange('settings');
+                  } else {
+                    go('event', { ...e, initialTab: 'settings' });
+                  }
                 }
               } else if (item.action === 'settings') {
-                go('event', { ...e, initialTab: 'settings' });
+                if (embedded && onTabChange) {
+                  onTabChange('settings');
+                } else {
+                  go('event', { ...e, initialTab: 'settings' });
+                }
               }
             }}
             style={{
@@ -2452,7 +2493,14 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
           <button className="hbtn hbtn--soft hbtn--sm">View All</button>
         </div>
         {(() => {
-          const transactions = confirmed.filter(u => u.amountMinor > 0);
+          const seen = new Set<string>();
+          const transactions = confirmed.filter(u => {
+            if (u.amountMinor <= 0) return false;
+            if (!u.bookingId) return true;
+            if (seen.has(u.bookingId)) return false;
+            seen.add(u.bookingId);
+            return true;
+          });
           if (transactions.length === 0 && !isDemoMode)
             return <EmptyState title="No transactions yet" message="Paid bookings will appear here." icon={<I.wallet style={{ width: 28, height: 28, opacity: 0.35 }} />} />;
           return (

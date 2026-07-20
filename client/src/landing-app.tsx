@@ -3,7 +3,7 @@ import React, { Fragment, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { Discussions, FinalCTA, Footer, PlatformActivity } from './landing-activity';
 import { initLenis } from './landing-core';
-import { Communities, Events } from './landing-features';
+import { Groups, Events } from './landing-features';
 import { Networking, Profiles } from './landing-features2';
 import { Hero, Nav, TrustStrip } from './landing-hero';
 
@@ -22,7 +22,7 @@ export function App() {
       <Nav />
       <Hero />
       <TrustStrip />
-      <Communities />
+      <Groups />
       <Events />
       <Networking />
       <Profiles />

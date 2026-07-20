@@ -294,7 +294,7 @@ export function EventMembersTab({
                           Remove
                         </button>
                       )}
-                      {(isHostOrCoHost || isAdmin || isModerator) && (
+                      {(isHostOrCoHost || isAdmin || isModerator) && hasAnswers && (
                         <button
                           className="hbtn hbtn--soft hbtn--sm"
                           style={{ fontSize: 11.5, padding: "4px 10px" }}

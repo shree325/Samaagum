@@ -8,11 +8,25 @@ export const calculateBookingStatusData = (confirmed: any[]) => [
 ];
 
 export const getPaidBookings = (confirmed: any[]) => {
-  return confirmed.filter(u => u.bookingStatus === 'confirmed' && u.amountMinor > 0);
+  const seen = new Set<string>();
+  const unique = confirmed.filter(u => {
+    if (!u.bookingId) return true;
+    if (seen.has(u.bookingId)) return false;
+    seen.add(u.bookingId);
+    return true;
+  });
+  return unique.filter(u => u.bookingStatus === 'confirmed' && u.amountMinor > 0);
 };
 
 export const calculateCashPending = (confirmed: any[]) => {
-  return confirmed.filter(u => u.isCashPayment && u.bookingStatus === 'pending_payment').length;
+  const seen = new Set<string>();
+  const unique = confirmed.filter(u => {
+    if (!u.bookingId) return true;
+    if (seen.has(u.bookingId)) return false;
+    seen.add(u.bookingId);
+    return true;
+  });
+  return unique.filter(u => u.isCashPayment && u.bookingStatus === 'pending_payment').length;
 };
 
 export const calculateAvgBookingValue = (revenue: number, paidBookingsCount: number) => {
@@ -35,7 +49,14 @@ export const calculateTicketSoldDistribution = (confirmed: any[], isDemoMode: bo
 
 export const calculateRevenueByTicketType = (confirmed: any[]) => {
   const grouped: Record<string, number> = {};
-  confirmed.forEach(a => {
+  const seen = new Set<string>();
+  const unique = confirmed.filter(u => {
+    if (!u.bookingId) return true;
+    if (seen.has(u.bookingId)) return false;
+    seen.add(u.bookingId);
+    return true;
+  });
+  unique.forEach(a => {
     if (!a.ticketTypeName || a.amountMinor <= 0) return;
     grouped[a.ticketTypeName] = (grouped[a.ticketTypeName] || 0) + (a.amountMinor / 100);
   });

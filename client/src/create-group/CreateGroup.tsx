@@ -54,7 +54,15 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
   const isEdit = mode === "edit" && editGroup;
 
   const draftKey = "sg_draft_group";
-  const savedDraft = !isEdit ? JSON.parse(localStorage.getItem(draftKey) || "{}") : {};
+  
+  // Clear draft storage if we are not editing
+  useEffect(() => {
+    if (!isEdit) {
+      localStorage.removeItem(draftKey);
+    }
+  }, [isEdit]);
+
+  const savedDraft = {};
 
   const [name, setName] = useState(isEdit ? (editGroup.name || "") : (savedDraft.name || ""));
   const [icon, setIcon] = useState(isEdit ? (editGroup.icon || "✺") : (savedDraft.icon || "✺"));
@@ -234,17 +242,7 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
     }
   }, []);
 
-  // Autosave
-  useEffect(() => {
-    localStorage.setItem(draftKey, JSON.stringify({
-      name, icon, cover, banner, cat, desc, visibility, joinElig,
-      limitCap, maxCap, waitlist, questionnaire, questions, forums, gallery,
-      galleryAllow, galleryImageOnly, galleryVideoOnly, galleryApprove, galleryUploadRoles, galleryViewRoles,
-      forumsThreadRoles, forumsReplyRoles, forumsApprove,
-      locationType, venueName, address, city, locationState, locationCountry, platform, meetingLink,
-      selectedAccess, visibilityAccess, approval
-    }));
-  }, [name, icon, cover, banner, cat, desc, visibility, joinElig, limitCap, maxCap, waitlist, questionnaire, questions, forums, gallery, galleryAllow, galleryImageOnly, galleryVideoOnly, galleryApprove, galleryUploadRoles, galleryViewRoles, forumsThreadRoles, forumsReplyRoles, forumsApprove, locationType, venueName, address, city, locationState, locationCountry, platform, meetingLink, selectedAccess, visibilityAccess, approval]);
+
 
   const [loading, setLoading] = useState(false);
 
