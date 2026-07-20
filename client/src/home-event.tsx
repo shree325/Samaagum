@@ -293,9 +293,8 @@ function EventDetail({ ev, st, go }) {
                   </span>
                 </div>
               </div>
-
-              </div>
-              <div className="ttl">{e.title}</div>
+            </div>
+            <div className="ttl">{e.title}</div>
               <div 
                 className="ev-host"
                 style={{ cursor: e.hostUserId || e.hosted_by_entity_id || e.host_entity_id ? 'pointer' : 'default' }}
@@ -708,13 +707,11 @@ function EventDetail({ ev, st, go }) {
               <div className="host-card">
                  <div className="hh"><Avatar name={e.hostBy || e.host} userId={e.hostUserId} img={e.hostPhoto} size={46} /><div><div className="n">{e.host}</div><div className="r">Organizer · 24 events</div></div></div>
                 <div className="hb">Curating the best gatherings in {e.city || city}. Follow to never miss a drop.</div>
-
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
   );
 }
 
