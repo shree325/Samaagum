@@ -1034,18 +1034,31 @@ export class GroupService {
             return acc;
         }, {});
 
+        const hasForm = !!(group?.join_form_id || ((group?.settings as any)?.questionnaires && Array.isArray((group.settings as any).questionnaires) && (group.settings as any).questionnaires.length > 0));
+
         return members.map(m => {
             const u = usersMap.get(m.user_id);
             const prof = profilesMap.get(m.user_id);
             const username = u?.primary_email ? u.primary_email.split('@')[0] : 'unknown';
             const displayName = u ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : username;
             const profilePhoto = u?.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
+            
+            let parsedAnswers = m.answers;
+            if (typeof parsedAnswers === 'string') {
+                try { parsedAnswers = JSON.parse(parsedAnswers); } catch (e) {}
+            }
+            const hasResponses = hasForm && !!(
+                m.form_response_id ||
+                (parsedAnswers && typeof parsedAnswers === 'object' && Object.keys(parsedAnswers).length > 0)
+            );
+
             return {
                 ...m,
                 users: u ? { id: u.id, first_name: u.first_name, last_name: u.last_name, primary_email: u.primary_email, display_name: displayName || username, username, profilePhoto } : null,
                 roles: rolesByUser[m.user_id] || ['group_member'],
                 messagingRestriction: prof?.messaging_restriction || 'anyone',
-                connectionState: connectionsMap.get(m.user_id) || 'none'
+                connectionState: connectionsMap.get(m.user_id) || 'none',
+                hasResponses
             };
         });
     }
@@ -2030,11 +2043,17 @@ export class GroupService {
             await this.requireActiveMember(groupId, user);
         }
 
-        const statusFilter = isAdmin ? undefined : 'approved';
-        const filter: any = { group_id: groupId };
-        if (statusFilter) filter.status = statusFilter;
-
-        const rows = await this.groupGalleryRepo.findAll(filter);
+        const rows = isAdmin
+            ? await prisma.group_gallery.findMany({ where: { group_id: groupId } })
+            : await prisma.group_gallery.findMany({
+                where: {
+                    group_id: groupId,
+                    OR: [
+                        { status: 'approved' },
+                        ...(user?.id ? [{ uploader_user_id: user.id }] : [])
+                    ]
+                }
+              });
         const userIds = rows.map(r => r.uploader_user_id);
         const users = await this.usersRepo.findAll({ id: { in: userIds } });
 

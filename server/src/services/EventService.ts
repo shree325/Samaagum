@@ -437,31 +437,99 @@ export class EventService {
   // 'unlisted' events are never listed on Discover and are only directly reachable via a
   // one-time invite link (handled at the route layer) or by hosts/co-hosts/already-joined users.
   // 'custom' events are restricted to selected groups (plus hosts/co-hosts/already-joined users).
-  private static async canUserAccessEvent(ev: any, userId?: string): Promise<boolean> {
-    const visibility = (ev.venue as any)?.visibility;
+  /**
+   * Determines whether a user can view a given event.
+   *
+   * Two modes:
+   *
+   * **Discovery mode** (`discoveryMode: true`) — used for home feed, recommended
+   * events, and search.  Answers "should this event appear in the user's feed?"
+   * Only current, **active** group membership is considered.  A booking that
+   * was made when the user was still a member does NOT grant discovery rights
+   * after they leave the group.  This ensures leaving a group immediately
+   * removes that group's private events from the user's feed.
+   *
+   * **Access mode** (`discoveryMode: false`, the default) — used for direct
+   * event detail pages.  If the user already has a confirmed booking they can
+   * still view the event page even after leaving the group.
+   *
+   * @param ev             - The event row (venue may be a JSON string or object).
+   * @param userId         - Optional authenticated user id.
+   * @param userGroupSet   - Optional pre-fetched set of active group ids for the
+   *                         user (avoids N+1 DB calls when checking many events).
+   *                         When omitted the function falls back to individual queries.
+   * @param discoveryMode  - When true, skips the booking bypass so only current
+   *                         group membership grants visibility. Defaults to false.
+   */
+  public static async canUserAccessEvent(
+    ev: any,
+    userId?: string,
+    userGroupSet?: Set<string>,
+    discoveryMode = false
+  ): Promise<boolean> {
+    // Robustly parse venue — it may be stored as a JSON string or as an object
+    const venueObj: any =
+      ev.venue == null
+        ? {}
+        : typeof ev.venue === 'string'
+        ? (() => { try { return JSON.parse(ev.venue); } catch { return {}; } })()
+        : ev.venue;
+
+    const visibility = venueObj?.visibility;
+
+    // Public events are always discoverable / accessible
     if (!visibility || visibility === 'public') return true;
 
+    // Unlisted and custom events require an authenticated user
     if (!userId) return false;
 
+    // Hosts and co-hosts always have access (and are discoverable) regardless of mode
     const isHostOrCoHost = await this.verifyEventCapability(userId, ev.id, 'event.manage').catch(() => false);
     if (isHostOrCoHost) return true;
 
-    const hasBooking = await prisma.bookings.findFirst({
-      where: { event_id: ev.id, booker_user_id: userId, status: { in: ['confirmed', 'pending_approval', 'pending_payment'] } }
-    });
-    if (hasBooking) return true;
+    // Booking bypass — only for direct access, NOT for discovery.
+    // Rationale: a user who left the group shouldn't see the event in their
+    // feed just because they once registered while they were a member.
+    if (!discoveryMode) {
+      const hasBooking = await prisma.bookings.findFirst({
+        where: { event_id: ev.id, booker_user_id: userId, status: { in: ['confirmed', 'pending_approval', 'pending_payment'] } }
+      });
+      if (hasBooking) return true;
+    }
 
+    // Check if user is an active member of the group that hosts this event
     if (ev.hosted_by_entity_id) {
-      const isGroupMember = await GroupService.userInGroups(userId, [ev.hosted_by_entity_id]).catch(() => false);
+      const isGroupMember = userGroupSet
+        ? userGroupSet.has(ev.hosted_by_entity_id)
+        : await GroupService.userInGroups(userId, [ev.hosted_by_entity_id]).catch(() => false);
       if (isGroupMember) return true;
     }
 
+    // For 'custom' visibility, also check the explicitly allowed group list
     if (visibility === 'custom') {
-      const groups: string[] = (ev.venue as any)?.meta?.selectedAccess?.restricted?.groups || [];
-      if (groups.length > 0 && await GroupService.userInGroups(userId, groups)) return true;
+      const allowedGroups: string[] = venueObj?.meta?.selectedAccess?.restricted?.groups || [];
+      if (allowedGroups.length > 0) {
+        const eligible = userGroupSet
+          ? allowedGroups.some(gid => userGroupSet.has(gid))
+          : await GroupService.userInGroups(userId, allowedGroups).catch(() => false);
+        if (eligible) return true;
+      }
     }
 
     return false;
+  }
+
+  /**
+   * Pre-fetches all active group memberships for a user into a Set.
+   * Pass this to `canUserAccessEvent` to avoid N+1 queries when iterating
+   * over many events in a single request.
+   */
+  public static async fetchUserGroupSet(userId: string): Promise<Set<string>> {
+    const memberships = await prisma.group_memberships.findMany({
+      where: { user_id: userId, state: 'active' },
+      select: { group_id: true }
+    });
+    return new Set(memberships.map((m: any) => m.group_id));
   }
 
   static async getPublicEvents(tenantId: string, userId?: string, cityQuery?: string) {
@@ -2200,7 +2268,7 @@ export class EventService {
     if (isPrivileged) {
       return items;
     }
-    return items.filter((item: any) => item.approved);
+    return items.filter((item: any) => item.approved || item.uploaderId === userId);
   }
 
   static async uploadToEventGallery(eventId: string, userId: string, body: any) {

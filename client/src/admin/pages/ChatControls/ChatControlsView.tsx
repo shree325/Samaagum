@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react';
 import { apiClient } from '../../../admin-app';
-import { Toggle } from '../../../create_event';
+import { Toggle } from '../../../create-event';
 import { Messages } from '../../../home-messages';
 import { Footer } from '../../../landing-activity';
 

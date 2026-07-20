@@ -269,7 +269,7 @@ export const I = {
 
 /* ---------- Data ---------- */
 export const PEOPLE = ["Aanya Rao", "Dev Kapoor", "Mira Shah", "Leo Park", "Zoya Nair", "Kabir Anand", "Sara Iyer", "Noah Field", "Tara Bose", "Ivan Cole"];
-export const COMMUNITIES = [
+export const GROUPS = [
   { name: "Founders Club BLR", members: "4.2k", tag: "Startups", desc: "Weekly mixers, demo nights & warm intros for India's builders.", c1: "#ff6b4a", c2: "#ff4d8d" },
   { name: "Design Guild", members: "8.9k", tag: "Design", desc: "Critiques, portfolio nights and a directory of working designers.", c1: "#6d5efc", c2: "#2a7fff" },
   { name: "Indie Hackers", members: "2.1k", tag: "Product", desc: "Ship-in-public threads and accountability pods that actually meet.", c1: "#10b981", c2: "#22d3ee" },

@@ -3,6 +3,7 @@ import { GroupService } from '../services/GroupService';
 import { InvitationService } from '../services/InvitationService';
 import { GroupNotificationService } from '../services/GroupNotificationService';
 import { notificationService } from '../services/NotificationService';
+import { invalidateUserCache } from './dashboardRoutes';
 import prisma from '../config/prisma';
 
 
@@ -311,6 +312,9 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 }
             }
 
+            // Invalidate dashboard cache so new member sees group events immediately
+            if (res.state === 'active') invalidateUserCache(request.user.id);
+
             if (res.state === 'pending') {
                 const groupEntity = await prisma.entities.findUnique({
                     where: { id },
@@ -456,6 +460,9 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 } catch (jsonErr) {}
             }
 
+            // Invalidate dashboard cache for the newly approved user
+            invalidateUserCache(memberId);
+
             GroupService.getGroupDetails(id, request.user)
                 .then(gDetails => {
                     if (gDetails && gDetails.group) {
@@ -552,6 +559,8 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
             const { id, memberId } = request.params as any;
             await GroupService.removeMember(id, memberId, request.user);
+            // Invalidate removed member's dashboard cache
+            invalidateUserCache(memberId);
             if ((fastify as any).io) {
                 (fastify as any).io.of('/groups').to(`group_${id}`).emit('dashboard_updated', { action: 'remove_member' });
             }
@@ -570,6 +579,8 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
             const { id } = request.params as any;
             await GroupService.leaveGroup(id, request.user.id);
+            // Invalidate dashboard cache — group events should disappear immediately
+            invalidateUserCache(request.user.id);
             if ((fastify as any).io) {
                 (fastify as any).io.of('/groups').to(`group_${id}`).emit('dashboard_updated', { action: 'leave_member', userId: request.user.id });
             }
@@ -588,6 +599,8 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
             const { id } = request.params as any;
             await GroupService.cancelJoinRequest(id, request.user.id);
+            // Invalidate dashboard cache (was pending member, now no membership)
+            invalidateUserCache(request.user.id);
             if ((fastify as any).io) {
                 (fastify as any).io.of('/groups').to(`group_${id}`).emit('dashboard_updated', { action: 'cancel_join_request', userId: request.user.id });
             }

@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState } from 'react';
 import { PEOPLE } from './components';
-import { COMMUNITIES, EVENTS, I, Reveal, lerp, range, useScrub } from './landing-core';
+import { GROUPS, EVENTS, I, Reveal, lerp, range, useScrub } from './landing-core';
 import { AUTH, AvaRow } from './landing-hero';
 
 /* ============================================================
@@ -18,7 +18,7 @@ export const COMM_LAYOUT = [
   { fx: 215, fy: -34, rot: 3 },
   { fx: 430, fy: 36, rot: 7 },
 ];
-export function Communities() {
+export function Groups() {
   const stageRef = useScrub((p, r, vh, el) => {
     const sp = easeOutCubic(range(p, 0.1, 0.52));
     const cards = el.querySelectorAll(".comm-card");
@@ -34,16 +34,16 @@ export function Communities() {
     });
   });
   return (
-    <section className="section" id="communities">
+    <section className="section" id="groups">
       <div className="sec-glow" style={{ width: 600, height: 600, background: "var(--accent-1)", top: "10%", left: "-10%", opacity: 0.18 }} />
       <div className="wrap center" style={{ position: "relative", zIndex: 2 }}>
-        <Reveal y={16}><span className="eyebrow-pill"><span className="grad-dot" />Communities</span></Reveal>
-        <Reveal y={20} delay={80}><h2 className="h-section" style={{ marginTop: 20 }}>Spaces where people<br /><span className="glow-text">actually belong.</span></h2></Reveal>
-        <Reveal y={20} delay={160}><p className="sub-section">Start a community in minutes. Give it a home with members, events, discussions and a feed that keeps everyone in the loop.</p></Reveal>
+        <Reveal y={16}><span className="eyebrow-pill"><span className="grad-dot" />Groups</span></Reveal>
+        <Reveal y={20} delay={80}><h2 className="h-section" style={{ marginTop: 20 }}>Spaces where people<br /><span className="glow-text">actually connect.</span></h2></Reveal>
+        <Reveal y={20} delay={160}><p className="sub-section">Start a group in minutes. Give it a home with members, events, discussions and a feed that keeps everyone in the loop.</p></Reveal>
       </div>
       <div className="wrap">
         <div className="comm-stage" ref={stageRef}>
-          {COMMUNITIES.map((c, i) => {
+          {GROUPS.map((c, i) => {
             const L = COMM_LAYOUT[i];
             return (
               <div key={c.name} className="comm-card glass-card"
@@ -105,7 +105,7 @@ export function Events() {
             <Reveal y={16}><span className="eyebrow-pill"><span className="grad-dot" />Events</span></Reveal>
             <Reveal y={20} delay={80}><h2 className="h-section" style={{ marginTop: 20 }}>Discover what's<br /><span className="glow-text">happening near you.</span></h2></Reveal>
           </div>
-          <Reveal y={20} delay={120}><p className="sub-section" style={{ marginTop: 0 }}>From rooftop sessions to demo days — browse, RSVP and show up. Every event lives inside the community that hosts it.</p></Reveal>
+          <Reveal y={20} delay={120}><p className="sub-section" style={{ marginTop: 0 }}>From rooftop sessions to demo days — browse, RSVP and show up. Every event lives inside the group that hosts it.</p></Reveal>
         </div>
       </div>
       <div style={{ marginTop: 48, position: "relative", zIndex: 2, WebkitMaskImage: "linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent)", maskImage: "linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent)" }}>

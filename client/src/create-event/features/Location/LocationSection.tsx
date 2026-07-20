@@ -1,0 +1,189 @@
+// @ts-nocheck
+import React, { useEffect, useState } from 'react';
+import { I } from '../../../home-icons';
+
+function detectProvider(url: string): 'zoom' | 'google' | null {
+  if (!url) return null;
+  if (url.includes('zoom.us')) return 'zoom';
+  if (url.includes('meet.google.com')) return 'google';
+  return null;
+}
+
+function MeetingLinkModal({
+  provider,
+  initialUrl,
+  onClose,
+  onSave,
+}: { provider: 'zoom' | 'google'; initialUrl: string; onClose: () => void; onSave: (url: string) => void }) {
+  const [url, setUrl] = useState(initialUrl);
+  const isGoogle = provider === 'google';
+  const icon = isGoogle ? '📹' : '🎥';
+  const name = isGoogle ? 'Google Meet' : 'Zoom';
+  const placeholder = isGoogle ? 'https://meet.google.com/xxx-xxxx-xxx' : 'https://zoom.us/j/xxxxxxxxxx';
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}>
+      <div style={{ background: 'var(--surface)', width: 400, borderRadius: '20px', padding: 28, boxShadow: 'var(--sh-xl)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+          <span style={{ fontSize: 28 }}>{icon}</span>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--ink)' }}>Add {name} Link</h3>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--ink-3)' }}>Paste your meeting link below</p>
+          </div>
+        </div>
+        <input className="cinput" type="text" placeholder={placeholder} value={url} onChange={e => setUrl(e.target.value)}
+          style={{ width: '100%', background: 'var(--field)', border: '1px solid var(--border)', marginBottom: 16 }} />
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button type="button" className="hbtn hbtn--ghost" style={{ flex: 1 }} onClick={onClose}>Cancel</button>
+          <button type="button" className="hbtn hbtn--primary" style={{ flex: 1 }} onClick={() => { if (url.trim()) onSave(url.trim()); }}>Save Link</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MeetingPreviewCard({ url, onEdit, onRemove }: { url: string; onEdit: () => void; onRemove: () => void }) {
+  const provider = detectProvider(url);
+  const icon = provider === 'google' ? '📹' : provider === 'zoom' ? '🎥' : '🔗';
+  const name = provider === 'google' ? 'Google Meet' : provider === 'zoom' ? 'Zoom Meeting' : 'Virtual Link';
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--field)', border: '1px solid var(--border)', borderRadius: 12, marginTop: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+        <span style={{ fontSize: 20 }}>{icon}</span>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>{name}</div>
+          <div style={{ fontSize: 11, color: 'var(--ink-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>{url}</div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button type="button" onClick={onEdit} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--accent-2)', fontSize: 12, fontWeight: 600 }}>Edit</button>
+        <button type="button" onClick={onRemove} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#e5484d', fontSize: 12, fontWeight: 600 }}>Remove</button>
+      </div>
+    </div>
+  );
+}
+
+export function LocationSection({
+  venue,
+  setVenue,
+  locType,
+  setLocType,
+  eventId,
+  onEventCreated,
+  existingVirtualMeeting,
+  onProviderSwitch,
+  offlineEntryType,
+  setOfflineEntryType,
+}: any) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [draft, setDraft] = useState(venue);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [activeModal, setActiveModal] = useState<'zoom' | 'google' | null>(null);
+  const [editingUrl, setEditingUrl] = useState<string | null>(null);
+  const apiBase = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:3000' : '';
+
+  useEffect(() => {
+    if (!draft || draft.length < 2 || draft.startsWith('http')) { setSearchResults([]); return; }
+    const timer = setTimeout(() => {
+      fetch(`${apiBase}/api/public/locations/search?q=${encodeURIComponent(draft)}`)
+        .then(r => r.json())
+        .then(res => { if (res.success) setSearchResults(res.data); });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [draft, apiBase]);
+
+  const commit = (value: string, type: string) => { setVenue(value); setLocType(type); setDraft(value); setIsOpen(false); };
+  const handleInput = (e: any) => { setDraft(e.target.value); setVenue(e.target.value); };
+
+  const displayTitle = venue || 'Add Event Location';
+  const displaySub = venue
+    ? locType === 'online'
+      ? `${detectProvider(venue) === 'google' ? 'Google Meet' : detectProvider(venue) === 'zoom' ? 'Zoom Meeting' : 'Virtual event'} - ${venue}`
+      : venue
+    : 'Offline location or virtual link';
+
+  return (
+    <div className="loc-sec-container">
+      {activeModal && (
+        <MeetingLinkModal
+          provider={activeModal}
+          initialUrl={editingUrl ?? ''}
+          onClose={() => { setActiveModal(null); setEditingUrl(null); }}
+          onSave={url => { commit(url, 'online'); setActiveModal(null); setEditingUrl(null); }}
+        />
+      )}
+
+      {/* Toggle header */}
+      <button type="button" onClick={() => setIsOpen(o => !o)} className="loc-sec-header">
+        <span className="loc-sec-icon-wrapper">
+          <I.pin style={{ width: 18, height: 18, color: 'var(--accent-2)' }} />
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: 'var(--ink)', lineHeight: '1.2' }}>{displayTitle}</p>
+          <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--ink-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displaySub}</p>
+        </div>
+        <span style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.15s', color: 'var(--ink-3)', display: 'flex', alignItems: 'center' }}><I.chevD /></span>
+      </button>
+
+      {venue && locType === 'online' && !isOpen && (
+        <MeetingPreviewCard url={venue} onEdit={() => { setEditingUrl(venue); setActiveModal(detectProvider(venue) === 'google' ? 'google' : 'zoom'); }} onRemove={() => commit('', 'physical')} />
+      )}
+
+      {/* Expanded panel */}
+      {isOpen && (
+        <div className="loc-sec-panel">
+          <div className="loc-sec-input-wrapper">
+            <input autoFocus type="text" value={draft} onChange={handleInput}
+              onKeyDown={e => { if (e.key === 'Enter' && draft.trim()) commit(draft.trim(), draft.startsWith('http') ? 'online' : 'physical'); if (e.key === 'Escape') setIsOpen(false); }}
+              placeholder="Enter location or virtual link..." className="cinput"
+              style={{ width: '100%', background: 'var(--field)', border: '1px solid var(--border)' }} />
+          </div>
+
+          {searchResults.length > 0 && (
+            <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', marginTop: 8, marginBottom: 16 }}>
+              {searchResults.map((loc, i) => (
+                <button key={i} type="button"
+                  onClick={() => { if (!loc.is_active) { alert(`The location '${loc.name}' is currently inactive and cannot be selected for events.`); return; } commit(loc.name, 'physical'); setSearchResults([]); }}
+                  className="loc-sec-btn"
+                  style={{ opacity: loc.is_active ? 1 : 0.5, cursor: loc.is_active ? 'pointer' : 'not-allowed', width: '100%', textAlign: 'left', background: 'var(--surface)', border: 'none', borderBottom: '1px solid var(--border)', padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                    <I.pin style={{ width: 15, height: 15, color: 'var(--ink-3)', marginTop: 2, flexShrink: 0 }} />
+                    <div className="loc-sec-btn-content">
+                      <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--ink)', lineHeight: '1.2' }}>
+                        {loc.name} {!loc.is_active && <span style={{ color: 'var(--red)', fontSize: '11px', marginLeft: 4 }}>(Inactive)</span>}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <hr style={{ border: 'none', borderTop: '1px solid var(--border-2)', margin: '8px 16px' }} />
+
+          <p className="loc-sec-label">Virtual Options</p>
+          <button type="button" onClick={() => setActiveModal('zoom')} className="loc-sec-btn" style={{ alignItems: 'center' }}>
+            <I.online style={{ width: 16, height: 16, color: 'var(--accent-1)', flexShrink: 0 }} />
+            <span style={{ fontSize: '13px', color: 'var(--ink)', flex: 1, textAlign: 'left' }}>Add Zoom Link</span>
+          </button>
+          <button type="button" onClick={() => setActiveModal('google')} className="loc-sec-btn" style={{ alignItems: 'center' }}>
+            <I.online style={{ width: 16, height: 16, color: 'var(--accent-2)', flexShrink: 0 }} />
+            <span style={{ fontSize: '13px', color: 'var(--ink)', flex: 1, textAlign: 'left' }}>Add Google Meet Link</span>
+          </button>
+
+          <div style={{ display: 'flex', gap: 8, padding: '12px 16px 16px', color: 'var(--ink-3)', fontSize: '12px' }}>
+            <span>💡</span>
+            <span>If you have a virtual event link, you can enter or paste it above. Press <b>Enter</b> to save.</span>
+          </div>
+        </div>
+      )}
+
+      {venue && locType === 'physical' && (
+        <div style={{ marginTop: 12, borderRadius: 'var(--r-md)', overflow: 'hidden', border: '1px solid var(--border)' }}>
+          <iframe width="100%" height="180" src={`https://maps.google.com/maps?q=${encodeURIComponent(venue)}&t=&z=14&ie=UTF8&iwloc=&output=embed`}
+            frameBorder="0" style={{ border: 0, display: 'block' }} allowFullScreen />
+        </div>
+      )}
+    </div>
+  );
+}

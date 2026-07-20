@@ -2,7 +2,7 @@
 import React from 'react';
 import { gradFor, initials } from './components';
 import { I, REDUCED, Reveal, clamp, lerp, range, useScrub, useTilt } from './landing-core';
-import { Communities, Events, easeOutCubic } from './landing-features';
+import { Groups, Events, easeOutCubic } from './landing-features';
 import { AUTH } from './landing-hero';
 
 /* ============================================================
@@ -62,11 +62,11 @@ export function Networking() {
           <div>
             <Reveal y={16}><span className="eyebrow-pill"><span className="grad-dot" />Networking</span></Reveal>
             <Reveal y={20} delay={80}><h2 className="h-section" style={{ marginTop: 20 }}>Meet the people<br /><span className="glow-text">worth knowing.</span></h2></Reveal>
-            <Reveal y={20} delay={140}><p className="sub-section">Samaagum maps the people around every community and event — so the right introduction is always one tap away.</p></Reveal>
+            <Reveal y={20} delay={140}><p className="sub-section">Samaagum maps the people around every group and event — so the right introduction is always one tap away.</p></Reveal>
             <div style={{ marginTop: 26, display: "flex", flexDirection: "column", gap: 14 }}>
               {[
                 ["Warm intros", "See who you have in common before you reach out."],
-                ["Shared rooms", "Discover the communities and events you both attend."],
+                ["Shared rooms", "Discover the groups and events you both attend."],
                 ["No cold DMs", "Connect through context, not spam."],
               ].map(([t, d], i) => (
                 <Reveal key={t} y={18} delay={180 + i * 70}>
@@ -102,7 +102,7 @@ export function Profiles() {
           <div>
             <Reveal y={16}><span className="eyebrow-pill"><span className="grad-dot" />Rich public profiles</span></Reveal>
             <Reveal y={20} delay={80}><h2 className="h-section" style={{ marginTop: 20 }}>A profile that<br /><span className="glow-text">opens doors.</span></h2></Reveal>
-            <Reveal y={20} delay={140}><p className="sub-section">More than a headshot. Show the communities you lead, the events you've hosted, what you're into and how to reach you — all in one beautiful, verifiable page.</p></Reveal>
+            <Reveal y={20} delay={140}><p className="sub-section">More than a headshot. Show the groups you lead, the events you've hosted, what you're into and how to reach you — all in one beautiful, verifiable page.</p></Reveal>
             <Reveal y={20} delay={210}>
               <div style={{ marginTop: 28, display: "flex", gap: 12, flexWrap: "wrap" }}>
                 <a href={AUTH} className="btn btn-primary">Claim your profile {I.arrow()}</a>
@@ -125,7 +125,7 @@ export function Profiles() {
                 <div className="pc-name">Aanya Rao <span className="pc-verify">{I.verify({ width: 19, height: 19, style: { color: "var(--accent-2)" } })}</span></div>
                 <div className="pc-role">Founder · Design Guild &amp; Founders Club · Bengaluru</div>
                 <div className="pc-stats">
-                  <div className="pc-stat"><div className="n">3</div><div className="l">Communities</div></div>
+                  <div className="pc-stat"><div className="n">3</div><div className="l">Groups</div></div>
                   <div className="pc-stat"><div className="n">28</div><div className="l">Events hosted</div></div>
                   <div className="pc-stat"><div className="n">1.2k</div><div className="l">Connections</div></div>
                 </div>
