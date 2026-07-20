@@ -746,7 +746,7 @@ export function HomeFeed({ st, go }: any) {
         {/* Suggested connections */}
         {token && (
           <div className="section">
-            <SectionBar title="People you may know" onMore={() => go("messages")} moreLabel="View all" />
+            <SectionBar title="People you may know" />
             {sections.people.loading ? (
               <div className="people-rail" style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 8 }}>
                 {[1, 2, 3, 4].map(idx => <SkeletonCard key={idx} type="person" />)}
@@ -771,6 +771,7 @@ export function HomeFeed({ st, go }: any) {
                       p={mapped}
                       connected={localConnected.has(p.id) || connected.has(p.name)}
                       onConnect={() => handleConnectPerson(p.id, p.name)}
+                      onNavigate={(id) => go("public-profile", { id, displayName: p.name || p.display_name, profilePhoto: p.photo })}
                     />
                   );
                 })}
