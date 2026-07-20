@@ -201,7 +201,7 @@ export function EventSidebar({
             const picture = typeof a === 'object' ? a.picture : undefined;
             return (
               <div
-                key={userId || i}
+                key={`${userId || 'u'}-${i}`}
                 className="att"
                 style={{ cursor: userId ? "pointer" : "default" }}
                 onClick={() => userId && go("profile", { id: userId })}

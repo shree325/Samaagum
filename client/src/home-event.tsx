@@ -141,6 +141,7 @@ function EventDetail({ ev, st, go }) {
             isFull: t.isFull,
             capacity: t.capacity || null,
             remaining: t.remaining !== undefined ? t.remaining : null,
+            maxPerBooking: t.max_per_booking || null,
             desc: t.description || "",
             salesEndAt: t.sales_end_at || t.salesEndAt || null
         };
@@ -415,24 +416,69 @@ function EventDetail({ ev, st, go }) {
 
             {/* Ticket sidebar */}
             <div className="ev-aside">
-              <div className="ticket-box">
+              <div className="ticket-box" style={{
+                  position: 'relative',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 22,
+                  padding: '28px 24px 24px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  boxShadow: '0 2px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04)',
+              }}>
+                {/* Ticket Icon Badge */}
+                <div style={{
+                  width: 52, height: 52, borderRadius: '50%',
+                  background: 'linear-gradient(135deg, rgba(168,85,247,0.1), rgba(99,102,241,0.1))',
+                  border: '1px solid rgba(168,85,247,0.2)',
+                  boxShadow: '0 4px 12px rgba(168,85,247,0.12)',
+                  display: 'flex', justifyContent: 'center', alignItems: 'center',
+                  marginBottom: 18,
+                }}>
+                  <I.ticket style={{ width: 22, height: 22, color: '#a855f7' }} />
+                </div>
+
+                {/* Heading */}
+                <h2 style={{
+                  color: 'var(--ink)',
+                  fontSize: 22,
+                  fontWeight: 700,
+                  margin: '0 0 6px 0',
+                  textAlign: 'center',
+                  letterSpacing: '-0.3px',
+                  lineHeight: 1.2,
+                }}>Ready to Join?</h2>
+
+                {/* Subtitle */}
+                <p style={{
+                  color: 'var(--ink-3)',
+                  fontSize: 13.5,
+                  margin: '0 0 24px 0',
+                  textAlign: 'center',
+                  lineHeight: 1.5,
+                  maxWidth: 220,
+                }}>Book your tickets securely in just a few clicks.</p>
+
+                {/* Ticket type selector & quantity */}
+                <div style={{ width: '100%' }}>
                 {e.type !== "Free" && (
-                  <div style={{ marginBottom: 16, marginTop: 12 }}>
+                  <div style={{ marginBottom: 14 }}>
                     {!tier ? (
                       <button
                         className="hbtn hbtn--soft hbtn--block"
                         onClick={() => setShowTicketPopup(true)}
-                        style={{ justifyContent: 'center', fontWeight: 600, height: 46 }}
+                        style={{ justifyContent: 'center', fontWeight: 600, height: 44, borderRadius: 10 }}
                       >
                         🎟 Select Ticket
                       </button>
                     ) : (
-                      <div 
+                      <div
                         onClick={() => setShowTicketPopup(true)}
                         style={{
-                          background: 'var(--surface-2)', padding: '12px 14px', borderRadius: 8,
+                          background: 'var(--surface-2)', padding: '11px 14px', borderRadius: 10,
                           border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between',
-                          alignItems: 'center', cursor: 'pointer', transition: 'border-color 0.2s', height: 46
+                          alignItems: 'center', cursor: 'pointer', transition: 'border-color 0.2s',
                         }}
                         onMouseEnter={ev => ev.currentTarget.style.borderColor = 'var(--accent)'}
                         onMouseLeave={ev => ev.currentTarget.style.borderColor = 'var(--border)'}
@@ -446,54 +492,87 @@ function EventDetail({ ev, st, go }) {
                     )}
                   </div>
                 )}
-                <div className="ticket-foot" style={e.type === "Free" ? { paddingTop: 16 } : {}}>
+                <div className="ticket-foot" style={{ padding: 0 }}>
                   {e.type !== "Free" && (
-                    <div className="qty">
+                    <div className="qty" style={{ marginBottom: 16 }}>
                       <span className="lbl">Quantity</span>
                       <div className="stepper">
                         <button onClick={() => setQty(q => Math.max(1, q - 1))}>–</button>
                         <span className="n">{qty}</span>
-                        <button onClick={() => setQty(q => Math.min(6, q + 1))}>+</button>
+                        <button onClick={() => setQty(q => Math.min(sel?.maxPerBooking || 10, q + 1))}>+</button>
                       </div>
                     </div>
                   )}
-                   {localStatus === 'completed' && (
-                <div style={{ padding: 12, background: "rgba(34, 197, 94, 0.1)", color: "var(--accent-1)", border: "1px solid rgba(34, 197, 94, 0.2)", borderRadius: 8, marginTop: 16, textAlign: "center", fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                  <I.cal /> EVENT COMPLETED
-                </div>
-              )}
-              {localStatus !== 'completed' && (
-                isReg || e.bookingStatus === 'confirmed' || e.bookingStatus === 'pending_payment' ? (
-                  <button className="hbtn hbtn--ghost hbtn--block" style={{ color: "var(--accent-2)" }} onClick={() => go("events")}>
-                    <I.check />You're registered (View Ticket)
-                  </button>
-                ) : e.bookingStatus === 'pending_approval' ? (
-                  <button className="hbtn hbtn--soft hbtn--block" disabled>
-                    Pending Approval
-                  </button>
-                ) : isSoldOut ? (
-                  isWaitlisted ? (
-                    <button className="hbtn hbtn--soft hbtn--block" style={{ color: "var(--accent-2)" }} onClick={() => go("waitlist", e)}>
-                      <I.users /> View Waitlist Status
-                    </button>
-                  ) : (
-                    <button className="hbtn hbtn--primary hbtn--block" onClick={() => { st.toggleWaitlist(e.id); go("waitlist", e); }}>
-                      Join Waitlist
-                    </button>
-                  )
-                ) : (
-                  <button 
-                    className="hbtn hbtn--primary hbtn--block" 
-                    disabled={e.type !== "Free" && !tier}
-                    onClick={() => { register(e.id, false, { ticketTypeId: tier, qty, ticketName: sel?.n }); go("events"); }}
-                  >
-                    {e.type === "Free" ? "Request to join" : `Get ${qty > 1 ? qty + " tickets" : "ticket"}`}
-                  </button>
-                )
-              )}
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center", marginTop: 11, fontSize: 12, color: "var(--ink-3)" }}>
-                    <I.check style={{ width: 13, height: 13, color: "#1f9d57" }} /> {isSoldOut ? "Waitlist claim window: 15 mins" : e.type === "Free" ? "Approval-based · free" : "Secure checkout · instant ticket"}
+                  {localStatus === 'completed' && (
+                    <div style={{ padding: 12, background: "rgba(34,197,94,0.1)", color: "var(--accent-1)", border: "1px solid rgba(34,197,94,0.2)", borderRadius: 10, textAlign: "center", fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                      <I.cal /> EVENT COMPLETED
+                    </div>
+                  )}
+                  {localStatus !== 'completed' && (
+                    isReg || e.bookingStatus === 'confirmed' || e.bookingStatus === 'pending_payment' ? (
+                      <button className="hbtn hbtn--ghost hbtn--block" style={{ color: "var(--accent-2)", borderRadius: 14 }} onClick={() => go("events")}>
+                        <I.check />You're registered (View Ticket)
+                      </button>
+                    ) : e.bookingStatus === 'pending_approval' ? (
+                      <button className="hbtn hbtn--soft hbtn--block" disabled style={{ borderRadius: 14 }}>
+                        Pending Approval
+                      </button>
+                    ) : isSoldOut ? (
+                      isWaitlisted ? (
+                        <button className="hbtn hbtn--soft hbtn--block" style={{ color: "var(--accent-2)", borderRadius: 14 }} onClick={() => go("waitlist", e)}>
+                          <I.users /> View Waitlist Status
+                        </button>
+                      ) : (
+                        <button className="hbtn hbtn--primary hbtn--block" style={{ borderRadius: 14 }} onClick={() => { st.toggleWaitlist(e.id); go("waitlist", e); }}>
+                          Join Waitlist
+                        </button>
+                      )
+                    ) : (
+                      <button
+                        disabled={e.type !== "Free" && !tier}
+                        onClick={() => { register(e.id, false, { ticketTypeId: tier, qty, ticketName: sel?.n }); go("events"); }}
+                        style={{
+                          width: '100%',
+                          background: (e.type !== "Free" && !tier) ? 'var(--surface-3)' : 'linear-gradient(90deg, #FF7A6B 0%, #D95CF5 50%, #6B63FF 100%)',
+                          border: 'none',
+                          borderRadius: 16,
+                          height: 54,
+                          fontSize: 15.5,
+                          fontWeight: 600,
+                          color: '#fff',
+                          cursor: (e.type !== "Free" && !tier) ? 'not-allowed' : 'pointer',
+                          opacity: (e.type !== "Free" && !tier) ? 0.5 : 1,
+                          boxShadow: (e.type !== "Free" && !tier) ? 'none' : '0 4px 20px rgba(169, 92, 245, 0.35)',
+                          transition: 'transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 8,
+                          letterSpacing: '-0.1px',
+                        }}
+                        onMouseEnter={ev => {
+                          if (e.type !== "Free" && !tier) return;
+                          ev.currentTarget.style.transform = 'translateY(-2px)';
+                          ev.currentTarget.style.boxShadow = '0 8px 28px rgba(169, 92, 245, 0.45)';
+                        }}
+                        onMouseLeave={ev => {
+                          if (e.type !== "Free" && !tier) return;
+                          ev.currentTarget.style.transform = 'translateY(0)';
+                          ev.currentTarget.style.boxShadow = '0 4px 20px rgba(169, 92, 245, 0.35)';
+                        }}
+                      >
+                        {e.type === "Free" ? "Request to join" : `Get ${qty > 1 ? qty + " tickets" : "ticket"}`}
+                        {e.type !== "Free" && tier && (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                        )}
+                      </button>
+                    )
+                  )}
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, justifyContent: "center", marginTop: 14, fontSize: 11.5, color: "var(--ink-3)" }}>
+                    <I.check style={{ width: 12, height: 12, color: "var(--accent-1)" }} />
+                    {isSoldOut ? "Waitlist claim window: 15 mins" : e.type === "Free" ? "Approval-based · free" : "Secure checkout · instant ticket"}
                   </div>
+                </div>
                 </div>
               </div>
 
@@ -527,6 +606,7 @@ function EventDetail({ ev, st, go }) {
                           onClick={() => {
                             if (!t.isFull) {
                               setTier(t.id);
+                              setQty(q => t.maxPerBooking ? Math.min(q, t.maxPerBooking) : q);
                               setShowTicketPopup(false);
                             }
                           }}

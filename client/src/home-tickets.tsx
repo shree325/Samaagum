@@ -948,7 +948,7 @@ export function TicketDetail({ tkt, st, go }) {
     <div className="scroll">
       <div className="flow view-enter" style={{ padding: "26px 24px 80px" }}>
         <div className="flow-head" style={{ marginBottom: 20 }}>
-          <button className="back" onClick={() => go("events")}><I.arrowL /></button>
+          <button className="back" onClick={() => go("tickets")}><I.arrowL /></button>
           <div>
             <div className="flow-title">Ticket</div>
             <div className="flow-sub">#{t.ticketId}</div>
@@ -981,6 +981,7 @@ export function TicketDetail({ tkt, st, go }) {
             )}
 
             <div className="qt-rows">
+              {(t.bookingId || (t.id && t.id.startsWith("BL-") ? t.id : null)) && <div className="qt-row"><span className="k">Booking ID</span><span className="v" style={{ fontFamily: "monospace", fontSize: 12 }}>{(t.bookingId || t.id).startsWith("BL-") ? (t.bookingId || t.id) : `BKG-${(t.bookingId || t.id).split('-')[0].toUpperCase()}`}</span></div>}
               {t.ticketId && <div className="qt-row"><span className="k">Ticket ID</span><span className="v" style={{ fontFamily: "monospace", fontSize: 12 }}>{t.ticketId}</span></div>}
               {t.allAttendees?.length <= 1 && <div className="qt-row"><span className="k">Attendee</span><span className="v">{t.attendee}</span></div>}
               <div className="qt-row"><span className="k">Date</span><span className="v">{t.date} · {t.time}</span></div>
@@ -1359,7 +1360,7 @@ export function VerifyTicketPanel({ eventId, onCheckedIn }) {
             if (code && code.data) {
               setResult(null);
               setScanning(false);
-              setTokenInput(code.data);
+              setTokenInput('');
               lookup(code.data);
               return;
             }

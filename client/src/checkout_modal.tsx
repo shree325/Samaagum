@@ -5,9 +5,8 @@ export function CheckoutModal({
     isOpen, 
     onClose, 
     liveEvent, 
-    qty, 
+    expandedTickets, 
     st, 
-    sel, 
     onConfirm
 }: any) {
     const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
@@ -15,6 +14,8 @@ export function CheckoutModal({
 
     const [checkoutStep, setCheckoutStep] = useState<"attendee_details" | "review">("attendee_details");
     const [attendees, setAttendees] = useState<any[]>([]);
+    
+    const qty = expandedTickets ? expandedTickets.length : 1;
 
     useEffect(() => {
         if (!isOpen) return;
@@ -106,11 +107,24 @@ export function CheckoutModal({
                 borderRadius: 16, width: '100%', maxWidth: 500, display: 'flex',
                 flexDirection: 'column', maxHeight: '85vh', boxShadow: 'var(--sh-lg)'
             }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--border-2)' }}>
-                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
-                        {checkoutStep === "attendee_details" && "Attendee Details"}
-                        {checkoutStep === "review" && "Review Order"}
-                    </h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '16px 20px', borderBottom: '1px solid var(--border-2)' }}>
+                    <div>
+                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, marginBottom: 8 }}>
+                            {checkoutStep === "attendee_details" && "Checkout"}
+                            {checkoutStep === "review" && "Review Order"}
+                        </h3>
+                        {expandedTickets && expandedTickets.length > 0 && (
+                            <div style={{ fontSize: 13, color: 'var(--ink-2)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                <div style={{ fontWeight: 600 }}>{qty} Ticket{qty > 1 ? 's' : ''}</div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                                    {Array.from(new Set(expandedTickets.map((t: any) => t.ticketName))).map(name => {
+                                        const count = expandedTickets.filter((t: any) => t.ticketName === name).length;
+                                        return <span key={name as string}>• {name as string} &times;{count}</span>;
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                    </div>
                     <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--ink-3)', fontSize: 20, cursor: 'pointer' }}>×</button>
                 </div>
 
@@ -121,7 +135,7 @@ export function CheckoutModal({
                             {attendees.map((att, index) => (
                                 <div key={index} style={{ border: '1px solid var(--border-2)', borderRadius: 12, padding: 16, background: 'var(--surface)' }}>
                                     <h4 style={{ margin: '0 0 16px 0', fontSize: 14, fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>
-                                        Attendee {index + 1} Details
+                                        Attendee {index + 1} {expandedTickets && expandedTickets[index] ? `(${expandedTickets[index].ticketName})` : 'Details'}
                                         {att.status === 'member' && <span style={{ fontSize: 11, color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '2px 8px', borderRadius: 12 }}>✓ Samaagum Member</span>}
                                         {att.status === 'guest' && <span style={{ fontSize: 11, color: '#6366f1', background: 'rgba(99, 102, 241, 0.1)', padding: '2px 8px', borderRadius: 12 }}>○ Guest Attendee</span>}
                                     </h4>
@@ -181,8 +195,11 @@ export function CheckoutModal({
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: 'var(--surface-2)', borderRadius: 12, fontWeight: 700 }}>
                                 <span>Total Price</span>
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-                                    <span style={{ fontSize: 16 }}>{liveEvent.type === "Free" ? "Free" : (sel?.priceVal ? `₹${((sel.priceVal / 100) * qty).toFixed(0)}` : sel?.p)}</span>
-                                    {liveEvent.type !== "Free" && <span style={{ fontSize: 12, color: 'var(--ink-3)', fontWeight: 500 }}>{sel?.n} x {qty}</span>}
+                                    <span style={{ fontSize: 16 }}>
+                                        {liveEvent.type === "Free" 
+                                            ? "Free" 
+                                            : `₹${((expandedTickets || []).reduce((acc: number, t: any) => acc + (t.price || 0), 0) / 100).toFixed(0)}`}
+                                    </span>
                                 </div>
                             </div>
                         </div>

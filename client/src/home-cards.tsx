@@ -136,7 +136,43 @@ export const FeatureCard = React.memo(function FeatureCard({ ev, onOpen, wishlis
             const isSoldOut = ev.going >= (ev.cap || 9999) || ev.id === "ev-feat";
             const hasWaitlist = ev.waitlist !== undefined ? ev.waitlist : false;
             if (isSoldOut && !hasWaitlist) return <button className="hbtn hbtn--soft" disabled>Sold Out</button>;
-            return <button className="hbtn hbtn--primary" onClick={(e)=>{ e.stopPropagation(); onOpen(ev); }}>Get tickets · {ev.price || 'Free'}</button>;
+            return <button 
+              onClick={(e)=>{ e.stopPropagation(); onOpen(ev); }}
+              style={{
+                backgroundColor: '#ffffff',
+                border: 'none',
+                borderRadius: 9999,
+                padding: '16px 24px',
+                fontSize: 15,
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 8px 16px rgba(0, 0, 0, 0.1)',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1
+              }}
+              onMouseEnter={ev => {
+                ev.currentTarget.style.transform = 'translateY(-2px)';
+                ev.currentTarget.style.boxShadow = '0 12px 24px rgba(0, 0, 0, 0.15)';
+              }}
+              onMouseLeave={ev => {
+                ev.currentTarget.style.transform = 'translateY(0)';
+                ev.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.1)';
+              }}
+            >
+              <span style={{
+                background: 'linear-gradient(to right, #db2777, #7c3aed)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+                color: 'transparent',
+                display: 'inline-block'
+              }}>
+                Get tickets · {ev.price || 'Free'}
+              </span>
+            </button>;
           })()}
           <div className="att"><div className="going"><div className="stack" style={{ display:"flex" }}>
             {["Kabir A","Dev K","Riya T","Sam K"].map((n,i)=><Avatar key={i} name={n} size={26} style={{ marginLeft: i? -9:0, border:"2px solid var(--surface)" }}/>)}
