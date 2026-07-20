@@ -113,6 +113,7 @@ export function JoinEventPage({ ev, st, go }) {
     );
     const isClosed = regStatus === "CLOSED";
     const isScheduled = regStatus === "SCHEDULED";
+    const isEnded = liveEvent.ends_at ? new Date(liveEvent.ends_at) < new Date() : (liveEvent.starts_at ? new Date(liveEvent.starts_at) < new Date() : false);
 
     // Always fetch live registration status from server so the button state
     // reflects reality even if the card navigation data was stale.
@@ -672,10 +673,19 @@ export function JoinEventPage({ ev, st, go }) {
                                                 <button className="hbtn hbtn--soft hbtn--block" disabled style={{ borderRadius: 14 }}>
                                                     Pending Approval
                                                 </button>
+                                            ) : liveEvent.bookingStatus === 'pending_payment' ? (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                                    <div style={{ padding: '12px 14px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 10, fontSize: 13, color: '#f59e0b', lineHeight: 1.5 }}>
+                                                        <strong>Awaiting Payment Verification</strong> — Your request has been submitted. The host will review and confirm once payment is received.
+                                                    </div>
+                                                    <button className="hbtn hbtn--soft hbtn--block" disabled style={{ borderRadius: 14, opacity: 0.6 }}>
+                                                        Pending Approval
+                                                    </button>
+                                                </div>
                                             ) : (
                                                 <>
-                                                    {/* Cash + Approval: Show payment instructions & Transaction ID input upfront */}
-                                                    {liveEvent.cash_enabled && liveEvent.approval_required && (
+                                                    {/* Cash Payment: Show payment instructions & Transaction ID input upfront */}
+                                                    {liveEvent.cash_enabled && (
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
                                                             <div style={{ padding: '10px 12px', background: 'rgba(245,158,11,0.1)', color: '#f59e0b', borderRadius: 8, fontSize: 12, lineHeight: 1.5 }}>
                                                                 <strong>Cash Payment Required</strong> – Please check the event description for payment details and complete the payment before submitting.
@@ -739,52 +749,74 @@ export function JoinEventPage({ ev, st, go }) {
                                                             })()}
                                                         </div>
                                                     )}
-                                                    <button
-                                                        style={{
-                                                            width: '100%',
-                                                            background: 'linear-gradient(90deg, #FF7A6B 0%, #D95CF5 50%, #6B63FF 100%)',
-                                                            border: 'none',
-                                                            borderRadius: 16,
-                                                            height: 54,
-                                                            fontSize: 15.5,
-                                                            fontWeight: 600,
-                                                            color: '#fff',
-                                                            cursor: 'pointer',
-                                                            boxShadow: '0 4px 20px rgba(169, 92, 245, 0.35)',
-                                                            transition: 'transform 0.18s ease, box-shadow 0.18s ease',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            gap: 8,
-                                                            letterSpacing: '-0.1px',
-                                                        }}
-                                                        onMouseEnter={e => {
-                                                            e.currentTarget.style.transform = 'translateY(-2px)';
-                                                            e.currentTarget.style.boxShadow = '0 8px 28px rgba(169, 92, 245, 0.45)';
-                                                        }}
-                                                        onMouseLeave={e => {
-                                                            e.currentTarget.style.transform = 'translateY(0)';
-                                                            e.currentTarget.style.boxShadow = '0 4px 20px rgba(169, 92, 245, 0.35)';
-                                                        }}
-                                                        onClick={() => {
-                                                            if (liveEvent.type === "Free") {
-                                                                if (tiers.length > 0) {
-                                                                    const t = tiers[0];
-                                                                    setSelectedTickets({
-                                                                        [t.id]: { ticketId: t.id, ticketName: t.n, price: 0, qty: 1, maxQty: 1, remaining: 999 }
-                                                                    });
+                                                    {isEnded ? (
+                                                        <button
+                                                            style={{
+                                                                width: '100%',
+                                                                background: 'var(--surface-3)',
+                                                                border: 'none',
+                                                                borderRadius: 16,
+                                                                height: 54,
+                                                                fontSize: 15.5,
+                                                                fontWeight: 600,
+                                                                color: 'var(--ink-2)',
+                                                                cursor: 'not-allowed',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                            }}
+                                                            disabled
+                                                        >
+                                                            Event is ended
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            style={{
+                                                                width: '100%',
+                                                                background: 'linear-gradient(90deg, #FF7A6B 0%, #D95CF5 50%, #6B63FF 100%)',
+                                                                border: 'none',
+                                                                borderRadius: 16,
+                                                                height: 54,
+                                                                fontSize: 15.5,
+                                                                fontWeight: 600,
+                                                                color: '#fff',
+                                                                cursor: 'pointer',
+                                                                boxShadow: '0 4px 20px rgba(169, 92, 245, 0.35)',
+                                                                transition: 'transform 0.18s ease, box-shadow 0.18s ease',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                gap: 8,
+                                                                letterSpacing: '-0.1px',
+                                                            }}
+                                                            onMouseEnter={e => {
+                                                                e.currentTarget.style.transform = 'translateY(-2px)';
+                                                                e.currentTarget.style.boxShadow = '0 8px 28px rgba(169, 92, 245, 0.45)';
+                                                            }}
+                                                            onMouseLeave={e => {
+                                                                e.currentTarget.style.transform = 'translateY(0)';
+                                                                e.currentTarget.style.boxShadow = '0 4px 20px rgba(169, 92, 245, 0.35)';
+                                                            }}
+                                                            onClick={() => {
+                                                                if (liveEvent.type === "Free") {
+                                                                    if (tiers.length > 0) {
+                                                                        const t = tiers[0];
+                                                                        setSelectedTickets({
+                                                                            [t.id]: { ticketId: t.id, ticketName: t.n, price: 0, qty: 1, maxQty: 1, remaining: 999 }
+                                                                        });
+                                                                    }
+                                                                    setShowCheckoutModal(true);
+                                                                } else {
+                                                                    setShowTicketPopup(true);
                                                                 }
-                                                                setShowCheckoutModal(true);
-                                                            } else {
-                                                                setShowTicketPopup(true);
-                                                            }
-                                                        }}
-                                                    >
-                                                        {liveEvent.cash_enabled && liveEvent.approval_required
-                                                            ? (liveEvent.type === "Free" ? "Request to join" : 'Submit Payment Request')
-                                                            : (liveEvent.type === "Free" ? "Request to join" : "Get Tickets")}
-                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                                                    </button>
+                                                            }}
+                                                        >
+                                                            {liveEvent.cash_enabled
+                                                                ? (liveEvent.type === "Free" ? "Request to join" : 'Submit Payment Request')
+                                                                : (liveEvent.type === "Free" ? "Request to join" : "Get Tickets")}
+                                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                                        </button>
+                                                    )}
                                                     {(() => {
                                                         let settingsObj = liveEvent.settings || {};
                                                         if (typeof settingsObj === 'string') {

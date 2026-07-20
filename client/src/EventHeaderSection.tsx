@@ -86,7 +86,7 @@ export function EventHeaderSection({
                 {e.online ? "Online" : "In-person"}
               </span>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                🎫 {e.price}
+                🎫 {e.type || ((e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : (e.cash_enabled ? 'Cash' : 'Paid'))}
               </span>
               <span className="fchip on" style={{ pointerEvents: "none", padding: "4px 11px", fontSize: 12 }}>
                 {e.cat || "Event"}

@@ -167,22 +167,22 @@ export function MyTickets({ st, go }) {
       fetch(`${apiBase}/api/events/${id}/waitlist/status`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
-      .then(r => r.json())
-      .then(res => {
-        if (res.success && res.data) {
-          setWaitlistPositions(prev => ({
-            ...prev,
-            [id]: res.data
-          }));
-        }
-      })
-      .catch(() => {});
+        .then(r => r.json())
+        .then(res => {
+          if (res.success && res.data) {
+            setWaitlistPositions(prev => ({
+              ...prev,
+              [id]: res.data
+            }));
+          }
+        })
+        .catch(() => { });
     });
 
     if (window.io) {
       const socketUrl = apiBase ? `${apiBase}/groups` : "/groups";
       const socket = window.io(socketUrl, { transports: ['websocket'] });
-      
+
       waitlistIds.forEach(id => {
         socket.emit('join_event', id);
       });
@@ -190,13 +190,13 @@ export function MyTickets({ st, go }) {
       let userId = null;
       const token = localStorage.getItem('token');
       if (token) {
-          try {
-              const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-              userId = payload.id;
-          } catch (err) {}
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+          userId = payload.id;
+        } catch (err) { }
       }
       if (userId) {
-          socket.emit('join_user', userId);
+        socket.emit('join_user', userId);
       }
 
       socket.on('ticket_updated', () => {
@@ -337,7 +337,7 @@ export function MyTickets({ st, go }) {
   const createdListRaw = st.createdEvents || [];
   const createdPool = createdListRaw.map((e) => {
     const startsAt = e.starts_at ? new Date(e.starts_at) : null;
-    const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
     const month = startsAt ? months[startsAt.getMonth()] : "TBD";
     const day = startsAt ? startsAt.getDate().toString() : "TBD";
     const time = startsAt ? startsAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : "Time TBD";
@@ -396,9 +396,9 @@ export function MyTickets({ st, go }) {
   const usedTicketEvents = (st.myTickets || []).filter((t) => t.status === 'used');
   for (const t of usedTicketEvents) {
     const allProcessed = [...archivedList, ...pastList];
-    const alreadyIn = allProcessed.some((u) => 
-      (t.eventId && u.eventId === t.eventId) || 
-      (t.eventId && u.id === t.eventId) || 
+    const alreadyIn = allProcessed.some((u) =>
+      (t.eventId && u.eventId === t.eventId) ||
+      (t.eventId && u.id === t.eventId) ||
       (t.id && u.id === t.id) ||
       (t.ev && u.ev === t.ev)
     );
@@ -436,9 +436,9 @@ export function MyTickets({ st, go }) {
   }
   for (const t of (st.myTickets || []).filter((t) => t.status !== 'used' && t.status !== 'voided')) {
     const allProcessed = [...archivedList, ...pastList, ...pending, ...waitlistedEvents, ...upcoming];
-    const alreadyIn = allProcessed.some((u) => 
-      (t.eventId && u.eventId === t.eventId) || 
-      (t.eventId && u.id === t.eventId) || 
+    const alreadyIn = allProcessed.some((u) =>
+      (t.eventId && u.eventId === t.eventId) ||
+      (t.eventId && u.id === t.eventId) ||
       (t.id && u.id === t.id) ||
       (t.ev && u.ev === t.ev)
     );
@@ -569,35 +569,36 @@ export function MyTickets({ st, go }) {
             {waitlistedEvents.map(e => {
               const wPos = waitlistPositions[e.id];
               return (
-              <div key={e.id} className="tkt" onClick={() => go("waitlist", e)}>
-                <div className="tkt-cov" style={{ background: e.cover && (e.cover.startsWith("linear-gradient") || e.cover.startsWith("radial-gradient") || e.cover.startsWith("var(")) ? e.cover : `url(${e.cover}) center/cover no-repeat` }}>
-                  <Grain />
-                  <span className="pill" style={{ background: "rgba(0,0,0,0.32)", color: "#fff", backdropFilter: "blur(8px)" }}>{e.cat}</span>
-                  <span className="pill violet" style={{ background: "rgba(255,255,255,0.92)", color: "var(--accent-2)" }}><span className="pdot" style={{ background: "var(--accent-2)" }} />Waitlisted</span>
-                </div>
-                <span className="perf l" /><span className="perf r" />
-                <div className="tkt-body">
-                  <div className="tkt-ttl">{e.title || e.ev}</div>
-                  <div className="tkt-meta">
-                    <span><I.cal style={{ width: 14, height: 14 }} /> {e.date} · {e.time}</span>
-                    <span>{e.online ? <I.online style={{ width: 14, height: 14 }} /> : <I.pin style={{ width: 14, height: 14 }} />} {e.venue}</span>
+                <div key={e.id} className="tkt" onClick={() => go("waitlist", e)}>
+                  <div className="tkt-cov" style={{ background: e.cover && (e.cover.startsWith("linear-gradient") || e.cover.startsWith("radial-gradient") || e.cover.startsWith("var(")) ? e.cover : `url(${e.cover}) center/cover no-repeat` }}>
+                    <Grain />
+                    <span className="pill" style={{ background: "rgba(0,0,0,0.32)", color: "#fff", backdropFilter: "blur(8px)" }}>{e.cat}</span>
+                    <span className="pill violet" style={{ background: "rgba(255,255,255,0.92)", color: "var(--accent-2)" }}><span className="pdot" style={{ background: "var(--accent-2)" }} />Waitlisted</span>
                   </div>
-                  <div className="tkt-foot">
-                    <span className="tkt-id">#{e.id?.slice(0, 8)}</span>
-                    <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      {wPos && (
-                        <span style={{ fontSize: 12, fontWeight: 600, background: 'var(--surface-3)', padding: '2px 8px', borderRadius: 12, color: 'var(--text-2)' }}>
-                          Pos {wPos.position} / {wPos.totalWaiting}
+                  <span className="perf l" /><span className="perf r" />
+                  <div className="tkt-body">
+                    <div className="tkt-ttl">{e.title || e.ev}</div>
+                    <div className="tkt-meta">
+                      <span><I.cal style={{ width: 14, height: 14 }} /> {e.date} · {e.time}</span>
+                      <span>{e.online ? <I.online style={{ width: 14, height: 14 }} /> : <I.pin style={{ width: 14, height: 14 }} />} {e.venue}</span>
+                    </div>
+                    <div className="tkt-foot">
+                      <span className="tkt-id">#{e.id?.slice(0, 8)}</span>
+                      <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        {wPos && (
+                          <span style={{ fontSize: 12, fontWeight: 600, background: 'var(--surface-3)', padding: '2px 8px', borderRadius: 12, color: 'var(--text-2)' }}>
+                            Pos {wPos.position} / {wPos.totalWaiting}
+                          </span>
+                        )}
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-2)", display: "flex", alignItems: "center", gap: 4 }}>
+                          View Queue <I.arrowR style={{ width: 14, height: 14 }} />
                         </span>
-                      )}
-                      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-2)", display: "flex", alignItems: "center", gap: 4 }}>
-                        View Queue <I.arrowR style={{ width: 14, height: 14 }} />
                       </span>
-                    </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )})}
+              )
+            })}
           </div>
         ) : tab === "created" ? (
           <div className="wallet-grid">
@@ -662,37 +663,37 @@ export function MyTickets({ st, go }) {
               // date has already elapsed, computed above from starts_at).
               const isPast = t.status === "used" || tab === "past";
               return (
-              <div key={t.id} className={`tkt ${isPast ? "used" : ""}`} onClick={() => {
-                // If it is a normalized joined event, it already has the event fields, otherwise locate it in our local cache or joinedEvents
-                const evObj = t.starts_at ? t : ([FEATURED, ...EVENTS].find(e => e.title === t.ev || e.id === t.eventId) || st.joinedEvents?.find(je => je.id === t.eventId || je.title === t.ev));
-                if (evObj) {
-                  go("event", evObj);
-                } else {
-                  go("ticket", t);
-                }
-              }}>
-                <div className="tkt-cov" style={{ background: t.cover && (t.cover.startsWith("linear-gradient") || t.cover.startsWith("radial-gradient") || t.cover.startsWith("var(")) ? t.cover : `url(${t.cover}) center/cover no-repeat` }}>
-                  <Grain />
-                  <span className="pill" style={{ background: "rgba(0,0,0,0.32)", color: "#fff", backdropFilter: "blur(8px)" }}>{t.tier}</span>
-                  {isPast ? (
-                    <span className="pill gray">Attended</span>
-                  ) : (
-                    <span className="pill green" style={{ background: "rgba(255,255,255,0.92)" }}><span className="pdot" />Confirmed</span>
-                  )}
-                </div>
-                <span className="perf l" /><span className="perf r" />
-                <div className="tkt-body">
-                  <div className="tkt-ttl">{t.ev}</div>
-                  <div className="tkt-meta">
-                    <span><I.cal style={{ width: 14, height: 14 }} /> {t.date} · {t.time}</span>
-                    <span>{t.online ? <I.online style={{ width: 14, height: 14 }} /> : <I.pin style={{ width: 14, height: 14 }} />} {t.venue}</span>
+                <div key={t.id} className={`tkt ${isPast ? "used" : ""}`} onClick={() => {
+                  // If it is a normalized joined event, it already has the event fields, otherwise locate it in our local cache or joinedEvents
+                  const evObj = t.starts_at ? t : ([FEATURED, ...EVENTS].find(e => e.title === t.ev || e.id === t.eventId) || st.joinedEvents?.find(je => je.id === t.eventId || je.title === t.ev));
+                  if (evObj) {
+                    go("event", evObj);
+                  } else {
+                    go("ticket", t);
+                  }
+                }}>
+                  <div className="tkt-cov" style={{ background: t.cover && (t.cover.startsWith("linear-gradient") || t.cover.startsWith("radial-gradient") || t.cover.startsWith("var(")) ? t.cover : `url(${t.cover}) center/cover no-repeat` }}>
+                    <Grain />
+                    <span className="pill" style={{ background: "rgba(0,0,0,0.32)", color: "#fff", backdropFilter: "blur(8px)" }}>{t.tier}</span>
+                    {isPast ? (
+                      <span className="pill gray">Attended</span>
+                    ) : (
+                      <span className="pill green" style={{ background: "rgba(255,255,255,0.92)" }}><span className="pdot" />Confirmed</span>
+                    )}
                   </div>
-                  <div className="tkt-foot">
-                    <span className="tkt-id">#{t.ticketId}</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: t.paid === "Free" ? "#1f9d57" : "var(--ink)" }}>{t.paid}</span>
+                  <span className="perf l" /><span className="perf r" />
+                  <div className="tkt-body">
+                    <div className="tkt-ttl">{t.ev}</div>
+                    <div className="tkt-meta">
+                      <span><I.cal style={{ width: 14, height: 14 }} /> {t.date} · {t.time}</span>
+                      <span>{t.online ? <I.online style={{ width: 14, height: 14 }} /> : <I.pin style={{ width: 14, height: 14 }} />} {t.venue}</span>
+                    </div>
+                    <div className="tkt-foot">
+                      <span className="tkt-id">#{t.ticketId}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: t.paid === "Free" ? "#1f9d57" : "var(--ink)" }}>{t.paid}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
               );
             })}
           </div>
@@ -905,7 +906,7 @@ async function shareTicket(t) {
   const url = `${window.location.origin}${window.location.pathname}#ticket/${encodeURIComponent(t.qrToken || t.id || "")}`;
   const shareData = {
     title: `${t.ev || "My ticket"} · Samaagum`,
-    text: t.online && t.online_link 
+    text: t.online && t.online_link
       ? `Join ${t.ev || "this event"} online — ${t.date || ""} · ${t.online_link}`
       : `My ticket for ${t.ev || "this event"} — ${t.date || ""}`,
     url
@@ -1014,10 +1015,10 @@ export function TicketDetail({ tkt, st, go }) {
                       </div>
                       <div>
                         {att.status === 'approved' ? <span className="pill green">Approved</span> :
-                         att.status === 'pending' ? <span className="pill" style={{ background: "rgba(245,158,11,0.12)", color: "#f59e0b" }}>Pending</span> :
-                         att.status === 'waitlisted' ? <span className="pill gray">Waitlisted</span> :
-                         att.status === 'rejected' ? <span className="pill" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>Rejected</span> :
-                         <span className="pill gray">{att.status}</span>}
+                          att.status === 'pending' ? <span className="pill" style={{ background: "rgba(245,158,11,0.12)", color: "#f59e0b" }}>Pending</span> :
+                            att.status === 'waitlisted' ? <span className="pill gray">Waitlisted</span> :
+                              att.status === 'rejected' ? <span className="pill" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>Rejected</span> :
+                                <span className="pill gray">{att.status}</span>}
                       </div>
                     </div>
                   ))}
@@ -1081,20 +1082,20 @@ export function ClaimFlow({ token, st, go, onClaimed }: any) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token })
     })
-    .then(r => r.json())
-    .then(res => {
-      setStatus("");
-      if (res.success) {
-        setOtpError("");
-        setStep("otp");
-      } else {
-        setErrorMsg(res.message || "Failed to send OTP.");
-      }
-    })
-    .catch(() => {
-      setStatus("");
-      setErrorMsg("Network error. Please try again.");
-    });
+      .then(r => r.json())
+      .then(res => {
+        setStatus("");
+        if (res.success) {
+          setOtpError("");
+          setStep("otp");
+        } else {
+          setErrorMsg(res.message || "Failed to send OTP.");
+        }
+      })
+      .catch(() => {
+        setStatus("");
+        setErrorMsg("Network error. Please try again.");
+      });
   };
 
   const verifyOtp = (otp) => {
@@ -1107,46 +1108,46 @@ export function ClaimFlow({ token, st, go, onClaimed }: any) {
       headers,
       body: JSON.stringify({ token, otp })
     })
-    .then(r => r.json())
-    .then(res => {
-      if (res.success) {
-        if (res.token) {
-          localStorage.setItem('token', res.token);
-          // Immediately update window.ME from the new token so the UI
-          // treats this user as a verified, logged-in member right away
-          try {
-            const parts = res.token.split('.');
-            if (parts.length >= 2) {
-              const p = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-              if (p.id) (window as any).ME.id = p.id;
-              if (p.email) {
-                const local = p.email.split('@')[0];
-                (window as any).ME.name = local.replace(/[._-]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
-                (window as any).ME.handle = `@${local}`;
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          if (res.token) {
+            localStorage.setItem('token', res.token);
+            // Immediately update window.ME from the new token so the UI
+            // treats this user as a verified, logged-in member right away
+            try {
+              const parts = res.token.split('.');
+              if (parts.length >= 2) {
+                const p = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+                if (p.id) (window as any).ME.id = p.id;
+                if (p.email) {
+                  const local = p.email.split('@')[0];
+                  (window as any).ME.name = local.replace(/[._-]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+                  (window as any).ME.handle = `@${local}`;
+                }
               }
-            }
-          } catch (_) {}
+            } catch (_) { }
+          }
+          // Notify parent (join_event.tsx) so it can re-fetch the event page state
+          if (typeof onClaimed === 'function') {
+            onClaimed(res.token);
+          }
+          // Refresh joined-events list in the sidebar
+          if (st && typeof st.fetchJoinedEvents === 'function') {
+            st.fetchJoinedEvents();
+          }
+          setStep("done");
+        } else {
+          setStatus("");
+          setOtpError(res.message || "Invalid OTP. Please try again.");
+          setCode(["", "", "", "", "", ""]);
+          setTimeout(() => refs.current[0]?.focus(), 50);
         }
-        // Notify parent (join_event.tsx) so it can re-fetch the event page state
-        if (typeof onClaimed === 'function') {
-          onClaimed(res.token);
-        }
-        // Refresh joined-events list in the sidebar
-        if (st && typeof st.fetchJoinedEvents === 'function') {
-          st.fetchJoinedEvents();
-        }
-        setStep("done");
-      } else {
+      })
+      .catch(() => {
         setStatus("");
-        setOtpError(res.message || "Invalid OTP. Please try again.");
-        setCode(["", "", "", "", "", ""]);
-        setTimeout(() => refs.current[0]?.focus(), 50);
-      }
-    })
-    .catch(() => {
-      setStatus("");
-      setOtpError("Network error. Please try again.");
-    });
+        setOtpError("Network error. Please try again.");
+      });
   };
 
   const onDigit = (i, v) => {
@@ -1164,7 +1165,7 @@ export function ClaimFlow({ token, st, go, onClaimed }: any) {
         {step === "loading" && (
           <div style={{ textAlign: "center", padding: "40px" }}>Loading...</div>
         )}
-        
+
         {step === "error" && (
           <div className="fcard fcard-pad" style={{ textAlign: "center", color: "var(--red)" }}>
             <h3>Error</h3>
@@ -1391,7 +1392,7 @@ export function VerifyTicketPanel({ eventId, onCheckedIn }) {
           onChange={ev2 => { setTokenInput(ev2.target.value); setResult(null); }}
           onFocus={() => setResult(null)}
           onKeyDown={ev2 => { if (ev2.key === 'Enter') { setResult(null); lookup(tokenInput); } }}
-          placeholder="Paste or type ticket token / Booking ID..."
+          placeholder="Enter Ticket ID or Booking ID..."
           style={{ flex: 1, padding: "9px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--field)", color: "var(--ink)", fontSize: 13 }}
         />
         <button className="hbtn hbtn--primary hbtn--sm" disabled={busy || !tokenInput.trim()} onClick={() => { setResult(null); lookup(tokenInput); }}>Verify</button>
@@ -1488,7 +1489,7 @@ export function VerifyTicketPanel({ eventId, onCheckedIn }) {
           )}
         </div>
       )}
-      
+
       {selectedProfile && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setSelectedProfile(null)}>
           <div style={{ background: 'var(--surface)', borderRadius: 16, width: '100%', maxWidth: 360, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }} onClick={e => e.stopPropagation()}>
@@ -1508,12 +1509,12 @@ export function VerifyTicketPanel({ eventId, onCheckedIn }) {
               <h3 style={{ margin: '0 0 4px 0', fontSize: 20, fontWeight: 700, color: 'var(--ink)' }}>{selectedProfile.name}</h3>
               {selectedProfile.username && <p style={{ margin: '0 0 8px 0', fontSize: 13, color: 'var(--ink-2)', fontWeight: 500 }}>@{selectedProfile.username}</p>}
               {selectedProfile.headline && <p style={{ margin: '0 0 16px 0', fontSize: 14, color: 'var(--ink)' }}>{selectedProfile.headline}</p>}
-              
+
               <div style={{ textAlign: 'left', background: 'var(--field)', borderRadius: 8, padding: 12, marginTop: 16 }}>
                 <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 4, textTransform: 'uppercase', fontWeight: 600 }}>Contact</div>
                 <div style={{ fontSize: 14, color: 'var(--ink)' }}>{selectedProfile.email || 'No email provided'}</div>
               </div>
-              
+
               {selectedProfile.bio && (
                 <div style={{ textAlign: 'left', background: 'var(--field)', borderRadius: 8, padding: 12, marginTop: 12 }}>
                   <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 4, textTransform: 'uppercase', fontWeight: 600 }}>About</div>
@@ -1589,17 +1590,17 @@ export function ScanEventPage({ ev, go }) {
   if (!ev || !isCheckinWindowOpen(ev)) return null;
 
   return (
-    <div className="scroll" style={{ padding: "24px 20px", maxWidth: 560, margin: "0 auto" }}>
-      <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => go("scan")} style={{ marginBottom: 14 }}>&larr; Back to Scan</button>
-      <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>{ev.title || "Untitled event"}</h2>
+    <div className="scroll" style={{ padding: "40px 24px", maxWidth: 900, width: "100%", margin: "0 auto" }}>
+      <button className="hbtn hbtn--ghost hbtn--md" onClick={() => go("scan")} style={{ marginBottom: 24, fontSize: 15 }}>&larr; Back to Scan</button>
+      <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 24 }}>{ev.title || "Untitled event"}</h2>
       {ev.location_type === 'online' || ev.online ? (
-        <div className="fcard fcard-pad" style={{ textAlign: "center", color: "var(--ink-2)", padding: 32 }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>🌐</div>
-          <h3 style={{ fontSize: 16, fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>This is an online event.</h3>
-          <p style={{ fontSize: 13 }}>There is nothing to scan.</p>
+        <div className="fcard fcard-pad" style={{ textAlign: "center", color: "var(--ink-2)", padding: 48, borderRadius: 16 }}>
+          <div style={{ fontSize: 40, marginBottom: 16 }}>🌐</div>
+          <h3 style={{ fontSize: 18, fontWeight: 600, color: "var(--ink)", marginBottom: 8 }}>This is an online event.</h3>
+          <p style={{ fontSize: 15 }}>There is nothing to scan.</p>
         </div>
       ) : (
-        <VerifyTicketPanel eventId={ev.id} onCheckedIn={() => {}} />
+        <VerifyTicketPanel eventId={ev.id} onCheckedIn={() => { }} />
       )}
     </div>
   );

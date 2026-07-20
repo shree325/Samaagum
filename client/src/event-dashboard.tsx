@@ -2799,7 +2799,7 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
           )}
 
           {/* Tab Navigation Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${allTabs.length}, 1fr)`, gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
             {allTabs.map(t => (
               <div key={t.id} onClick={() => setActiveTab(t.id as any)} style={{
                 background: 'var(--surface)', borderRadius: 16, padding: 20, cursor: 'pointer',

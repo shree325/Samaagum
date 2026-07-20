@@ -80,7 +80,7 @@ function EventDetail({ ev, st, go }) {
 
   const { wishlisted, toggleWishlist, registered, register, city, waitlisted } = st;
   const isSaved = wishlisted ? wishlisted.has(e.id) : false;
-  const isReg = registered.has(e.id);
+  const isReg = registered.has(e.id) && e.bookingStatus !== 'cancelled';
   const isWaitlisted = (waitlisted ? waitlisted.has(e.id) : false) || (st.joinedEvents?.some(je => je.id === e.id && je.bookingStatus === 'waitlisted') ?? false);
   const isSoldOut = e.going >= (e.cap || 9999) || e.id === "ev-feat";
 
@@ -168,6 +168,8 @@ function EventDetail({ ev, st, go }) {
 
   const [showShareSheet, setShowShareSheet] = useState(false);
   const [localStatus, setLocalStatus] = useState(e.status || "published");
+  const isEnded = liveEvent.ends_at ? new Date(liveEvent.ends_at) < new Date() : (liveEvent.starts_at ? new Date(liveEvent.starts_at) < new Date() : false);
+  const displayStatus = isEnded ? 'completed' : localStatus;
 
   React.useEffect(() => {
     if (window.io && liveEvent.id && liveEvent.id !== "ev-feat") {
@@ -265,7 +267,7 @@ function EventDetail({ ev, st, go }) {
               <div className="tags">
                 <span className="fchip on" style={{ pointerEvents: "none" }}>{e.cat}</span>
                 <span className="fchip" style={{ pointerEvents: "none" }}>{e.online ? <><I.online style={{ width: 14, height: 14 }} /> Online</> : <><I.pin style={{ width: 14, height: 14 }} /> {e.city || city}</>}</span>
-                <span className="fchip" style={{ pointerEvents: "none" }}>{e.type}</span>
+                <span className="fchip" style={{ pointerEvents: "none" }}><I.ticket style={{ width: 14, height: 14 }} /> {e.type || ((e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : (e.cash_enabled ? 'Cash' : 'Paid'))}</span>
               </div>
               <div className="ttl">{e.title}</div>
               <div 
@@ -407,7 +409,7 @@ function EventDetail({ ev, st, go }) {
                   <div className="att" style={{ paddingRight: 14 }}><div className="av" style={{ width: 28, height: 28, fontSize: 11, background: "var(--surface-2)", color: "var(--ink-2)" }}>+{Math.max(0, e.going - attendees.length)}</div><span className="nm">more</span></div>
                 </div>
               </div>
-              {isWaitlisted && localStatus !== 'completed' && (
+              {isWaitlisted && displayStatus !== 'completed' && (
                 <div style={{ marginTop: 20 }}>
                   <Waitlist ev={e} st={st} go={go} />
                 </div>
@@ -503,15 +505,19 @@ function EventDetail({ ev, st, go }) {
                       </div>
                     </div>
                   )}
-                  {localStatus === 'completed' && (
+                  {displayStatus === 'completed' && (
                     <div style={{ padding: 12, background: "rgba(34,197,94,0.1)", color: "var(--accent-1)", border: "1px solid rgba(34,197,94,0.2)", borderRadius: 10, textAlign: "center", fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                      <I.cal /> EVENT COMPLETED
+                      <I.cal /> EVENT IS ENDED
                     </div>
                   )}
-                  {localStatus !== 'completed' && (
-                    isReg || e.bookingStatus === 'confirmed' || e.bookingStatus === 'pending_payment' ? (
+                  {displayStatus !== 'completed' && (
+                    isReg || e.bookingStatus === 'confirmed' ? (
                       <button className="hbtn hbtn--ghost hbtn--block" style={{ color: "var(--accent-2)", borderRadius: 14 }} onClick={() => go("events")}>
                         <I.check />You're registered (View Ticket)
+                      </button>
+                    ) : e.bookingStatus === 'pending_payment' ? (
+                      <button className="hbtn hbtn--soft hbtn--block" disabled style={{ borderRadius: 14 }}>
+                        Pending Approval
                       </button>
                     ) : e.bookingStatus === 'pending_approval' ? (
                       <button className="hbtn hbtn--soft hbtn--block" disabled style={{ borderRadius: 14 }}>

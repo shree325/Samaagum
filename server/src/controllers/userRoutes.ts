@@ -22,7 +22,8 @@ export const userRoutes = async (fastify: FastifyInstance) => {
         return { success: true, exists: false };
       }
 
-      const name = user.profiles?.display_name || user.first_name ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : '';
+      const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim();
+      const name = user.profiles?.display_name || fullName || '';
       const gender = user.gender || '';
 
       let hasTicket = false;

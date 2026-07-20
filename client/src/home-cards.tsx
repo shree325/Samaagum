@@ -133,8 +133,10 @@ export const FeatureCard = React.memo(function FeatureCard({ ev, onOpen, wishlis
         </div>
         <div className="factions">
           {(() => {
+            const isEnded = ev.ends_at ? new Date(ev.ends_at) < new Date() : (ev.starts_at ? new Date(ev.starts_at) < new Date() : false);
             const isSoldOut = ev.going >= (ev.cap || 9999) || ev.id === "ev-feat";
             const hasWaitlist = ev.waitlist !== undefined ? ev.waitlist : false;
+            if (isEnded) return <button className="hbtn hbtn--soft" disabled>Event is ended</button>;
             if (isSoldOut && !hasWaitlist) return <button className="hbtn hbtn--soft" disabled>Sold Out</button>;
             return <button 
               onClick={(e)=>{ e.stopPropagation(); onOpen(ev); }}
