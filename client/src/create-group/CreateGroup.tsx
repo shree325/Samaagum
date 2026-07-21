@@ -181,8 +181,8 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
   const [accessModalTarget, setAccessModalTarget] = useState("join");
 
   const [capModal, setCapModal] = useState(false);
-  const [limitCap, setLimitCap] = useState(isEdit ? (editGroup.settings?.capacity?.limit || false) : (savedDraft.limitCap || false));
-  const [maxCap, setMaxCap] = useState(isEdit ? (editGroup.settings?.capacity?.max?.toString() || "") : (savedDraft.maxCap || ""));
+  const [limitCap, setLimitCap] = useState(isEdit ? (editGroup.settings?.capacity?.limit || false) : (savedDraft.capacityEnabled || savedDraft.limitCap || false));
+  const [maxCap, setMaxCap] = useState(isEdit ? (editGroup.settings?.capacity?.max?.toString() || "") : (savedDraft.capacity || savedDraft.maxCap || ""));
   const [waitlist, setWaitlist] = useState(isEdit ? (editGroup.settings?.capacity?.waitlist || false) : (savedDraft.waitlist || false));
   
   const [approval, setApproval] = useState(isEdit ? (editGroup.joinMode === 'approval') : (savedDraft.approval || false));
@@ -1054,6 +1054,10 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
               else if (data.joinElig === 'invite' && canJoinInvite) setJoinElig('invite');
             }
             if (data.approval !== undefined) setApproval(data.approval);
+            if (data.capacity) {
+              setLimitCap(true);
+              setMaxCap(String(data.capacity));
+            }
             
             if (data.imagePrompt) {
               const encodedPrompt = encodeURIComponent(data.imagePrompt);

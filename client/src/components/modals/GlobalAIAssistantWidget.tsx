@@ -72,6 +72,8 @@ export function GlobalAIAssistantWidget({ aiEnabled }: { aiEnabled?: boolean }) 
                     registrationStatus: draft.registrationStatus,
                     approval: draft.requireApproval,
                     questionnaire: draft.questionnaireEnabled,
+                    capacityEnabled: !!draft.capacity,
+                    capacity: draft.capacity ? String(draft.capacity) : undefined,
                     cover: draft.cover
                 }));
                 
@@ -94,6 +96,8 @@ export function GlobalAIAssistantWidget({ aiEnabled }: { aiEnabled?: boolean }) 
                     visibility: draft.visibility,
                     joinElig: draft.joinElig,
                     approval: draft.approval,
+                    capacityEnabled: !!draft.capacity,
+                    capacity: draft.capacity ? String(draft.capacity) : undefined,
                     banner: draft.banner
                 }));
                 

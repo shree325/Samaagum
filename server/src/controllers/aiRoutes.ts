@@ -33,7 +33,8 @@ For a GROUP, use this JSON schema:
   "imagePrompt": "A highly descriptive, vivid prompt to generate a 1:1 aspect ratio cover image/banner for this group. (e.g., 'A vibrant futuristic cityscape with neon lights at night, highly detailed, 4k')",
   "visibility": "One of: public, private, hidden. Default to public unless implied otherwise.",
   "joinElig": "One of: anyone, restricted, invite. Default to anyone.",
-  "approval": boolean // True if user asks for join approvals to be enabled
+  "approval": boolean, // True if user asks for join approvals to be enabled
+  "capacity": 100 // number, maximum participants or members allowed
 }
 
 For an EVENT, use this JSON schema:
@@ -50,9 +51,10 @@ For an EVENT, use this JSON schema:
   "visibility": "One of: public, unlisted, custom. Default to public.",
   "registrationStatus": "One of: OPEN, CLOSED, SCHEDULED. Default to OPEN. (If they say registration starts next week, use SCHEDULED)",
   "regStartDate": "YYYY-MM-DD" // Only if SCHEDULED,
-  "regStartTime": "HH:MM" // Only if SCHEDULED,
+  "regStartTime": "HH:MM", // Only if SCHEDULED
   "requireApproval": boolean, // True if they mention needing to approve attendees
-  "questionnaireEnabled": boolean // True if they mention wanting a registration form/questions
+  "questionnaireEnabled": boolean, // True if they mention wanting a registration form/questions
+  "capacity": 100 // number, maximum participants allowed
 }
 `;
 
@@ -121,16 +123,22 @@ If "create_event" or "create_group", return:
 {
   "intent": "create_event" or "create_group",
   "data": {
-    // Populate as many of these fields as you can deduce:
-    // "name" (for group) or "title" (for event)
-    // "description"
-    // "category"
-    // "startDate", "startTime", "endDate", "endTime" (events only)
-    // "visibility" ("public", "unlisted"/"private", "custom"/"hidden")
-    // "registrationStatus" ("OPEN", "CLOSED", "SCHEDULED") (events only)
-    // "requireApproval" (boolean)
-    // "questionnaireEnabled" (boolean) (events only)
-    // "imagePrompt": "A highly descriptive prompt to generate a 1:1 aspect ratio cover banner/image for this..."
+    "name": "Group name (if group)",
+    "title": "Event title (if event)",
+    "description": "Write a HIGHLY DETAILED, engaging description. MUST BE VERY LONG (at least 3-4 paragraphs)!",
+    "category": "Category string",
+    "startDate": "YYYY-MM-DD (events only)",
+    "startTime": "HH:MM (events only)",
+    "endDate": "YYYY-MM-DD (events only)",
+    "endTime": "HH:MM (events only)",
+    "visibility": "One of: public, unlisted, custom",
+    "registrationStatus": "One of: OPEN, CLOSED, SCHEDULED (events only)",
+    "requireApproval": true_or_false,
+    "approval": true_or_false,
+    "questionnaireEnabled": true_or_false,
+    "joinElig": "anyone, restricted, or invite",
+    "capacity": 100,
+    "imagePrompt": "A highly descriptive prompt to generate a 1:1 aspect ratio cover banner/image for this..."
   }
 }
 `;

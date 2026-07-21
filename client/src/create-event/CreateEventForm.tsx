@@ -753,6 +753,10 @@ export function CreateEventForm({ go, mobile, st, editEv, hostGroupId }: any) {
             
             if (data.requireApproval !== undefined) form.setApproval(data.requireApproval);
             if (data.questionnaireEnabled) form.questionnaireState.setEnableRegForm(true);
+            if (data.capacity) {
+              form.capacityState.setCapacityEnabled(true);
+              form.capacityState.setCapacity(String(data.capacity));
+            }
 
             if (data.imagePrompt) {
               const encodedPrompt = encodeURIComponent(data.imagePrompt);
