@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Groq from 'groq-sdk';
 
 export default async function aiRoutes(fastify: FastifyInstance) {
     fastify.post('/generate-entity', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
@@ -9,13 +9,12 @@ export default async function aiRoutes(fastify: FastifyInstance) {
                 return reply.status(400).send({ success: false, message: 'Prompt is required' });
             }
 
-            const apiKey = process.env.GEMINI_API_KEY;
+            const apiKey = process.env.GROQ_API_KEY;
             if (!apiKey) {
-                return reply.status(500).send({ success: false, message: 'GEMINI_API_KEY is not configured on the server.' });
+                return reply.status(500).send({ success: false, message: 'GROQ_API_KEY is not configured on the server.' });
             }
 
-            const genAI = new GoogleGenerativeAI(apiKey);
-            const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+            const groq = new Groq({ apiKey });
 
             const systemPrompt = `
 You are an expert community builder and event planner AI.
@@ -59,8 +58,13 @@ For an EVENT, use this JSON schema:
 
             const fullPrompt = `${systemPrompt}\n\nUser Request: ${prompt}`;
             
-            const result = await model.generateContent(fullPrompt);
-            const responseText = result.response.text();
+            const chatCompletion = await groq.chat.completions.create({
+                messages: [{ role: 'user', content: fullPrompt }],
+                model: 'llama-3.3-70b-versatile',
+                temperature: 0.5,
+                response_format: { type: 'json_object' }
+            });
+            const responseText = chatCompletion.choices[0]?.message?.content || "{}";
             
             // Clean up potential markdown formatting in the response
             let cleanedText = responseText.trim();
@@ -90,11 +94,10 @@ For an EVENT, use this JSON schema:
             const { prompt, currentDate } = request.body;
             if (!prompt) return reply.status(400).send({ success: false, message: 'Prompt is required' });
 
-            const apiKey = process.env.GEMINI_API_KEY;
-            if (!apiKey) return reply.status(500).send({ success: false, message: 'GEMINI_API_KEY is not configured on the server.' });
+            const apiKey = process.env.GROQ_API_KEY;
+            if (!apiKey) return reply.status(500).send({ success: false, message: 'GROQ_API_KEY is not configured on the server.' });
 
-            const genAI = new GoogleGenerativeAI(apiKey);
-            const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+            const groq = new Groq({ apiKey });
 
             const systemPrompt = `
 You are the Samaagum Global AI Assistant.
@@ -134,8 +137,13 @@ If "create_event" or "create_group", return:
 
             const fullPrompt = `${systemPrompt}\n\nUser Request: ${prompt}`;
             
-            const result = await model.generateContent(fullPrompt);
-            let cleanedText = result.response.text().trim();
+            const chatCompletion = await groq.chat.completions.create({
+                messages: [{ role: 'user', content: fullPrompt }],
+                model: 'llama-3.3-70b-versatile',
+                temperature: 0.5,
+                response_format: { type: 'json_object' }
+            });
+            let cleanedText = chatCompletion.choices[0]?.message?.content || "{}";
             if (cleanedText.startsWith('\`\`\`json')) cleanedText = cleanedText.replace(/^\`\`\`json/, '').replace(/\`\`\`$/, '').trim();
             else if (cleanedText.startsWith('\`\`\`')) cleanedText = cleanedText.replace(/^\`\`\`/, '').replace(/\`\`\`$/, '').trim();
 
