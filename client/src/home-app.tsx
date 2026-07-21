@@ -23,7 +23,7 @@ import { ClaimFlow, MyTickets, AllTickets, TicketDetail, ScanHub, ScanEventPage 
 import { EventDashboard } from './event-dashboard';
 import { GroupDashboard } from './group-dashboard';
 import { Waitlist } from './home-waitlist';
-import { I, tick } from './home-icons';
+import { I, tick, Mark } from './home-icons';
 import { PublicProfile } from './public-profile';
 import { useTweaks } from './tweaks-panel';
 import { usePlanEntitlements } from './usePlanEntitlements';

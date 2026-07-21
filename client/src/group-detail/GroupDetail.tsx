@@ -231,9 +231,7 @@ export function GroupDetail({ group, st, go }: GroupDetailProps) {
     const socketUrl = apiBase ? `${apiBase}/groups` : "/groups";
     const socket = (window as any).io(socketUrl, { transports: ['websocket'] });
 
-    if (isMember) {
-      socket.emit('join_group', { groupId: g.id, userId: currentUserId });
-    }
+    socket.emit('join_group', { groupId: g.id, userId: currentUserId });
 
     socket.on('dashboard_updated', () => {
       fetchGroupDetails();
@@ -368,7 +366,7 @@ export function GroupDetail({ group, st, go }: GroupDetailProps) {
     });
 
     return () => {
-      if (isMember) socket.emit('leave_group', g.id);
+      socket.emit('leave_group', g.id);
       socket.disconnect();
     };
   }, [g.id, isOwner, isMember, tab, sort, fetchPosts]);

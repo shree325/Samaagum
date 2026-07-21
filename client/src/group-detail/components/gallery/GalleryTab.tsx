@@ -34,7 +34,7 @@ export function GalleryTab({ gallery, permissions, g }: GalleryTabProps) {
       const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
       const tkn = localStorage.getItem('token');
       const res = await fetch(`${apiBase}/api/groups/${g.id}/gallery/${mediaId}/approve`, {
-        method: 'POST',
+        method: 'PATCH',
         headers: tkn ? { 'Authorization': `Bearer ${tkn}` } : {}
       });
       const data = await res.json();
@@ -67,7 +67,7 @@ export function GalleryTab({ gallery, permissions, g }: GalleryTabProps) {
   // Setup separate lists
   const approvedItems = galleryItems.filter((x: any) => x.status === 'approved' || !galleryNeedsApproval);
   const pendingItems = galleryItems.filter((x: any) => x.status === 'pending');
-  const showPendingSection = (g.role === 'owner' || g.role === 'admin' || g.role === 'moderator' || callerIsAdmin) && pendingItems.length > 0;
+  const showPendingSection = pendingItems.length > 0;
 
   const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
   const _resolveUrl = (u: string) => u && !u.startsWith('blob:') ? (u.startsWith('/api/') ? apiBase + u : u) : null;
@@ -112,10 +112,16 @@ export function GalleryTab({ gallery, permissions, g }: GalleryTabProps) {
                   ) : (
                     <img src={src || undefined} alt="gallery pending" style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }} onClick={() => openMediaPreview({ src, type: 'image' })} />
                   )}
-                  <div style={{ position: 'absolute', bottom: 6, left: 6, right: 6, display: 'flex', gap: 4, zIndex: 2 }}>
-                    <button className="hbtn hbtn--primary hbtn--sm" style={{ flex: 1, padding: '2px 0', fontSize: 11, height: 24 }} onClick={() => handleApproveMedia(item.id)}>Approve</button>
-                    <button className="hbtn hbtn--ghost hbtn--sm" style={{ flex: 1, padding: '2px 0', fontSize: 11, color: '#ff4d4f', background: 'rgba(255,255,255,0.85)', height: 24 }} onClick={() => handleDeleteMedia(item.id)}>Reject</button>
-                  </div>
+                  {callerIsAdmin ? (
+                    <div style={{ position: 'absolute', bottom: 6, left: 6, right: 6, display: 'flex', gap: 4, zIndex: 2 }}>
+                      <button className="hbtn hbtn--primary hbtn--sm" style={{ flex: 1, padding: '2px 0', fontSize: 11, height: 24 }} onClick={() => handleApproveMedia(item.id)}>Approve</button>
+                      <button className="hbtn hbtn--ghost hbtn--sm" style={{ flex: 1, padding: '2px 0', fontSize: 11, color: '#ff4d4f', background: 'rgba(255,255,255,0.85)', height: 24 }} onClick={() => handleDeleteMedia(item.id)}>Reject</button>
+                    </div>
+                  ) : (
+                    <div style={{ position: 'absolute', bottom: 6, left: 6, right: 6, display: 'flex', gap: 4, zIndex: 2 }}>
+                      <button className="hbtn hbtn--ghost hbtn--sm" style={{ flex: 1, padding: '2px 0', fontSize: 11, color: '#ff4d4f', background: 'rgba(255,255,255,0.85)', height: 24 }} onClick={() => handleDeleteMedia(item.id)}>Delete</button>
+                    </div>
+                  )}
                 </div>
               );
             })}
