@@ -733,6 +733,29 @@ export function GroupDetail({ group, st, go }: GroupDetailProps) {
                 if (requiredMissing) {
                   return alert("Please answer all required questions.");
                 }
+
+                for (let i = 0; i < g.settings!.questionnaires!.length; i++) {
+                  const q: any = g.settings!.questionnaires![i];
+                  const val = answers[i];
+                  if (val && typeof val === 'string' && val.trim().length > 0) {
+                      if (q.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+                          return alert(`Please enter a valid email address for "${q.q}".`);
+                      }
+                      if (q.type === 'phone' && !/^(\+91[\s-]?)?\d{10}$/.test(val.trim())) {
+                          return alert(`Please enter a valid 10-digit phone number for "${q.q}".`);
+                      }
+                      if (q.type === 'date') {
+                          if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+                              return alert(`Please enter a valid date (YYYY-MM-DD) for "${q.q}".`);
+                          }
+                          const year = parseInt(val.split('-')[0], 10);
+                          if (year < 1900 || year > 2100) {
+                              return alert(`Please enter a realistic year for "${q.q}".`);
+                          }
+                      }
+                  }
+                }
+
                 submitJoinRequest(answers);
               }}
             >

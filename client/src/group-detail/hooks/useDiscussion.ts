@@ -94,6 +94,20 @@ export function useDiscussion(g: Group, permissions: any) {
     } catch (e) { console.error(e); }
   };
 
+  const handleApproveThread = async (postId: string) => {
+    try {
+      const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+      const res = await fetch(`${apiBase}/api/groups/${g.id}/posts/${postId}/approve`, {
+        method: 'POST',
+        headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: 'active' } : p));
+      } else alert(data.message);
+    } catch (e) { console.error(e); }
+  };
+
   const openThread = async (post: Post) => {
     setActiveThread({ ...post, comments: [] });
     setLoadingThread(true);
@@ -377,6 +391,7 @@ export function useDiscussion(g: Group, permissions: any) {
     setPosts,
     draft,
     setDraft,
+    handleApproveThread,
     posting,
     activeThread,
     setActiveThread,

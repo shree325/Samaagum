@@ -14,9 +14,12 @@ interface ThreadCardProps {
   onReact: (postId: string, emoji: string) => void;
   isLiked: boolean;
   onLike: (postId: string) => void;
+  canApprove?: boolean;
+  onApprove?: (postId: string) => void;
+  onDecline?: (postId: string) => void;
 }
 
-export function ThreadCard({ p, onOpen, voteData, onVote, reactions, onReact, isLiked, onLike }: ThreadCardProps) {
+export function ThreadCard({ p, onOpen, voteData, onVote, reactions, onReact, isLiked, onLike, canApprove, onApprove, onDecline }: ThreadCardProps) {
   const timeStr = p.created_at ? getRelativeTime(p.created_at) : 'Just now';
   const authorName = p.author_name || p.author_username || 'Unknown';
   const displayTitle = p.title || (p.body ? p.body.slice(0, 90) + (p.body.length > 90 ? '…' : '') : 'Untitled thread');
@@ -61,6 +64,30 @@ export function ThreadCard({ p, onOpen, voteData, onVote, reactions, onReact, is
             <span style={{ fontSize: 15, lineHeight: 1 }}>{isLiked ? "❤️" : "🤍"}</span>
             {likeCount > 0 && <span>{likeCount}</span>}
           </button>
+          
+          {p.status === 'hidden' && canApprove && (
+            <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
+              <button 
+                type="button" 
+                onClick={(e) => { e.stopPropagation(); onApprove && onApprove(p.id); }}
+                style={{ padding: '2px 10px', fontSize: 12, borderRadius: 12, border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontWeight: 600 }}
+              >
+                Approve
+              </button>
+              <button 
+                type="button" 
+                onClick={(e) => { e.stopPropagation(); onDecline && onDecline(p.id); }}
+                style={{ padding: '2px 10px', fontSize: 12, borderRadius: 12, border: '1px solid #e74c3c', background: 'transparent', color: '#e74c3c', cursor: 'pointer', fontWeight: 600 }}
+              >
+                Decline
+              </button>
+            </div>
+          )}
+          {p.status === 'hidden' && !canApprove && (
+            <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: '#f39c12', padding: '2px 8px', borderRadius: 12, border: '1px solid #f39c12' }}>
+              Pending Approval
+            </span>
+          )}
         </div>
       </div>
     </div>

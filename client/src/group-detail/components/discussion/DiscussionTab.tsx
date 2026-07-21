@@ -95,7 +95,8 @@ export function DiscussionTab({
     canPost,
     canReply,
     isMember,
-    isPublicGroup
+    isPublicGroup,
+    canModerateForums
   } = permissions;
 
   const filteredPosts = (activeTag
@@ -210,7 +211,20 @@ export function DiscussionTab({
         </div>
       ) : (
         filteredPosts.map((p: any) => (
-          <ThreadCard key={p.id} p={p} onOpen={openThread} voteData={threadVotes[p.id]} onVote={handleVoteThread} reactions={threadReactions[p.id]} onReact={handleReactThread} isLiked={myLikes.has(p.id)} onLike={handleLikeThread} />
+          <ThreadCard 
+            key={p.id} 
+            p={p} 
+            onOpen={openThread} 
+            voteData={threadVotes[p.id]} 
+            onVote={handleVoteThread} 
+            reactions={threadReactions[p.id]} 
+            onReact={handleReactThread} 
+            isLiked={myLikes.has(p.id)} 
+            onLike={handleLikeThread} 
+            canApprove={canModerateForums}
+            onApprove={discussion.handleApproveThread}
+            onDecline={handleDeletePost}
+          />
         ))
       )}
       <NewDiscussionModal
