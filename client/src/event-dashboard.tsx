@@ -468,7 +468,7 @@ export function EventDashboard({ ev, st, go, embedded = false, onTabChange }: an
   const [overviewScale, setOverviewScale] = useState<'today' | 'week' | 'month'>('week');
   const [mapViewMode, setMapViewMode] = useState<'auto' | 'india' | 'world'>('auto');
   const [selectedCity, setSelectedCity] = useState<any>(null);
-  const [mapCenter, setMapCenter]       = useState<[number, number]>([0, 20]);
+  const [mapCenter, setMapCenter]       = useState<[number, number]>([83, 22]);
   const [mapZoom, setMapZoom]           = useState<number>(1);
   // Check-in Timeline chart scale filter
   const [checkinScale, setCheckinScale] = useState<'today' | 'week' | 'month'>('today');

@@ -104,7 +104,7 @@ export function GalleryTab({ gallery, permissions, g }: GalleryTabProps) {
           </h4>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 12 }}>
             {pendingItems.map((item: any) => {
-              const src = _resolveUrl(item.url);
+              const src = _resolveUrl(item.src || item.url);
               return (
                 <div key={item.id} style={{ position: 'relative', aspectRatio: '1/1', borderRadius: 8, overflow: 'hidden', background: '#000' }}>
                   {item.type === 'video' ? (
@@ -132,7 +132,7 @@ export function GalleryTab({ gallery, permissions, g }: GalleryTabProps) {
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 16 }}>
           {approvedItems.map((item: any) => {
-            const src = _resolveUrl(item.url);
+            const src = _resolveUrl(item.src || item.url);
             const isManager = g.role === 'owner' || g.role === 'admin' || g.role === 'moderator' || callerIsAdmin;
             return (
               <div key={item.id} className="gallery-item-wrapper" style={{ position: 'relative', aspectRatio: '1/1', borderRadius: 12, overflow: 'hidden', background: '#000' }}>
