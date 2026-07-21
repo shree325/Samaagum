@@ -44,7 +44,22 @@ function QuestionnaireModal({
 
   const handleAddCustom = () => {
     if (!customText.trim()) return;
-    const fieldData = { type: customType, question: customText.trim(), required: customRequired, ...(customType === 'options' ? { options: customOptions.filter(o => o.trim() !== '') } : {}) };
+    let realType = customType;
+    let extraProps: any = {};
+    if (customType === 'paragraph') {
+      realType = 'text';
+      extraProps.responseType = 'paragraph';
+    } else if (customType === 'checkboxes') {
+      realType = 'options';
+      extraProps.selectionType = 'multiple';
+    }
+    const fieldData = { 
+      type: realType, 
+      question: customText.trim(), 
+      required: customRequired, 
+      ...(customType === 'options' || customType === 'checkboxes' ? { options: customOptions.filter(o => o.trim() !== '') } : {}),
+      ...extraProps
+    };
     if (editingId) {
       setFormFields(formFields.map((f: any) => f.id === editingId ? { ...f, ...fieldData } : f));
       setEditingId(null);
@@ -55,8 +70,16 @@ function QuestionnaireModal({
   };
 
   const handleEditField = (field: any) => {
-    setEditingId(field.id); setCustomText(field.question || ''); setCustomType(field.type || 'text');
-    setCustomRequired(!!field.required); setCustomOptions(field.options?.length ? field.options : ['Option 1', 'Option 2']);
+    setEditingId(field.id); 
+    setCustomText(field.question || ''); 
+    
+    let t = field.type || 'text';
+    if (t === 'text' && field.responseType === 'paragraph') t = 'paragraph';
+    if (t === 'options' && field.selectionType === 'multiple') t = 'checkboxes';
+    setCustomType(t);
+    
+    setCustomRequired(!!field.required); 
+    setCustomOptions(field.options?.length ? field.options : ['Option 1', 'Option 2']);
     setActiveTab('custom');
   };
 
@@ -150,8 +173,14 @@ function QuestionnaireModal({
                       <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-2)', marginBottom: 8, display: 'block' }}>Type</label>
                       <select className="cselect" value={customType} onChange={e => setCustomType(e.target.value)} style={{ background: 'var(--field)', border: '1px solid var(--border)', height: 44, borderRadius: '10px' }}>
                         <option value="text">Short Answer</option>
-                        <option value="paragraph">Paragraph</option>
+                        <option value="paragraph">Long Answer</option>
+                        <option value="yes_no">Yes / No</option>
                         <option value="options">Multiple Choice</option>
+                        <option value="checkboxes">Multiple Select (checkboxes)</option>
+                        <option value="email">Email</option>
+                        <option value="phone">Phone Number</option>
+                        <option value="date">Date</option>
+                        <option value="time">Time</option>
                         <option value="social">Social Link</option>
                         <option value="company">Company Info</option>
                       </select>
@@ -161,7 +190,7 @@ function QuestionnaireModal({
                       <Toggle on={customRequired} onClick={() => setCustomRequired(!customRequired)} />
                     </div>
                   </div>
-                  {customType === 'options' && (
+                  {(customType === 'options' || customType === 'checkboxes') && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8, padding: 12, background: 'var(--bg-2)', borderRadius: '10px', border: '1px solid var(--border)' }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-2)' }}>Multiple Choice Options</span>
                       {customOptions.map((opt, oIdx) => (

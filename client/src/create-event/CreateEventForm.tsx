@@ -150,7 +150,30 @@ export function CreateEventForm({ go, mobile, st, editEv, hostGroupId }: any) {
                         Type: {field.type}
                       </div>
                       {field.type === 'text' && (
-                        <input className="cinput" readOnly placeholder={field.responseType === 'paragraph' ? 'Long answer text...' : 'Short answer text...'} style={{ background: 'var(--bg-2)', fontSize: 12, padding: '8px 12px' }} />
+                        field.responseType === 'paragraph' ? (
+                          <textarea className="cinput" readOnly placeholder="Long answer text..." style={{ background: 'var(--bg-2)', fontSize: 12, padding: '8px 12px', minHeight: 60, resize: 'vertical' }} />
+                        ) : (
+                          <input className="cinput" readOnly placeholder="Short answer text..." style={{ background: 'var(--bg-2)', fontSize: 12, padding: '8px 12px' }} />
+                        )
+                      )}
+                      {field.type === 'yes_no' && (
+                        <div style={{ display: 'flex', gap: 16 }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--ink-2)' }}>
+                            <input type="radio" disabled /> Yes
+                          </label>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--ink-2)' }}>
+                            <input type="radio" disabled /> No
+                          </label>
+                        </div>
+                      )}
+                      {field.type === 'email' && (
+                        <input type="email" className="cinput" readOnly placeholder="Email address..." style={{ background: 'var(--bg-2)', fontSize: 12, padding: '8px 12px' }} />
+                      )}
+                      {field.type === 'date' && (
+                        <input type="date" className="cinput" readOnly style={{ background: 'var(--bg-2)', fontSize: 12, padding: '8px 12px' }} />
+                      )}
+                      {field.type === 'time' && (
+                        <input type="time" className="cinput" readOnly style={{ background: 'var(--bg-2)', fontSize: 12, padding: '8px 12px' }} />
                       )}
                       {field.type === 'options' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

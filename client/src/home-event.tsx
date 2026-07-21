@@ -124,9 +124,9 @@ function EventDetail({ ev, st, go }) {
   );
 
   const priceStr = e.price || "₹500";
-  const rawTiers = (e.tickets && e.tickets.length > 0)
-    ? e.tickets.filter((t: any) => !t.visibility || t.visibility === 'public')
-    : null;
+    const rawTiers = (e.tickets && e.tickets.length > 0)
+      ? e.tickets.filter((t: any) => !t.visibility || t.visibility === 'public')
+      : null;
 
   const tiers = rawTiers 
     ? rawTiers.map((t: any) => {
