@@ -1,8 +1,8 @@
 import { useState } from 'react';
 
-export function useQuestionnaire({ draft, editEv }: any) {
+export function useQuestionnaire({ draft, editEv, savedDraft }: any) {
   const [enableRegForm, setEnableRegForm] = useState(
-    draft?.enableRegForm ?? editEv?.venue_raw?.meta?.enableRegForm ?? editEv?.venue?.meta?.enableRegForm ?? false
+    draft?.enableRegForm ?? savedDraft?.questionnaire ?? editEv?.venue_raw?.meta?.enableRegForm ?? editEv?.venue?.meta?.enableRegForm ?? false
   );
   const [formFields, setFormFields] = useState(
     draft?.formFields ?? editEv?.venue_raw?.meta?.formFields ?? editEv?.venue?.meta?.formFields ?? [

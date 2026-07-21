@@ -30,6 +30,7 @@ import { usePlanEntitlements } from './usePlanEntitlements';
 import { EventPage } from './event';
 import { PreviewEventPage } from './preview_event';
 import { JoinEventPage } from './join_event';
+import { GlobalAIAssistantWidget } from './components/modals/GlobalAIAssistantWidget';
 
 /* ============================================================
    Samaagum Home — main app (routing, frame, theme, tweaks)
@@ -1650,6 +1651,8 @@ useEffect(() => {
           </div>
         </div>
       )}
+
+      <GlobalAIAssistantWidget />
     </div>
   );
 }

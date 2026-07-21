@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { GroupCard } from '../home-cards';
 import { COVERS, ME, copyText } from '../home-data';
 import { Discover } from '../home-feed';
@@ -31,6 +31,7 @@ import { ForumSettingsModal } from './components/modals/ForumSettingsModal';
 import { GallerySettingsModal } from './components/modals/GallerySettingsModal';
 import { DescriptionModal } from './components/modals/DescriptionModal';
 import { IconPickerModal } from './components/modals/IconPickerModal';
+import { AIGeneratorModal } from '../components/modals/AIGeneratorModal';
 
 export function CreateGroup({ mode, editGroup, go, mobile, st }) {
   const entitlements = st?.entitlements || DEFAULT_FREE_ENTITLEMENTS;
@@ -54,6 +55,9 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
   const isEdit = mode === "edit" && editGroup;
 
   const draftKey = "sg_draft_group";
+  const savedDraft = useMemo(() => {
+    try { return JSON.parse(localStorage.getItem(draftKey) || "{}"); } catch { return {}; }
+  }, []);
   
   // Clear draft storage if we are not editing
   useEffect(() => {
@@ -61,8 +65,6 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
       localStorage.removeItem(draftKey);
     }
   }, [isEdit]);
-
-  const savedDraft = {};
 
   const [name, setName] = useState(isEdit ? (editGroup.name || "") : (savedDraft.name || ""));
   const [icon, setIcon] = useState(isEdit ? (editGroup.icon || "✺") : (savedDraft.icon || "✺"));
@@ -102,10 +104,10 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
   const [iconDrawer, setIconDrawer] = useState(false);
   const [descModal, setDescModal] = useState(false);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
+  const [aiModal, setAiModal] = useState(false);
 
   // Options Modals
-  const [visibility, setVisibility] = useState(isEdit ? (editGroup.visibility || "public") : (savedDraft.visibility || (canPublic ? "public" : (canUnlisted ? "private" : "hidden"))));
-
+  const [visibility, setVisibility] = useState(isEdit ? (editGroup.visibility || "public") : (savedDraft.visibility || "public"));
   const [joinElig, setJoinElig] = useState(isEdit ? (() => {
     const sje = editGroup.settings?.joinElig;
     if (sje === 'restricted' || sje === 'communities' || editGroup.joinMode === 'restricted') return 'restricted';
@@ -509,9 +511,14 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
 
       <div className="create-form">
         <div className="cf-inner">
-          <div className="create-head">
-            <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => go("home")} style={{ padding: "7px 11px" }}><I.arrowL /></button>
-            <div><div className="ck">New Group</div><h1>Create a group</h1></div>
+          <div className="create-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => go("home")} style={{ padding: "7px 11px" }}><I.arrowL /></button>
+              <div><div className="ck">New Group</div><h1 style={{ margin: 0 }}>Create a group</h1></div>
+            </div>
+            <button className="hbtn hbtn--primary hbtn--sm" onClick={() => setAiModal(true)} style={{ gap: 6 }}>
+              ✨ Generate with AI
+            </button>
           </div>
 
           <div className="form-card main-info-card">
@@ -1010,6 +1017,49 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
           </div>
         </div>
       </div>
+
+      {locationModalOpen && (
+        <LocationModal
+          locationType={locationType} setLocationType={setLocationType}
+          venueName={venueName} setVenueName={setVenueName}
+          address={address} setAddress={setAddress}
+          city={city} setCity={setCity}
+          locationState={locationState} setLocationState={setLocationState}
+          locationCountry={locationCountry} setLocationCountry={setLocationCountry}
+          platform={platform} setPlatform={setPlatform}
+          meetingLink={meetingLink} setMeetingLink={setMeetingLink}
+          onClose={() => setLocationModalOpen(false)}
+        />
+      )}
+
+      {aiModal && (
+        <AIGeneratorModal
+          type="group"
+          onClose={() => setAiModal(false)}
+          onGenerate={(data) => {
+            if (data.name) setName(data.name);
+            if (data.description) setDesc(data.description);
+            if (data.category) setCat(data.category);
+            
+            if (data.visibility) {
+              if (allowedVisibilities.includes(data.visibility)) {
+                setVisibility(data.visibility);
+              }
+            }
+            if (data.joinElig) {
+              if (data.joinElig === 'anyone' && canJoinOpen) setJoinElig('anyone');
+              else if (data.joinElig === 'restricted' && canJoinRestricted) setJoinElig('restricted');
+              else if (data.joinElig === 'invite' && canJoinInvite) setJoinElig('invite');
+            }
+            if (data.approval !== undefined) setApproval(data.approval);
+            
+            if (data.imagePrompt) {
+              const encodedPrompt = encodeURIComponent(data.imagePrompt);
+              setBanner(`https://image.pollinations.ai/prompt/${encodedPrompt}?width=1080&height=1080&nologo=true`);
+            }
+          }}
+        />
+      )}
 
       {upgradeModalOpen && (
         <UpgradePlanModal 
