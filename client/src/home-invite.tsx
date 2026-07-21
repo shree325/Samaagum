@@ -95,6 +95,33 @@ export function InviteLanding({ token, go }) {
             alert("Please answer all required questions.");
             return;
         }
+
+        for (let i = 0; i < questionnaires.length; i++) {
+            const q = questionnaires[i];
+            const val = qAnswers[i];
+            if (val && typeof val === 'string' && val.trim().length > 0) {
+                if (q.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+                    alert(`Please enter a valid email address for "${q.q}".`);
+                    return;
+                }
+                if (q.type === 'phone' && !/^(\+91[\s-]?)?\d{10}$/.test(val.trim())) {
+                    alert(`Please enter a valid 10-digit phone number for "${q.q}".`);
+                    return;
+                }
+                if (q.type === 'date') {
+                    if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+                        alert(`Please enter a valid date (YYYY-MM-DD) for "${q.q}".`);
+                        return;
+                    }
+                    const year = parseInt(val.split('-')[0], 10);
+                    if (year < 1900 || year > 2100) {
+                        alert(`Please enter a realistic year for "${q.q}".`);
+                        return;
+                    }
+                }
+            }
+        }
+
         setShowQForm(false);
         doAccept(qAnswers);
     };

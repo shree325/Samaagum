@@ -1630,11 +1630,32 @@ useEffect(() => {
                 onClick={() => {
                   const fields = questEvent.venue_obj?.meta?.formFields || [];
                   for (const f of fields) {
+                    const val = questAnswers[f.id];
                     if (f.required) {
-                      const val = questAnswers[f.id];
                       if (!val || (Array.isArray(val) && val.length === 0) || (typeof val === 'object' && !val.company)) {
                         if (window.toast) window.toast(`Please answer all required questions.`, "warning");
                         return;
+                      }
+                    }
+                    if (val && typeof val === 'string' && val.trim().length > 0) {
+                      if (f.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+                        if (window.toast) window.toast(`Please enter a valid email address for "${f.question}".`, "warning");
+                        return;
+                      }
+                      if (f.type === 'phone' && !/^(\+91[\s-]?)?\d{10}$/.test(val.trim())) {
+                        if (window.toast) window.toast(`Please enter a valid 10-digit phone number for "${f.question}".`, "warning");
+                        return;
+                      }
+                      if (f.type === 'date') {
+                        if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+                          if (window.toast) window.toast(`Please enter a valid date (YYYY-MM-DD) for "${f.question}".`, "warning");
+                          return;
+                        }
+                        const year = parseInt(val.split('-')[0], 10);
+                        if (year < 1900 || year > 2100) {
+                          if (window.toast) window.toast(`Please enter a realistic year for "${f.question}".`, "warning");
+                          return;
+                        }
                       }
                     }
                   }

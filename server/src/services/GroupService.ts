@@ -1614,6 +1614,20 @@ export class GroupService {
             whereExtra += ` AND (fp.title ILIKE $5 OR fp.body ILIKE $5)`;
         }
 
+        let isPrivileged = false;
+        if (userId) {
+            const highestRole = await this.getHighestGroupRole(userId, groupId);
+            isPrivileged = ['group_owner', 'group_admin', 'group_moderator'].includes(highestRole);
+        }
+        
+        if (isPrivileged) {
+            whereExtra += ` AND fp.status IN ('active', 'hidden')`;
+        } else if (userId) {
+            whereExtra += ` AND (fp.status = 'active' OR (fp.status = 'hidden' AND fp.author_user_id = $2::uuid))`;
+        } else {
+            whereExtra += ` AND fp.status = 'active'`;
+        }
+
         const posts = await this.forumPostsRepo.getGroupPostsRaw(groupId, userId, lim, skip, orderBy, whereExtra, queryParams);
 
         const postIds = posts.map((p: any) => String(p.id));
@@ -1675,6 +1689,11 @@ export class GroupService {
         const allowed = await this.checkForumPermission(user.id, groupId, 'create_thread', settings);
         if (!allowed) throw new Error('You do not have permission to post in this group');
 
+        const highestRole = await this.getHighestGroupRole(user.id, groupId);
+        const isAdminOrMod = ['group_owner', 'group_admin', 'group_moderator'].includes(highestRole);
+        const needsApproval = settings?.forums?.approve && !isAdminOrMod;
+        const postStatus = needsApproval ? 'hidden' : 'active';
+
         const post = await this.forumPostsRepo.create({
             tenant_id: user.tenantId,
             scope_type: 'group',
@@ -1682,7 +1701,7 @@ export class GroupService {
             author_user_id: user.id,
             title: body.title || null,
             body: body.body,
-            status: 'active'
+            status: postStatus
         });
 
         const tagColorMap: Record<string, string> = {
@@ -1699,16 +1718,28 @@ export class GroupService {
                      RETURNING id`,
                     user.tenantId, groupId, tagName, tagColorMap[tagName] || 'gray'
                 );
-                if (tagRows[0]) {
-                    await this.postTagsRepo.create({
-                        post_id: post.id!,
-                        tag_id: String(tagRows[0].id)
-                    });
+                if (tagRows[0]?.id) {
+                    await prisma.$queryRawUnsafe(
+                        `INSERT INTO forum_post_tags(post_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+                        post.id, tagRows[0].id
+                    );
                 }
             }
         }
 
-        return { ...post, tags: body.tags || [], reactions: {}, vote_score: 0, user_vote: 0, comments_count: 0 };
+        return { ...post, tags: body.tags || [], reactions: {}, vote_score: 0, user_vote: 0, comments_count: 0, status: postStatus };
+    }
+
+    static async approveGroupPost(groupId: string, postId: string, userId: string) {
+        const highestRole = await this.getHighestGroupRole(userId, groupId);
+        const isAdminOrMod = ['group_owner', 'group_admin', 'group_moderator'].includes(highestRole);
+        if (!isAdminOrMod) throw new Error('Forbidden: Only admins and moderators can approve threads');
+
+        const post = await this.forumPostsRepo.findOne({ id: postId, scope_type: 'group', scope_id: groupId, deleted_at: null } as any);
+        if (!post) throw new Error('Thread not found');
+        if ((post as any).status !== 'hidden') throw new Error('Thread is not pending approval');
+
+        await prisma.$executeRaw`UPDATE forum_posts SET status = 'active', updated_at = NOW() WHERE id = ${postId}::uuid`;
     }
 
     static async editGroupPost(groupId: string, postId: string, user: any, body: any) {
@@ -2055,13 +2086,13 @@ export class GroupService {
                 }
               });
         const userIds = rows.map(r => r.uploader_user_id);
-        const users = await this.usersRepo.findAll({ id: { in: userIds } });
+        const users = await prisma.users.findMany({ where: { id: { in: userIds } } });
 
         return rows.map(r => {
             const u = users.find(userItem => userItem.id === r.uploader_user_id);
             // Only admins see who uploaded each item; members see null
             const uploaderName = isAdmin && u
-                ? `${u.first_name || ''} ${u.last_name || ''}`.trim() || 'Unknown'
+                ? `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.username || u.primary_email?.split('@')[0] || 'Unknown'
                 : null;
             return {
                 id: String(r.id),

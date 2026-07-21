@@ -701,6 +701,24 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
         }
     });
 
+    // POST /:id/posts/:postId/approve
+    fastify.post('/:id/posts/:postId/approve', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+        try {
+            if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+            const { id, postId } = request.params as any;
+            await GroupService.approveGroupPost(id, postId, request.user.id);
+            if ((fastify as any).io) {
+                (fastify as any).io.of('/groups').to(`group_${id}`).emit('thread_approved', { groupId: id, postId });
+            }
+            return { success: true, message: 'Thread approved successfully' };
+        } catch (e: any) {
+            if (e.message.includes('not found')) return reply.status(404).send({ success: false, message: e.message });
+            if (e.message.includes('Forbidden')) return reply.status(403).send({ success: false, message: e.message });
+            if (e.message.includes('not pending')) return reply.status(400).send({ success: false, message: e.message });
+            return reply.status(500).send({ success: false, message: e.message });
+        }
+    });
+
     // PATCH /:id/posts/:postId
     fastify.patch('/:id/posts/:postId', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
         try {
