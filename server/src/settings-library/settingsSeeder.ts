@@ -102,7 +102,7 @@ export const DEFAULT_CHAT_SETTINGS: ChatSettings = {
     profanityFilter: 'block_message',
     reportReviewQueue: true,
     linkPreviews: true,
-    maxMessagesPerMin: 10,
+    maxMessagesPerMin: 0,
     maxDmsPerDay: 100,
     maxGroupParticipants: 250
   }

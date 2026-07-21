@@ -1,77 +1,104 @@
-import { PrismaClient } from '@prisma/client';
+import { PostgresBaseRepository } from "./PostgresBaseRepository";
 import { IGroupMembership, IR_group_memberships } from "./IR_group_memberships";
 
-export class R_group_memberships implements IR_group_memberships {
-  constructor(private db: PrismaClient) {}
+import prisma from '../config/prisma';
 
-  async create(gm: IGroupMembership): Promise<IGroupMembership> {
-    const query = `
-      INSERT INTO group_memberships (bu_id, par_row_id, user_id, role, status, x_data, created_by, last_upd_by)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING *;
-    `;
-    const values = [
-      gm.bu_id, gm.par_row_id, gm.user_id, gm.role || 'member', gm.status || 'active',
-      gm.x_data ? JSON.stringify(gm.x_data) : null, gm.created_by || null, gm.last_upd_by || null
-    ];
-    const { rows } = await this.db.query(query, values);
-    return rows[0];
+export class R_group_memberships extends PostgresBaseRepository<IGroupMembership> implements IR_group_memberships {
+  constructor(dbClient?: any) {
+    super('group_memberships', 'id', dbClient);
   }
 
-  async getById(rowId: string): Promise<IGroupMembership | null> {
-    const { rows } = await this.db.query(`SELECT * FROM group_memberships WHERE row_id = $1`, [rowId]);
-    return rows[0] || null;
+  async getByGroupAndUser(group_id: string, user_id: string): Promise<IGroupMembership | null> {
+    return (this.dbModel as any).findFirst({
+      where: { group_id, user_id }
+    });
   }
 
-  async getByGroupAndUser(groupId: string, userId: string): Promise<IGroupMembership | null> {
-    const { rows } = await this.db.query(
-      `SELECT * FROM group_memberships WHERE par_row_id = $1 AND user_id = $2`,
-      [groupId, userId]
-    );
-    return rows[0] || null;
+  async getByGroup(group_id: string): Promise<IGroupMembership[]> {
+    return (this.dbModel as any).findMany({
+      where: { group_id },
+      orderBy: { created_at: 'desc' }
+    });
   }
 
-  async getByGroup(groupId: string): Promise<IGroupMembership[]> {
-    const { rows } = await this.db.query(
-      `SELECT * FROM group_memberships WHERE par_row_id = $1 ORDER BY created DESC`,
-      [groupId]
-    );
-    return rows;
+  async getByUser(user_id: string): Promise<IGroupMembership[]> {
+    return (this.dbModel as any).findMany({
+      where: { user_id },
+      orderBy: { created_at: 'desc' }
+    });
   }
 
-  async getByUser(userId: string): Promise<IGroupMembership[]> {
-    const { rows } = await this.db.query(
-      `SELECT * FROM group_memberships WHERE user_id = $1 ORDER BY created DESC`,
-      [userId]
-    );
-    return rows;
+  async findFirstActive(userId: string, orConditions: any[]): Promise<IGroupMembership | null> {
+    return await prisma.group_memberships.findFirst({
+      where: { user_id: userId, state: 'active', OR: orConditions }
+    });
   }
 
-  async update(rowId: string, gm: Partial<IGroupMembership>): Promise<IGroupMembership | null> {
-    const query = `
-      UPDATE group_memberships
-      SET role = COALESCE($1, role),
-          status = COALESCE($2, status),
-          x_data = COALESCE($3, x_data),
-          last_upd = now(),
-          last_upd_by = $4,
-          modification_num = modification_num + 1
-      WHERE row_id = $5
-      RETURNING *;
-    `;
-    const values = [
-      gm.role || null,
-      gm.status || null,
-      gm.x_data ? JSON.stringify(gm.x_data) : null,
-      gm.last_upd_by || null,
-      rowId
-    ];
-    const { rows } = await this.db.query(query, values);
-    return rows[0] || null;
+  async findFirstActiveByCategory(userId: string, cats: string[]): Promise<IGroupMembership | null> {
+    return await prisma.group_memberships.findFirst({
+      where: { user_id: userId, state: 'active', entities: { groups: { is: { category: { in: cats } } } } }
+    });
   }
 
-  async delete(rowId: string): Promise<boolean> {
-    const result = await this.db.query(`DELETE FROM group_memberships WHERE row_id = $1`, [rowId]);
-    return (result.rowCount ?? 0) > 0;
+  async getMembershipCounts(groupIds: string[]): Promise<any[]> {
+    return await (prisma.group_memberships.groupBy as any)({
+      by: ['group_id'],
+      where: { group_id: { in: groupIds }, state: 'active' },
+      _count: { _all: true }
+    });
+  }
+
+  async getMembershipCountsAll(): Promise<any[]> {
+    return await (prisma.group_memberships.groupBy as any)({
+      by: ['group_id'],
+      where: { state: 'active' },
+      _count: { _all: true }
+    });
+  }
+
+  async getOnlineCounts(groupIds: string[]): Promise<any[]> {
+    if (groupIds.length === 0) return [];
+    return await prisma.$queryRawUnsafe<any[]>(`
+      SELECT gm.group_id, count(p.user_id)::int as count
+      FROM group_memberships gm
+      JOIN presences p ON p.user_id = gm.user_id
+      WHERE gm.group_id IN (${groupIds.map((_, i) => `$${i + 1}::uuid`).join(', ')})
+        AND p.active_connections > 0
+        AND gm.state = 'active'
+      GROUP BY gm.group_id
+    `, ...groupIds);
+  }
+
+  async getOnlineCountsAll(): Promise<any[]> {
+    return await prisma.$queryRawUnsafe<any[]>(`
+      SELECT gm.group_id, count(p.user_id)::int as count
+      FROM group_memberships gm
+      JOIN presences p ON p.user_id = gm.user_id
+      WHERE p.active_connections > 0
+        AND gm.state = 'active'
+      GROUP BY gm.group_id
+    `);
+  }
+
+  async deleteMembership(groupId: string, userId: string): Promise<boolean> {
+    try {
+      await prisma.group_memberships.deleteMany({
+        where: { group_id: groupId, user_id: userId }
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async leaveGroupTx(groupId: string, userId: string): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+      await tx.role_assignments.deleteMany({
+        where: { user_id: userId, scope_entity_id: groupId }
+      });
+      await tx.group_memberships.deleteMany({
+        where: { group_id: groupId, user_id: userId }
+      });
+    });
   }
 }

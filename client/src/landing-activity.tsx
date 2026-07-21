@@ -1,22 +1,29 @@
 // @ts-nocheck
+import React, { useEffect, useState } from 'react';
+import { CITIES, Wordmark, gradFor, initials } from './components';
+import { ACTIVITY, CountUp, I, Reveal, range, useScrub } from './landing-core';
+import { Communities, Events } from './landing-features';
+import { Networking, Profiles } from './landing-features2';
+import { AUTH } from './landing-hero';
+
 /* ============================================================
    Samaagum landing — Discussions, Activity, CTA, Footer
    ============================================================ */
 
 /* ---------------- Discussions ---------------- */
-const THREAD = [
+export const THREAD = [
   { who: "Mira Shah", txt: "Anyone going to Design Systems Night on Saturday? Looking for a +1 👀", me: false, reacts: ["Same!", "I'm in"] },
   { who: "You", txt: "Yes! RSVP'd this morning — let's go together.", me: true },
   { who: "Dev Kapoor", txt: "Dropping the deck from last week's critique here for everyone.", me: false, reacts: ["Helpful · 9"] },
-  { who: "You", txt: "This is gold. Pinning it to the community.", me: true },
+  { who: "You", txt: "This is gold. Pinning it to the group.", me: true },
 ];
-function Discussions() {
+export function Discussions() {
   return (
     <section className="section" id="discussions">
       <div className="wrap center">
         <Reveal y={16}><span className="eyebrow-pill"><span className="grad-dot" />Discussions</span></Reveal>
         <Reveal y={20} delay={80}><h2 className="h-section" style={{ marginTop: 20 }}>Conversations that<br /><span className="glow-text">keep going.</span></h2></Reveal>
-        <Reveal y={20} delay={160}><p className="sub-section">Threads, polls and pinned posts inside every community — so the conversation never stops at the event door.</p></Reveal>
+        <Reveal y={20} delay={160}><p className="sub-section">Threads, polls and pinned posts inside every group — so the conversation never stops at the event door.</p></Reveal>
       </div>
       <div className="wrap">
         <div className="thread">
@@ -37,7 +44,7 @@ function Discussions() {
 }
 
 /* ---------------- Platform Activity ---------------- */
-function ActivityItem({ a }) {
+export function ActivityItem({ a }) {
   return (
     <div className="activity-item">
       <div className="ava" style={{ background: gradFor(a.who) }}>{initials(a.who)}</div>
@@ -46,7 +53,7 @@ function ActivityItem({ a }) {
     </div>
   );
 }
-function PlatformActivity() {
+export function PlatformActivity() {
   const [dynamicCities, setDynamicCities] = React.useState(window.CITIES || []);
   React.useEffect(() => {
     if (window.getActiveCities) {
@@ -102,8 +109,8 @@ function PlatformActivity() {
             <div className="glass-card map-card">
               <div className="map-dots" />
               <div className="sec-glow" style={{ width: 300, height: 300, background: "var(--accent-1)", top: "20%", left: "30%", opacity: 0.18 }} />
-              {dynamicCities.map((c) => (
-                <div key={c.n} className="map-pin2" style={{ left: c.x + "%", top: c.y + "%" }}>
+              {dynamicCities.map((c, idx) => (
+                <div key={`${c.n}-${idx}`} className="map-pin2" style={{ left: c.x + "%", top: c.y + "%" }}>
                   <span className="ring" /><span className="core" />
                   {["Bengaluru", "London", "New York", c.n].includes(c.n) && <span className="lbl">{c.n}</span>}
                 </div>
@@ -121,7 +128,7 @@ function PlatformActivity() {
 }
 
 /* ---------------- Final CTA ---------------- */
-function FinalCTA() {
+export function FinalCTA() {
   const ringRef = useScrub((p, r, vh, el) => {
     el.style.transform = `translate(-50%,-50%) scale(${(0.9 + p * 0.3).toFixed(3)})`;
     el.style.opacity = `${(0.4 + range(p, 0.2, 0.7) * 0.6).toFixed(2)}`;
@@ -138,7 +145,7 @@ function FinalCTA() {
       <div className="wrap" style={{ position: "relative", zIndex: 3 }}>
         <Reveal y={16}><span className="eyebrow-pill" style={{ marginBottom: 24 }}><span className="grad-dot" />Your people are waiting</span></Reveal>
         <Reveal y={24} delay={80}><h2>Find your people.<br /><span className="glow-text">Start today.</span></h2></Reveal>
-        <Reveal y={20} delay={160}><p className="sub-section">Join Samaagum free. Create a community, discover events, and meet the people who'll shape what's next.</p></Reveal>
+        <Reveal y={20} delay={160}><p className="sub-section">Join Samaagum free. Create a group, discover events, and meet the people who'll shape what's next.</p></Reveal>
         <Reveal y={20} delay={240}>
           <div className="hero-cta">
             <a href={AUTH} className="btn btn-primary">Get started — it's free {I.arrow()}</a>
@@ -151,9 +158,9 @@ function FinalCTA() {
 }
 
 /* ---------------- Footer ---------------- */
-function Footer() {
+export function Footer() {
   const cols = [
-    ["Product", ["Communities", "Events", "Networking", "Profiles", "Discussions"]],
+    ["Product", ["Groups", "Events", "Networking", "Profiles", "Discussions"]],
     ["Company", ["About", "Careers", "Blog", "Press"]],
     ["Resources", ["Help center", "Guidelines", "Privacy", "Terms"]],
   ];
@@ -163,7 +170,7 @@ function Footer() {
         <div className="footer-grid">
           <div className="footer-brand">
             <Wordmark size={20} />
-            <p>The premium home for communities, events and the people who make them happen.</p>
+            <p>The premium home for groups, events and the people who make them happen.</p>
           </div>
           {cols.map(([h, links]) => (
             <div key={h}>
@@ -175,7 +182,7 @@ function Footer() {
           ))}
         </div>
         <div className="footer-bottom">
-          <span>© 2026 Samaagum. Crafted for community.</span>
+          <span>© 2026 Samaagum. Crafted for connection.</span>
           <span style={{ display: "inline-flex", gap: 18 }}>
             <a href={AUTH} style={{ display: "inline", margin: 0 }}>Privacy</a>
             <a href={AUTH} style={{ display: "inline", margin: 0 }}>Terms</a>
@@ -186,4 +193,4 @@ function Footer() {
   );
 }
 
-Object.assign(window, { Discussions, PlatformActivity, FinalCTA, Footer, ActivityItem });
+

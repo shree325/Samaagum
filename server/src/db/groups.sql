@@ -10,10 +10,16 @@ CREATE TABLE groups (
   entity_id       UUID        PRIMARY KEY REFERENCES entities(id) ON DELETE CASCADE,
   name            TEXT        NOT NULL,
   slug            TEXT,
+  description     TEXT,
+  category        TEXT,
+  icon            TEXT,
+  cover           TEXT,
+  banner          TEXT,
   join_mode       join_mode   NOT NULL DEFAULT 'open',
   -- join_form_id FK deferred to after forms table
   join_form_id    UUID,
-  listed          listed_state NOT NULL DEFAULT 'unlisted'
+  listed          listed_state NOT NULL DEFAULT 'unlisted',
+  settings        JSONB        DEFAULT '{}'
 );
 
 COMMENT ON TABLE groups                    IS 'phase:MVP-0';

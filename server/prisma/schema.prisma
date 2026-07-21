@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -159,6 +160,10 @@ model booking_line_items {
   unit_price_amount_minor BigInt?
   unit_price_currency     String?              @db.Char(3)
   line_status             String               @default("active")
+  discount_minor          BigInt               @default(0)
+  tax_minor               BigInt               @default(0)
+  total_minor             BigInt?
+  attendee_capture_mode   String?
   bookings                bookings             @relation(fields: [booking_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenants                 tenants              @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   ticket_types            ticket_types?        @relation(fields: [ticket_type_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -172,27 +177,30 @@ model booking_line_items {
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model bookings {
-  id                    String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id             String                  @db.Uuid
-  event_id              String                  @db.Uuid
-  booker_user_id        String                  @db.Uuid
-  status                booking_status          @default(pending_payment)
-  payment_method        payment_method          @default(free)
-  hold_expires_at       DateTime?               @db.Timestamptz(6)
-  total_amount_minor    BigInt?
-  total_currency        String?                 @db.Char(3)
-  created_at            DateTime                @default(now()) @db.Timestamptz(6)
-  updated_at            DateTime                @default(now()) @db.Timestamptz(6)
-  affiliate_commissions affiliate_commissions[]
-  attendees             attendees[]
-  booking_line_items    booking_line_items[]
-  users                 users                   @relation(fields: [booker_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  events                events                  @relation(fields: [event_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tenants               tenants                 @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  coupon_redemptions    coupon_redemptions[]
-  disputes              disputes[]
-  payments              payments[]
-  referral_clicks       referral_clicks[]
+  id                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id              String                   @db.Uuid
+  event_id               String                   @db.Uuid
+  booker_user_id         String                   @db.Uuid
+  status                 booking_status           @default(pending_payment)
+  payment_method         payment_method           @default(free)
+  hold_expires_at        DateTime?                @db.Timestamptz(6)
+  total_amount_minor     BigInt?
+  total_currency         String?                  @db.Char(3)
+  created_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  payment_proof_url      String?
+  affiliate_commissions  affiliate_commissions[]
+  attendees              attendees[]
+  booking_line_items     booking_line_items[]
+  users                  users                    @relation(fields: [booker_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  events                 events                   @relation(fields: [event_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenants                tenants                  @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  coupon_redemptions     coupon_redemptions[]
+  disputes               disputes[]
+  event_registration_log event_registration_log[]
+  invoices               invoices?
+  payments               payments[]
+  referral_clicks        referral_clicks[]
 
   @@index([booker_user_id], map: "idx_bookings_booker_user_id")
   @@index([event_id], map: "idx_bookings_event_id")
@@ -331,8 +339,6 @@ model conversation_participants {
   users           users                         @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@id([conversation_id, user_id])
-  @@index([conversation_id])
-  @@index([user_id])
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -383,24 +389,26 @@ model coupon_redemptions {
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model coupons {
-  id                    String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id             String               @db.Uuid
-  event_id              String               @db.Uuid
-  code                  String
-  discount_type         coupon_discount
-  discount_amount_minor BigInt?
-  discount_currency     String?              @db.Char(3)
-  discount_percent      Decimal?             @db.Decimal(5, 2)
-  valid_from            DateTime?            @db.Timestamptz(6)
-  valid_to              DateTime?            @db.Timestamptz(6)
-  max_total             Int?
-  max_per_user          Int?
-  status                String               @default("active")
-  created_at            DateTime             @default(now()) @db.Timestamptz(6)
-  updated_at            DateTime             @default(now()) @db.Timestamptz(6)
-  coupon_redemptions    coupon_redemptions[]
-  events                events               @relation(fields: [event_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tenants               tenants              @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                         String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                  String               @db.Uuid
+  event_id                   String               @db.Uuid
+  code                       String
+  discount_type              coupon_discount
+  discount_amount_minor      BigInt?
+  discount_currency          String?              @db.Char(3)
+  discount_percent           Decimal?             @db.Decimal(5, 2)
+  valid_from                 DateTime?            @db.Timestamptz(6)
+  valid_to                   DateTime?            @db.Timestamptz(6)
+  max_total                  Int?
+  max_per_user               Int?
+  status                     String               @default("active")
+  created_at                 DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime             @default(now()) @db.Timestamptz(6)
+  min_purchase_amount_minor  BigInt?
+  applicable_ticket_type_ids String[]             @db.Uuid
+  coupon_redemptions         coupon_redemptions[]
+  events                     events               @relation(fields: [event_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenants                    tenants              @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([event_id, code])
 }
@@ -486,8 +494,8 @@ model entities {
   role_assignments                                                       role_assignments[]
   settlements                                                            settlements[]
   sponsors                                                               sponsors[]
-  sub_communities_sub_communities_community_entity_idToentities          sub_communities[]       @relation("sub_communities_community_entity_idToentities")
-  sub_communities_sub_communities_entity_idToentities                    sub_communities?        @relation("sub_communities_entity_idToentities")
+  sub_communities_community                                              sub_communities[]       @relation("sub_communities_community_entity_idToentities")
+  sub_communities_entity                                                 sub_communities?        @relation("sub_communities_entity_idToentities")
   subscriptions                                                          subscriptions[]
   takeover_requests                                                      takeover_requests[]
 
@@ -556,6 +564,14 @@ model events {
   financial_locked_at    DateTime?                @db.Timestamptz(6)
   created_at             DateTime                 @default(now()) @db.Timestamptz(6)
   updated_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  instruction            String?
+  eligibility_rules      Json                     @default("{}")
+  registration_status    String                   @default("OPEN")
+  registration_opens_at  DateTime?                @db.Timestamptz(6)
+  registration_closes_at DateTime?                @db.Timestamptz(6)
+  settings               Json?
+  payment_instructions   String?
+  payment_hold_hours     Int?                     @default(48)
   addons                 addons[]
   bookings               bookings[]
   bundles                bundles[]
@@ -563,8 +579,12 @@ model events {
   collaborations         collaborations[]
   conversations          conversations[]
   coupons                coupons[]
+  event_invitations      event_invitations[]
   eventMedias            event_media[]
+  event_registration_log event_registration_log[]
   event_team_assignments event_team_assignments[]
+  eventVirtualMeetings   event_virtual_meetings[]
+  event_wishlist         event_wishlist[]
   entities               entities                 @relation(fields: [hosted_by_entity_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   events                 events?                  @relation("eventsToevents", fields: [parent_event_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   other_events           events[]                 @relation("eventsToevents")
@@ -579,6 +599,25 @@ model events {
 
   @@index([hosted_by_entity_id], map: "idx_events_hosted_by_entity_id")
   @@index([status], map: "idx_events_status")
+}
+
+model event_invitations {
+  id                                        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id                                  String    @db.Uuid
+  purpose                                   String
+  token                                     String    @unique
+  status                                    String    @default("pending")
+  created_by                                String?   @db.Uuid
+  used_by                                   String?   @db.Uuid
+  used_at                                   DateTime? @db.Timestamptz(6)
+  created_at                                DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at                                DateTime? @default(now()) @db.Timestamptz(6)
+  users_event_invitations_created_byTousers users?    @relation("event_invitations_created_byTousers", fields: [created_by], references: [id], onUpdate: NoAction)
+  events                                    events    @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_event_invitations_used_byTousers    users?    @relation("event_invitations_used_byTousers", fields: [used_by], references: [id], onUpdate: NoAction)
+
+  @@index([event_id], map: "idx_event_invitations_event")
+  @@index([token], map: "idx_event_invitations_token")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -668,36 +707,49 @@ model forms {
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model forum_comments {
-  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id      String         @db.Uuid
-  post_id        String         @db.Uuid
-  author_user_id String         @db.Uuid
-  body           String?
-  status         content_status @default(active)
-  created_at     DateTime       @default(now()) @db.Timestamptz(6)
-  updated_at     DateTime       @default(now()) @db.Timestamptz(6)
-  users          users          @relation(fields: [author_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  forum_posts    forum_posts    @relation(fields: [post_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tenants        tenants        @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                   String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id            String           @db.Uuid
+  post_id              String           @db.Uuid
+  author_user_id       String           @db.Uuid
+  body                 String?
+  status               content_status   @default(active)
+  created_at           DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime         @default(now()) @db.Timestamptz(6)
+  deleted_at           DateTime?        @db.Timestamptz(6)
+  parent_id            String?          @db.Uuid
+  users                users            @relation(fields: [author_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  forum_comments       forum_comments?  @relation("forum_commentsToforum_comments", fields: [parent_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  other_forum_comments forum_comments[] @relation("forum_commentsToforum_comments")
+  forum_posts          forum_posts      @relation(fields: [post_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenants              tenants          @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([parent_id], map: "idx_forum_comments_parent")
+  @@index([post_id, deleted_at], map: "idx_forum_comments_post_del")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model forum_posts {
-  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id      String           @db.Uuid
-  scope_type     String
-  scope_id       String           @db.Uuid
-  author_user_id String           @db.Uuid
-  title          String?
-  body           String?
-  pinned         Boolean          @default(false)
-  status         content_status   @default(active)
-  created_at     DateTime         @default(now()) @db.Timestamptz(6)
-  updated_at     DateTime         @default(now()) @db.Timestamptz(6)
-  forum_comments forum_comments[]
-  users          users            @relation(fields: [author_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tenants        tenants          @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id       String            @db.Uuid
+  scope_type      String
+  scope_id        String            @db.Uuid
+  author_user_id  String            @db.Uuid
+  title           String?
+  body            String?
+  pinned          Boolean           @default(false)
+  status          content_status    @default(active)
+  created_at      DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime          @default(now()) @db.Timestamptz(6)
+  archived        Boolean           @default(false)
+  deleted_at      DateTime?         @db.Timestamptz(6)
+  locked          Boolean           @default(false)
+  solved          Boolean           @default(false)
+  view_count      Int               @default(0)
+  forum_comments  forum_comments[]
+  forum_post_tags forum_post_tags[]
+  users           users             @relation(fields: [author_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tenants         tenants           @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([scope_id], map: "idx_forum_posts_scope_id")
 }
@@ -742,6 +794,7 @@ model group_memberships {
   joined_at        DateTime?        @db.Timestamptz(6)
   created_at       DateTime         @default(now()) @db.Timestamptz(6)
   updated_at       DateTime         @default(now()) @db.Timestamptz(6)
+  answers          Json?
   form_responses   form_responses?  @relation(fields: [form_response_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_gm_form_response")
   entities         entities         @relation(fields: [group_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenants          tenants          @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -754,14 +807,23 @@ model group_memberships {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model groups {
-  entity_id    String       @id @db.Uuid
-  name         String
-  slug         String?
-  join_mode    join_mode    @default(open)
-  join_form_id String?      @db.Uuid
-  listed       listed_state @default(unlisted)
-  forms        forms?       @relation(fields: [join_form_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_groups_join_form")
-  entities     entities     @relation(fields: [entity_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  entity_id         String              @id @db.Uuid
+  name              String
+  slug              String?
+  join_mode         join_mode           @default(open)
+  join_form_id      String?             @db.Uuid
+  listed            listed_state        @default(unlisted)
+  banner            String?
+  banner_data       Bytes?
+  category          String?
+  cover             String?
+  description       String?
+  icon              String?
+  icon_data         Bytes?
+  settings          Json?               @default("{}")
+  group_invitations group_invitations[]
+  forms             forms?              @relation(fields: [join_form_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_groups_join_form")
+  entities          entities            @relation(fields: [entity_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -997,7 +1059,6 @@ model messages {
   reactions            reactions[]
 
   @@index([conversation_id], map: "idx_messages_conversation_id")
-  @@index([conversation_id, created_at])
 }
 
 model migrations {
@@ -1175,10 +1236,10 @@ model profiles {
   phone_number                                       String?       @db.VarChar(20)
   user_name                                          String?
   headline                                           String?
+  messaging_restriction                              String?       @default("anyone") @db.VarChar(50)
+  privacy_prefs                                      Json?         @default("{}")
   media_assets_profiles_cover_asset_idTomedia_assets media_assets? @relation("profiles_cover_asset_idTomedia_assets", fields: [cover_asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_profiles_cover")
   media_assets_profiles_photo_asset_idTomedia_assets media_assets? @relation("profiles_photo_asset_idTomedia_assets", fields: [photo_asset_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_profiles_photo")
-  messaging_restriction                              String        @default("anyone")
-  privacy_prefs                                      Json?         @default("{}")
   tenants                                            tenants       @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   users                                              users         @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
@@ -1226,6 +1287,9 @@ model referral_links {
   commission_rule       Json?
   created_at            DateTime                @default(now()) @db.Timestamptz(6)
   updated_at            DateTime                @default(now()) @db.Timestamptz(6)
+  status                String                  @default("active")
+  clicked_count         Int                     @default(0)
+  converted_count       Int                     @default(0)
   affiliate_commissions affiliate_commissions[]
   referral_clicks       referral_clicks[]
   affiliates            affiliates              @relation(fields: [affiliate_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -1607,6 +1671,7 @@ model tickets {
   claimed_by_user_id String?            @db.Uuid
   created_at         DateTime           @default(now()) @db.Timestamptz(6)
   updated_at         DateTime           @default(now()) @db.Timestamptz(6)
+  ticket_code        String?            @unique
   attendees          attendees[]
   checkins           checkins[]
   ticket_claims      ticket_claims[]
@@ -1655,113 +1720,125 @@ model user_interests {
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model users {
-  id                                                                   String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id                                                            String                       @db.Uuid
-  primary_email                                                        String?                      @db.Citext
-  email_verified                                                       Boolean                      @default(false)
-  state                                                                user_state                   @default(provisional)
-  locale                                                               String                       @default("en")
-  preferred_currency                                                   String?                      @db.Char(3)
+  id                                                                   String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                                                            String                          @db.Uuid
+  primary_email                                                        String?                         @db.Citext
+  email_verified                                                       Boolean                         @default(false)
+  state                                                                user_state                      @default(provisional)
+  locale                                                               String                          @default("en")
+  preferred_currency                                                   String?                         @db.Char(3)
   gender                                                               String?
-  dob                                                                  DateTime?                    @db.Date
+  dob                                                                  DateTime?                       @db.Date
   phone_e164                                                           String?
-  profile_completed                                                    Boolean                      @default(false)
-  activated_at                                                         DateTime?                    @db.Timestamptz(6)
-  deleted_at                                                           DateTime?                    @db.Timestamptz(6)
-  created_at                                                           DateTime                     @default(now()) @db.Timestamptz(6)
-  updated_at                                                           DateTime                     @default(now()) @db.Timestamptz(6)
-  last_seen_at                                                         DateTime?                    @db.Timestamptz(6)
+  profile_completed                                                    Boolean                         @default(false)
+  activated_at                                                         DateTime?                       @db.Timestamptz(6)
+  deleted_at                                                           DateTime?                       @db.Timestamptz(6)
+  created_at                                                           DateTime                        @default(now()) @db.Timestamptz(6)
+  updated_at                                                           DateTime                        @default(now()) @db.Timestamptz(6)
+  last_seen_at                                                         DateTime?                       @db.Timestamptz(6)
   profile_image_data                                                   Bytes?
   first_name                                                           String?
   last_name                                                            String?
   location                                                             String?
-  phone_number                                                         String?                      @db.VarChar(20)
+  phone_number                                                         String?                         @db.VarChar(20)
   admin_roles                                                          admin_roles[]
   affiliates                                                           affiliates[]
-  attendees_attendees_created_byTousers                                attendees[]                  @relation("attendees_created_byTousers")
-  attendees_attendees_updated_byTousers                                attendees[]                  @relation("attendees_updated_byTousers")
-  attendees_attendees_user_idTousers                                   attendees[]                  @relation("attendees_user_idTousers")
+  attendees_attendees_created_byTousers                                attendees[]                     @relation("attendees_created_byTousers")
+  attendees_attendees_updated_byTousers                                attendees[]                     @relation("attendees_updated_byTousers")
+  attendees_attendees_user_idTousers                                   attendees[]                     @relation("attendees_user_idTousers")
   auth_identities                                                      auth_identities[]
-  blocked_users_blocked_users_blocked_idTousers                        blocked_users[]              @relation("blocked_users_blocked_idTousers")
-  blocked_users_blocked_users_blocker_idTousers                        blocked_users[]              @relation("blocked_users_blocker_idTousers")
+  blocked_users_blocked_users_blocked_idTousers                        blocked_users[]                 @relation("blocked_users_blocked_idTousers")
+  blocked_users_blocked_users_blocker_idTousers                        blocked_users[]                 @relation("blocked_users_blocker_idTousers")
   bookings                                                             bookings[]
-  checkin_gates_checkin_gates_created_byTousers                        checkin_gates[]              @relation("checkin_gates_created_byTousers")
-  checkin_gates_checkin_gates_updated_byTousers                        checkin_gates[]              @relation("checkin_gates_updated_byTousers")
+  checkin_gates_checkin_gates_created_byTousers                        checkin_gates[]                 @relation("checkin_gates_created_byTousers")
+  checkin_gates_checkin_gates_updated_byTousers                        checkin_gates[]                 @relation("checkin_gates_updated_byTousers")
   checkins                                                             checkins[]
-  connections_connections_addressee_user_idTousers                     connections[]                @relation("connections_addressee_user_idTousers")
-  connections_connections_requester_user_idTousers                     connections[]                @relation("connections_requester_user_idTousers")
+  connections_connections_addressee_user_idTousers                     connections[]                   @relation("connections_addressee_user_idTousers")
+  connections_connections_requester_user_idTousers                     connections[]                   @relation("connections_requester_user_idTousers")
   conversation_participants                                            conversation_participants[]
   conversations                                                        conversations[]
   coupon_redemptions                                                   coupon_redemptions[]
   disputes                                                             disputes[]
   entities                                                             entities[]
-  event_categories_event_categories_created_byTousers                  event_categories[]           @relation("event_categories_created_byTousers")
-  event_categories_event_categories_updated_byTousers                  event_categories[]           @relation("event_categories_updated_byTousers")
-  event_media_event_media_created_byTousers                            event_media[]                @relation("event_media_created_byTousers")
-  event_media_event_media_updated_byTousers                            event_media[]                @relation("event_media_updated_byTousers")
-  event_team_assignments_event_team_assignments_granted_byTousers      event_team_assignments[]     @relation("event_team_assignments_granted_byTousers")
-  event_team_assignments_event_team_assignments_user_idTousers         event_team_assignments[]     @relation("event_team_assignments_user_idTousers")
+  event_categories_event_categories_created_byTousers                  event_categories[]              @relation("event_categories_created_byTousers")
+  event_categories_event_categories_updated_byTousers                  event_categories[]              @relation("event_categories_updated_byTousers")
+  event_invitations_event_invitations_created_byTousers                event_invitations[]             @relation("event_invitations_created_byTousers")
+  event_invitations_event_invitations_used_byTousers                   event_invitations[]             @relation("event_invitations_used_byTousers")
+  event_media_event_media_created_byTousers                            event_media[]                   @relation("event_media_created_byTousers")
+  event_media_event_media_updated_byTousers                            event_media[]                   @relation("event_media_updated_byTousers")
+  event_registration_log                                               event_registration_log[]
+  event_team_assignments_event_team_assignments_granted_byTousers      event_team_assignments[]        @relation("event_team_assignments_granted_byTousers")
+  event_team_assignments_event_team_assignments_user_idTousers         event_team_assignments[]        @relation("event_team_assignments_user_idTousers")
+  event_wishlist                                                       event_wishlist[]
   follows                                                              follows[]
   form_responses                                                       form_responses[]
   forum_comments                                                       forum_comments[]
+  forum_member_permissions                                             forum_member_permissions[]
   forum_posts                                                          forum_posts[]
-  gamification_gamification_created_byTousers                          gamification[]               @relation("gamification_created_byTousers")
-  gamification_gamification_last_upd_byTousers                         gamification[]               @relation("gamification_last_upd_byTousers")
-  gamification_gamification_user_idTousers                             gamification?                @relation("gamification_user_idTousers")
+  forum_reactions                                                      forum_reactions[]
+  forum_votes                                                          forum_votes[]
+  gamification_gamification_created_byTousers                          gamification[]                  @relation("gamification_created_byTousers")
+  gamification_gamification_last_upd_byTousers                         gamification[]                  @relation("gamification_last_upd_byTousers")
+  gamification_gamification_user_idTousers                             gamification?                   @relation("gamification_user_idTousers")
+  group_gallery                                                        group_gallery[]
+  group_invitations                                                    group_invitations[]
   group_memberships                                                    group_memberships[]
-  impersonation_sessions_impersonation_sessions_admin_user_idTousers   impersonation_sessions[]     @relation("impersonation_sessions_admin_user_idTousers")
-  impersonation_sessions_impersonation_sessions_target_user_idTousers  impersonation_sessions[]     @relation("impersonation_sessions_target_user_idTousers")
+  impersonation_sessions_impersonation_sessions_admin_user_idTousers   impersonation_sessions[]        @relation("impersonation_sessions_admin_user_idTousers")
+  impersonation_sessions_impersonation_sessions_target_user_idTousers  impersonation_sessions[]        @relation("impersonation_sessions_target_user_idTousers")
   kyc_reviews                                                          kyc_reviews[]
   kyc_submissions                                                      kyc_submissions[]
-  maker_checker_requests_maker_checker_requests_checker_user_idTousers maker_checker_requests[]     @relation("maker_checker_requests_checker_user_idTousers")
-  maker_checker_requests_maker_checker_requests_maker_user_idTousers   maker_checker_requests[]     @relation("maker_checker_requests_maker_user_idTousers")
-  marketplace_bids                                                    marketplace_bids[]
-  marketplace_listings                                                marketplace_listings[]
-  media_assets                                                        media_assets[]
-  membership_subscriptions                                            membership_subscriptions[]
-  message_receipts                                                    message_receipts[]
-  message_versions                                                    message_versions[]
-  message_visibilities                                                message_visibilities[]
-  messages                                                            messages[]
-  ml_feature_store_ml_feature_store_created_byTousers                 ml_feature_store[]           @relation("ml_feature_store_created_byTousers")
-  ml_feature_store_ml_feature_store_last_upd_byTousers                ml_feature_store[]           @relation("ml_feature_store_last_upd_byTousers")
-  moderation_actions                                                  moderation_actions[]
-  moderation_audit_logs                                               moderation_audit_logs[]
-  moderation_reports_moderation_reports_handled_byTousers             moderation_reports[]         @relation("moderation_reports_handled_byTousers")
-  moderation_reports_moderation_reports_reporter_user_idTousers       moderation_reports[]         @relation("moderation_reports_reporter_user_idTousers")
-  notification_log                                                    notification_log[]
-  notification_preferences                                            notification_preferences[]
-  notification_recipients                                             notification_recipients[]
-  org_domains_org_domains_created_byTousers                           org_domains[]                @relation("org_domains_created_byTousers")
-  org_domains_org_domains_updated_byTousers                           org_domains[]                @relation("org_domains_updated_byTousers")
-  platform_settings                                                   platform_settings[]
-  presences                                                           presences?
-  profile_links                                                       profile_links[]
-  profile_requirement_status                                          profile_requirement_status[]
-  profiles                                                            profiles?
-  ratings                                                             ratings[]
-  reactions                                                           reactions[]
-  refunds_refunds_checker_user_idTousers                              refunds[]                    @relation("refunds_checker_user_idTousers")
-  refunds_refunds_maker_user_idTousers                                refunds[]                    @relation("refunds_maker_user_idTousers")
-  reports_reports_assigned_moderator_idTousers                        reports[]                    @relation("reports_assigned_moderator_idTousers")
-  reports_reports_reporter_idTousers                                  reports[]                    @relation("reports_reporter_idTousers")
-  reports_reports_resolved_by_idTousers                               reports[]                    @relation("reports_resolved_by_idTousers")
-  reviews                                                             reviews[]
-  role_assignments_role_assignments_granted_byTousers                 role_assignments[]           @relation("role_assignments_granted_byTousers")
-  role_assignments_role_assignments_user_idTousers                    role_assignments[]           @relation("role_assignments_user_idTousers")
-  sub_communities_sub_communities_created_byTousers                   sub_communities[]            @relation("sub_communities_created_byTousers")
-  sent_messaging_requests                                             messaging_requests[]         @relation("sent_messaging_requests")
-  received_messaging_requests                                         messaging_requests[]         @relation("received_messaging_requests")
-  sub_communities_sub_communities_updated_byTousers                   sub_communities[]            @relation("sub_communities_updated_byTousers")
-  subscription_orders                                                 subscription_orders[]
-  support_cases_support_cases_assigned_toTousers                      support_cases[]              @relation("support_cases_assigned_toTousers")
-  support_cases_support_cases_raised_by_user_idTousers                 support_cases[]              @relation("support_cases_raised_by_user_idTousers")
+  maker_checker_requests_maker_checker_requests_checker_user_idTousers maker_checker_requests[]        @relation("maker_checker_requests_checker_user_idTousers")
+  maker_checker_requests_maker_checker_requests_maker_user_idTousers   maker_checker_requests[]        @relation("maker_checker_requests_maker_user_idTousers")
+  marketplace_bids                                                     marketplace_bids[]
+  marketplace_listings                                                 marketplace_listings[]
+  media_assets                                                         media_assets[]
+  membership_subscriptions                                             membership_subscriptions[]
+  message_receipts                                                     message_receipts[]
+  message_versions                                                     message_versions[]
+  message_visibilities                                                 message_visibilities[]
+  messages                                                             messages[]
+  received_messaging_requests                                          messaging_requests[]            @relation("received_messaging_requests")
+  sent_messaging_requests                                              messaging_requests[]            @relation("sent_messaging_requests")
+  ml_feature_store_ml_feature_store_created_byTousers                  ml_feature_store[]              @relation("ml_feature_store_created_byTousers")
+  ml_feature_store_ml_feature_store_last_upd_byTousers                 ml_feature_store[]              @relation("ml_feature_store_last_upd_byTousers")
+  moderation_actions                                                   moderation_actions[]
+  moderation_audit_logs                                                moderation_audit_logs[]
+  moderation_reports_moderation_reports_handled_byTousers              moderation_reports[]            @relation("moderation_reports_handled_byTousers")
+  moderation_reports_moderation_reports_reporter_user_idTousers        moderation_reports[]            @relation("moderation_reports_reporter_user_idTousers")
+  notification_log                                                     notification_log[]
+  notification_preferences                                             notification_preferences[]
+  notification_recipients                                              notification_recipients[]
+  org_domains_org_domains_created_byTousers                            org_domains[]                   @relation("org_domains_created_byTousers")
+  org_domains_org_domains_updated_byTousers                            org_domains[]                   @relation("org_domains_updated_byTousers")
+  platform_settings                                                    platform_settings[]
+  presences                                                            presences?
+  profile_links                                                        profile_links[]
+  profile_requirement_status                                           profile_requirement_status[]
+  profiles                                                             profiles?
+  ratings                                                              ratings[]
+  reactions                                                            reactions[]
+  refunds_refunds_checker_user_idTousers                               refunds[]                       @relation("refunds_checker_user_idTousers")
+  refunds_refunds_maker_user_idTousers                                 refunds[]                       @relation("refunds_maker_user_idTousers")
+  reports_reports_assigned_moderator_idTousers                         reports[]                       @relation("reports_assigned_moderator_idTousers")
+  reports_reports_reporter_idTousers                                   reports[]                       @relation("reports_reporter_idTousers")
+  reports_reports_resolved_by_idTousers                                reports[]                       @relation("reports_resolved_by_idTousers")
+  reviews                                                              reviews[]
+  role_assignments_role_assignments_granted_byTousers                  role_assignments[]              @relation("role_assignments_granted_byTousers")
+  role_assignments_role_assignments_user_idTousers                     role_assignments[]              @relation("role_assignments_user_idTousers")
+  sub_communities_sub_communities_created_byTousers                    sub_communities[]               @relation("sub_communities_created_byTousers")
+  sub_communities_sub_communities_updated_byTousers                    sub_communities[]               @relation("sub_communities_updated_byTousers")
+  subscription_orders                                                  subscription_orders[]
+  support_cases_support_cases_assigned_toTousers                       support_cases[]                 @relation("support_cases_assigned_toTousers")
+  support_cases_support_cases_raised_by_user_idTousers                 support_cases[]                 @relation("support_cases_raised_by_user_idTousers")
   takeover_requests                                                    takeover_requests[]
   tickets                                                              tickets[]
   user_badges                                                          user_badges[]
   user_consents                                                        user_consents[]
+  userIntegrations                                                     user_integrations[]
   user_interests                                                       user_interests[]
-  tenants                                                              tenants                      @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  userNotificationPreferences                                          user_notification_preferences[]
+  userNotificationSettings                                             user_notification_settings?
+  tenants                                                              tenants                         @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   waitlist_entries                                                     waitlist_entries[]
   wishlists                                                            wishlists[]
 
@@ -1891,6 +1968,7 @@ model admin_subscription_plans {
   tenant_id           String?               @db.Uuid
   created_at          DateTime              @default(now()) @db.Timestamptz(6)
   updated_at          DateTime              @default(now()) @db.Timestamptz(6)
+  is_default          Boolean?              @default(false)
   admin_positions     admin_positions?      @relation(fields: [rbac_position_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   admin_roles         admin_roles?          @relation(fields: [rbac_role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenants             tenants?              @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -1959,6 +2037,7 @@ model subscription_orders {
   completed_at             DateTime?                @db.Timestamptz(6)
   created_at               DateTime                 @default(now()) @db.Timestamptz(6)
   updated_at               DateTime                 @default(now()) @db.Timestamptz(6)
+  invoices                 invoices?
   admin_subscription_plans admin_subscription_plans @relation(fields: [plan_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tenants                  tenants?                 @relation(fields: [tenant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   users                    users                    @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -1966,6 +2045,20 @@ model subscription_orders {
   @@index([status], map: "idx_sub_orders_status")
   @@index([tenant_id], map: "idx_sub_orders_tenant")
   @@index([user_id], map: "idx_sub_orders_user")
+}
+
+model invoices {
+  id             String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoice_number String               @unique
+  order_id       String?              @unique @db.Uuid
+  created_at     DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime             @default(now()) @db.Timestamptz(6)
+  pdf_data       Bytes
+  booking_id     String?              @unique(map: "idx_invoices_booking_unique", where: raw("(booking_id IS NOT NULL)")) @db.Uuid
+  bookings       bookings?            @relation(fields: [booking_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  order          subscription_orders? @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([order_id], map: "idx_invoices_order")
 }
 
 model otp_verifications {
@@ -1999,29 +2092,30 @@ model attachments {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model attendees {
-  id                                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenant_id                         String    @db.Uuid
-  booking_id                        String    @db.Uuid
-  ticket_id                         String?   @db.Uuid
-  user_id                           String?   @db.Uuid
-  name                              String    @db.VarChar(255)
-  email                             String?   @db.VarChar(255)
-  gender                            String?   @db.VarChar(20)
-  phone                             String?   @db.VarChar(20)
-  dob                               DateTime? @db.Date
-  claimed_at                        DateTime? @db.Timestamptz(6)
-  checkin_status                    String?   @default("not_checked_in") @db.VarChar(50)
+  id                                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id                         String          @db.Uuid
+  booking_id                        String          @db.Uuid
+  ticket_id                         String?         @db.Uuid
+  user_id                           String?         @db.Uuid
+  name                              String          @db.VarChar(255)
+  email                             String?         @db.VarChar(255)
+  gender                            String?         @db.VarChar(20)
+  phone                             String?         @db.VarChar(20)
+  dob                               DateTime?       @db.Date
+  claimed_at                        DateTime?       @db.Timestamptz(6)
+  checkin_status                    String?         @default("not_checked_in") @db.VarChar(50)
   notes                             String?
-  created_at                        DateTime? @default(now()) @db.Timestamptz(6)
-  created_by                        String?   @db.Uuid
-  updated_at                        DateTime? @default(now()) @db.Timestamptz(6)
-  updated_by                        String?   @db.Uuid
-  bookings                          bookings  @relation(fields: [booking_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  users_attendees_created_byTousers users?    @relation("attendees_created_byTousers", fields: [created_by], references: [id], onUpdate: NoAction)
-  tenants                           tenants   @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  tickets                           tickets?  @relation(fields: [ticket_id], references: [id], onUpdate: NoAction)
-  users_attendees_updated_byTousers users?    @relation("attendees_updated_byTousers", fields: [updated_by], references: [id], onUpdate: NoAction)
-  users_attendees_user_idTousers    users?    @relation("attendees_user_idTousers", fields: [user_id], references: [id], onUpdate: NoAction)
+  created_at                        DateTime?       @default(now()) @db.Timestamptz(6)
+  created_by                        String?         @db.Uuid
+  updated_at                        DateTime?       @default(now()) @db.Timestamptz(6)
+  updated_by                        String?         @db.Uuid
+  status                            attendee_status @default(pending)
+  bookings                          bookings        @relation(fields: [booking_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_attendees_created_byTousers users?          @relation("attendees_created_byTousers", fields: [created_by], references: [id], onUpdate: NoAction)
+  tenants                           tenants         @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tickets                           tickets?        @relation(fields: [ticket_id], references: [id], onUpdate: NoAction)
+  users_attendees_updated_byTousers users?          @relation("attendees_updated_byTousers", fields: [updated_by], references: [id], onUpdate: NoAction)
+  users_attendees_user_idTousers    users?          @relation("attendees_user_idTousers", fields: [user_id], references: [id], onUpdate: NoAction)
 
   @@index([booking_id], map: "idx_attendees_booking")
   @@index([email], map: "idx_attendees_email")
@@ -2248,24 +2342,21 @@ model message_receipts {
   seen_at      DateTime? @db.Timestamptz(6)
   failed_at    DateTime? @db.Timestamptz(6)
   id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  messages     messages  @relation(fields: [message_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users        users     @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  messages     messages  @relation(fields: [message_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users        users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([message_id, user_id])
-  @@index([message_id])
-  @@index([user_id])
 }
 
 model message_versions {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  message_id String   @db.Uuid
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  message_id String    @db.Uuid
   version    Int
   body       String
-  edited_by  String   @db.Uuid
-  created_at DateTime @default(now()) @db.Timestamptz(6)
-  usersId    String?  @db.Uuid
-  messages   messages @relation(fields: [message_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  users      users?   @relation(fields: [usersId], references: [id])
+  edited_by  String    @db.Uuid
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  users      users     @relation(fields: [edited_by], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  messages   messages  @relation(fields: [message_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 }
 
 model message_visibilities {
@@ -2469,6 +2560,196 @@ model sub_communities {
   @@index([tenant_id], map: "idx_sub_communities_tenant")
 }
 
+model forum_member_permissions {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id  String   @db.Uuid
+  group_id   String   @db.Uuid
+  user_id    String   @db.Uuid
+  perm_type  String   @db.VarChar(20)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  users      users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([group_id, user_id, perm_type])
+  @@index([group_id, perm_type], map: "idx_forum_member_perm_group")
+}
+
+model forum_post_tags {
+  post_id     String      @db.Uuid
+  tag_id      String      @db.Uuid
+  forum_posts forum_posts @relation(fields: [post_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  forum_tags  forum_tags  @relation(fields: [tag_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([post_id, tag_id])
+  @@index([tag_id], map: "idx_forum_post_tags_tag")
+}
+
+model forum_reactions {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id   String   @db.Uuid
+  user_id     String   @db.Uuid
+  target_id   String   @db.Uuid
+  target_type String   @db.VarChar(10)
+  emoji       String   @db.VarChar(10)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  users       users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, target_id, target_type, emoji])
+  @@index([target_id, target_type], map: "idx_forum_reactions_target")
+}
+
+model forum_tags {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id       String            @db.Uuid
+  scope_id        String            @db.Uuid
+  scope_type      String            @default("group") @db.VarChar(20)
+  name            String            @db.VarChar(50)
+  color           String            @default("gray") @db.VarChar(20)
+  created_at      DateTime          @default(now()) @db.Timestamptz(6)
+  forum_post_tags forum_post_tags[]
+
+  @@unique([scope_id, name])
+  @@index([scope_id], map: "idx_forum_tags_scope")
+}
+
+model forum_votes {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id   String   @db.Uuid
+  user_id     String   @db.Uuid
+  target_id   String   @db.Uuid
+  target_type String   @db.VarChar(10)
+  vote        Int      @db.SmallInt
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  users       users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, target_id, target_type])
+  @@index([target_id, target_type], map: "idx_forum_votes_target")
+}
+
+model group_gallery {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenant_id        String   @db.Uuid
+  group_id         String   @db.Uuid
+  uploader_user_id String   @db.Uuid
+  url              String
+  type             String   @default("image") @db.VarChar(10)
+  status           String   @default("approved") @db.VarChar(20)
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  users            users    @relation(fields: [uploader_user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([group_id], map: "idx_group_gallery_group")
+}
+
+model group_invitations {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  group_id     String    @db.Uuid
+  email        String?
+  username     String?
+  token        String    @unique
+  status       String    @default("pending")
+  link_type    String    @default("single_use")
+  max_uses     Int?
+  uses_count   Int       @default(0)
+  expires_at   DateTime? @db.Timestamptz(6)
+  accepted_at  DateTime? @db.Timestamptz(6)
+  invited_by   String?   @db.Uuid
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime  @default(now()) @db.Timestamptz(6)
+  email_status String?   @default("pending") @db.VarChar(50)
+  groups       groups    @relation(fields: [group_id], references: [entity_id], onDelete: Cascade)
+  users        users?    @relation(fields: [invited_by], references: [id])
+}
+
+model messaging_requests {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sender_id   String   @db.Uuid
+  receiver_id String   @db.Uuid
+  status      String   @default("PENDING")
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+  receiver    users    @relation("received_messaging_requests", fields: [receiver_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  sender      users    @relation("sent_messaging_requests", fields: [sender_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([sender_id, receiver_id])
+}
+
+model event_registration_log {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id   String    @db.Uuid
+  changed_by String    @db.Uuid
+  action     String
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  booking_id String?   @db.Uuid
+  remarks    String?
+  bookings   bookings? @relation(fields: [booking_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users      users     @relation(fields: [changed_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  events     events    @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model event_wishlist {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id   String   @db.Uuid
+  user_id    String   @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  events     events   @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users      users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([event_id, user_id])
+  @@index([event_id], map: "idx_event_wishlist_event")
+  @@index([user_id], map: "idx_event_wishlist_user")
+}
+
+model user_integrations {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id          String    @db.Uuid
+  provider         String    @db.VarChar(50)
+  access_token     String
+  refresh_token    String?
+  expires_at       DateTime? @db.Timestamptz(6)
+  provider_user_id String?   @db.VarChar(255)
+  email            String?   @db.VarChar(255)
+  created_at       DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime? @default(now()) @db.Timestamptz(6)
+  users            users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, provider])
+}
+
+model event_virtual_meetings {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id          String    @db.Uuid
+  provider          String    @db.VarChar(50)
+  meeting_id        String?   @db.VarChar(255)
+  calendar_event_id String?   @db.VarChar(255)
+  conference_id     String?   @db.VarChar(255)
+  metadata          Json?     @default("{}")
+  created_at        DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime? @default(now()) @db.Timestamptz(6)
+  events            events    @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([event_id, provider])
+}
+
+model user_notification_settings {
+  user_id        String   @id @db.Uuid
+  in_app_enabled Boolean  @default(true)
+  email_enabled  Boolean  @default(true)
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime @default(now()) @db.Timestamptz(6)
+  users          users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model user_notification_preferences {
+  user_id    String                     @db.Uuid
+  type       NotificationPreferenceType
+  channel    String                     @default("app")
+  enabled    Boolean                    @default(true)
+  created_at DateTime                   @default(now()) @db.Timestamptz(6)
+  updated_at DateTime                   @default(now()) @db.Timestamptz(6)
+  users      users                      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([user_id, type, channel])
+}
+
 enum assignment_state {
   invited
   active
@@ -2483,6 +2764,8 @@ enum booking_status {
   expired
   cancelled
   refunded
+  waitlisted
+  refunded_offline @map("refunded-offline")
 }
 
 enum checkin_method {
@@ -2580,6 +2863,7 @@ enum form_purpose {
 enum join_mode {
   open
   approval
+  invite_only
 }
 
 enum listed_state {
@@ -2705,6 +2989,7 @@ enum ticket_status {
   checked_in
   cancelled
   refunded
+  waitlisted
 }
 
 enum ticket_visibility {
@@ -2748,20 +3033,6 @@ enum MessageType {
   SYSTEM
 }
 
-model messaging_requests {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  sender_id    String   @db.Uuid
-  receiver_id  String   @db.Uuid
-  status       String   @default("PENDING") // PENDING, ACCEPTED, DECLINED
-  created_at   DateTime @default(now()) @db.Timestamptz(6)
-  updated_at   DateTime @default(now()) @db.Timestamptz(6)
-
-  sender       users    @relation("sent_messaging_requests", fields: [sender_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  receiver     users    @relation("received_messaging_requests", fields: [receiver_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@unique([sender_id, receiver_id])
-}
-
 enum ConversationParticipantStatus {
   PENDING
   ACCEPTED
@@ -2769,4 +3040,41 @@ enum ConversationParticipantStatus {
   BLOCKED
   LEFT
   EXPIRED
+}
+
+enum NotificationPreferenceType {
+  MESSAGE_RECEIVED
+  TICKET_BOOKED
+  TICKET_CONFIRMED
+  WAITLIST_UPDATES
+  CAPACITY_UPDATES
+  JOIN_REQUESTS
+  MEMBERSHIP_APPROVED
+  MEMBERSHIP_DECLINED
+  REGISTRATION_APPROVED
+  REGISTRATION_DECLINED
+  EVENT_REMINDER_24H
+  EVENT_REMINDER_1H
+  EVENT_UPDATED
+  EVENT_CANCELLED
+  EVENT_COMPLETED
+  HOST_ANNOUNCEMENTS
+  NEW_GROUP_EVENTS
+  NEW_DISCUSSION_POSTS
+  DISCUSSION_REPLIES
+  CONNECTION_ACCEPTED
+  EVENT_JOIN_REQUESTS
+  SYSTEM_INVITE
+  GROUP_INVITE
+  EVENT_CHECKIN
+  SUBSCRIPTION_EXPIRING
+  SUBSCRIPTION_ACTIVE
+}
+
+enum attendee_status {
+  pending
+  approved
+  rejected
+  waitlisted
+  checked_in
 }

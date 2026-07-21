@@ -1,0 +1,391 @@
+openapi: 3.0.0
+info:
+  title: Samaagum End-User Messaging API
+  version: 1.0.0
+  description: API contract for all end-user direct messaging, chat threads, and message requests.
+
+servers:
+  - url: http://localhost:3000
+    description: Local development backend server
+
+paths:
+  /api/messaging/users/search:
+    get:
+      summary: Search users to start or connect a conversation
+      operationId: searchMessagingUsers
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of matching users found
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+
+  /api/messaging/requests/status/{userId}:
+    get:
+      summary: Get connection or messaging request status with another user
+      operationId: getRequestStatus
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Current relationship / request status
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    required:
+                      - status
+                    properties:
+                      status:
+                        type: string
+                        enum: [CONNECTED, PENDING, NONE, REJECTED]
+
+  /api/messaging/conversations/direct:
+    post:
+      summary: Initialize or fetch a direct conversation with a target user
+      operationId: getOrCreateDirectConversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - targetId
+              properties:
+                targetId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Conversation initialized or fetched successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Conversation'
+        '403':
+          description: Access restricted due to privacy configurations
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - error
+                  - restriction
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    type: string
+                  restriction:
+                    type: string
+                    enum: [approval_required, only_connected, no_one]
+                  hasPending:
+                    type: boolean
+
+  /api/messaging/requests:
+    post:
+      summary: Send a message request to a target user
+      operationId: sendMessageRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - targetId
+              properties:
+                targetId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Message request sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    type: string
+
+  /api/messaging/requests/incoming:
+    get:
+      summary: Retrieve incoming message requests for the active user
+      operationId: getIncomingRequests
+      responses:
+        '200':
+          description: List of incoming message requests
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MessagingRequest'
+
+  /api/messaging/requests/{reqId}/accept:
+    post:
+      summary: Accept an incoming message request
+      operationId: acceptRequest
+      parameters:
+        - in: path
+          name: reqId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Messaging request accepted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+
+  /api/messaging/requests/{reqId}/decline:
+    post:
+      summary: Decline an incoming message request
+      operationId: declineRequest
+      parameters:
+        - in: path
+          name: reqId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Messaging request declined successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                properties:
+                  success:
+                    type: boolean
+
+  /api/messaging/conversations:
+    get:
+      summary: Retrieve all conversations for the authenticated user
+      operationId: getConversations
+      responses:
+        '200':
+          description: List of active conversations/threads
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Conversation'
+
+  /api/messaging/conversations/{conversationId}/messages:
+    get:
+      summary: Retrieve message history for a conversation
+      operationId: getConversationMessages
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: Message history logs list
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+
+components:
+  schemas:
+    User:
+      type: object
+      required:
+        - id
+        - name
+        - email
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        primary_email:
+          type: string
+          format: email
+
+    Conversation:
+      type: object
+      required:
+        - id
+        - type
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [DIRECT, GROUP, EVENT, dm]
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lastActivityAt:
+          type: string
+          format: date-time
+        dmKey:
+          type: string
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+
+    Message:
+      type: object
+      required:
+        - id
+        - conversationId
+        - senderId
+        - content
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        conversationId:
+          type: string
+          format: uuid
+        senderId:
+          type: string
+          format: uuid
+        body:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        status:
+          type: integer
+        isEdited:
+          type: boolean
+        replyToMessageId:
+          type: string
+          format: uuid
+
+    MessagingRequest:
+      type: object
+      required:
+        - id
+        - requesterId
+        - addresseeId
+        - status
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        requesterId:
+          type: string
+          format: uuid
+        addresseeId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time

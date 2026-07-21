@@ -1,11 +1,16 @@
 // @ts-nocheck
+import React, { useEffect, useState } from 'react';
+import { ME, WAITLIST_ME } from './home-data';
+import { Grain } from './home-icons';
+import { I } from './home-icons';
+
 /* ============================================================
    Samaagum — Waitlist full lifecycle (F9 · S-160 / S-161)
    QUEUED → INVITED → CONVERTED / EXPIRED
    Notify-and-claim (collect-and-settle, no auth holds).
    ============================================================ */
 
-function CircleProgress({ pct, size = 168, children }) {
+export function CircleProgress({ pct, size = 168, children }) {
   const r = (size - 16) / 2, c = 2 * Math.PI * r;
   return (
     <div className="wl-ring" style={{ width: size, height: size, position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
@@ -20,7 +25,7 @@ function CircleProgress({ pct, size = 168, children }) {
   );
 }
 
-function useWaitlistCountdown(initialSeconds, active, onExpire) {
+export function useWaitlistCountdown(initialSeconds, active, onExpire) {
   const [seconds, setSeconds] = useState(initialSeconds);
   useEffect(() => {
     if (!active) {
@@ -50,28 +55,160 @@ function useWaitlistCountdown(initialSeconds, active, onExpire) {
   };
 }
 
-function Waitlist({ ev, st, go }) {
+export function Waitlist({ ev, st, go }) {
   const base = WAITLIST_ME;
   const targetId = ev?.id || "ev-feat";
   const e = ev ? { ...base, ev: ev.title || base.ev, cover: ev.cover || base.cover, date: ev.date || base.date, time: ev.time || base.time, venue: ev.venue || base.venue } : base;
   
   // Detect if user is already waitlisted or if we start in join state
-  const isWaitlisted = st.waitlisted ? st.waitlisted.has(targetId) : false;
+  const isWaitlisted = (st.waitlisted ? st.waitlisted.has(targetId) : false) || (st.joinedEvents?.some(je => je.id === targetId && je.bookingStatus === 'waitlisted') ?? false);
   
-  const [state, setState] = useState(isWaitlisted ? "QUEUED" : "JOIN"); // JOIN | QUEUED | INVITED | CONVERTED | EXPIRED
+  const [state, setState] = useState(isWaitlisted ? "QUEUED" : "JOIN"); // JOIN | QUEUED | INVITED | CONVERTED | EXPIRED | COMPLETED
   const [refs, setRefs] = useState(0);
-  const pos = Math.max(1, base.position - refs * base.boostPerRef);
+  
+  const [realPosition, setRealPosition] = useState(null);
+  const [realTotal, setRealTotal] = useState(null);
+  
+  useEffect(() => {
+    if (!targetId || targetId === "ev-feat") return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+    
+    // Initial fetch
+    fetch(`${apiBase}/api/events/${targetId}/waitlist/status`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    .then(r => r.json())
+    .then(res => {
+      if (res.success && res.data) {
+        setRealPosition(res.data.position);
+        setRealTotal(res.data.totalWaiting);
+        if (res.data.isWaitlisted) {
+          setState("QUEUED");
+          if (st.toggleWaitlist && (!st.waitlisted || !st.waitlisted.has(targetId))) {
+            st.toggleWaitlist(targetId);
+          }
+        }
+      }
+    }).catch(() => {});
+
+    if (window.io) {
+      const socketUrl = apiBase ? `${apiBase}/groups` : "/groups";
+      const socket = window.io(socketUrl, { transports: ['websocket'] });
+      
+      socket.emit('join_event', targetId);
+
+      socket.on('waitlist_positions_updated', (payload) => {
+        if (payload.eventId !== targetId) return;
+        setRealTotal(payload.totalWaiting);
+        const myUserId = window.ME?.id;
+        if (myUserId && payload.positions) {
+          const myPos = payload.positions.find(p => p.userId === myUserId);
+          if (myPos) {
+            setRealPosition(myPos.position);
+          }
+        }
+      });
+
+      socket.on('waitlist_closed', (payload) => {
+        if (payload.eventId !== targetId) return;
+        // Switch the screen to CLOSED state and refresh My Events list
+        setState('CLOSED');
+        setRealTotal(0);
+        setRealPosition(null);
+        window.dispatchEvent(new CustomEvent('samaagum:refreshJoinedEvents'));
+      });
+
+      socket.on('event_completed', (payload) => {
+        if (payload.eventId !== targetId) return;
+        setState('COMPLETED');
+        setRealTotal(0);
+        setRealPosition(null);
+        window.dispatchEvent(new CustomEvent('samaagum:refreshJoinedEvents'));
+      });
+
+      return () => {
+        socket.emit('leave_event', targetId);
+        socket.disconnect();
+      };
+    }
+  }, [targetId]);
+
+  const pos = realPosition ?? Math.max(1, base.position - refs * base.boostPerRef);
+  const totalWaiting = realTotal ?? base.total;
   const boostUnits = Math.min(base.boostCap / base.boostPerRef, refs);
   const inviteTimer = useWaitlistCountdown(base.claimWindowMins * 60, state === "INVITED", () => setState("EXPIRED"));
 
-  const handleJoinWaitlist = () => {
-    if (st.toggleWaitlist) st.toggleWaitlist(targetId);
-    setState("QUEUED");
+  const handleJoinWaitlist = async () => {
+    const token = localStorage.getItem('token');
+    const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+    
+    if (token && targetId && targetId !== "ev-feat") {
+      try {
+        const res = await fetch(`${apiBase}/api/messaging/events/${targetId}/join`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.success && data.status === 'waitlisted') {
+          if (st.toggleWaitlist) st.toggleWaitlist(targetId);
+          setState("QUEUED");
+          // Re-fetch position
+          const statRes = await fetch(`${apiBase}/api/events/${targetId}/waitlist/status`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const statData = await statRes.json();
+          if (statData.success && statData.data) {
+            setRealPosition(statData.data.position);
+            setRealTotal(statData.data.totalWaiting);
+          }
+          if (window.toast) window.toast("Joined the waitlist successfully", "success");
+        } else {
+          if (window.toast) window.toast(data.message || "Failed to join waitlist", "error");
+        }
+      } catch (err) {
+        if (window.toast) window.toast("Failed to join waitlist", "error");
+      }
+    } else {
+      if (st.toggleWaitlist) st.toggleWaitlist(targetId);
+      setState("QUEUED");
+    }
   };
 
-  const handleLeaveWaitlist = () => {
-    if (st.toggleWaitlist) st.toggleWaitlist(targetId);
-    setState("JOIN");
+  const handleLeaveWaitlist = async () => {
+    const token = localStorage.getItem('token');
+    const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+    
+    if (token && targetId && targetId !== "ev-feat") {
+      try {
+        const res = await fetch(`${apiBase}/api/events/${targetId}/waitlist`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.success) {
+          if (st.toggleWaitlist) st.toggleWaitlist(targetId);
+          setState("JOIN");
+          setRealPosition(null);
+          window.dispatchEvent(new CustomEvent('samaagum:refreshJoinedEvents'));
+          if (window.toast) window.toast("Left waitlist successfully", "success");
+          setTimeout(() => {
+            go("back");
+          }, 100);
+        } else {
+          if (window.toast) window.toast(data.message || "Failed to leave waitlist", "error");
+        }
+      } catch (err) {
+        if (window.toast) window.toast("Failed to leave waitlist", "error");
+      }
+    } else {
+      if (st.toggleWaitlist) st.toggleWaitlist(targetId);
+      setState("JOIN");
+      setTimeout(() => {
+        go("back");
+      }, 100);
+    }
   };
 
   const handleClaimSeat = () => {
@@ -90,7 +227,7 @@ function Waitlist({ ev, st, go }) {
     <div className="scroll">
       <div className="flow view-enter" style={{ maxWidth: 560, margin: "0 auto", padding: "24px 16px" }}>
         <div className="flow-head">
-          <button className="back" onClick={() => go("home")}><I.arrowL /></button>
+          <button className="back" onClick={() => go("back")}><I.arrowL /></button>
           <div><div className="flow-title">Waitlist</div><div className="flow-sub">{e.ev}</div></div>
         </div>
 
@@ -106,6 +243,38 @@ function Waitlist({ ev, st, go }) {
           <span className="pill red" style={{ background: "rgba(239, 68, 68, 0.1)", color: "#ef4444", border: "1px solid rgba(239, 68, 68, 0.2)" }}><span className="pdot" style={{ background: "#ef4444" }} />Sold out</span>
         </div>
 
+        {/* CLOSED — waitlist disabled by host */}
+        {state === "CLOSED" && (
+          <div className="fcard fcard-pad" style={{ textAlign: "center" }}>
+            <div className="empty" style={{ padding: "8px 0 4px" }}>
+              <div className="ill" style={{ fontSize: 32, marginBottom: 8 }}>🚫</div>
+              <h3>Waitlist Closed</h3>
+              <p style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.4 }}>
+                The waitlist for this event has been closed by the host. You have been removed from the waitlist.
+              </p>
+            </div>
+            <button className="hbtn hbtn--ghost hbtn--block" style={{ marginTop: 8 }} onClick={() => go("back")}>
+              Back to Events
+            </button>
+          </div>
+        )}
+
+        {/* COMPLETED — event has ended */}
+        {state === "COMPLETED" && (
+          <div className="fcard fcard-pad" style={{ textAlign: "center" }}>
+            <div className="empty" style={{ padding: "8px 0 4px" }}>
+              <div className="ill" style={{ fontSize: 32, marginBottom: 8 }}>🏁</div>
+              <h3>Event Completed</h3>
+              <p style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.4 }}>
+                This event has already ended. Your waitlist status has been cleared.
+              </p>
+            </div>
+            <button className="hbtn hbtn--ghost hbtn--block" style={{ marginTop: 8 }} onClick={() => go("back")}>
+              Back to Events
+            </button>
+          </div>
+        )}
+
         {/* JOIN */}
         {state === "JOIN" && (
           <div className="fcard fcard-pad" style={{ textAlign: "center" }}>
@@ -118,7 +287,7 @@ function Waitlist({ ev, st, go }) {
             </div>
             <div className="notice info" style={{ textAlign: "left", margin: "8px 0 16px" }}>
               <span className="ni"><I.spark /></span>
-              <div style={{ fontSize: 12.5 }}><b>{base.total} people</b> are waiting. Share your referral link after joining to move up the queue (capped, so it stays fair).</div>
+              <div style={{ fontSize: 12.5 }}><b>{totalWaiting} people</b> are waiting. Share your referral link after joining to move up the queue (capped, so it stays fair).</div>
             </div>
             <button className="hbtn hbtn--primary hbtn--block" onClick={handleJoinWaitlist}>Join the waitlist</button>
           </div>
@@ -129,33 +298,13 @@ function Waitlist({ ev, st, go }) {
           <>
             <div className="fcard fcard-pad" style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
               <span className="pill violet" style={{ marginBottom: 16 }}><span className="pdot" />Queued</span>
-              <CircleProgress pct={1 - pos / base.total}>
+              <CircleProgress pct={1 - pos / totalWaiting}>
                 <div className="wl-pos"><span className="hash">#</span>{pos}</div>
-                <div className="wl-of">of {base.total} waiting</div>
+                <div className="wl-of">of {totalWaiting} waiting</div>
               </CircleProgress>
               <p style={{ fontSize: 13.5, color: "var(--ink-2)", marginTop: 16, maxWidth: 380, marginInline: "auto", lineHeight: 1.5 }}>
                 You're <b>#{pos}</b> in line. We'll email and notify you instantly if you're promoted to claim a seat.
               </p>
-            </div>
-
-            <div className="fcard boost-card fcard-pad" style={{ marginTop: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ width: 36, height: 36, borderRadius: 11, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--accent-2)", color: "#fff", flexShrink: 0 }}><I.spark /></span>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)" }}>Boost your position</div>
-                  <div style={{ fontSize: 12, color: "var(--ink-2)" }}>Each friend who joins via your link moves you up {base.boostPerRef} spots · max {base.boostCap}.</div>
-                </div>
-              </div>
-              <div className="boost-meter">
-                {Array.from({ length: base.boostCap / base.boostPerRef }).map((_, i) => (
-                  <i key={i} className={i < boostUnits ? "on" : ""} />
-                ))}
-              </div>
-              <div style={{ display: "flex", gap: 9 }}>
-                <input className="ss-search" style={{ flex: 1, fontSize: 12, fontFamily: "monospace" }} readOnly value="samaagum.co/w/indie-live?ref=aanya" />
-                <button className="hbtn hbtn--ghost" onClick={() => setRefs(r => Math.min(base.boostCap / base.boostPerRef, r + 1))}><I.share /> Boost</button>
-              </div>
-              {refs > 0 && <div style={{ fontSize: 12.5, color: "#1f9d57", fontWeight: 600, marginTop: 10, display: "flex", gap: 6, alignItems: "center" }}><I.check style={{ width: 14, height: 14 }} /> {refs} referral{refs > 1 ? "s" : ""} — moved up {boostUnits * base.boostPerRef} spots</div>}
             </div>
 
             <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
@@ -204,7 +353,7 @@ function Waitlist({ ev, st, go }) {
             <div className="fcard-pad" style={{ paddingTop: 4, paddingBottom: 24 }}>
               <div style={{ display: "flex", gap: 10 }}>
                 <button className="hbtn hbtn--primary hbtn--block" onClick={() => { setState("QUEUED"); if (inviteTimer?.reset) inviteTimer.reset(); }}>Rejoin waitlist</button>
-                <button className="hbtn hbtn--ghost" onClick={() => go("home")}>Home</button>
+                <button className="hbtn hbtn--ghost" onClick={() => go("back")}>Back</button>
               </div>
             </div>
           </div>
@@ -214,4 +363,4 @@ function Waitlist({ ev, st, go }) {
   );
 }
 
-Object.assign(window, { Waitlist, CircleProgress });
+

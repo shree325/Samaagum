@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import prisma from '../config/prisma';
+import { sendEmail } from '../utils/email';
 
 const SCOPES = 'openid email profile';
 
@@ -84,7 +85,15 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 where: { scope_tenant_id: null, key: 'auth_settings' }
             });
             const settings = authRow?.value as any;
-            const { clientId, clientSecret } = settings?.google || {};
+            const { clientId } = settings?.google || {};
+            let clientSecret = settings?.google?.clientSecret;
+            if (clientSecret && typeof clientSecret === 'string') {
+                clientSecret = clientSecret.replace(/\\",\s*\\"?redirect_uris.*/, '')
+                                           .replace(/",\s*"?redirect_uris.*/, '')
+                                           .replace(/\\".*$/, '')
+                                           .replace(/".*$/, '')
+                                           .trim();
+            }
 
             if (!clientId || !clientSecret) {
                 return reply.redirect(`${frontendBase}/?auth_error=oauth_not_configured`);
@@ -133,8 +142,10 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const tenantId = tenant?.id || '00000000-0000-0000-0000-000000000000';
 
             let dbUser = await prisma.users.findFirst({ where: { primary_email: email } });
+            let isNewUser = false;
 
             if (!dbUser) {
+                isNewUser = true;
                 dbUser = await prisma.users.create({
                     data: {
                         tenant_id: tenantId,
@@ -154,7 +165,14 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                         created_at: new Date()
                     }
                 });
+                // Auto-assign the default plan to new users
+                const { SubscriptionActivationService } = await import('../services/SubscriptionActivationService');
+                SubscriptionActivationService.assignDefaultPlanToUser(dbUser.id, tenantId).catch(console.error);
+            } else if (!(dbUser as any).profile_completed) {
+                // Existing user who never finished onboarding — send them back through it
+                isNewUser = true;
             }
+
 
             // Issue JWT token
             const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
@@ -163,6 +181,9 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 tenantId: dbUser.tenant_id,
                 email: dbUser.primary_email,
                 name,
+                firstName: googleUser.given_name || name.split(' ')[0] || '',
+                lastName: googleUser.family_name || name.split(' ').slice(1).join(' ') || '',
+                picture: googleUser.picture || '',
                 role: 'user',
                 provider: 'google'
             })).toString('base64url');
@@ -171,7 +192,7 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             console.log(`✅ Google OAuth login: ${email} → ${frontendBase}`);
 
             // Redirect back to frontend — the inline script in index.html saves the token and goes to home
-            return reply.redirect(`${frontendBase}/?token=${encodeURIComponent(token)}&auth=google`);
+            return reply.redirect(`${frontendBase}/?token=${encodeURIComponent(token)}&auth=google${isNewUser ? '&isNewUser=true' : ''}`);
 
         } catch (err: any) {
             console.error('Google OAuth callback error:', err);
@@ -284,11 +305,13 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
     // GET /auth/linkedin/callback — Handle LinkedIn OAuth callback
     fastify.get('/linkedin/callback', async (request: any, reply) => {
         let frontendBase = 'http://localhost:8080';
+        let mode = 'login';
         try {
             const rawState = (request.query as any).state;
             if (rawState) {
                 const stateData = JSON.parse(Buffer.from(rawState, 'base64url').toString('utf8'));
                 if (stateData.frontendOrigin) frontendBase = stateData.frontendOrigin;
+                if (stateData.mode) mode = stateData.mode;
             }
         } catch {}
 
@@ -346,8 +369,10 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const tenantId = tenant?.id || '00000000-0000-0000-0000-000000000000';
 
             let dbUser = await prisma.users.findFirst({ where: { primary_email: email } });
+            let isNewUser = false;
 
             if (!dbUser) {
+                isNewUser = true;
                 dbUser = await prisma.users.create({
                     data: {
                         tenant_id: tenantId,
@@ -367,6 +392,9 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                         created_at: new Date()
                     }
                 });
+                // Auto-assign the default plan to new users
+                const { SubscriptionActivationService } = await import('../services/SubscriptionActivationService');
+                SubscriptionActivationService.assignDefaultPlanToUser(dbUser.id, tenantId).catch(console.error);
             }
 
             const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
@@ -375,6 +403,9 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 tenantId: dbUser.tenant_id,
                 email: dbUser.primary_email,
                 name,
+                firstName: linkedinUser.given_name || name.split(' ')[0] || '',
+                lastName: linkedinUser.family_name || name.split(' ').slice(1).join(' ') || '',
+                picture: linkedinUser.picture || '',
                 role: 'user',
                 provider: 'linkedin'
             })).toString('base64url');
@@ -382,7 +413,7 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
 
             console.log(`✅ LinkedIn OAuth login: ${email} → ${frontendBase}`);
 
-            return reply.redirect(`${frontendBase}/?token=${encodeURIComponent(token)}&auth=linkedin`);
+            return reply.redirect(`${frontendBase}/?token=${encodeURIComponent(token)}&auth=linkedin${isNewUser ? '&isNewUser=true' : ''}`);
 
         } catch (err: any) {
             console.error('LinkedIn OAuth callback error:', err);
@@ -448,11 +479,13 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
     fastify.get('/custom/:providerKey/callback', async (request: any, reply) => {
         const { providerKey } = request.params as any;
         let frontendBase = 'http://localhost:8080';
+        let mode = 'login';
         try {
             const rawState = (request.query as any).state;
             if (rawState) {
                 const stateData = JSON.parse(Buffer.from(rawState, 'base64url').toString('utf8'));
                 if (stateData.frontendOrigin) frontendBase = stateData.frontendOrigin;
+                if (stateData.mode) mode = stateData.mode;
             }
         } catch {}
 
@@ -559,8 +592,10 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
             const tenantId = tenant?.id || '00000000-0000-0000-0000-000000000000';
 
             let dbUser = await prisma.users.findFirst({ where: { primary_email: email } });
+            let isNewUser = false;
 
             if (!dbUser) {
+                isNewUser = true;
                 dbUser = await prisma.users.create({
                     data: {
                         tenant_id: tenantId,
@@ -580,6 +615,9 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                         created_at: new Date()
                     }
                 });
+                // Auto-assign the default plan to new users
+                const { SubscriptionActivationService } = await import('../services/SubscriptionActivationService');
+                SubscriptionActivationService.assignDefaultPlanToUser(dbUser.id, tenantId).catch(console.error);
             }
 
             const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
@@ -588,6 +626,9 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 tenantId: dbUser.tenant_id,
                 email: dbUser.primary_email,
                 name,
+                firstName: userProfile.given_name || name.split(' ')[0] || '',
+                lastName: userProfile.family_name || name.split(' ').slice(1).join(' ') || '',
+                picture: userProfile.picture || userProfile.avatar_url || '',
                 role: 'user',
                 provider: providerKey
             })).toString('base64url');
@@ -595,11 +636,146 @@ export const oauthRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
 
             console.log(`✅ Custom OAuth login (${providerKey}): ${email} → ${frontendBase}`);
 
-            return reply.redirect(`${frontendBase}/?token=${encodeURIComponent(token)}&auth=${providerKey}`);
+            return reply.redirect(`${frontendBase}/?token=${encodeURIComponent(token)}&auth=${providerKey}${isNewUser ? '&isNewUser=true' : ''}`);
 
         } catch (err: any) {
             console.error(`Custom OAuth callback error for ${providerKey}:`, err);
             return reply.redirect(`${frontendBase}/?auth_error=server_error`);
+        }
+    });
+
+    // POST /api/auth/otp/send
+    fastify.post('/otp/send', async (request: any, reply) => {
+        try {
+            const { email, purpose } = request.body as any;
+            if (!email || !purpose) {
+                return reply.status(400).send({ success: false, message: 'Email and purpose are required.' });
+            }
+
+            // Generate numeric OTP (6 digits)
+            const otp = Math.floor(100000 + Math.random() * 900000).toString();
+            const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins expiry
+
+            await prisma.$executeRawUnsafe(
+                `DELETE FROM otp_verifications WHERE email = $1 AND purpose = $2`,
+                email.toLowerCase().trim(), purpose
+            );
+
+            await prisma.$executeRawUnsafe(
+                `INSERT INTO otp_verifications (id, email, otp_hash, purpose, expires_at, attempts, verified, created_at)
+                 VALUES (gen_random_uuid(), $1, $2, $3, $4, 0, false, now())`,
+                email.toLowerCase().trim(), otp, purpose, expiresAt
+            );
+
+            // Send via email
+            await sendEmail({
+                to: email,
+                subject: `Verification Code: ${otp}`,
+                html: `
+                    <div style="font-family: sans-serif; padding: 20px; color: #111;">
+                      <h2 style="color: #6d5efc;">Verification Code</h2>
+                      <p>Your one-time authorization code for <strong>${purpose}</strong> is:</p>
+                      <div style="background: #f4f4f5; padding: 16px; border-radius: 8px; font-size: 28px; letter-spacing: 4px; font-weight: bold; font-family: monospace; display: inline-block; margin: 15px 0;">
+                        ${otp}
+                      </div>
+                      <p style="color: #666; font-size: 13px;">This code will expire in 10 minutes. If you did not request this code, please ignore this message.</p>
+                    </div>
+                `
+            });
+
+            return { success: true, message: 'OTP sent successfully.' };
+        } catch (err: any) {
+            return reply.status(500).send({ success: false, message: err.message || 'Failed to send OTP.' });
+        }
+    });
+
+    // POST /api/auth/otp/verify
+    fastify.post('/otp/verify', async (request: any, reply) => {
+        try {
+            const { email, purpose, code, name, gender } = request.body as any;
+            if (!email || !purpose || !code) {
+                return reply.status(400).send({ success: false, message: 'Email, purpose and code are required.' });
+            }
+
+            const cleanEmail = email.toLowerCase().trim();
+
+            const verifications = await prisma.$queryRawUnsafe<any[]>(
+                `SELECT * FROM otp_verifications WHERE email = $1 AND purpose = $2 AND verified = false AND expires_at > now() ORDER BY created_at DESC LIMIT 1`,
+                cleanEmail, purpose
+            );
+
+            const verification = verifications[0];
+            if (!verification) {
+                return reply.status(400).send({ success: false, message: 'No active OTP found. Please request a new one.' });
+            }
+
+            if (verification.attempts >= 5) {
+                return reply.status(400).send({ success: false, message: 'Too many attempts. Request a new OTP.' });
+            }
+
+            if (verification.otp_hash !== code) {
+                await prisma.$executeRawUnsafe(`UPDATE otp_verifications SET attempts = attempts + 1 WHERE id = $1`, verification.id);
+                return reply.status(400).send({ success: false, message: 'Invalid OTP.' });
+            }
+
+            await prisma.$executeRawUnsafe(`UPDATE otp_verifications SET verified = true WHERE id = $1`, verification.id);
+
+            // Find or create the user
+            let dbUser = await prisma.users.findFirst({
+                where: { primary_email: { equals: cleanEmail, mode: 'insensitive' } }
+            });
+
+            let isNewUser = false;
+            const tenantId = '00000000-0000-0000-0000-000000000000';
+
+            if (!dbUser) {
+                isNewUser = true;
+                const firstName = name ? name.split(' ')[0] : null;
+                const lastName = name ? name.split(' ').slice(1).join(' ') : null;
+                dbUser = await prisma.users.create({
+                    data: {
+                        tenant_id: tenantId,
+                        primary_email: cleanEmail,
+                        email_verified: true,
+                        profile_completed: true,
+                        state: 'active' as any,
+                        first_name: firstName,
+                        last_name: lastName,
+                        gender: gender || null,
+                        profiles: {
+                            create: {
+                                tenant_id: tenantId,
+                                display_name: name || cleanEmail.split('@')[0],
+                                first_name: firstName,
+                                last_name: lastName
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Generate JWT token
+            const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+            const payload = Buffer.from(JSON.stringify({
+                id: dbUser.id,
+                tenantId: dbUser.tenant_id,
+                email: dbUser.primary_email || email,
+                name: name || `${dbUser.first_name || ''} ${dbUser.last_name || ''}`.trim() || (dbUser.primary_email || email).split('@')[0],
+                firstName: dbUser.first_name || '',
+                lastName: dbUser.last_name || '',
+                role: 'user',
+                provider: 'otp'
+            })).toString('base64url');
+            const token = `${header}.${payload}.mocksignature`;
+
+            return {
+                success: true,
+                message: 'OTP verified successfully.',
+                token,
+                isNewUser
+            };
+        } catch (err: any) {
+            return reply.status(500).send({ success: false, message: err.message || 'Failed to verify OTP.' });
         }
     });
 };

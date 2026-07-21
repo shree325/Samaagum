@@ -1,11 +1,19 @@
 // @ts-nocheck
+import React, { useEffect, useRef, useState } from 'react';
+import { Toggle } from './create-event';
+import { ME } from './home-data';
+import { Profile } from './home-profile';
+import { Empty, Sidebar } from './home-shell';
+import { Footer } from './landing-activity';
+import { I } from './home-icons';
+
 /* ============================================================
    Samaagum Home — Account & Privacy Settings Page
    ============================================================ */
 
-const { useState, useEffect, useRef } = React;
 
-function SettingsPage({ st, go, activeTabParam }) {
+
+export function SettingsPage({ st, go, activeTabParam }) {
   // Navigation tabs in settings page
   const [activeTab, setActiveTab] = useState(activeTabParam || "account");
 
@@ -63,7 +71,7 @@ function SettingsPage({ st, go, activeTabParam }) {
     try {
       const api = window.location.port === "8080" ? "http://localhost:3000" : window.location.origin;
       const token = localStorage.getItem('token');
-      await fetch(`${api}/api/admin/user/profile`, {
+      const res = await fetch(`${api}/api/admin/user/profile`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -73,16 +81,15 @@ function SettingsPage({ st, go, activeTabParam }) {
           privacyPrefs: newPrefs
         })
       });
+      if (res.ok && window.chatSocket) {
+        window.chatSocket.emit("privacy.update");
+      }
     } catch (e) {
       console.error("Failed to sync privacy preferences to server", e);
     }
   };
 
-  useEffect(() => {
-    localStorage.setItem("samaagum_privacy_prefs", JSON.stringify(privacy));
-    ME.privacy = privacy;
-    syncPrivacyToServer(privacy);
-  }, [privacy]);
+
 
   const [sessions, setSessions] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
@@ -126,14 +133,14 @@ function SettingsPage({ st, go, activeTabParam }) {
           ...(token ? { "Authorization": `Bearer ${token}` } : {})
         }
       })
-      .then(res => res.json())
-      .then(res => {
-        if (res.success && res.data && res.data.length > 0) {
-          setSessions(res.data);
-        }
-      })
-      .catch(err => console.error("Error fetching sessions:", err))
-      .finally(() => setLoadingSessions(false));
+        .then(res => res.json())
+        .then(res => {
+          if (res.success && res.data && res.data.length > 0) {
+            setSessions(res.data);
+          }
+        })
+        .catch(err => console.error("Error fetching sessions:", err))
+        .finally(() => setLoadingSessions(false));
     }
   }, [activeTab]);
 
@@ -142,7 +149,7 @@ function SettingsPage({ st, go, activeTabParam }) {
       setLoadingBilling(true);
       const api = window.location.port === "8080" ? "http://localhost:3000" : window.location.origin;
       const token = localStorage.getItem('token');
-      
+
       Promise.all([
         fetch(`${api}/api/subscription/status`, {
           headers: { ...(token ? { "Authorization": `Bearer ${token}` } : {}) }
@@ -151,18 +158,18 @@ function SettingsPage({ st, go, activeTabParam }) {
           headers: { ...(token ? { "Authorization": `Bearer ${token}` } : {}) }
         }).then(res => res.json())
       ])
-      .then(([statusRes, ordersRes]) => {
-        if (statusRes.success && statusRes.data) {
-          setBillingData(statusRes.data.subscription);
-        } else {
-          setBillingData(null);
-        }
-        if (ordersRes.success && ordersRes.data) {
-          setBillingOrders(ordersRes.data);
-        }
-      })
-      .catch(err => console.error("Error fetching billing details:", err))
-      .finally(() => setLoadingBilling(false));
+        .then(([statusRes, ordersRes]) => {
+          if (statusRes.success && statusRes.data) {
+            setBillingData(statusRes.data.subscription);
+          } else {
+            setBillingData(null);
+          }
+          if (ordersRes.success && ordersRes.data) {
+            setBillingOrders(ordersRes.data);
+          }
+        })
+        .catch(err => console.error("Error fetching billing details:", err))
+        .finally(() => setLoadingBilling(false));
     }
   }, [activeTab]);
 
@@ -186,16 +193,10 @@ function SettingsPage({ st, go, activeTabParam }) {
 
   const handleToggle = (key) => {
     setPrivacy(prev => ({ ...prev, [key]: !prev[key] }));
-    if (window.toast) {
-      window.toast("Preference updated!");
-    }
   };
 
   const handleVisibilityChange = (value) => {
     setPrivacy(prev => ({ ...prev, profileVisibility: value }));
-    if (window.toast) {
-      window.toast(`Profile visibility set to ${value}`);
-    }
   };
 
   const handleImageChange = (e) => {
@@ -215,6 +216,37 @@ function SettingsPage({ st, go, activeTabParam }) {
     }
   };
 
+  const downloadInvoice = async (orderId, orderNumber) => {
+    try {
+      const api = window.location.port === "8080" ? "http://localhost:3000" : window.location.origin;
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${api}/api/subscription/orders/${orderId}/invoice`, {
+        headers: {
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        }
+      });
+      if (!response.ok) {
+        throw new Error('Failed to download invoice');
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Invoice-${orderNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+    } catch (err) {
+      console.error(err);
+      if (window.toast) {
+        window.toast("Error downloading invoice. Please try again.");
+      } else {
+        alert("Error downloading invoice. Please try again.");
+      }
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -229,6 +261,7 @@ function SettingsPage({ st, go, activeTabParam }) {
       formData.append("bio", ME.role || "");
       formData.append("location", ME.location || "");
       formData.append("messagingRestriction", profile.messagingRestriction);
+      formData.append("privacyPrefs", JSON.stringify(privacy));
 
       const base64ToBlob = (base64) => {
         const arr = base64.split(',');
@@ -260,6 +293,14 @@ function SettingsPage({ st, go, activeTabParam }) {
         ME.name = fullName;
         ME.messaging_restriction = profile.messagingRestriction;
         if (profile.img !== undefined) ME.img = profile.img;
+
+        // Save privacy preferences on success
+        localStorage.setItem("samaagum_privacy_prefs", JSON.stringify(privacy));
+        ME.privacy = privacy;
+        if (window.chatSocket) {
+          window.chatSocket.emit("privacy.update");
+        }
+
         if (window.toast) window.toast("Settings saved successfully!");
       } else {
         const err = await res.json().catch(() => null);
@@ -276,18 +317,18 @@ function SettingsPage({ st, go, activeTabParam }) {
     {
       title: "General Settings",
       items: [
-        { id: "apps", label: "Apps", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8"/><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8"/></svg> },
-        { id: "account", label: "Account", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="8.5" r="3.6" stroke="currentColor" strokeWidth="1.8"/><path d="M5 19.5c.8-3.4 3.6-5 7-5s6.2 1.6 7 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg> },
-        { id: "session", label: "Sessions", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><rect x="5" y="3" width="14" height="18" rx="2" stroke="currentColor" strokeWidth="1.8"/><line x1="12" y1="17" x2="12.01" y2="17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg> },
-        { id: "notification", label: "Notification", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M6 9a6 6 0 0112 0c0 4 1.2 5.5 2 6.5H4c.8-1 2-2.5 2-6.5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/><path d="M10 19a2 2 0 004 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg> },
-        { id: "language", label: "Language & Region", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="12" r="8.3" stroke="currentColor" strokeWidth="1.8"/><path d="M3.7 12h16.6M12 3.7c2.2 2.2 3.3 5 3.3 8.3S14.2 18.1 12 20.3c-2.2-2.2-3.3-5-3.3-8.3S9.8 5.9 12 3.7z" stroke="currentColor" strokeWidth="1.8"/></svg> },
+        { id: "apps", label: "Apps", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8" /><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8" /><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8" /><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.8" /></svg> },
+        { id: "account", label: "Account", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="8.5" r="3.6" stroke="currentColor" strokeWidth="1.8" /><path d="M5 19.5c.8-3.4 3.6-5 7-5s6.2 1.6 7 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg> },
+        { id: "session", label: "Sessions", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><rect x="5" y="3" width="14" height="18" rx="2" stroke="currentColor" strokeWidth="1.8" /><line x1="12" y1="17" x2="12.01" y2="17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg> },
+        { id: "notification", label: "Notification", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M6 9a6 6 0 0112 0c0 4 1.2 5.5 2 6.5H4c.8-1 2-2.5 2-6.5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /><path d="M10 19a2 2 0 004 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg> },
+        { id: "language", label: "Language & Region", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="12" r="8.3" stroke="currentColor" strokeWidth="1.8" /><path d="M3.7 12h16.6M12 3.7c2.2 2.2 3.3 5 3.3 8.3S14.2 18.1 12 20.3c-2.2-2.2-3.3-5-3.3-8.3S9.8 5.9 12 3.7z" stroke="currentColor" strokeWidth="1.8" /></svg> },
       ]
     },
     {
       title: "Workspace Settings",
       items: [
-        { id: "general", label: "General", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" stroke="currentColor" strokeWidth="1.8"/></svg> },
-        { id: "billing", label: "Billing", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M20 7H4a2 2 0 00-2 2v8a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" stroke="currentColor" strokeWidth="1.8"/><path d="M22 13h-4v2h4v-2zM4 7V5a2 2 0 012-2h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg> },
+        { id: "general", label: "General", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" stroke="currentColor" strokeWidth="1.8" /></svg> },
+        { id: "billing", label: "Billing", icon: <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M20 7H4a2 2 0 00-2 2v8a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" stroke="currentColor" strokeWidth="1.8" /><path d="M22 13h-4v2h4v-2zM4 7V5a2 2 0 012-2h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg> },
       ]
     }
   ];
@@ -295,7 +336,7 @@ function SettingsPage({ st, go, activeTabParam }) {
   return (
     <div className="scroll" style={{ flex: 1, overflowY: "auto", background: "var(--bg-2)" }}>
       <div className="view-enter" style={{ maxWidth: 1200, margin: "0 auto", padding: "32px 24px" }}>
-        
+
         {/* Breadcrumb Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
           <button onClick={() => go("home")} style={{ background: "none", border: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: "14px", display: "flex", alignItems: "center", gap: 4 }}>
@@ -310,7 +351,7 @@ function SettingsPage({ st, go, activeTabParam }) {
         </h1>
 
         <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 40, alignItems: "start" }}>
-          
+
           {/* Settings Sub-Sidebar Menu */}
           <aside style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             {menuSections.map((sec, sIdx) => (
@@ -355,7 +396,9 @@ function SettingsPage({ st, go, activeTabParam }) {
 
           {/* Settings Main Panels */}
           <main style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", padding: 40, boxShadow: "var(--sh-sm)" }}>
-                       {activeTab !== "account" && activeTab !== "session" && activeTab !== "billing" ? (
+            {activeTab === "notification" ? (
+              <NotificationSettingsPanel />
+            ) : activeTab !== "account" && activeTab !== "session" && activeTab !== "billing" && activeTab !== "notification" ? (
               // Empty state for other sections
               <div style={{ textAlign: "center", padding: "64px 0", color: "var(--ink-3)" }}>
                 <div style={{ fontSize: "48px", marginBottom: 16 }}>⚙️</div>
@@ -380,7 +423,7 @@ function SettingsPage({ st, go, activeTabParam }) {
                   ) : (
                     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                       {sessions.map(sess => (
-                        <div 
+                        <div
                           key={sess.id}
                           style={{
                             display: "flex",
@@ -404,9 +447,9 @@ function SettingsPage({ st, go, activeTabParam }) {
                               color: sess.current ? "var(--accent-2)" : "var(--ink-2)"
                             }}>
                               {sess.os === 'iOS' || sess.os === 'Android' ? (
-                                <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><rect x="5" y="2" width="14" height="20" rx="3" stroke="currentColor" strokeWidth="1.8"/><circle cx="12" cy="18" r="1" fill="currentColor"/></svg>
+                                <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><rect x="5" y="2" width="14" height="20" rx="3" stroke="currentColor" strokeWidth="1.8" /><circle cx="12" cy="18" r="1" fill="currentColor" /></svg>
                               ) : (
-                                <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><rect x="3" y="4" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="1.8"/><path d="M7 20h10M12 16v4" stroke="currentColor" strokeWidth="1.8"/></svg>
+                                <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><rect x="3" y="4" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="1.8" /><path d="M7 20h10M12 16v4" stroke="currentColor" strokeWidth="1.8" /></svg>
                               )}
                             </div>
                             <div>
@@ -530,7 +573,7 @@ function SettingsPage({ st, go, activeTabParam }) {
                                 transition: "all var(--t-fast)"
                               }}
                             >
-                              <svg viewBox="0 0 24 24" fill="none" width="14" height="14" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+                              <svg viewBox="0 0 24 24" fill="none" width="14" height="14" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
                               {billingData && billingData.plan ? "Renew / Upgrade" : "Upgrade Plan"}
                             </button>
                           </div>
@@ -538,35 +581,35 @@ function SettingsPage({ st, go, activeTabParam }) {
 
                         {billingData && billingData.plan ? (
                           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 20, borderTop: "1px solid var(--border)", paddingTop: 20 }}>
-                             <div>
-                               <div style={{ fontSize: "12px", color: "var(--ink-3)", marginBottom: 4 }}>Billing Cycle</div>
-                               <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
-                                 {billingData.billingCycle === "yearly" ? "Yearly" : "Monthly"}
-                               </div>
-                             </div>
-                             <div>
-                               <div style={{ fontSize: "12px", color: "var(--ink-3)", marginBottom: 4 }}>Purchase Date</div>
-                               <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
-                                 {new Date(billingData.startDate).toLocaleDateString(undefined, { dateStyle: "medium" })}
-                               </div>
-                             </div>
-                             <div>
-                               <div style={{ fontSize: "12px", color: "var(--ink-3)", marginBottom: 4 }}>Expiry Date</div>
-                               <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
-                                 {new Date(billingData.endDate).toLocaleDateString(undefined, { dateStyle: "medium" })}
-                               </div>
-                             </div>
-                             <div>
-                               <div style={{ fontSize: "12px", color: "var(--ink-3)", marginBottom: 4 }}>Time Remaining</div>
-                               <div style={{ fontSize: "14px", fontWeight: 600, color: billingData?.endDate && Math.ceil((new Date(billingData.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) <= 5 ? "rgb(239, 68, 68)" : "var(--ink)" }}>
-                                 {(() => {
-                                   const days = Math.ceil((new Date(billingData.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-                                   if (days < 0) return "Expired";
-                                   if (days === 0) return "Expires today";
-                                   return `${days} days left`;
-                                 })()}
-                               </div>
-                             </div>
+                            <div>
+                              <div style={{ fontSize: "12px", color: "var(--ink-3)", marginBottom: 4 }}>Billing Cycle</div>
+                              <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
+                                {billingData.billingCycle === "yearly" ? "Yearly" : "Monthly"}
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: "12px", color: "var(--ink-3)", marginBottom: 4 }}>Purchase Date</div>
+                              <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
+                                {new Date(billingData.startDate).toLocaleDateString(undefined, { dateStyle: "medium" })}
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: "12px", color: "var(--ink-3)", marginBottom: 4 }}>Expiry Date</div>
+                              <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
+                                {new Date(billingData.endDate).toLocaleDateString(undefined, { dateStyle: "medium" })}
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: "12px", color: "var(--ink-3)", marginBottom: 4 }}>Time Remaining</div>
+                              <div style={{ fontSize: "14px", fontWeight: 600, color: billingData?.endDate && Math.ceil((new Date(billingData.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) <= 5 ? "rgb(239, 68, 68)" : "var(--ink)" }}>
+                                {(() => {
+                                  const days = Math.ceil((new Date(billingData.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                                  if (days < 0) return "Expired";
+                                  if (days === 0) return "Expires today";
+                                  return `${days} days left`;
+                                })()}
+                              </div>
+                            </div>
                           </div>
                         ) : (
                           <div style={{ color: "var(--ink-2)", fontSize: "14px", borderTop: "1px solid var(--border)", paddingTop: 20 }}>
@@ -601,6 +644,7 @@ function SettingsPage({ st, go, activeTabParam }) {
                                   <th style={{ padding: "12px 16px", fontWeight: 600, color: "var(--ink-2)" }}>Total</th>
                                   <th style={{ padding: "12px 16px", fontWeight: 600, color: "var(--ink-2)" }}>Payment Method</th>
                                   <th style={{ padding: "12px 16px", fontWeight: 600, color: "var(--ink-2)" }}>Status</th>
+                                  <th style={{ padding: "12px 16px", fontWeight: 600, color: "var(--ink-2)" }}>Actions</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -630,6 +674,31 @@ function SettingsPage({ st, go, activeTabParam }) {
                                       }}>
                                         {order.status}
                                       </span>
+                                    </td>
+                                    <td style={{ padding: "12px 16px" }}>
+                                      {order.status === "completed" && (
+                                        <button
+                                          onClick={() => downloadInvoice(order.id, order.order_number)}
+                                          style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "6px",
+                                            padding: "6px 12px",
+                                            borderRadius: "6px",
+                                            border: "1px solid var(--border)",
+                                            background: "var(--surface)",
+                                            color: "var(--ink-2)",
+                                            fontSize: "12px",
+                                            fontWeight: 500,
+                                            cursor: "pointer",
+                                            transition: "all 0.2s"
+                                          }}
+                                          onMouseEnter={e => { e.currentTarget.style.color = "var(--primary)"; e.currentTarget.style.borderColor = "var(--primary)"; }}
+                                          onMouseLeave={e => { e.currentTarget.style.color = "var(--ink-2)"; e.currentTarget.style.borderColor = "var(--border)"; }}
+                                        >
+                                          <I.download style={{ width: 13, height: 13 }} /> Invoice
+                                        </button>
+                                      )}
                                     </td>
                                   </tr>
                                 ))}
@@ -694,7 +763,7 @@ function SettingsPage({ st, go, activeTabParam }) {
                     </div>
 
                     {privacy.profileVisibility === "private" && (
-                      <div 
+                      <div
                         className="view-enter"
                         style={{
                           background: "var(--surface-2)",
@@ -711,12 +780,12 @@ function SettingsPage({ st, go, activeTabParam }) {
                         <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)" }}>
                           Private Profile Settings
                         </div>
-                        
+
                         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                           <label style={{ display: "flex", alignItems: "flex-start", gap: 12, cursor: "pointer" }}>
-                            <input 
-                              type="radio" 
-                              name="privateProfileMode" 
+                            <input
+                              type="radio"
+                              name="privateProfileMode"
                               value="hide_all"
                               checked={privacy.privateProfileMode === "hide_all"}
                               onChange={() => {
@@ -732,9 +801,9 @@ function SettingsPage({ st, go, activeTabParam }) {
                           </label>
 
                           <label style={{ display: "flex", alignItems: "flex-start", gap: 12, cursor: "pointer" }}>
-                            <input 
-                              type="radio" 
-                              name="privateProfileMode" 
+                            <input
+                              type="radio"
+                              name="privateProfileMode"
                               value="custom_fields"
                               checked={privacy.privateProfileMode === "custom_fields"}
                               onChange={() => {
@@ -751,14 +820,14 @@ function SettingsPage({ st, go, activeTabParam }) {
                         </div>
 
                         {privacy.privateProfileMode === "custom_fields" && (
-                          <div 
-                            style={{ 
-                              display: "grid", 
-                              gridTemplateColumns: "1fr 1fr", 
-                              gap: "12px 20px", 
-                              borderTop: "1px solid var(--border)", 
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "1fr 1fr",
+                              gap: "12px 20px",
+                              borderTop: "1px solid var(--border)",
                               paddingTop: "16px",
-                              marginTop: "8px" 
+                              marginTop: "8px"
                             }}
                           >
                             <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--ink-3)", gridColumn: "1 / -1", marginBottom: "4px" }}>
@@ -774,8 +843,8 @@ function SettingsPage({ st, go, activeTabParam }) {
                               { key: "virtualCard", label: "Virtual Card" }
                             ].map(field => (
                               <label key={field.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "13px", color: "var(--ink)", cursor: "pointer" }}>
-                                <input 
-                                  type="checkbox" 
+                                <input
+                                  type="checkbox"
                                   checked={privacy.visibleFields?.[field.key] || false}
                                   onChange={() => {
                                     setPrivacy(prev => ({
@@ -806,7 +875,7 @@ function SettingsPage({ st, go, activeTabParam }) {
                         <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>Show active status</div>
                         <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Allow other community members to see when you are online in chats.</div>
                       </div>
-                      <button 
+                      <button
                         onClick={() => handleToggle("showActiveStatus")}
                         style={{
                           background: privacy.showActiveStatus ? "var(--accent-2)" : "var(--border-3, #ccc)",
@@ -838,7 +907,7 @@ function SettingsPage({ st, go, activeTabParam }) {
                         <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>Search Engine Indexing</div>
                         <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Allow search engines like Google to index your public Samaagum profile page.</div>
                       </div>
-                      <button 
+                      <button
                         onClick={() => handleToggle("searchIndexing")}
                         style={{
                           background: privacy.searchIndexing ? "var(--accent-2)" : "var(--border-3, #ccc)",
@@ -886,8 +955,8 @@ function SettingsPage({ st, go, activeTabParam }) {
                         desc: "Any Samaagum member can send you a direct message, even without connecting first.",
                         icon: (
                           <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
-                            <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.8"/>
-                            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                            <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.8" />
+                            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                           </svg>
                         )
                       },
@@ -897,7 +966,7 @@ function SettingsPage({ st, go, activeTabParam }) {
                         desc: "Only people you have accepted a connection with can start a conversation with you.",
                         icon: (
                           <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
-                            <path d="M17 20c0-2.76-2.24-5-5-5s-5 2.24-5 5M12 15a4 4 0 100-8 4 4 0 000 8zM22 11a3 3 0 11-6 0 3 3 0 016 0zM2 11a3 3 0 116 0 3 3 0 01-6 0z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                            <path d="M17 20c0-2.76-2.24-5-5-5s-5 2.24-5 5M12 15a4 4 0 100-8 4 4 0 000 8zM22 11a3 3 0 11-6 0 3 3 0 016 0zM2 11a3 3 0 116 0 3 3 0 01-6 0z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                           </svg>
                         )
                       },
@@ -907,8 +976,8 @@ function SettingsPage({ st, go, activeTabParam }) {
                         desc: "Nobody can send you direct messages. The message icon is hidden from your profile entirely.",
                         icon: (
                           <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
-                            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
-                            <line x1="4" y1="4" x2="20" y2="20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                            <line x1="4" y1="4" x2="20" y2="20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                           </svg>
                         )
                       }
@@ -998,7 +1067,7 @@ function SettingsPage({ st, go, activeTabParam }) {
                         <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>Support access</div>
                         <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>You have granted us to access to your account for support purposes until Aug 31, 2023, 9:40 PM.</div>
                       </div>
-                      <button 
+                      <button
                         onClick={() => handleToggle("supportAccess")}
                         style={{
                           background: privacy.supportAccess ? "var(--accent-2)" : "var(--border-3, #ccc)",
@@ -1030,7 +1099,7 @@ function SettingsPage({ st, go, activeTabParam }) {
                         <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>Log out of all devices</div>
                         <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Log out of all other active sessions on other devices besides this one.</div>
                       </div>
-                      <button 
+                      <button
                         onClick={() => window.toast ? window.toast("Logged out of all other devices successfully.") : alert("Logged out")}
                         style={{
                           background: "var(--surface-2)",
@@ -1053,7 +1122,7 @@ function SettingsPage({ st, go, activeTabParam }) {
                         <div style={{ fontSize: "14px", fontWeight: 600, color: "#e5484d", marginBottom: 4 }}>Delete my account</div>
                         <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Permanently delete the account and remove access from all workspaces.</div>
                       </div>
-                      <button 
+                      <button
                         onClick={() => {
                           if (confirm("Are you absolutely sure you want to delete your account? This action is irreversible.")) {
                             localStorage.clear();
@@ -1122,4 +1191,490 @@ function SettingsPage({ st, go, activeTabParam }) {
   );
 }
 
-Object.assign(window, { SettingsPage });
+const IN_APP_CATEGORIES = [
+  {
+    id: "messages",
+    title: "1. Messages",
+    description: "Control notifications related to private messaging.",
+    items: [
+      { type: "MESSAGE_RECEIVED", label: "New Direct Messages", description: "Receive notifications whenever someone sends you a new message." }
+    ]
+  },
+  {
+    id: "membership",
+    title: "2. Membership & Approval Requests",
+    description: "Notifications related to joining groups and events.",
+    items: [
+      { type: "JOIN_REQUESTS", label: "Someone Requests to Join My Group", description: "Receive notifications when users request to join your group.", requiresRole: true },
+      { type: "EVENT_JOIN_REQUESTS", label: "Someone Requests to Join My Event", description: "Receive notifications when users request to join your event.", requiresRole: true },
+      { type: "MEMBERSHIP_APPROVED", label: "My Membership Request Approved", description: "Receive notifications when your membership request is approved." },
+      { type: "MEMBERSHIP_DECLINED", label: "My Membership Request Declined", description: "Receive notifications when your membership request is declined." },
+      { type: "REGISTRATION_APPROVED", label: "Event Registration Approved", description: "Receive notifications when your event registration is approved." },
+      { type: "REGISTRATION_DECLINED", label: "Event Registration Declined", description: "Receive notifications when your event registration is declined." }
+    ]
+  },
+  {
+    id: "reminders",
+    title: "3. Upcoming Events",
+    description: "Event reminders.",
+    items: [
+      { type: "EVENT_REMINDER_24H", label: "Upcoming Event Reminders", description: "Receive reminders for upcoming events you are attending." }
+    ]
+  },
+  {
+    id: "updates",
+    title: "4. Event Updates",
+    description: "Notifications about events you are attending.",
+    items: [
+      { type: "EVENT_UPDATED", label: "Event Updated", description: "Receive notifications when details of an event you are attending are updated." },
+      { type: "EVENT_CANCELLED", label: "Event Cancelled", description: "Receive notifications when an event you are attending is cancelled." }
+    ]
+  },
+  {
+    id: "group_activity",
+    title: "5. Group Activity",
+    description: "Notifications from groups you belong to.",
+    items: [
+      { type: "NEW_GROUP_EVENTS", label: "New Group Events", description: "Receive notifications when new events are created in your groups." },
+      { type: "NEW_DISCUSSION_POSTS", label: "New Discussion Posts", description: "Receive notifications when new discussion posts are created." },
+      { type: "DISCUSSION_REPLIES", label: "Replies & Discussion Activity", description: "Receive notifications for discussion activity." }
+    ]
+  },
+  {
+    id: "connections",
+    title: "6. Connections",
+    description: "Networking notifications.",
+    items: [
+      { type: "CONNECTION_ACCEPTED", label: "Connection Accepted", description: "Receive notifications when someone accepts your connection request." }
+    ]
+  },
+  {
+    id: "subscription_alerts",
+    title: "7. Subscription Alerts",
+    description: "Alerts about your subscription status.",
+    items: [
+      { type: "SUBSCRIPTION_EXPIRING", label: "Subscription Expiring Alerts", description: "Receive in-app alerts 5 days before your subscription expires." }
+    ]
+  }
+];
+
+const EMAIL_CATEGORIES = [
+  {
+    id: "email_registrations",
+    title: "1. Tickets & Registrations",
+    description: "Ticket deliveries and registrations.",
+    items: [
+      { type: "TICKET_BOOKED", label: "Ticket Booked Successfully", description: "Receive emails with your ticket when you book an event." },
+      { type: "TICKET_CONFIRMED", label: "Ticket Confirmed", description: "Receive emails when your registration is confirmed." },
+      { type: "REGISTRATION_APPROVED", label: "Event Registration Approved", description: "Receive emails with your QR check-in ticket when your registration is approved." }
+    ]
+  },
+  {
+    id: "email_checkin",
+    title: "2. Check-Ins",
+    description: "Event check-in receipts.",
+    items: [
+      { type: "EVENT_CHECKIN", label: "Event Check-In Receipts", description: "Receive emails confirming your successful check-in at an event." }
+    ]
+  },
+  {
+    id: "email_billing",
+    title: "3. Subscription & Billing",
+    description: "Subscription status alerts.",
+    items: [
+      { type: "SUBSCRIPTION_EXPIRING", label: "Subscription Expiring Alerts", description: "Receive warnings 5 days before your subscription expires." },
+      { type: "SUBSCRIPTION_ACTIVE", label: "Subscription Activated", description: "Receive confirmation emails when your subscription is activated." }
+    ]
+  }
+];
+
+function NotificationSettingsPanel() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState(""); // "", "saving", "saved", "error"
+  const [inAppEnabled, setInAppEnabled] = useState(true);
+  const [emailEnabled, setEmailEnabled] = useState(true);
+  const [preferences, setPreferences] = useState({});
+  const [lastModified, setLastModified] = useState(null);
+  const [hasGroups, setHasGroups] = useState(false);
+  const [activeTab, setActiveTab] = useState<'app' | 'email'>('app');
+
+  const api = window.location.port === "8080" ? "http://localhost:3000" : window.location.origin;
+  const token = localStorage.getItem('token');
+
+  // Load preferences
+  useEffect(() => {
+    fetch(`${api}/api/notification-preferences`, {
+      headers: { ...(token ? { "Authorization": `Bearer ${token}` } : {}) }
+    })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success) {
+          setInAppEnabled(res.inAppEnabled);
+          setEmailEnabled(res.emailEnabled ?? true);
+          setPreferences(res.preferences || {});
+          setLastModified(res.lastModified);
+        }
+      })
+      .catch(err => console.error("Error loading notification preferences", err))
+      .finally(() => setLoading(false));
+    fetch(`${api}/api/groups/my-managed`, {
+      headers: { ...(token ? { "Authorization": `Bearer ${token}` } : {}) }
+    })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.data && res.data.length > 0) {
+          setHasGroups(true);
+        }
+      })
+      .catch(() => { });
+  }, []);
+
+  const savePreferences = async (updatedInApp, updatedEmail, updatedPrefs) => {
+    setSaving(true);
+    setSaveStatus("saving");
+    try {
+      const payload = {} as any;
+      if (updatedInApp !== undefined) {
+        payload.inAppEnabled = updatedInApp;
+      }
+      if (updatedEmail !== undefined) {
+        payload.emailEnabled = updatedEmail;
+      }
+      if (updatedPrefs !== undefined) {
+        payload.preferences = updatedPrefs;
+      }
+
+      const res = await fetch(`${api}/api/notification-preferences`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setInAppEnabled(data.inAppEnabled);
+        setEmailEnabled(data.emailEnabled ?? true);
+        setPreferences(data.preferences);
+        setLastModified(data.lastModified);
+        setSaveStatus("saved");
+        setTimeout(() => setSaveStatus(""), 2000);
+      } else {
+        setSaveStatus("error");
+      }
+    } catch (e) {
+      setSaveStatus("error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleGlobalToggle = () => {
+    const nextVal = !inAppEnabled;
+    setInAppEnabled(nextVal);
+    savePreferences(nextVal, undefined, undefined);
+  };
+
+  const handleGlobalEmailToggle = () => {
+    const nextVal = !emailEnabled;
+    setEmailEnabled(nextVal);
+    savePreferences(undefined, nextVal, undefined);
+  };
+
+  const handleToggle = (type, channel) => {
+    const key = `${type}:${channel}`;
+    const nextVal = !preferences[key];
+    setPreferences(prev => ({ ...prev, [key]: nextVal }));
+    savePreferences(undefined, undefined, [{ type, channel, enabled: nextVal }]);
+  };
+
+  const handleCategoryToggle = (categoryItems, channel, allEnabled) => {
+    const nextVal = !allEnabled;
+    const updates = categoryItems.map(item => ({
+      type: item.type,
+      channel,
+      enabled: nextVal
+    }));
+    setPreferences(prev => {
+      const updated = { ...prev };
+      updates.forEach(u => {
+        updated[`${u.type}:${channel}`] = u.enabled;
+      });
+      return updated;
+    });
+    savePreferences(undefined, undefined, updates);
+  };
+
+  if (loading) {
+    return (
+      <div style={{ color: "var(--ink-3)", fontSize: "14px", display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ display: "inline-block", width: 16, height: 16, border: "2px solid var(--border)", borderTopColor: "var(--accent-2)", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+        Loading notification settings...
+      </div>
+    );
+  }
+
+  const currentCategories = activeTab === 'app' ? IN_APP_CATEGORIES : EMAIL_CATEGORIES;
+  const isEnabled = activeTab === 'app' ? inAppEnabled : emailEnabled;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      {/* Header and status */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <h2 style={{ fontFamily: "var(--font-display)", fontSize: "20px", fontWeight: 600, color: "var(--ink)", marginBottom: 8 }}>
+            Notification Preferences
+          </h2>
+          <p style={{ fontSize: "14px", color: "var(--ink-3)" }}>
+            Choose how you want to be notified of activity on Samaagum.
+          </p>
+        </div>
+        <div>
+          {saveStatus === "saving" && <span style={{ fontSize: "12px", color: "var(--ink-3)" }}>Saving changes...</span>}
+          {saveStatus === "saved" && <span style={{ fontSize: "12px", color: "rgb(34, 197, 94)", fontWeight: 500 }}>Saved successfully!</span>}
+          {saveStatus === "error" && <span style={{ fontSize: "12px", color: "rgb(239, 68, 68)", fontWeight: 500 }}>Error saving changes</span>}
+        </div>
+      </div>
+
+      {/* Tabs Selector */}
+      <div style={{ display: "flex", borderBottom: "1px solid var(--border)", gap: 16 }}>
+        <button
+          onClick={() => setActiveTab('app')}
+          style={{
+            padding: "12px 16px",
+            background: "none",
+            border: "none",
+            borderBottom: activeTab === 'app' ? "2px solid var(--accent-2)" : "2px solid transparent",
+            color: activeTab === 'app' ? "var(--accent-2)" : "var(--ink-3)",
+            fontWeight: 600,
+            cursor: "pointer",
+            fontSize: "14px",
+            transition: "all var(--t-fast)"
+          }}
+        >
+          In-App Notifications
+        </button>
+        <button
+          onClick={() => setActiveTab('email')}
+          style={{
+            padding: "12px 16px",
+            background: "none",
+            border: "none",
+            borderBottom: activeTab === 'email' ? "2px solid var(--accent-2)" : "2px solid transparent",
+            color: activeTab === 'email' ? "var(--accent-2)" : "var(--ink-3)",
+            fontWeight: 600,
+            cursor: "pointer",
+            fontSize: "14px",
+            transition: "all var(--t-fast)"
+          }}
+        >
+          Email Notifications
+        </button>
+      </div>
+
+      {/* Global In-App Switch (Only shown when activeTab is 'app') */}
+      {activeTab === 'app' && (
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "20px",
+          borderRadius: "var(--r-md)",
+          border: "1px solid var(--border)",
+          background: "rgba(109, 94, 252, 0.03)"
+        }}>
+          <div>
+            <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>Enable In-App Notifications</div>
+            <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Turn on or off all in-app notifications on this account. Critical security alerts will always be shown.</div>
+          </div>
+          <div
+            onClick={handleGlobalToggle}
+            role="switch"
+            aria-checked={inAppEnabled}
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); handleGlobalToggle(); } }}
+            style={{
+              background: inAppEnabled ? "var(--accent-2)" : "var(--border-3, #ccc)",
+              width: "44px",
+              height: "24px",
+              borderRadius: "12px",
+              position: "relative",
+              cursor: "pointer",
+              transition: "background var(--t-fast)",
+              display: "inline-block",
+              boxSizing: "border-box",
+              flexShrink: 0
+            }}
+          >
+            <span style={{
+              width: "18px",
+              height: "18px",
+              borderRadius: "50%",
+              background: "#fff",
+              position: "absolute",
+              top: "3px",
+              left: inAppEnabled ? "23px" : "3px",
+              transition: "left var(--t-fast)"
+            }} />
+          </div>
+        </div>
+      )}
+
+      {/* Global Email Switch (Only shown when activeTab is 'email') */}
+      {activeTab === 'email' && (
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "20px",
+          borderRadius: "var(--r-md)",
+          border: "1px solid var(--border)",
+          background: "rgba(109, 94, 252, 0.03)"
+        }}>
+          <div>
+            <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--ink)", marginBottom: 4 }}>Enable Email Notifications</div>
+            <div style={{ fontSize: "12px", color: "var(--ink-3)" }}>Turn on or off all email notifications on this account. Invoice and transaction receipts will always be sent.</div>
+          </div>
+          <div
+            onClick={handleGlobalEmailToggle}
+            role="switch"
+            aria-checked={emailEnabled}
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); handleGlobalEmailToggle(); } }}
+            style={{
+              background: emailEnabled ? "var(--accent-2)" : "var(--border-3, #ccc)",
+              width: "44px",
+              height: "24px",
+              borderRadius: "12px",
+              position: "relative",
+              cursor: "pointer",
+              transition: "background var(--t-fast)",
+              display: "inline-block",
+              boxSizing: "border-box",
+              flexShrink: 0
+            }}
+          >
+            <span style={{
+              width: "18px",
+              height: "18px",
+              borderRadius: "50%",
+              background: "#fff",
+              position: "absolute",
+              top: "3px",
+              left: emailEnabled ? "23px" : "3px",
+              transition: "left var(--t-fast)"
+            }} />
+          </div>
+        </div>
+      )}
+
+      {/* Custom Categories toggles - hidden when corresponding global setting is disabled */}
+      {isEnabled && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+          {currentCategories.map(cat => {
+            const items = cat.items;
+            const allEnabled = items.every(item => preferences[`${item.type}:${activeTab}`] !== false);
+
+            return (
+              <div key={cat.id} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {/* Category Header with Master Switch */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border)", paddingBottom: 12 }}>
+                  <div>
+                    <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--ink)" }}>{cat.title}</h3>
+                    <div style={{ fontSize: "12px", color: "var(--ink-3)", marginTop: 2 }}>{cat.description}</div>
+                  </div>
+                  <button
+                    onClick={() => handleCategoryToggle(items, activeTab, allEnabled)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "var(--accent-2)",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer"
+                    }}
+                  >
+                    {allEnabled ? "Mute All" : "Unmute All"}
+                  </button>
+                </div>
+
+                {/* Items List */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  {items.map(item => {
+                    const enabled = preferences[`${item.type}:${activeTab}`] !== false;
+                    const isRoleRestricted = item.requiresRole && !hasGroups;
+
+                    return (
+                      <div key={item.type} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ maxWidth: "80%" }}>
+                          <div style={{ fontSize: "14px", fontWeight: 500, color: "var(--ink)", display: "flex", alignItems: "center", gap: 8 }}>
+                            {item.label}
+                            {isRoleRestricted && (
+                              <span style={{
+                                fontSize: "11px",
+                                color: "var(--ink-3)",
+                                background: "var(--surface-2)",
+                                padding: "2px 6px",
+                                borderRadius: "var(--r-sm)",
+                                fontWeight: 400
+                              }}>
+                                Not owning/moderating groups
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: "12px", color: "var(--ink-3)", marginTop: 4 }}>{item.description}</div>
+                        </div>
+                        <div
+                          onClick={() => { if (!isRoleRestricted) handleToggle(item.type, activeTab); }}
+                          role="switch"
+                          aria-checked={enabled}
+                          tabIndex={isRoleRestricted ? -1 : 0}
+                          onKeyDown={(e) => { if ((e.key === ' ' || e.key === 'Enter') && !isRoleRestricted) { e.preventDefault(); handleToggle(item.type, activeTab); } }}
+                          style={{
+                            background: enabled && !isRoleRestricted ? "var(--accent-2)" : "var(--border-3, #ccc)",
+                            width: "44px",
+                            height: "24px",
+                            borderRadius: "12px",
+                            position: "relative",
+                            cursor: isRoleRestricted ? "not-allowed" : "pointer",
+                            opacity: isRoleRestricted ? 0.5 : 1,
+                            transition: "background var(--t-fast)",
+                            display: "inline-block",
+                            boxSizing: "border-box",
+                            flexShrink: 0
+                          }}
+                        >
+                          <span style={{
+                            width: "18px",
+                            height: "18px",
+                            borderRadius: "50%",
+                            background: "#fff",
+                            position: "absolute",
+                            top: "3px",
+                            left: enabled && !isRoleRestricted ? "23px" : "3px",
+                            transition: "left var(--t-fast)"
+                          }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {lastModified && (
+        <div style={{ fontSize: "12px", color: "var(--ink-3)", borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+          Last modified: {new Date(lastModified).toLocaleString()}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+

@@ -27,11 +27,15 @@ export const adminUserRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
           u.state,
           u.created_at,
           p.display_name AS name,
-          r.key AS role_key               -- <-- use only existing column
+          (
+            SELECT r.key
+            FROM role_assignments ra
+            LEFT JOIN roles r ON r.id = ra.role_id
+            WHERE ra.user_id = u.id
+            LIMIT 1
+          ) AS role_key
         FROM users u
         LEFT JOIN profiles p ON p.user_id = u.id
-        LEFT JOIN role_assignments ra ON ra.user_id = u.id
-        LEFT JOIN roles r ON r.id = ra.role_id
         ORDER BY u.created_at DESC
       `);
 
@@ -103,6 +107,15 @@ export const adminUserRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
           });
         }
 
+        const { emitProfileUpdate, sendNotificationToUser, disconnectUserSockets } = await import('../services/messagingSocket');
+        emitProfileUpdate(userRecord.id, { name });
+        if (state === 'suspended') {
+          sendNotificationToUser(userRecord.id, 'user.suspended', { message: 'You have been suspended. contact admin for futher information ' });
+          setTimeout(() => {
+            disconnectUserSockets(userRecord.id).catch(console.error);
+          }, 500);
+        }
+
         return { success: true, data: { id: userRecord.id, name, email, role, status } };
       } else {
         // Create new user
@@ -120,6 +133,10 @@ export const adminUserRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
             data: { tenant_id: tenantId, user_id: newUser.id, role_id: roleRecord.id },
           });
         }
+
+        // Auto-assign the default plan to manually created user
+        const { SubscriptionActivationService } = await import('../services/SubscriptionActivationService');
+        SubscriptionActivationService.assignDefaultPlanToUser(newUser.id, tenantId).catch(console.error);
 
         return { success: true, data: { id: newUser.id, name, email, role, status } };
       }
@@ -154,6 +171,18 @@ export const adminUserRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
           await prisma.role_assignments.create({ data: { tenant_id: userRecord.tenant_id, user_id: id, role_id: roleRecord.id } });
         }
       }
+
+      const { emitProfileUpdate, sendNotificationToUser, disconnectUserSockets } = await import('../services/messagingSocket');
+      if (name) {
+        emitProfileUpdate(id, { name });
+      }
+      if (state === 'suspended') {
+        sendNotificationToUser(id, 'user.suspended', { message: 'You have been suspended. contact admin for futher information ' });
+        setTimeout(() => {
+          disconnectUserSockets(id).catch(console.error);
+        }, 500);
+      }
+
       return { success: true, data: { id, name, email, role, status } };
     } catch (e: any) {
       return reply.status(500).send({ success: false, message: e.message });
@@ -220,6 +249,10 @@ export const adminUserRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
             },
           });
         }
+
+        // Auto-assign the default plan to invited user
+        const { SubscriptionActivationService } = await import('../services/SubscriptionActivationService');
+        SubscriptionActivationService.assignDefaultPlanToUser(userRecord.id, tenantId).catch(console.error);
       }
 
       // 2. Generate and store token in auth_identities

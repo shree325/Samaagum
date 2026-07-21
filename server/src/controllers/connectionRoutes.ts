@@ -41,7 +41,12 @@ function getUserFromRequest(request: any): { userId: string; tenantId: string } 
     if (!header.startsWith('Bearer ')) return null;
     const token = header.slice(7);
     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
-    return { userId: payload.sub || payload.userId || payload.id, tenantId: payload.tenantId || payload.tenant_id };
+    const uid = payload.sub || payload.userId || payload.id;
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (uid && UUID_REGEX.test(uid)) {
+      return { userId: uid, tenantId: payload.tenantId || payload.tenant_id };
+    }
+    return null;
   } catch {
     return null;
   }
@@ -237,18 +242,22 @@ export async function connectionRoutes(fastify: FastifyInstance) {
 
       const updated = await prisma.connections.update({ where: { id }, data: { state: 'accepted' } });
 
-      // Create a persistent notification log entry for the requester
+      // Create a persistent notification log entry for the requester (if they allow it)
       try {
-        await prisma.notification_log.create({
-          data: {
-            tenant_id: conn.tenant_id,
-            user_id: conn.requester_user_id,
-            channel: 'socket',
-            template_key: 'connection_accepted',
-            provider_ref: conn.addressee_user_id,
-            status: 'queued'
-          }
-        });
+        const { notificationService } = require('../services/NotificationService');
+        const canDeliver = await notificationService.shouldDeliverByTemplateKey(conn.requester_user_id, 'connection_accepted');
+        if (canDeliver) {
+          await prisma.notification_log.create({
+            data: {
+              tenant_id: conn.tenant_id,
+              user_id: conn.requester_user_id,
+              channel: 'socket',
+              template_key: 'connection_accepted',
+              provider_ref: conn.addressee_user_id,
+              status: 'queued'
+            }
+          });
+        }
       } catch (err) {
         console.error("Failed to create notification log for accepted connection:", err);
       }
@@ -349,6 +358,160 @@ export async function connectionRoutes(fastify: FastifyInstance) {
 
       const updated = await prisma.connections.update({ where: { id }, data: { state: 'blocked' } });
       return reply.send({ success: true, data: updated, message: 'User blocked.' });
+    } catch (err: any) {
+      return reply.status(500).send({ success: false, message: err.message });
+    }
+  });
+
+  /** GET /api/connections/network/:targetUserId */
+  fastify.get('/network/:targetUserId', async (request: any, reply) => {
+    const auth = getUserFromRequest(request);
+    if (!auth?.userId) return reply.status(401).send({ success: false, message: 'Unauthorized' });
+
+    const { targetUserId } = request.params;
+    const query = request.query as any;
+    const q = (query.q || '').trim();
+    const page = parseInt(query.page) || 1;
+    const limit = parseInt(query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    try {
+      // 1. Get total connections of User B (accepted only) matching search query.
+      // We will perform a search query check. First let's query the accepted connections of User B.
+      const rawConnections = await prisma.$queryRawUnsafe<any[]>(
+        `WITH b_connections AS (
+          SELECT
+            CASE
+              WHEN requester_user_id = $1::uuid THEN addressee_user_id
+              ELSE requester_user_id
+            END AS peer_id
+          FROM connections
+          WHERE (requester_user_id = $1::uuid OR addressee_user_id = $1::uuid)
+            AND state = 'accepted'
+        ),
+        a_connections AS (
+          SELECT
+            CASE
+              WHEN requester_user_id = $2::uuid THEN addressee_user_id
+              ELSE requester_user_id
+            END AS peer_id,
+            id AS connection_id,
+            state,
+            CASE WHEN requester_user_id = $2::uuid THEN true ELSE false END AS is_requester
+          FROM connections
+          WHERE requester_user_id = $2::uuid OR addressee_user_id = $2::uuid
+        )
+        SELECT
+          bc.peer_id,
+          u.id as user_id,
+          p.display_name,
+          u.primary_email,
+          p.headline,
+          u.profile_image_data,
+          p.cover_image_data,
+          ac.connection_id,
+          ac.state AS a_state,
+          ac.is_requester
+        FROM b_connections bc
+        JOIN users u ON u.id = bc.peer_id
+        LEFT JOIN profiles p ON p.user_id = u.id
+        LEFT JOIN a_connections ac ON ac.peer_id = bc.peer_id
+        WHERE (
+            $3 = '' OR
+            p.display_name ILIKE $4 OR
+            u.primary_email ILIKE $4
+          )
+        ORDER BY p.display_name ASC NULLS LAST
+        LIMIT $5 OFFSET $6`,
+        targetUserId,
+        auth.userId,
+        q,
+        `%${q}%`,
+        limit,
+        offset
+      );
+
+      // Get count matching the same query
+      const countRes = await prisma.$queryRawUnsafe<any[]>(
+        `WITH b_connections AS (
+          SELECT
+            CASE
+              WHEN requester_user_id = $1::uuid THEN addressee_user_id
+              ELSE requester_user_id
+            END AS peer_id
+          FROM connections
+          WHERE (requester_user_id = $1::uuid OR addressee_user_id = $1::uuid)
+            AND state = 'accepted'
+        )
+        SELECT COUNT(bc.peer_id)::integer as total
+        FROM b_connections bc
+        JOIN users u ON u.id = bc.peer_id
+        LEFT JOIN profiles p ON p.user_id = u.id
+        WHERE (
+            $2 = '' OR
+            p.display_name ILIKE $3 OR
+            u.primary_email ILIKE $3
+          )`,
+        targetUserId,
+        q,
+        `%${q}%`
+      );
+
+      const totalCount = countRes[0]?.total || 0;
+
+      const mutual: any[] = [];
+      const newConns: any[] = [];
+
+      for (const row of rawConnections) {
+        let profilePhoto = '';
+        if (row.profile_image_data) {
+          profilePhoto = `data:image/jpeg;base64,${Buffer.from(row.profile_image_data).toString('base64')}`;
+        }
+        
+        // Map states relative to User A
+        let connectionState = 'none';
+        if (row.user_id === auth.userId) {
+          connectionState = 'accepted';
+        } else if (row.a_state === 'accepted') {
+          connectionState = 'accepted';
+        } else if (row.a_state === 'requested') {
+          connectionState = row.is_requester ? 'requested' : 'requested_by_them';
+        } else if (row.a_state === 'blocked') {
+          connectionState = 'blocked';
+        }
+
+        const username = row.primary_email ? row.primary_email.split('@')[0] : '';
+
+        const item = {
+          userId: row.user_id,
+          displayName: row.display_name || username || 'Someone',
+          username: username,
+          profilePhoto: profilePhoto,
+          headline: row.headline || '',
+          connectionId: row.connection_id || null,
+          connectionState: connectionState
+        };
+
+        if (connectionState === 'accepted') {
+          mutual.push(item);
+        } else if (connectionState !== 'blocked') {
+          newConns.push(item);
+        }
+      }
+
+      return reply.send({
+        success: true,
+        data: {
+          totalCount,
+          mutual,
+          new: newConns,
+          pagination: {
+            page,
+            limit,
+            hasMore: offset + rawConnections.length < totalCount
+          }
+        }
+      });
     } catch (err: any) {
       return reply.status(500).send({ success: false, message: err.message });
     }

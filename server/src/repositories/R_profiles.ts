@@ -1,3 +1,4 @@
+/// <reference path="../types/prisma.d.ts" />
 import { PrismaClient } from '@prisma/client';
 import { IProfile, IR_profiles } from './IR_profiles';
 
@@ -54,5 +55,10 @@ export class R_profiles implements IR_profiles {
   async delete(userId: string): Promise<boolean> {
     const result = await this.db.query('DELETE FROM profiles WHERE user_id = $1', [userId]);
     return (result.rowCount ?? 0) > 0;
+  }
+
+  async findByUsername(username: string): Promise<IProfile | null> {
+    const result = await this.db.query('SELECT * FROM profiles WHERE user_name = $1', [username]);
+    return result.rows[0] || null;
   }
 }

@@ -8,6 +8,7 @@ export interface IBooking {
   hold_expires_at?: Date | null;
   total_amount_minor?: number | null;
   total_currency?: string | null;
+  payment_proof_url?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }

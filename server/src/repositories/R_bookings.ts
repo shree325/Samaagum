@@ -8,15 +8,16 @@ export class R_bookings implements IR_bookings {
     const query = `
       INSERT INTO bookings (
         tenant_id, event_id, booker_user_id, status, payment_method,
-        hold_expires_at, total_amount_minor, total_currency
+        hold_expires_at, total_amount_minor, total_currency, payment_proof_url
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       RETURNING *;
     `;
     const values = [
       booking.tenant_id, booking.event_id, booking.booker_user_id,
       booking.status ?? 'pending_payment', booking.payment_method ?? 'free',
       booking.hold_expires_at, booking.total_amount_minor, booking.total_currency,
+      booking.payment_proof_url ?? null
     ];
     const result = await this.db.query(query, values);
     return result.rows[0];
@@ -58,12 +59,13 @@ export class R_bookings implements IR_bookings {
         payment_method = COALESCE($2, payment_method),
         hold_expires_at = COALESCE($3, hold_expires_at),
         total_amount_minor = COALESCE($4, total_amount_minor),
-        total_currency = COALESCE($5, total_currency)
-      WHERE id = $6
+        total_currency = COALESCE($5, total_currency),
+        payment_proof_url = COALESCE($6, payment_proof_url)
+      WHERE id = $7
       RETURNING *;`,
       [
         booking.status, booking.payment_method, booking.hold_expires_at,
-        booking.total_amount_minor, booking.total_currency, id,
+        booking.total_amount_minor, booking.total_currency, booking.payment_proof_url, id,
       ]
     );
     return result.rows[0] || null;

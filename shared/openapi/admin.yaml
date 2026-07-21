@@ -854,6 +854,49 @@ paths:
                   message:
                     type: string
 
+  /api/admin/settings/chat:
+    get:
+      summary: Retrieve chat controls and governance configurations
+      operationId: getChatSettings
+      responses:
+        '200':
+          description: Enriched chat settings object
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - data
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/ChatSettings'
+    post:
+      summary: Save chat controls and governance configurations
+      operationId: saveChatSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatSettings'
+      responses:
+        '200':
+          description: Chat settings saved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - message
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
 
   # ------------------------------------------------------------------------
   # Geo Management APIs
@@ -1825,6 +1868,132 @@ components:
           type: string
         active:
           type: boolean
+
+    ChatSettings:
+      type: object
+      required:
+        - allowSiteMessaging
+        - allowDirectMessaging
+        - allowGroupChat
+        - allowEventChat
+        - rolePermissions
+        - communicationPolicies
+      properties:
+        allowSiteMessaging:
+          type: boolean
+        allowDirectMessaging:
+          type: boolean
+        allowGroupChat:
+          type: boolean
+        allowEventChat:
+          type: boolean
+        rolePermissions:
+          $ref: '#/components/schemas/ChatRolePermissions'
+        communicationPolicies:
+          $ref: '#/components/schemas/ChatCommunicationPolicies'
+
+    ChatRolePermissions:
+      type: object
+      required:
+        - directMessaging
+        - groupChat
+        - eventChat
+        - moderate
+        - pinMessages
+        - banUsers
+      properties:
+        directMessaging:
+          type: array
+          items:
+            type: string
+        groupChat:
+          type: array
+          items:
+            type: string
+        eventChat:
+          type: array
+          items:
+            type: string
+        moderate:
+          type: array
+          items:
+            type: string
+        pinMessages:
+          type: array
+          items:
+            type: string
+        banUsers:
+          type: array
+          items:
+            type: string
+
+    ChatCommunicationPolicies:
+      type: object
+      required:
+        - allowLinks
+        - allowMedia
+        - maxMessageLength
+        - directMessagesEnabled
+        - dmWhoCanSend
+        - dmRequestApproval
+        - dmAllowMedia
+        - groupChatsEnabled
+        - groupWhoCanCreate
+        - groupModerationMode
+        - groupAllowMedia
+        - eventChatsEnabled
+        - eventDefaultModerationMode
+        - eventAutoArchive
+        - eventOrganizerOverride
+        - profanityFilter
+        - reportReviewQueue
+        - linkPreviews
+        - maxMessagesPerMin
+        - maxDmsPerDay
+        - maxGroupParticipants
+      properties:
+        allowLinks:
+          type: boolean
+        allowMedia:
+          type: boolean
+        maxMessageLength:
+          type: integer
+        directMessagesEnabled:
+          type: boolean
+        dmWhoCanSend:
+          type: string
+        dmRequestApproval:
+          type: boolean
+        dmAllowMedia:
+          type: boolean
+        groupChatsEnabled:
+          type: boolean
+        groupWhoCanCreate:
+          type: string
+        groupModerationMode:
+          type: string
+        groupAllowMedia:
+          type: boolean
+        eventChatsEnabled:
+          type: boolean
+        eventDefaultModerationMode:
+          type: string
+        eventAutoArchive:
+          type: boolean
+        eventOrganizerOverride:
+          type: boolean
+        profanityFilter:
+          type: string
+        reportReviewQueue:
+          type: boolean
+        linkPreviews:
+          type: boolean
+        maxMessagesPerMin:
+          type: integer
+        maxDmsPerDay:
+          type: integer
+        maxGroupParticipants:
+          type: integer
 
     GeoLocation:
       type: object

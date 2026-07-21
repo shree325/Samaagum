@@ -9,13 +9,21 @@ export class R_connections extends PostgresBaseRepository<IConnection> implement
 
   async findByRequesterId(requesterId: string): Promise<IConnection[]> {
     const query = `SELECT * FROM connections WHERE requester_user_id = $1`;
-    const { rows } = await prisma.query(query, [requesterId]);
+    const { rows } = await (prisma as any).query(query, [requesterId]);
     return rows;
   }
 
   async findByAddresseeId(addresseeId: string): Promise<IConnection[]> {
     const query = `SELECT * FROM connections WHERE addressee_user_id = $1`;
-    const { rows } = await prisma.query(query, [addresseeId]);
+    const { rows } = await (prisma as any).query(query, [addresseeId]);
     return rows;
   }
+
+
+  async countPending(userId: string): Promise<number> {
+    return await prisma.connections.count({
+      where: { addressee_user_id: userId, state: 'requested' }
+    });
+  }
 }
+

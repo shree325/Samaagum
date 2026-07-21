@@ -178,7 +178,10 @@ export async function messagingTestRoutes(fastify: FastifyInstance) {
   /**
    * Helper to calculate presence status.
    */
-  const getCalculatedStatus = (activeConnections: number, lastSeenAt: Date | null): string => {
+  const getCalculatedStatus = (activeConnections: number, lastSeenAt: Date | null, showActiveStatus = true): string => {
+    if (!showActiveStatus) {
+      return "HIDDEN";
+    }
     if (activeConnections > 0) {
       return "ONLINE";
     }
@@ -207,7 +210,10 @@ export async function messagingTestRoutes(fastify: FastifyInstance) {
       }
       
       const rows = await prisma.$queryRawUnsafe<any[]>(
-        `SELECT user_id, active_connections, status, last_seen_at FROM presences WHERE user_id IN (${userIds.map((_, i) => `$${i + 1}`).join(', ')})`,
+        `SELECT p.user_id, p.active_connections, p.status, p.last_seen_at, pr.privacy_prefs
+         FROM presences p
+         LEFT JOIN profiles pr ON pr.user_id = p.user_id
+         WHERE p.user_id IN (${userIds.map((_, i) => `$${i + 1}`).join(', ')})`,
         ...userIds
       );
       const map = new Map(rows.map(r => [r.user_id, r]));
@@ -215,11 +221,14 @@ export async function messagingTestRoutes(fastify: FastifyInstance) {
         const p = map.get(uid);
         const activeConns = p?.active_connections || 0;
         const lastSeen = p?.last_seen_at || null;
+        const privacy = p?.privacy_prefs || {};
+        const showActiveStatus = privacy.showActiveStatus !== false;
+
         return {
           userId: uid,
-          status: getCalculatedStatus(activeConns, lastSeen),
-          activeConnections: activeConns,
-          lastSeenAt: lastSeen
+          status: getCalculatedStatus(activeConns, lastSeen, showActiveStatus),
+          activeConnections: showActiveStatus ? activeConns : 0,
+          lastSeenAt: showActiveStatus ? lastSeen : null
         };
       });
       return { success: true, data: result };
@@ -236,19 +245,25 @@ export async function messagingTestRoutes(fastify: FastifyInstance) {
     try {
       const { userId } = request.params as any;
       const rows = await prisma.$queryRawUnsafe<any[]>(
-        `SELECT user_id, active_connections, status, last_seen_at FROM presences WHERE user_id = $1`,
+        `SELECT p.user_id, p.active_connections, p.status, p.last_seen_at, pr.privacy_prefs
+         FROM presences p
+         LEFT JOIN profiles pr ON pr.user_id = p.user_id
+         WHERE p.user_id = $1`,
         userId
       );
       const p = rows[0];
       const activeConns = p?.active_connections || 0;
       const lastSeen = p?.last_seen_at || null;
+      const privacy = p?.privacy_prefs || {};
+      const showActiveStatus = privacy.showActiveStatus !== false;
+
       return {
         success: true,
         data: {
           userId,
-          status: getCalculatedStatus(activeConns, lastSeen),
-          activeConnections: activeConns,
-          lastSeenAt: lastSeen
+          status: getCalculatedStatus(activeConns, lastSeen, showActiveStatus),
+          activeConnections: showActiveStatus ? activeConns : 0,
+          lastSeenAt: showActiveStatus ? lastSeen : null
         }
       };
     } catch (error: any) {

@@ -97,7 +97,7 @@ async function markOtpVerified(db: any, id: string) {
 export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
 
   // â”€â”€ AUTH SETTINGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  
+
   fastify.get('/settings/auth', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
     try {
       const row = await prisma.platform_settings.findFirst({
@@ -196,7 +196,7 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
   });
 
   // â”€â”€ COMMUNICATION SETTINGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  
+
   fastify.get('/settings/communication', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
     try {
       const row = await prisma.platform_settings.findFirst({
@@ -317,7 +317,7 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
 
       if (settings.provider === 'brevo') {
         const apiKey = settings.brevoApiKey;
-        
+
         const payload: any = {
           to: [{ email }]
         };
@@ -342,9 +342,9 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
         }
 
         if (!apiKey || apiKey === 'mock-key' || apiKey.trim() === '' || apiKey.includes('â€¢â€¢â€¢â€¢')) {
-          return { 
-            success: true, 
-            message: `[MOCK] Test email successfully routed to ${email} (Mock Brevo flow). Configure a real Brevo API Key to send live emails.` 
+          return {
+            success: true,
+            message: `[MOCK] Test email successfully routed to ${email} (Mock Brevo flow). Configure a real Brevo API Key to send live emails.`
           };
         }
 
@@ -465,16 +465,16 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
 
       if (purpose === 'Signup') {
         if (existingUser) {
-          return reply.status(400).send({ 
-            success: false, 
-            message: 'Account already exists with this email. Please log in instead.' 
+          return reply.status(400).send({
+            success: false,
+            message: 'Account already exists with this email. Please log in instead.'
           });
         }
       } else if (purpose === 'Login') {
         if (!existingUser) {
-          return reply.status(400).send({ 
-            success: false, 
-            message: 'Account does not exist. Please sign up/create a profile first.' 
+          return reply.status(400).send({
+            success: false,
+            message: 'Account does not exist. Please sign up/create a profile first.'
           });
         }
       }
@@ -506,10 +506,10 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
 
       // Check if communication is disabled or if we are in mock mode
       if (otpSettings.mockMode || !commSettings.enabled || commSettings.provider === 'none') {
-        return { 
-          success: true, 
-          message: `[MOCK MODE] OTP sent to ${email}. Code is: ${otp}`, 
-          code: otp 
+        return {
+          success: true,
+          message: `[MOCK MODE] OTP sent to ${email}. Code is: ${otp}`,
+          code: otp
         };
       }
 
@@ -553,7 +553,7 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
             },
             body: JSON.stringify(payload)
           });
-          
+
           if (response.status >= 200 && response.status < 300) {
             return { success: true, message: `OTP code sent successfully to ${email} (via Brevo).` };
           } else {
@@ -565,17 +565,17 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
 
       // SMTP flow (mocked response for simplicity)
       if (commSettings.provider === 'smtp') {
-        return { 
-          success: true, 
-          message: `[SMTP MOCK] OTP code successfully routed via SMTP relay ${commSettings.smtpHost}:${commSettings.smtpPort} to ${email}. Code: ${otp}` 
+        return {
+          success: true,
+          message: `[SMTP MOCK] OTP code successfully routed via SMTP relay ${commSettings.smtpHost}:${commSettings.smtpPort} to ${email}. Code: ${otp}`
         };
       }
 
       // Fallback
-      return { 
-        success: true, 
-        message: `OTP sent to ${email} (communication fallback mock). Code: ${otp}`, 
-        code: otp 
+      return {
+        success: true,
+        message: `OTP sent to ${email} (communication fallback mock). Code: ${otp}`,
+        code: otp
       };
 
     } catch (error: any) {
@@ -586,7 +586,7 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
   // Verifies an OTP
   fastify.post('/otp/verify', async (request: any, reply) => {
     try {
-      const { email, purpose, code, gender, dob, firstName, lastName, phoneNumber } = request.body as any;
+      const { email, purpose, code, gender, dob, firstName, lastName, phoneNumber, claimToken } = request.body as any;
       if (!email || !purpose || !code) {
         return reply.status(400).send({ success: false, message: 'Email, purpose and verification code are required.' });
       }
@@ -657,6 +657,10 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
               }
             }
           });
+          // Auto-assign the default plan to new users (fire-and-forget)
+          import('../services/SubscriptionActivationService').then(({ SubscriptionActivationService }) => {
+            SubscriptionActivationService.assignDefaultPlanToUser(dbUser!.id, tenantId).catch(console.error);
+          }).catch(console.error);
         } else {
           if (!dbUser) {
             return reply.status(400).send({ success: false, message: 'Account does not exist. Please sign up/create a profile first.' });
@@ -713,10 +717,30 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
         })).toString('base64url');
         const token = `${header}.${tokenPayload}.mocksignature`;
 
-        return { 
-          success: true, 
-          message: 'OTP verified successfully!', 
+        // For Login, tell the client whether onboarding is still needed
+        let profileCompleted = true;
+        let onboardingStep = 'done';
+        if (purpose === 'Login') {
+          profileCompleted = !!(dbUser as any).profile_completed;
+          if (!profileCompleted) {
+            // Determine which step to resume at
+            const profileRow = await prisma.profiles.findUnique({ where: { user_id: dbUser.id } });
+            if (!profileRow?.first_name && !dbUser.first_name) {
+              onboardingStep = 'profile';
+            } else if (!profileRow?.skills || (profileRow.skills as any[]).length === 0) {
+              onboardingStep = 'interests';
+            } else {
+              onboardingStep = 'location';
+            }
+          }
+        }
+
+        return {
+          success: true,
+          message: 'OTP verified successfully!',
           token,
+          profileCompleted,
+          onboardingStep,
           user: {
             id: dbUser.id,
             email: dbUser.primary_email,
@@ -726,9 +750,9 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
       } else {
         await incrementOtpAttempts(prisma, verification.id);
         const remaining = otpSettings.maxAttempts - (verification.attempts + 1);
-        return reply.status(400).send({ 
-          success: false, 
-          message: `Incorrect code entered. ${remaining > 0 ? `${remaining} attempts remaining.` : 'Please request a new code.'}` 
+        return reply.status(400).send({
+          success: false,
+          message: `Incorrect code entered. ${remaining > 0 ? `${remaining} attempts remaining.` : 'Please request a new code.'}`
         });
       }
 
@@ -807,6 +831,42 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
       };
     } catch (error: any) {
       return reply.status(500).send({ success: false, message: error.message || 'Failed to fetch profile.' });
+    }
+  });
+
+  // GET onboarding status — tells the home page whether the user needs to complete onboarding
+  fastify.get('/onboarding-status', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+    try {
+      if (!request.user || !request.user.id) {
+        return reply.status(401).send({ success: false, message: 'Unauthorized' });
+      }
+      const dbUser = await prisma.users.findUnique({
+        where: { id: request.user.id },
+        include: { profiles: true }
+      });
+      if (!dbUser) {
+        return reply.status(404).send({ success: false, message: 'User not found' });
+      }
+
+      const profileCompleted = !!(dbUser as any).profile_completed;
+      if (profileCompleted) {
+        return { success: true, profileCompleted: true, onboardingStep: 'done' };
+      }
+
+      // Determine which step to resume at
+      const profileRow = (dbUser as any).profiles;
+      let onboardingStep = 'profile';
+      if (profileRow?.first_name || dbUser.first_name) {
+        if (!profileRow?.skills || (profileRow.skills as any[]).length === 0) {
+          onboardingStep = 'interests';
+        } else {
+          onboardingStep = 'location';
+        }
+      }
+
+      return { success: true, profileCompleted: false, onboardingStep };
+    } catch (error: any) {
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to fetch onboarding status.' });
     }
   });
 
@@ -1012,13 +1072,13 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
       }
       if (firstName !== undefined) userUpdateData.first_name = firstName;
       if (lastName !== undefined) userUpdateData.last_name = lastName;
-      
+
       const finalLocation = preferredLocation || location || '';
       if (finalLocation) {
         // --- Added Active Location Validation ---
         const { locationService } = require('../services/locationService');
         const isValid = await locationService.validateActiveLocation(
-          locationName || finalLocation, 
+          locationName || finalLocation,
           dbUser.location
         );
         if (!isValid) {
@@ -1028,19 +1088,24 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
           });
         }
         // ----------------------------------------
-        
+
         userUpdateData.location = finalLocation;
       }
-      
+
       const finalGender = gender || null;
       if (finalGender !== null) userUpdateData.gender = finalGender;
- 
+
       const finalDob = dob ? new Date(dob) : null;
       if (finalDob !== null) userUpdateData.dob = finalDob;
- 
+
       // Store image bytes directly on the users row
       if (profilePhotoBuffer !== undefined) userUpdateData.profile_image_data = profilePhotoBuffer;
- 
+
+      // Mark onboarding complete when the location step is saved (location = final step)
+      if (finalLocation) {
+        userUpdateData.profile_completed = true;
+      }
+
       if (Object.keys(userUpdateData).length > 0) {
         userUpdateData.updated_at = new Date();
         await prisma.users.update({
@@ -1048,9 +1113,9 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
           data: userUpdateData
         });
       }
- 
+
       const finalSkills = skills ? skills : interests ? interests : undefined;
- 
+
       const updateData: any = {
         display_name: displayName,
         first_name: firstName,
@@ -1101,15 +1166,15 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
       }
 
       if (profilePhotoBuffer !== undefined) {
-         updateData.profile_image_data = profilePhotoBuffer;
-         createData.profile_image_data = profilePhotoBuffer;
+        updateData.profile_image_data = profilePhotoBuffer;
+        createData.profile_image_data = profilePhotoBuffer;
       }
       if (coverBannerBuffer !== undefined) {
-         updateData.cover_image_data = coverBannerBuffer;
-         createData.cover_image_data = coverBannerBuffer;
+        updateData.cover_image_data = coverBannerBuffer;
+        createData.cover_image_data = coverBannerBuffer;
       } else if (clearCoverBanner) {
-         updateData.cover_image_data = null;
-         createData.cover_image_data = null;
+        updateData.cover_image_data = null;
+        createData.cover_image_data = null;
       }
 
       // Upsert profile
@@ -1119,11 +1184,9 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
         create: createData
       });
 
-      // Broadcast real-time profile update if privacy settings changed.
-      // Clients listen on the /chat namespace, so emit there (a plain io.emit
-      // hits the default "/" namespace and never reaches them).
-      if (privacyPrefs !== undefined) {
-        emitProfileUpdate(dbUser.id, { privacyPrefs });
+      // Broadcast real-time profile update if privacy settings or messaging restrictions changed
+      if (privacyPrefs !== undefined || messagingRestriction !== undefined) {
+        emitProfileUpdate(dbUser.id, { privacyPrefs, messagingRestriction });
       }
 
       // Update social links only if provided in request
@@ -1163,7 +1226,7 @@ export const adminSettingsRoutes: FastifyPluginAsync = async (fastify: FastifyIn
   });
 
   // ── CHAT SETTINGS ──────────────────────────────────────────────────────────
-  
+
   fastify.get('/settings/chat', { preHandler: [(fastify as any).authenticate, (fastify as any).requireAdmin] }, async (request: any, reply) => {
     try {
       const row = await prisma.platform_settings.findFirst({

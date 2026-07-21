@@ -15,6 +15,7 @@ CREATE TABLE forum_posts (
   title           TEXT,
   body            TEXT,
   pinned          BOOLEAN         NOT NULL DEFAULT false,
+  locked          BOOLEAN         NOT NULL DEFAULT false,
   status          content_status  NOT NULL DEFAULT 'active',
   created_at      timestamptz     NOT NULL DEFAULT now(),
   updated_at      timestamptz     NOT NULL DEFAULT now()

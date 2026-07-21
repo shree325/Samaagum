@@ -28,6 +28,7 @@ CREATE TABLE events (
   registration_form_id    UUID              REFERENCES forms(id),
   cash_enabled            BOOLEAN           NOT NULL DEFAULT false,
   financial_locked_at     timestamptz,
+  instruction             TEXT,
   created_at              timestamptz       NOT NULL DEFAULT now(),
   updated_at              timestamptz       NOT NULL DEFAULT now()
 );

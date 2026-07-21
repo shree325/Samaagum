@@ -28,6 +28,22 @@ declare global {
   const clamp: any;
   const range: any;
   const EVENTS: any;
+  const COVERS: any;
+  const GROUPS: any;
+  const EventCard: any;
+  const Grain: any;
+  const ME: any;
+  const FEATURED: any;
+
+  interface Window {
+    toast?: (...args: any[]) => any;
+    io?: (...args: any[]) => any;
+    ME?: any;
+    TicketQR?: any;
+    EVENTS?: any;
+    GROUPS?: any;
+    FEATURED?: any;
+  }
 }
 
 export {};

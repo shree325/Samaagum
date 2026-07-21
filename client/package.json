@@ -3,16 +3,30 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "npx -y kill-port 8080 && npx -y serve -l 8080",
-    "start": "npx -y kill-port 8080 && npx -y serve -l 8080",
-    "build": "echo 'No build step required for client'"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
+    "d3-geo": "^3.1.1",
+    "d3-scale": "^4.0.2",
     "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.18.1",
+    "react-simple-maps": "^3.0.0",
+    "recharts": "^3.9.2",
     "serve": "^14.2.4"
   },
   "devDependencies": {
+    "@types/d3-geo": "^3.1.0",
+    "@types/d3-scale": "^4.0.9",
     "@types/qrcode": "^1.5.6",
-    "tailwindcss": "^4.3.1"
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "concurrently": "^10.0.3",
+    "tailwindcss": "^4.3.1",
+    "vite": "^8.1.3"
   }
 }

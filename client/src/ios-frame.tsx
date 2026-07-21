@@ -1,3 +1,5 @@
+import React, { Fragment } from 'react';
+
 // @ds-adherence-ignore -- omelette starter scaffold (raw elements/hex/px by design)
 
 /* BEGIN USAGE */
@@ -17,7 +19,7 @@
 // ─────────────────────────────────────────────────────────────
 // Status bar
 // ─────────────────────────────────────────────────────────────
-function IOSStatusBar({ dark = false, time = '9:41' }) {
+export function IOSStatusBar({ dark = false, time = '9:41' }) {
   const c = dark ? '#fff' : '#000';
   return (
     <div style={{
@@ -56,7 +58,7 @@ function IOSStatusBar({ dark = false, time = '9:41' }) {
 // ─────────────────────────────────────────────────────────────
 // Liquid glass pill — blur + tint + shine
 // ─────────────────────────────────────────────────────────────
-function IOSGlassPill({ children, dark = false, style = {} }) {
+export function IOSGlassPill({ children, dark = false, style = {} }) {
   return (
     <div style={{
       height: 44, minWidth: 44, borderRadius: 9999,
@@ -92,7 +94,7 @@ function IOSGlassPill({ children, dark = false, style = {} }) {
 // ─────────────────────────────────────────────────────────────
 // Navigation bar — glass pills + large title
 // ─────────────────────────────────────────────────────────────
-function IOSNavBar({ title = 'Title', dark = false, trailingIcon = true }) {
+export function IOSNavBar({ title = 'Title', dark = false, trailingIcon = true }) {
   const muted = dark ? 'rgba(255,255,255,0.6)' : '#404040';
   const text = dark ? '#fff' : '#000';
   const pillIcon = (content) => (
@@ -140,7 +142,7 @@ function IOSNavBar({ title = 'Title', dark = false, trailingIcon = true }) {
 // ─────────────────────────────────────────────────────────────
 // Grouped list (inset card, r:26) + row (52px)
 // ─────────────────────────────────────────────────────────────
-function IOSListRow({ title, detail, icon, chevron = true, isLast = false, dark = false }) {
+export function IOSListRow({ title, detail, icon, chevron = true, isLast = false, dark = false }) {
   const text = dark ? '#fff' : '#000';
   const sec = dark ? 'rgba(235,235,245,0.6)' : 'rgba(60,60,67,0.6)';
   const ter = dark ? 'rgba(235,235,245,0.3)' : 'rgba(60,60,67,0.3)';
@@ -175,7 +177,7 @@ function IOSListRow({ title, detail, icon, chevron = true, isLast = false, dark 
   );
 }
 
-function IOSList({ header, children, dark = false }) {
+export function IOSList({ header, children, dark = false }) {
   const hc = dark ? 'rgba(235,235,245,0.6)' : 'rgba(60,60,67,0.6)';
   const bg = dark ? '#1C1C1E' : '#fff';
   return (
@@ -198,7 +200,7 @@ function IOSList({ header, children, dark = false }) {
 // ─────────────────────────────────────────────────────────────
 // Device frame
 // ─────────────────────────────────────────────────────────────
-function IOSDevice({
+export function IOSDevice({
   children, width = 402, height = 874, dark = false,
   title, keyboard = false,
 }) {
@@ -243,7 +245,7 @@ function IOSDevice({
 // ─────────────────────────────────────────────────────────────
 // Keyboard — iOS 26 liquid glass
 // ─────────────────────────────────────────────────────────────
-function IOSKeyboard({ dark = false }) {
+export function IOSKeyboard({ dark = false }) {
   const glyph = dark ? 'rgba(255,255,255,0.7)' : '#595959';
   const sugg = dark ? 'rgba(255,255,255,0.6)' : '#333';
   const keyBg = dark ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.85)';
@@ -255,7 +257,7 @@ function IOSKeyboard({ dark = false }) {
     ret: <svg width="20" height="14" viewBox="0 0 20 14"><path d="M18 1v6H4m0 0l4-4M4 7l4 4" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   };
 
-  const key = (content, { w, flex, ret, fs = 25, k } = {}) => (
+  const key = (content: any, { w, flex, ret, fs = 25, k }: { w?: number | string; flex?: boolean; ret?: boolean; fs?: number; k?: string } = {}) => (
     <div key={k} style={{
       height: 42, borderRadius: 8.5,
       flex: flex ? 1 : undefined, width: w, minWidth: 0,
@@ -344,6 +346,4 @@ function IOSKeyboard({ dark = false }) {
   );
 }
 
-Object.assign(window, {
-  IOSDevice, IOSStatusBar, IOSNavBar, IOSGlassPill, IOSList, IOSListRow, IOSKeyboard,
-});
+

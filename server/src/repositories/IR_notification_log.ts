@@ -19,4 +19,12 @@ export interface IR_notification_log {
   getByUserId(userId: string): Promise<INotificationLog[]>;
   getAll(buId: string): Promise<INotificationLog[]>;
   delete(rowId: string): Promise<boolean>;
+  syncMessageNotifications(
+    userId: string,
+    conversationId: string,
+    maxCreatedAt: Date
+  ): Promise<number>;
+  countUnread(userId: string): Promise<number>;
 }
+
+

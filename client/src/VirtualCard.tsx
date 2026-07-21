@@ -1,8 +1,18 @@
 // @ts-nocheck
-const { useState, useEffect } = React;
+import React, { useEffect, useState } from 'react';
+// Removed unused import to avoid circular dependencies
+import { QRCode, useProfileSync } from './home-icons';
+import { Profile } from './home-profile';
+import { apiBase } from './home-subscription';
+import { I } from './home-icons';
 
-function VirtualCard({ user }) {
+
+
+import QRCodeLib from 'qrcode';
+
+export function VirtualCard({ user }) {
   const [qrCodeUrl, setQrCodeUrl] = useState('');
+  const [showShareModal, setShowShareModal] = useState(false);
 
   const photo = user?.img || user?.profilePhoto || user?.profile_photo || user?.profiles?.[0]?.img;
   const displayName = user?.name || user?.full_name || user?.profile?.[0]?.display_name || user?.profile?.display_name || user?.profiles?.[0]?.display_name || user?.profiles?.display_name || 'User';
@@ -20,13 +30,13 @@ function VirtualCard({ user }) {
   const p = I.useProfileSync ? I.useProfileSync(userId, { 
     name: displayName, 
     img: photo, 
-    bio: role, 
+    body: role, 
     location: null 
   }) : { name: displayName, img: photo, bio: role, location: null };
 
   const syncedDisplayName = p.name;
   const syncedPhoto = p.img;
-  const syncedRole = p.bio;
+  const syncedRole = p.bio || p.headline || role;
 
   const username = handle.replace('@', '');
   
@@ -34,25 +44,38 @@ function VirtualCard({ user }) {
   // Fallback to query parameter routing to support Live Server testing
   const profileUrl = `${apiBase}/pages/VirtualCardPage.html?u=${encodeURIComponent(username)}`;
 
+  const downloadVCF = () => {
+    const vcard = `BEGIN:VCARD\nVERSION:3.0\nFN:${displayName || ''}\nTITLE:${role || ''}\nEMAIL:${email || ''}\nTEL:${phone || ''}\nURL:${user?.socialLinks?.website || ''}\nEND:VCARD`;
+    const blob = new Blob([vcard], { type: 'text/vcard' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(displayName || 'contact').replace(/\s+/g, '_')}.vcf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   useEffect(() => {
-    if (window.QRCodeLib) {
-      window.QRCodeLib.toDataURL(profileUrl, {
-        width: 200,
-        margin: 2,
-        color: {
-          dark: '#111827',
-          light: '#ffffff'
-        }
-      }).then(url => {
+    const vcardText = `BEGIN:VCARD\nVERSION:3.0\nFN:${displayName || ''}\nTITLE:${role || ''}\nEMAIL:${email || ''}\nTEL:${phone || ''}\nURL:${user?.socialLinks?.website || ''}\nEND:VCARD`;
+    QRCodeLib.toDataURL(vcardText, {
+      width: 200,
+      margin: 2,
+      color: {
+        dark: '#111827',
+        light: '#ffffff'
+      }
+    })
+      .then(url => {
         setQrCodeUrl(url);
-      }).catch(err => {
+      })
+      .catch(err => {
         console.error('Error generating QR Code', err);
+        // Fallback to quickchart if library fails
+        setQrCodeUrl(`https://quickchart.io/qr?text=${encodeURIComponent(vcardText)}&size=200&dark=111827&light=ffffff&margin=2`);
       });
-    } else {
-      // Fallback if library didn't load
-      setQrCodeUrl(`https://quickchart.io/qr?text=${encodeURIComponent(profileUrl)}&size=200&dark=111827&light=ffffff&margin=2`);
-    }
-  }, [profileUrl]);
+  }, [displayName, role, email, phone, user?.socialLinks?.website]);
 
 
   const downloadQR = async () => {
@@ -81,15 +104,153 @@ function VirtualCard({ user }) {
   };
 
   const shareProfile = () => {
-    if (navigator.share) {
-      navigator.share({
-        title: `${displayName}`,
-        text: `Check out my Samaagum Profile`,
-        url: profileUrl
-      }).catch(console.error);
+    setShowShareModal(true);
+  };
+
+  const downloadCardImage = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 800;
+    canvas.height = 450;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // 1. Draw premium gradient background
+    const grad = ctx.createLinearGradient(0, 0, 800, 450);
+    grad.addColorStop(0, '#0f172a'); // slate-900
+    grad.addColorStop(1, '#1e1b4b'); // indigo-950
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 800, 450);
+
+    // Add grid lines
+    ctx.strokeStyle = 'rgba(99, 102, 241, 0.08)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 800; i += 40) {
+      ctx.beginPath();
+      ctx.moveTo(i, 0);
+      ctx.lineTo(i, 450);
+      ctx.stroke();
+    }
+    for (let j = 0; j < 450; j += 40) {
+      ctx.beginPath();
+      ctx.moveTo(0, j);
+      ctx.lineTo(800, j);
+      ctx.stroke();
+    }
+
+    // Glow effect
+    ctx.fillStyle = 'rgba(99, 102, 241, 0.15)';
+    ctx.beginPath();
+    ctx.arc(800, 0, 250, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Draw Logo / Branding
+    ctx.fillStyle = '#6366f1'; // Indigo-500
+    ctx.font = '800 24px sans-serif';
+    ctx.fillText('SAMAAGUM', 50, 60);
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.font = '500 12px sans-serif';
+    ctx.fillText('VIRTUAL CONTACT CARD', 50, 80);
+
+    // 3. Draw Profile Picture
+    const drawContent = () => {
+      // Draw Name
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 36px sans-serif';
+      ctx.fillText(displayName, 50, 240);
+
+      // Draw Role
+      ctx.fillStyle = '#94a3b8'; // slate-400
+      ctx.font = '500 18px sans-serif';
+      ctx.fillText(role || 'Member', 50, 275);
+
+      // Draw Email / Phone
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.font = '500 14px monospace';
+      let textY = 320;
+      if (email) {
+        ctx.fillText(`✉  ${email}`, 50, textY);
+        textY += 28;
+      }
+      if (phone) {
+        ctx.fillText(`☎  ${phone}`, 50, textY);
+        textY += 28;
+      }
+
+      // Draw QR Code on the right side
+      if (qrCodeUrl) {
+        const qrImg = new Image();
+        qrImg.onload = () => {
+          // Draw white background wrapper for QR code
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          if (ctx.roundRect) {
+            ctx.roundRect(520, 100, 220, 220, 16);
+          } else {
+            ctx.rect(520, 100, 220, 220);
+          }
+          ctx.fill();
+
+          // Draw the QR code
+          ctx.drawImage(qrImg, 530, 110, 200, 200);
+
+          // Subtext under QR code
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+          ctx.font = '600 12px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('SCAN TO CONNECT', 630, 350);
+
+          // Save/Download link
+          const imgUrl = canvas.toDataURL('image/png');
+          const a = document.createElement('a');
+          a.href = imgUrl;
+          a.download = `samaagum-card-${username}.png`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        };
+        qrImg.src = qrCodeUrl;
+      }
+    };
+
+    // Load and draw profile image
+    if (syncedPhoto && syncedPhoto.length > 10 && syncedPhoto !== "null") {
+      const avatarImg = new Image();
+      avatarImg.crossOrigin = 'anonymous';
+      avatarImg.onload = () => {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(110, 150, 60, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.drawImage(avatarImg, 50, 90, 120, 120);
+        ctx.restore();
+        drawContent();
+      };
+      avatarImg.onerror = () => {
+        // Fallback if avatar fails to load
+        ctx.fillStyle = '#6366f1';
+        ctx.beginPath();
+        ctx.arc(110, 150, 60, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 36px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText((displayName || 'U')[0].toUpperCase(), 110, 162);
+        ctx.textAlign = 'left';
+        drawContent();
+      };
+      avatarImg.src = syncedPhoto;
     } else {
-      navigator.clipboard.writeText(profileUrl);
-      alert("Profile Link Copied");
+      ctx.fillStyle = '#6366f1';
+      ctx.beginPath();
+      ctx.arc(110, 150, 60, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 36px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText((displayName || 'U')[0].toUpperCase(), 110, 162);
+      ctx.textAlign = 'left';
+      drawContent();
     }
   };
 
@@ -143,7 +304,7 @@ function VirtualCard({ user }) {
                 <img 
                   src={qrCodeUrl} 
                   alt="Virtual Card QR" 
-                  onClick={() => window.location.href = profileUrl}
+                  onClick={downloadVCF}
                   style={{ width: 120, height: 120, borderRadius: 8, cursor: "pointer", transition: "transform 0.2s" }} 
                   onMouseOver={e => e.currentTarget.style.transform = "scale(1.03)"}
                   onMouseOut={e => e.currentTarget.style.transform = "scale(1)"}
@@ -155,10 +316,10 @@ function VirtualCard({ user }) {
               )}
             </div>
             <p 
-              onClick={() => window.location.href = profileUrl}
+              onClick={downloadVCF}
               style={{ color: "var(--accent-1)", fontSize: 12, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', cursor: "pointer", margin: 0 }}
             >
-              Scan to View
+              Download VCF
             </p>
           </div>
         </div>
@@ -197,9 +358,9 @@ function VirtualCard({ user }) {
 
         {/* Action Buttons */}
         <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 12, borderTop: "1px dashed var(--border)", paddingTop: 20, position: "relative", zIndex: 1 }}>
-          <button onClick={downloadQR} style={{ background: "var(--accent-1)", color: "white", padding: "10px 24px", borderRadius: 24, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 8, border: "none", transition: "transform 0.2s" }} onMouseOver={e => e.currentTarget.style.transform = "translateY(-2px)"} onMouseOut={e => e.currentTarget.style.transform = "translateY(0)"}>
+          <button onClick={downloadCardImage} style={{ background: "var(--accent-1)", color: "white", padding: "10px 24px", borderRadius: 24, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 8, border: "none", transition: "transform 0.2s" }} onMouseOver={e => e.currentTarget.style.transform = "translateY(-2px)"} onMouseOut={e => e.currentTarget.style.transform = "translateY(0)"}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-            Download QR
+            Download Card Image
           </button>
           <button onClick={shareProfile} style={{ background: "transparent", border: "1px solid var(--ink)", color: "var(--ink)", padding: "10px 24px", borderRadius: 24, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 8, transition: "all 0.2s" }} onMouseOver={e => {e.currentTarget.style.background = "var(--ink)"; e.currentTarget.style.color = "var(--bg-app)"}} onMouseOut={e => {e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--ink)"}}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
@@ -208,8 +369,279 @@ function VirtualCard({ user }) {
         </div>
 
       </div>
+
+      {showShareModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(5, 4, 10, 0.75)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          zIndex: 999999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 20,
+          boxSizing: 'border-box'
+        }}>
+          <div style={{
+            background: 'var(--surface, #14121f)',
+            border: '1px solid var(--border, rgba(255,255,255,0.08))',
+            borderRadius: 24,
+            padding: 32,
+            width: 480,
+            maxWidth: '100%',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+            position: 'relative',
+            color: 'var(--ink, #fff)',
+            fontFamily: 'system-ui, sans-serif'
+          }}>
+            {/* Close Button */}
+            <button 
+              onClick={() => setShowShareModal(false)}
+              style={{
+                position: 'absolute',
+                top: 20,
+                right: 20,
+                background: 'rgba(255,255,255,0.05)',
+                border: 'none',
+                color: 'var(--ink-2, #94a3b8)',
+                width: 36,
+                height: 36,
+                borderRadius: '50%',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 18,
+                transition: 'all 0.2s'
+              }}
+              onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+              onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+            >
+              ✕
+            </button>
+
+            <h3 style={{ margin: '0 0 8px 0', fontSize: 20, fontWeight: 700 }}>Share Virtual Card</h3>
+            <p style={{ margin: '0 0 24px 0', fontSize: 14, color: 'var(--ink-3, #64748b)' }}>
+              Choose a platform or copy the link to share your contact details.
+            </p>
+
+            {/* Direct Platform Links */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 24 }}>
+              {/* WhatsApp */}
+              <a 
+                href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Check out my Samaagum Virtual Card: ${profileUrl}`)}`}
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '12px 16px',
+                  borderRadius: 16,
+                  background: '#25d366',
+                  color: '#fff',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  textDecoration: 'none',
+                  transition: 'transform 0.15s'
+                }}
+                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <span style={{ fontSize: 20 }}>💬</span> WhatsApp
+              </a>
+
+              {/* X / Twitter */}
+              <a 
+                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Check out my Samaagum Virtual Card`)}&url=${encodeURIComponent(profileUrl)}`}
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '12px 16px',
+                  borderRadius: 16,
+                  background: '#000000',
+                  color: '#fff',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  textDecoration: 'none',
+                  transition: 'transform 0.15s',
+                  border: '1px solid rgba(255,255,255,0.1)'
+                }}
+                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <span style={{ fontSize: 18 }}>✖</span> X / Twitter
+              </a>
+
+              {/* Facebook */}
+              <a 
+                href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(profileUrl)}`}
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '12px 16px',
+                  borderRadius: 16,
+                  background: '#1877f2',
+                  color: '#fff',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  textDecoration: 'none',
+                  transition: 'transform 0.15s'
+                }}
+                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <span style={{ fontSize: 20 }}>📘</span> Facebook
+              </a>
+
+              {/* LinkedIn */}
+              <a 
+                href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(profileUrl)}`}
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '12px 16px',
+                  borderRadius: 16,
+                  background: '#0a66c2',
+                  color: '#fff',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  textDecoration: 'none',
+                  transition: 'transform 0.15s'
+                }}
+                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <span style={{ fontSize: 20 }}>💼</span> LinkedIn
+              </a>
+            </div>
+
+            {/* Link Copy Block */}
+            <div style={{ display: 'flex', gap: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: 16, padding: 8, marginBottom: 20 }}>
+              <input 
+                type="text" 
+                readOnly 
+                value={profileUrl}
+                style={{
+                  flex: 1,
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--ink-2, #cbd5e1)',
+                  fontSize: 13,
+                  outline: 'none',
+                  padding: '0 8px',
+                  fontFamily: 'monospace'
+                }}
+              />
+              <button 
+                onClick={() => {
+                  navigator.clipboard.writeText(profileUrl);
+                  alert("Link copied!");
+                }}
+                style={{
+                  background: 'var(--accent-1)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 10,
+                  padding: '8px 16px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'opacity 0.2s'
+                }}
+                onMouseOver={e => e.currentTarget.style.opacity = 0.9}
+                onMouseOut={e => e.currentTarget.style.opacity = 1}
+              >
+                Copy
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              {/* Native share sheet fallback if supported */}
+              {navigator.share && (
+                <button
+                  onClick={() => {
+                    navigator.share({
+                      title: `${displayName} - Virtual Card`,
+                      text: `Check out my Samaagum Virtual Card`,
+                      url: profileUrl
+                    }).catch(console.error);
+                  }}
+                  style={{
+                    flex: 1,
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 16,
+                    padding: '12px',
+                    color: 'var(--ink)',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                  onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                >
+                  🔗 More Options
+                </button>
+              )}
+
+              {/* Download Canvas Image option */}
+              <button
+                onClick={() => {
+                  downloadCardImage();
+                  setShowShareModal(false);
+                }}
+                style={{
+                  flex: 1,
+                  background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                  border: 'none',
+                  borderRadius: 16,
+                  padding: '12px',
+                  color: '#fff',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  transition: 'opacity 0.2s'
+                }}
+                onMouseOver={e => e.currentTarget.style.opacity = 0.95}
+                onMouseOut={e => e.currentTarget.style.opacity = 1}
+              >
+                🖼 Save Card Image
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-Object.assign(window, { VirtualCard });
+if (typeof window !== 'undefined') {
+  window.VirtualCard = VirtualCard;
+}
+
+

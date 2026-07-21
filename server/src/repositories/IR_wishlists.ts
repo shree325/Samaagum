@@ -1,17 +1,17 @@
 import { IBaseRepository } from './IBaseRepository';
 
-export interface IWishlist {
-  wishlist_id?: string;
-  user_id: string;
+export interface IEventWishlist {
+  id?: string;
   event_id: string;
-  created_by_user_id?: string | null;
-  updated_by_user_id?: string | null;
-  modification_num?: number;
+  user_id: string;
   created_at?: Date;
-  updated_at?: Date;
 }
 
-export interface IR_wishlists extends IBaseRepository<IWishlist> {
-  findByUserId(userId: string): Promise<IWishlist[]>;
-  findByEventId(eventId: string): Promise<IWishlist[]>;
+export interface IR_wishlists {
+  toggle(eventId: string, userId: string): Promise<{ wishlisted: boolean; count: number }>;
+  getByUserId(userId: string): Promise<IEventWishlist[]>;
+  getCountByEventId(eventId: string): Promise<number>;
+  isWishlisted(eventId: string, userId: string): Promise<boolean>;
+  getUsersWishlistingEvent(eventId: string): Promise<{ user_id: string }[]>;
+  removeByEventAndUser(eventId: string, userId: string): Promise<boolean>;
 }

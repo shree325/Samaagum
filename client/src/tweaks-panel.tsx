@@ -1,3 +1,7 @@
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { App, TWEAK_DEFAULTS } from './home-app';
+import { clamp, range } from './landing-core';
+
 // @ds-adherence-ignore -- omelette starter scaffold (raw elements/hex/px by design)
 
 /* BEGIN USAGE */
@@ -57,7 +61,7 @@
 /* END USAGE */
 // ─────────────────────────────────────────────────────────────────────────────
 
-const __TWEAKS_STYLE = `
+export const __TWEAKS_STYLE = `
   .twk-panel{position:fixed;right:16px;bottom:16px;z-index:2147483646;width:280px;
     max-height:calc(100vh - 32px);display:flex;flex-direction:column;
     transform:scale(var(--dc-inv-zoom,1));transform-origin:bottom right;
@@ -170,15 +174,41 @@ const __TWEAKS_STYLE = `
 // ── useTweaks ───────────────────────────────────────────────────────────────
 // Single source of truth for tweak values. setTweak persists via the host
 // (__edit_mode_set_keys → host rewrites the EDITMODE block on disk).
-function useTweaks(defaults) {
-  const [values, setValues] = React.useState(defaults);
+export function useTweaks(defaults) {
+  const getInitialValues = () => {
+    const stored = localStorage.getItem('samaagum_tweaks');
+    if (stored) {
+      try {
+        return { ...defaults, ...JSON.parse(stored) };
+      } catch (e) {}
+    }
+    const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return { ...defaults, dark: systemPrefersDark };
+  };
+
+  const [values, setValues] = React.useState(getInitialValues);
+  
+  React.useEffect(() => {
+    const onTweakChange = (e) => {
+      if (e.detail) {
+        setValues((prev) => ({ ...prev, ...e.detail }));
+      }
+    };
+    window.addEventListener('tweakchange', onTweakChange);
+    return () => window.removeEventListener('tweakchange', onTweakChange);
+  }, []);
+
   // Accepts either setTweak('key', value) or setTweak({ key: value, ... }) so a
   // useState-style call doesn't write a "[object Object]" key into the persisted
   // JSON block.
   const setTweak = React.useCallback((keyOrEdits, val) => {
     const edits = typeof keyOrEdits === 'object' && keyOrEdits !== null
       ? keyOrEdits : { [keyOrEdits]: val };
-    setValues((prev) => ({ ...prev, ...edits }));
+    setValues((prev) => {
+      const next = { ...prev, ...edits };
+      localStorage.setItem('samaagum_tweaks', JSON.stringify(next));
+      return next;
+    });
     window.parent.postMessage({ type: '__edit_mode_set_keys', edits }, '*');
     // Same-window signal so in-page listeners (deck-stage rail thumbnails)
     // can react — the parent message only reaches the host, not peers.
@@ -194,7 +224,7 @@ function useTweaks(defaults) {
 // The close button posts __edit_mode_dismissed so the host's toolbar toggle
 // flips off in lockstep; the host echoes __deactivate_edit_mode back which
 // is what actually hides the panel.
-function TweaksPanel({ title = 'Tweaks', children }) {
+export function TweaksPanel({ title = 'Tweaks', children }) {
   const [open, setOpen] = React.useState(false);
   const dragRef = React.useRef(null);
   const offsetRef = React.useRef({ x: 16, y: 16 });
@@ -286,7 +316,7 @@ function TweaksPanel({ title = 'Tweaks', children }) {
 
 // ── Layout helpers ──────────────────────────────────────────────────────────
 
-function TweakSection({ label, children }) {
+export function TweakSection({ label, children }) {
   return (
     <>
       <div className="twk-sect">{label}</div>
@@ -295,7 +325,7 @@ function TweakSection({ label, children }) {
   );
 }
 
-function TweakRow({ label, value, children, inline = false }) {
+export function TweakRow({ label, value, children, inline = false }: any) {
   return (
     <div className={inline ? 'twk-row twk-row-h' : 'twk-row'}>
       <div className="twk-lbl">
@@ -309,7 +339,7 @@ function TweakRow({ label, value, children, inline = false }) {
 
 // ── Controls ────────────────────────────────────────────────────────────────
 
-function TweakSlider({ label, value, min = 0, max = 100, step = 1, unit = '', onChange }) {
+export function TweakSlider({ label, value, min = 0, max = 100, step = 1, unit = '', onChange }) {
   return (
     <TweakRow label={label} value={`${value}${unit}`}>
       <input type="range" className="twk-slider" min={min} max={max} step={step}
@@ -318,7 +348,7 @@ function TweakSlider({ label, value, min = 0, max = 100, step = 1, unit = '', on
   );
 }
 
-function TweakToggle({ label, value, onChange }) {
+export function TweakToggle({ label, value, onChange }) {
   return (
     <div className="twk-row twk-row-h">
       <div className="twk-lbl"><span>{label}</span></div>
@@ -329,7 +359,7 @@ function TweakToggle({ label, value, onChange }) {
   );
 }
 
-function TweakRadio({ label, value, options, onChange }) {
+export function TweakRadio({ label, value, options, onChange }) {
   const trackRef = React.useRef(null);
   const [dragging, setDragging] = React.useState(false);
   // The active value is read by pointer-move handlers attached for the lifetime
@@ -401,7 +431,7 @@ function TweakRadio({ label, value, options, onChange }) {
   );
 }
 
-function TweakSelect({ label, value, options, onChange }) {
+export function TweakSelect({ label, value, options, onChange }) {
   return (
     <TweakRow label={label}>
       <select className="twk-field" value={value} onChange={(e) => onChange(e.target.value)}>
@@ -415,7 +445,7 @@ function TweakSelect({ label, value, options, onChange }) {
   );
 }
 
-function TweakText({ label, value, placeholder, onChange }) {
+export function TweakText({ label, value, placeholder, onChange }) {
   return (
     <TweakRow label={label}>
       <input className="twk-field" type="text" value={value} placeholder={placeholder}
@@ -424,7 +454,7 @@ function TweakText({ label, value, placeholder, onChange }) {
   );
 }
 
-function TweakNumber({ label, value, min, max, step = 1, unit = '', onChange }) {
+export function TweakNumber({ label, value, min, max, step = 1, unit = '', onChange }) {
   const clamp = (n) => {
     if (min != null && n < min) return min;
     if (max != null && n > max) return max;
@@ -461,7 +491,7 @@ function TweakNumber({ label, value, min, max, step = 1, unit = '', onChange }) 
 // Relative-luminance contrast pick — checkmarks drawn over a swatch need to
 // read on both #111 and #fafafa without per-option configuration. Hex input
 // only (#rgb / #rrggbb); named or rgb()/hsl() colors fall through to "light".
-function __twkIsLight(hex) {
+export function __twkIsLight(hex) {
   const h = String(hex).replace('#', '');
   const x = h.length === 3 ? h.replace(/./g, (c) => c + c) : h.padEnd(6, '0');
   const n = parseInt(x.slice(0, 6), 16);
@@ -470,7 +500,7 @@ function __twkIsLight(hex) {
   return r * 299 + g * 587 + b * 114 > 148000;
 }
 
-const __TwkCheck = ({ light }) => (
+export const __TwkCheck = ({ light }) => (
   <svg viewBox="0 0 14 14" aria-hidden="true">
     <path d="M3 7.2 5.8 10 11 4.2" fill="none" strokeWidth="2.2"
           strokeLinecap="round" strokeLinejoin="round"
@@ -484,7 +514,7 @@ const __TwkCheck = ({ light }) => (
 // rest stacked in a sharp column on the right. onChange emits the
 // option in the shape it was passed (string stays string, array stays array).
 // Without options it falls back to the native color input for back-compat.
-function TweakColor({ label, value, options, onChange }) {
+export function TweakColor({ label, value, options, onChange }) {
   if (!options || !options.length) {
     return (
       <div className="twk-row twk-row-h">
@@ -527,15 +557,11 @@ function TweakColor({ label, value, options, onChange }) {
   );
 }
 
-function TweakButton({ label, onClick, secondary = false }) {
+export function TweakButton({ label, onClick, secondary = false }) {
   return (
     <button type="button" className={secondary ? 'twk-btn secondary' : 'twk-btn'}
             onClick={onClick}>{label}</button>
   );
 }
 
-Object.assign(window, {
-  useTweaks, TweaksPanel, TweakSection, TweakRow,
-  TweakSlider, TweakToggle, TweakRadio, TweakSelect,
-  TweakText, TweakNumber, TweakColor, TweakButton,
-});
+

@@ -19,6 +19,13 @@ export interface IEvent {
   registration_form_id?: string | null;
   cash_enabled?: boolean;
   financial_locked_at?: Date | null;
+  instruction?: string | null;
+  payment_instructions?: string | null;
+  payment_hold_hours?: number | null;
+  registration_status?: 'OPEN' | 'CLOSED' | 'SCHEDULED';
+  registration_opens_at?: Date | null;
+  registration_closes_at?: Date | null;
+  settings?: Record<string, unknown> | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -30,5 +37,6 @@ export interface IR_events {
   getByStatus(tenantId: string, status: string): Promise<IEvent[]>;
   getAll(tenantId: string): Promise<IEvent[]>;
   update(id: string, event: Partial<IEvent>): Promise<IEvent | null>;
+  updateRegistrationStatus(id: string, status: 'OPEN'|'CLOSED'|'SCHEDULED', opensAt?: Date | null, closesAt?: Date | null): Promise<boolean>;
   delete(id: string): Promise<boolean>;
 }

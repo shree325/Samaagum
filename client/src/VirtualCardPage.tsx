@@ -1,12 +1,21 @@
 // @ts-nocheck
-const { useState, useEffect } = React;
+import React, { useEffect, useState } from 'react';
+import { VirtualCard } from './VirtualCard';
+import { ME } from './home-data';
+import { Profile } from './home-profile';
+import { apiBase } from './home-subscription';
+import { I } from './landing-core';
+import QRCodeLib from 'qrcode';
 
-function VirtualCardPage() {
+
+
+export function VirtualCardPage() {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showShareModal, setShowShareModal] = useState(false);
 
-  const VCard = window.VirtualCard;
+  // VCard is imported from './VirtualCard'
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -19,8 +28,7 @@ function VirtualCardPage() {
         if (!username) {
           const token = localStorage.getItem('token');
           if (!token) {
-            setError('No username provided. Example: ?u=yourhandle');
-            setLoading(false);
+            window.location.replace('/');
             return;
           }
           
@@ -57,7 +65,7 @@ function VirtualCardPage() {
           return;
         }
 
-        const res = await fetch(`${apiBase}/api/card/${encodeURIComponent(username)}`);
+        const res = await fetch(`${apiBase}/api/public/card/${encodeURIComponent(username)}`);
         
         if (!res.ok) {
           throw new Error('User not found');
@@ -78,6 +86,154 @@ function VirtualCardPage() {
     
     fetchUser();
   }, []);
+
+  const downloadCardImage = async () => {
+    try {
+      const qrUrl = await QRCodeLib.toDataURL(window.location.href, { margin: 1 });
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 450;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // 1. Draw premium gradient background
+      const grad = ctx.createLinearGradient(0, 0, 800, 450);
+      grad.addColorStop(0, '#0f172a');
+      grad.addColorStop(1, '#1e1b4b');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 800, 450);
+
+      // Add grid lines
+      ctx.strokeStyle = 'rgba(99, 102, 241, 0.08)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 800; i += 40) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, 450);
+        ctx.stroke();
+      }
+      for (let j = 0; j < 450; j += 40) {
+        ctx.beginPath();
+        ctx.moveTo(0, j);
+        ctx.lineTo(800, j);
+        ctx.stroke();
+      }
+
+      // Glow effect
+      ctx.fillStyle = 'rgba(99, 102, 241, 0.15)';
+      ctx.beginPath();
+      ctx.arc(800, 0, 250, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 2. Draw Logo / Branding
+      ctx.fillStyle = '#6366f1';
+      ctx.font = '800 24px sans-serif';
+      ctx.fillText('SAMAAGUM', 50, 60);
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.font = '500 12px sans-serif';
+      ctx.fillText('VIRTUAL CONTACT CARD', 50, 80);
+
+      const drawContent = () => {
+        // Draw Name
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 36px sans-serif';
+        ctx.fillText(userData.full_name || 'User', 50, 240);
+
+        // Draw Role
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '500 18px sans-serif';
+        ctx.fillText(userData.role || 'Member', 50, 275);
+
+        // Draw Email / Phone
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.font = '500 14px monospace';
+        let textY = 320;
+        if (userData.email) {
+          ctx.fillText(`✉  ${userData.email}`, 50, textY);
+          textY += 28;
+        }
+        if (userData.phone) {
+          ctx.fillText(`☎  ${userData.phone}`, 50, textY);
+          textY += 28;
+        }
+
+        // Draw QR Code on the right side
+        if (qrUrl) {
+          const qrImg = new Image();
+          qrImg.onload = () => {
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            if (ctx.roundRect) {
+              ctx.roundRect(520, 100, 220, 220, 16);
+            } else {
+              ctx.rect(520, 100, 220, 220);
+            }
+            ctx.fill();
+
+            ctx.drawImage(qrImg, 530, 110, 200, 200);
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.font = '600 12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('SCAN TO CONNECT', 630, 350);
+
+            const imgUrl = canvas.toDataURL('image/png');
+            const a = document.createElement('a');
+            a.href = imgUrl;
+            const username = new URLSearchParams(window.location.search).get('u') || 'user';
+            a.download = `samaagum-card-${username}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          };
+          qrImg.src = qrUrl;
+        }
+      };
+
+      // Load and draw profile image
+      if (userData.profile_photo && userData.profile_photo.length > 10 && userData.profile_photo !== "null") {
+        const avatarImg = new Image();
+        avatarImg.crossOrigin = 'anonymous';
+        avatarImg.onload = () => {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(110, 150, 60, 0, Math.PI * 2);
+          ctx.clip();
+          ctx.drawImage(avatarImg, 50, 90, 120, 120);
+          ctx.restore();
+          drawContent();
+        };
+        avatarImg.onerror = () => {
+          ctx.fillStyle = '#6366f1';
+          ctx.beginPath();
+          ctx.arc(110, 150, 60, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 36px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText((userData.full_name || 'U')[0].toUpperCase(), 110, 162);
+          ctx.textAlign = 'left';
+          drawContent();
+        };
+        avatarImg.src = userData.profile_photo;
+      } else {
+        ctx.fillStyle = '#6366f1';
+        ctx.beginPath();
+        ctx.arc(110, 150, 60, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 36px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText((userData.full_name || 'U')[0].toUpperCase(), 110, 162);
+        ctx.textAlign = 'left';
+        drawContent();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   if (loading) {
     return (
@@ -137,18 +293,7 @@ function VirtualCardPage() {
               </div>
               
               <div style={{ display: "flex", gap: 12, marginTop: 84 }}>
-                <button onClick={() => {
-                  if (navigator.share) {
-                    navigator.share({
-                      title: userData.full_name,
-                      text: `Check out ${userData.full_name}'s Samaagum Profile`,
-                      url: window.location.href
-                    }).catch(console.error);
-                  } else {
-                    navigator.clipboard.writeText(window.location.href);
-                    alert("Profile Link Copied");
-                  }
-                }} style={{ background: "transparent", border: "1px solid var(--border)", color: "var(--ink)", padding: "8px 16px", borderRadius: 20, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 8, transition: "all 0.2s" }} onMouseOver={e => e.currentTarget.style.background = "var(--surface)"} onMouseOut={e => e.currentTarget.style.background = "transparent"}>
+                <button onClick={() => setShowShareModal(true)} style={{ background: "transparent", border: "1px solid var(--border)", color: "var(--ink)", padding: "8px 16px", borderRadius: 20, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 8, transition: "all 0.2s" }} onMouseOver={e => e.currentTarget.style.background = "var(--surface)"} onMouseOut={e => e.currentTarget.style.background = "transparent"}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
                   Share
                 </button>
@@ -251,12 +396,287 @@ function VirtualCardPage() {
           </div>
 
           <div>
-            {VCard && <VCard user={{ ...userData, name: userData.full_name }} />}
+            <VirtualCard user={{ ...userData, name: userData.full_name }} />
           </div>
         </div>
       </div>
+
+      {showShareModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(5, 4, 10, 0.75)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          zIndex: 999999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 20,
+          boxSizing: 'border-box'
+        }}>
+          <div style={{
+            background: 'var(--surface, #14121f)',
+            border: '1px solid var(--border, rgba(255,255,255,0.08))',
+            borderRadius: 24,
+            padding: 32,
+            width: 480,
+            maxWidth: '100%',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+            position: 'relative',
+            color: 'var(--ink, #fff)',
+            fontFamily: 'system-ui, sans-serif'
+          }}>
+            {/* Close Button */}
+            <button 
+              onClick={() => setShowShareModal(false)}
+              style={{
+                position: 'absolute',
+                top: 20,
+                right: 20,
+                background: 'rgba(255,255,255,0.05)',
+                border: 'none',
+                color: 'var(--ink-2, #94a3b8)',
+                width: 36,
+                height: 36,
+                borderRadius: '50%',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 18,
+                transition: 'all 0.2s'
+              }}
+              onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+              onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+            >
+              ✕
+            </button>
+
+            <h3 style={{ margin: '0 0 8px 0', fontSize: 20, fontWeight: 700 }}>Share Virtual Card</h3>
+            <p style={{ margin: '0 0 24px 0', fontSize: 14, color: 'var(--ink-3, #64748b)' }}>
+              Choose a platform or copy the link to share your contact details.
+            </p>
+
+            {/* Direct Platform Links */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 24 }}>
+              {/* WhatsApp */}
+              <a 
+                href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Check out my Samaagum Virtual Card: ${window.location.href}`)}`}
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '12px 16px',
+                  borderRadius: 16,
+                  background: '#25d366',
+                  color: '#fff',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  textDecoration: 'none',
+                  transition: 'transform 0.15s'
+                }}
+                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <span style={{ fontSize: 20 }}>💬</span> WhatsApp
+              </a>
+
+              {/* X / Twitter */}
+              <a 
+                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Check out my Samaagum Virtual Card`)}&url=${encodeURIComponent(window.location.href)}`}
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '12px 16px',
+                  borderRadius: 16,
+                  background: '#000000',
+                  color: '#fff',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  textDecoration: 'none',
+                  transition: 'transform 0.15s',
+                  border: '1px solid rgba(255,255,255,0.1)'
+                }}
+                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <span style={{ fontSize: 18 }}>✖</span> X / Twitter
+              </a>
+
+              {/* Facebook */}
+              <a 
+                href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`}
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '12px 16px',
+                  borderRadius: 16,
+                  background: '#1877f2',
+                  color: '#fff',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  textDecoration: 'none',
+                  transition: 'transform 0.15s'
+                }}
+                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <span style={{ fontSize: 20 }}>📘</span> Facebook
+              </a>
+
+              {/* LinkedIn */}
+              <a 
+                href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(window.location.href)}`}
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '12px 16px',
+                  borderRadius: 16,
+                  background: '#0a66c2',
+                  color: '#fff',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  textDecoration: 'none',
+                  transition: 'transform 0.15s'
+                }}
+                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+              >
+                <span style={{ fontSize: 20 }}>💼</span> LinkedIn
+              </a>
+            </div>
+
+            {/* Link Copy Block */}
+            <div style={{ display: 'flex', gap: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: 16, padding: 8, marginBottom: 20 }}>
+              <input 
+                type="text" 
+                readOnly 
+                value={window.location.href}
+                style={{
+                  flex: 1,
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--ink-2, #cbd5e1)',
+                  fontSize: 13,
+                  outline: 'none',
+                  padding: '0 8px',
+                  fontFamily: 'monospace'
+                }}
+              />
+              <button 
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href);
+                  alert("Link copied!");
+                }}
+                style={{
+                  background: 'var(--accent-1)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 10,
+                  padding: '8px 16px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'opacity 0.2s'
+                }}
+                onMouseOver={e => e.currentTarget.style.opacity = 0.9}
+                onMouseOut={e => e.currentTarget.style.opacity = 1}
+              >
+                Copy
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              {/* Native share sheet fallback if supported */}
+              {navigator.share && (
+                <button
+                  onClick={() => {
+                    navigator.share({
+                      title: `${userData.full_name || 'User'} - Virtual Card`,
+                      text: `Check out my Samaagum Virtual Card`,
+                      url: window.location.href
+                    }).catch(console.error);
+                  }}
+                  style={{
+                    flex: 1,
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 16,
+                    padding: '12px',
+                    color: 'var(--ink)',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                  onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                >
+                  🔗 More Options
+                </button>
+              )}
+
+              {/* Download Canvas Image option */}
+              <button
+                onClick={() => {
+                  downloadCardImage();
+                  setShowShareModal(false);
+                }}
+                style={{
+                  flex: 1,
+                  background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+                  border: 'none',
+                  borderRadius: 16,
+                  padding: '12px',
+                  color: '#fff',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  transition: 'opacity 0.2s'
+                }}
+                onMouseOver={e => e.currentTarget.style.opacity = 0.95}
+                onMouseOut={e => e.currentTarget.style.opacity = 1}
+              >
+                🖼 Save Card Image
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-Object.assign(window, { VirtualCardPage });
+import ReactDOM from 'react-dom/client';
+
+const rootElement = document.getElementById('root');
+if (rootElement) {
+  const root = ReactDOM.createRoot(rootElement);
+  root.render(<VirtualCardPage />);
+}
+
+

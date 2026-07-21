@@ -11,9 +11,11 @@ export class R_events implements IR_events {
         title, description, status, starts_at, ends_at, venue_timezone,
         location_type, venue, online_link, capacity_total,
         registration_mode, approval_required, registration_form_id,
-        cash_enabled, financial_locked_at
+        cash_enabled, financial_locked_at, instruction,
+        registration_status, registration_opens_at, registration_closes_at, settings,
+        payment_instructions, payment_hold_hours
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
       RETURNING *;
     `;
     const values = [
@@ -25,7 +27,11 @@ export class R_events implements IR_events {
       event.online_link, event.capacity_total,
       event.registration_mode ?? 'paid', event.approval_required ?? false,
       event.registration_form_id, event.cash_enabled ?? false,
-      event.financial_locked_at,
+      event.financial_locked_at, event.instruction,
+      event.registration_status ?? 'OPEN', event.registration_opens_at ?? null, event.registration_closes_at ?? null,
+      event.settings ? JSON.stringify(event.settings) : null,
+      event.payment_instructions ?? null,
+      event.payment_hold_hours ?? 48
     ];
     const result = await this.db.query(query, values);
     return result.rows[0];
@@ -61,32 +67,62 @@ export class R_events implements IR_events {
   }
 
   async update(id: string, event: Partial<IEvent>): Promise<IEvent | null> {
+    const fields: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+
+    const addField = (key: keyof IEvent, dbCol: string, transform?: (v: any) => any) => {
+      if (event[key] !== undefined) {
+        fields.push(`${dbCol} = $${idx++}`);
+        const val = event[key];
+        values.push(transform && val !== null ? transform(val) : val);
+      }
+    };
+
+    addField('title', 'title');
+    addField('description', 'description');
+    addField('status', 'status');
+    addField('starts_at', 'starts_at');
+    addField('ends_at', 'ends_at');
+    addField('capacity_total', 'capacity_total');
+    addField('cash_enabled', 'cash_enabled');
+    addField('registration_mode', 'registration_mode');
+    addField('approval_required', 'approval_required');
+    addField('location_type', 'location_type');
+    addField('venue', 'venue', v => JSON.stringify(v));
+    addField('online_link', 'online_link');
+    addField('instruction', 'instruction');
+    addField('hosted_by_entity_id', 'hosted_by_entity_id');
+    addField('registration_status', 'registration_status');
+    addField('registration_opens_at', 'registration_opens_at');
+    addField('registration_closes_at', 'registration_closes_at');
+    addField('settings', 'settings', v => JSON.stringify(v));
+    addField('payment_instructions', 'payment_instructions');
+    addField('payment_hold_hours', 'payment_hold_hours');
+
+    if (fields.length === 0) {
+      const current = await this.db.query('SELECT * FROM events WHERE id = $1', [id]);
+      return current.rows[0] || null;
+    }
+
+    values.push(id);
     const result = await this.db.query(
-      `UPDATE events SET
-        title = COALESCE($1, title),
-        description = COALESCE($2, description),
-        status = COALESCE($3, status),
-        starts_at = COALESCE($4, starts_at),
-        ends_at = COALESCE($5, ends_at),
-        capacity_total = COALESCE($6, capacity_total),
-        cash_enabled = COALESCE($7, cash_enabled),
-        registration_mode = COALESCE($8, registration_mode),
-        approval_required = COALESCE($9, approval_required),
-        location_type = COALESCE($10, location_type),
-        venue = COALESCE($11, venue),
-        online_link = COALESCE($12, online_link)
-      WHERE id = $13
-      RETURNING *;`,
-      [
-        event.title, event.description, event.status,
-        event.starts_at, event.ends_at, event.capacity_total,
-        event.cash_enabled, event.registration_mode, event.approval_required,
-        event.location_type,
-        event.venue ? JSON.stringify(event.venue) : null,
-        event.online_link, id,
-      ]
+      `UPDATE events SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
+      values
     );
     return result.rows[0] || null;
+  }
+
+  async updateRegistrationStatus(id: string, status: 'OPEN'|'CLOSED'|'SCHEDULED', opensAt?: Date | null, closesAt?: Date | null): Promise<boolean> {
+    const result = await this.db.query(
+      `UPDATE events SET 
+        registration_status = $1, 
+        registration_opens_at = $2, 
+        registration_closes_at = $3 
+      WHERE id = $4`,
+      [status, opensAt || null, closesAt || null, id]
+    );
+    return (result.rowCount ?? 0) > 0;
   }
 
   async delete(id: string): Promise<boolean> {

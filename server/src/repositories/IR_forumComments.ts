@@ -1,7 +1,7 @@
 import { IBaseRepository } from './IBaseRepository';
 
 export interface IForumComment {
-  comment_id?: string;
+  id?: string;
   post_id: string;
   author_user_id: string;
   body: string;
@@ -11,9 +11,13 @@ export interface IForumComment {
   modification_num?: number;
   created_at?: Date;
   updated_at?: Date;
+  parent_id?: string | null;
 }
 
 export interface IR_forumComments extends IBaseRepository<IForumComment> {
   findByPostId(postId: string): Promise<IForumComment[]>;
   findByAuthorUserId(authorUserId: string): Promise<IForumComment[]>;
+  getRecursiveComments(postId: string, userId: string | null): Promise<any[]>;
+  updateCommentRaw(commentId: string, body: string): Promise<void>;
+  softDeleteComment(commentId: string): Promise<void>;
 }

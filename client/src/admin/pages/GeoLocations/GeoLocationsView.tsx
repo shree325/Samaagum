@@ -1,7 +1,10 @@
 // @ts-nocheck
-const { useEffect, useState, useCallback, useRef } = React;
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { API_BASE } from '../../../home-notifications';
 
-const useGeoLocationsFetch = () => {
+
+
+export const useGeoLocationsFetch = () => {
   const token = localStorage.getItem('samaagum_admin_token');
   const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:3000' : '';
   const headers = {
@@ -45,7 +48,7 @@ const useGeoLocationsFetch = () => {
   return { get, post, put, patch, del };
 };
 
-const GEO_LOCATIONS_COLS = [
+export const GEO_LOCATIONS_COLS = [
   { key: 'status', label: 'Status' },
   { key: 'geoname_id', label: 'Geoname ID' },
   { key: 'locale_code', label: 'Locale' },
@@ -63,14 +66,14 @@ const GEO_LOCATIONS_COLS = [
   { key: 'is_in_european_union', label: 'In EU?' }
 ];
 
-const DEFAULT_VISIBLE_COLS = {
+export const DEFAULT_VISIBLE_COLS = {
   status: true, geoname_id: true, locale_code: false, continent_code: false, continent_name: false,
   country_iso_code: true, country_name: true, subdivision_1_iso_code: false,
   subdivision_1_name: true, subdivision_2_iso_code: false, subdivision_2_name: false,
   city_name: true, metro_code: false, time_zone: true, is_in_european_union: false
 };
 
-const IconsUI = {
+export const IconsUI = {
   search: (p) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>,
   columns: (p) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7m0-18H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7m0-18v18" /></svg>,
   edit: (p) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>,
@@ -82,9 +85,9 @@ const IconsUI = {
   chevronDown: (p) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="6 9 12 15 18 9" /></svg>
 };
 
-const DownloadIconUI = (p) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
+export const DownloadIconUI = (p) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
 
-const ToggleSwitch = ({ active, onClick }) => (
+export const ToggleSwitch = ({ active, onClick }) => (
   <button
     type="button"
     onClick={onClick}
@@ -107,7 +110,7 @@ const ToggleSwitch = ({ active, onClick }) => (
   </button>
 );
 
-const GeoLocationsView = ({ addToast }) => {
+export const GeoLocationsView = ({ addToast }) => {
   const { get, post, put, patch, del } = useGeoLocationsFetch();
   const [data, setData] = useState([]);
 
@@ -549,4 +552,4 @@ const GeoLocationsView = ({ addToast }) => {
   );
 };
 
-window.GeoLocationsView = GeoLocationsView;
+
