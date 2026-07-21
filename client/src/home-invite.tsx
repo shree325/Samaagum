@@ -149,8 +149,8 @@ export function InviteLanding({ token, go }) {
 
     if (joinResult) {
         return (
-            <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)", padding: 20 }}>
-                <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", width: "100%", maxWidth: 420, boxShadow: "var(--sh-lg)", padding: "40px 24px 32px", textAlign: "center" }}>
+            <div style={{ height: "100vh", overflowY: "auto", display: "flex", alignItems: "flex-start", justifyContent: "center", background: "var(--bg)", padding: "40px 20px", boxSizing: "border-box" }}>
+                <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", width: "100%", maxWidth: 420, boxShadow: "var(--sh-lg)", padding: "40px 24px 32px", textAlign: "center", boxSizing: "border-box" }}>
                     {joinResult.state === 'active' ? (
                         <>
                             <div style={{ fontSize: 48, marginBottom: 16, color: "var(--accent-2)" }}>✓</div>
@@ -183,11 +183,11 @@ export function InviteLanding({ token, go }) {
 
     if (showQForm) {
         return (
-            <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)", padding: 20 }}>
-                <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", width: "100%", maxWidth: 480, boxShadow: "var(--sh-lg)", padding: "32px 24px" }}>
+            <div style={{ height: "100vh", overflowY: "auto", display: "flex", alignItems: "flex-start", justifyContent: "center", background: "var(--bg)", padding: "40px 20px", boxSizing: "border-box" }}>
+                <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", width: "100%", maxWidth: 480, boxShadow: "var(--sh-lg)", padding: "32px 24px", boxSizing: "border-box" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>Join Questionnaire</h2>
-                        <button className="tool" onClick={() => setShowQForm(false)}><I.x style={{ width: 20, height: 20 }}/></button>
+                        <button className="tool" onClick={() => setShowQForm(false)}><I.x style={{ width: 20, height: 20 }} /></button>
                     </div>
                     <p style={{ margin: "0 0 24px 0", fontSize: 13, color: "var(--ink-2)" }}>
                         Please answer the following to join <strong>{group.name}</strong>.
@@ -202,13 +202,13 @@ export function InviteLanding({ token, go }) {
                                     <textarea
                                         placeholder="Your answer..."
                                         value={qAnswers[i] || ""}
-                                        onChange={e => setQAnswers({...qAnswers, [i]: e.target.value})}
+                                        onChange={e => setQAnswers({ ...qAnswers, [i]: e.target.value })}
                                         style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 14, minHeight: 80, resize: "vertical", fontFamily: "inherit" }}
                                     />
                                 ) : q.type === 'yesno' ? (
                                     <select
                                         value={qAnswers[i] || ""}
-                                        onChange={e => setQAnswers({...qAnswers, [i]: e.target.value})}
+                                        onChange={e => setQAnswers({ ...qAnswers, [i]: e.target.value })}
                                         style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 14, fontFamily: "inherit" }}
                                     >
                                         <option value="">Select...</option>
@@ -224,7 +224,7 @@ export function InviteLanding({ token, go }) {
                                                     name={"q_" + i}
                                                     value={opt}
                                                     checked={qAnswers[i] === opt}
-                                                    onChange={e => setQAnswers({...qAnswers, [i]: e.target.value})}
+                                                    onChange={e => setQAnswers({ ...qAnswers, [i]: e.target.value })}
                                                     style={{ margin: 0 }}
                                                 />
                                                 {opt}
@@ -242,7 +242,7 @@ export function InviteLanding({ token, go }) {
                                                     onChange={e => {
                                                         const cur = qAnswers[i] || [];
                                                         const next = e.target.checked ? [...cur, opt] : cur.filter(x => x !== opt);
-                                                        setQAnswers({...qAnswers, [i]: next});
+                                                        setQAnswers({ ...qAnswers, [i]: next });
                                                     }}
                                                     style={{ margin: 0 }}
                                                 />
@@ -255,7 +255,7 @@ export function InviteLanding({ token, go }) {
                                         type="email"
                                         placeholder="you@example.com"
                                         value={qAnswers[i] || ""}
-                                        onChange={e => setQAnswers({...qAnswers, [i]: e.target.value})}
+                                        onChange={e => setQAnswers({ ...qAnswers, [i]: e.target.value })}
                                         style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 14, fontFamily: "inherit" }}
                                     />
                                 ) : q.type === 'phone' ? (
@@ -263,21 +263,21 @@ export function InviteLanding({ token, go }) {
                                         type="tel"
                                         placeholder="+91 98765 43210"
                                         value={qAnswers[i] || ""}
-                                        onChange={e => setQAnswers({...qAnswers, [i]: e.target.value})}
+                                        onChange={e => setQAnswers({ ...qAnswers, [i]: e.target.value })}
                                         style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 14, fontFamily: "inherit" }}
                                     />
                                 ) : q.type === 'date' ? (
                                     <input
                                         type="date"
                                         value={qAnswers[i] || ""}
-                                        onChange={e => setQAnswers({...qAnswers, [i]: e.target.value})}
+                                        onChange={e => setQAnswers({ ...qAnswers, [i]: e.target.value })}
                                         style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 14, fontFamily: "inherit" }}
                                     />
                                 ) : q.type === 'time' ? (
                                     <input
                                         type="time"
                                         value={qAnswers[i] || ""}
-                                        onChange={e => setQAnswers({...qAnswers, [i]: e.target.value})}
+                                        onChange={e => setQAnswers({ ...qAnswers, [i]: e.target.value })}
                                         style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 14, fontFamily: "inherit" }}
                                     />
                                 ) : (
@@ -285,7 +285,7 @@ export function InviteLanding({ token, go }) {
                                         type="text"
                                         placeholder="Your answer..."
                                         value={qAnswers[i] || ""}
-                                        onChange={e => setQAnswers({...qAnswers, [i]: e.target.value})}
+                                        onChange={e => setQAnswers({ ...qAnswers, [i]: e.target.value })}
                                         style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 14, fontFamily: "inherit" }}
                                     />
                                 )}
@@ -306,8 +306,8 @@ export function InviteLanding({ token, go }) {
     }
 
     return (
-        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)", padding: 20 }}>
-            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", width: "100%", maxWidth: 420, overflow: "hidden", boxShadow: "var(--sh-lg)" }}>
+        <div style={{ height: "100vh", overflowY: "auto", display: "flex", alignItems: "flex-start", justifyContent: "center", background: "var(--bg)", padding: "40px 20px", boxSizing: "border-box" }}>
+            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", width: "100%", maxWidth: 420, overflow: "hidden", boxShadow: "var(--sh-lg)", boxSizing: "border-box" }}>
                 <div style={{ position: "relative", height: 120, background: group.cover || "var(--accent-1)" }}>
                     {(() => {
                         const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";

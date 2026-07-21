@@ -1385,8 +1385,8 @@ useEffect(() => {
       />
     );
     if (v === "edit-event") return <CreateEvent editEv={cur.param} go={go} mobile={mobile} st={st} />;
-    if (v === "create-group") return <CreateGroup mode={cur.param?.settings?.isDraft ? "edit" : "create"} editGroup={cur.param} go={go} mobile={mobile} st={st} />;
-    if (v === "edit-group") return <CreateGroup mode="edit" editGroup={cur.param} go={go} mobile={mobile} st={st} />;
+    if (v === "create-group") return <CreateGroup key={cur.param?.id || "create"} mode={cur.param?.settings?.isDraft ? "edit" : "create"} editGroup={cur.param} go={go} mobile={mobile} st={st} />;
+    if (v === "edit-group") return <CreateGroup key={cur.param?.id || "edit"} mode="edit" editGroup={cur.param} go={go} mobile={mobile} st={st} />;
     if (v === "event-dashboard") return <EventDashboard ev={cur.param} st={st} go={go} />;
     if (v === "group-dashboard") return <GroupDashboard group={cur.param} st={st} go={go} />;
     if (v === "scan") return <ScanHub st={st} go={go} />;

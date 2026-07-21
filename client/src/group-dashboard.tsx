@@ -182,14 +182,7 @@ export const GroupDashboard: React.FC<GroupDashboardProps> = ({
         color: 'orange' as const,
         subtitle: 'Awaiting review'
       },
-      {
-        key: 'revenue' as const,
-        title: 'Revenue',
-        value: `₹${revenueStats.totalRevenue}`,
-        icon: <I.wallet style={{ width: 20, height: 20 }} />,
-        color: 'purple' as const,
-        subtitle: 'total collected'
-      },
+
       {
         key: 'ongoing_events' as const,
         title: 'Ongoing Events',

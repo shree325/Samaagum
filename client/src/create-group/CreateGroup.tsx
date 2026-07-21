@@ -62,6 +62,82 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
     }
   }, [isEdit]);
 
+  useEffect(() => {
+    if (isEdit && editGroup) {
+      setName(editGroup.name || "");
+      setIcon(editGroup.icon || "✺");
+      setCover(editGroup.cover || COVERS.violet);
+      setBanner(editGroup.banner || "");
+      setCat(editGroup.category || "Design");
+      setDesc(editGroup.description || "");
+
+      const s = editGroup.settings || {};
+
+      if (s.location) {
+        setCity(s.location.city || s.city || "");
+        setLocationState(s.location.state || "");
+        setLocationCountry(s.location.country || "");
+      } else if (s.city) {
+        setCity(s.city || "");
+      }
+
+      if (s.capacity) {
+        setLimitCap(s.capacity.limit || false);
+        setMaxCap(s.capacity.max ? s.capacity.max.toString() : "");
+        setWaitlist(s.capacity.waitlist || false);
+      }
+
+      if (s.forums) {
+        setForums(s.forums.enabled || false);
+        setForumsThreadRoles(s.forums.threadRoles || { public: true, roles: [] });
+        setForumsReplyRoles(s.forums.replyRoles || { public: true, roles: [] });
+        setForumsApprove(s.forums.approve || false);
+      }
+
+      if (s.gallery) {
+        setGallery(s.gallery.enabled || false);
+        setGalleryAllow(s.gallery.allow !== false);
+        setGalleryImageOnly(s.gallery.imageOnly || false);
+        setGalleryVideoOnly(s.gallery.videoOnly || false);
+        setGalleryApprove(s.gallery.approve || false);
+        setGalleryUploadRoles(s.gallery.uploadRoles || { public: false, roles: ['group_owner', 'group_admin', 'group_moderator'] });
+        setGalleryViewRoles(s.gallery.viewRoles || { public: true, roles: [] });
+      }
+
+      if (s.questionnaires && s.questionnaires.length > 0) {
+        setQuestionnaire(true);
+        setQuestions(s.questionnaires);
+      }
+
+      let je = "anyone";
+      if (s.joinElig === 'restricted' || s.joinElig === 'communities' || editGroup.joinMode === 'restricted') je = 'restricted';
+      else if (s.joinElig === 'invite' || editGroup.joinMode === 'invite_only') je = 'invite';
+      setJoinElig(je);
+
+      setApproval(editGroup.joinMode === 'approval');
+
+      if (s.originalVisibility) {
+        setVisibility(s.originalVisibility);
+      } else if (editGroup.visibility) {
+        let v = editGroup.visibility;
+        if (v === 'private') {
+           const vis = s.restrictedAccess?.visibility || {};
+           if ((vis.communities && vis.communities.length > 0) || 
+               (vis.groups && vis.groups.length > 0) || 
+               (vis.subCommunities && vis.subCommunities.length > 0)) {
+             v = 'hidden';
+           }
+        }
+        setVisibility(v);
+      }
+
+      if (s.restrictedAccess) {
+        if (s.restrictedAccess.join) setSelectedAccess(s.restrictedAccess.join);
+        if (s.restrictedAccess.visibility) setVisibilityAccess(s.restrictedAccess.visibility);
+      }
+    }
+  }, [editGroup]);
+
   const savedDraft = {};
 
   const [name, setName] = useState(isEdit ? (editGroup.name || "") : (savedDraft.name || ""));
@@ -267,6 +343,7 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
         visibility,
         listed: isDraftSubmit ? "unlisted" : (visibility === "public" ? "listed" : "unlisted"),
         settings: {
+          originalVisibility: visibility,
           isDraft: isDraftSubmit,
           joinElig: joinElig === "communities" ? "restricted" : joinElig,
           location: { city, state: locationState, country: locationCountry },
