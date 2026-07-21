@@ -57,7 +57,7 @@ For an EVENT, use this JSON schema:
 `;
 
             const fullPrompt = `${systemPrompt}\n\nUser Request: ${prompt}`;
-            
+
             const chatCompletion = await groq.chat.completions.create({
                 messages: [{ role: 'user', content: fullPrompt }],
                 model: 'llama-3.3-70b-versatile',
@@ -65,7 +65,7 @@ For an EVENT, use this JSON schema:
                 response_format: { type: 'json_object' }
             });
             const responseText = chatCompletion.choices[0]?.message?.content || "{}";
-            
+
             // Clean up potential markdown formatting in the response
             let cleanedText = responseText.trim();
             if (cleanedText.startsWith('\`\`\`json')) {
@@ -136,7 +136,7 @@ If "create_event" or "create_group", return:
 `;
 
             const fullPrompt = `${systemPrompt}\n\nUser Request: ${prompt}`;
-            
+
             const chatCompletion = await groq.chat.completions.create({
                 messages: [{ role: 'user', content: fullPrompt }],
                 model: 'llama-3.3-70b-versatile',

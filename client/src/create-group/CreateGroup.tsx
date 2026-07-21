@@ -516,9 +516,11 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
               <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => go("home")} style={{ padding: "7px 11px" }}><I.arrowL /></button>
               <div><div className="ck">New Group</div><h1 style={{ margin: 0 }}>Create a group</h1></div>
             </div>
-            <button className="hbtn hbtn--primary hbtn--sm" onClick={() => setAiModal(true)} style={{ gap: 6 }}>
-              ✨ Generate with AI
-            </button>
+            {entitlements?.ai_assistant_enabled && (
+              <button className="hbtn hbtn--primary hbtn--sm" onClick={() => setAiModal(true)} style={{ gap: 6 }}>
+                ✨ Generate with AI
+              </button>
+            )}
           </div>
 
           <div className="form-card main-info-card">

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { I } from '../../home-icons';
 import { useNavigate } from 'react-router-dom';
 
-export function GlobalAIAssistantWidget() {
+export function GlobalAIAssistantWidget({ aiEnabled }: { aiEnabled?: boolean }) {
     const [isOpen, setIsOpen] = useState(false);
     const [prompt, setPrompt] = useState('');
     const [loading, setLoading] = useState(false);
@@ -110,6 +110,8 @@ export function GlobalAIAssistantWidget() {
             setLoading(false);
         }
     };
+
+    if (!aiEnabled) return null;
 
     return (
         <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 10000, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>

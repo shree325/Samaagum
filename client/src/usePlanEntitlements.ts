@@ -14,7 +14,8 @@ export const DEFAULT_FREE_ENTITLEMENTS = {
   event_allowed_join_modes: ['restricted', 'invite'],
   event_max_participants: 100,
   event_checkin_methods: ['scanner', 'manual', 'gate'],
-  event_can_create_paid_tickets: false
+  event_can_create_paid_tickets: false,
+  ai_assistant_enabled: false
 };
 
 export const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";

@@ -378,9 +378,11 @@ export function CreateEventForm({ go, mobile, st, editEv, hostGroupId }: any) {
                   <h1 style={{ margin: 0 }}>{isEditing ? 'Edit Event' : 'Create an event'}</h1>
                 </div>
               </div>
-              <button className="hbtn hbtn--primary hbtn--sm" onClick={() => setAiModal(true)} style={{ gap: 6 }}>
-                ✨ Generate with AI
-              </button>
+              {entitlements?.ai_assistant_enabled && (
+                <button className="hbtn hbtn--primary hbtn--sm" onClick={() => setAiModal(true)} style={{ gap: 6 }}>
+                  ✨ Generate with AI
+                </button>
+              )}
             </div>
 
             <div className="create-container">

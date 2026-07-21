@@ -1651,8 +1651,7 @@ useEffect(() => {
           </div>
         </div>
       )}
-
-      <GlobalAIAssistantWidget />
+      <GlobalAIAssistantWidget aiEnabled={entitlements?.ai_assistant_enabled || false} />
     </div>
   );
 }
