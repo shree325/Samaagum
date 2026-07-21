@@ -59,7 +59,7 @@ export function useGallery(g: Group, galleryNeedsApproval: boolean) {
       }
     } catch (err) {
       alert("Upload failed");
-    } {
+    } finally {
       setGalleryUploading(false);
       e.target.value = "";
     }

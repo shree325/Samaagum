@@ -19,10 +19,10 @@ import { MemberOnlyScreen } from './components/common/MemberOnlyScreen';
 import { AboutTab } from './components/about/AboutTab';
 import { DiscussionTab } from './components/discussion/DiscussionTab';
 import { EventsTab } from './components/events/EventsTab';
-import { GalleryTab } from './components/gallery/GalleryTab';
 import { InvitesTab } from './components/invites/InvitesTab';
 import { ForumManagementTab } from './components/forum/ForumManagementTab';
-import { MemberManagementPanel } from '../home-group'; // Kept in home-group or imported accordingly
+import { GalleryTab } from './components/gallery/GalleryTab';
+import { MemberManagementPanel } from './components/members/MemberManagementPanel';
 import { GroupDashboard } from '../group-dashboard';
 
 import { ME } from '../home-data';
@@ -538,6 +538,7 @@ export function GroupDetail({ group, st, go }: GroupDetailProps) {
                     )
                   )}
                   {tab === "events" && <EventsTab gEvents={gEvents} isOwner={isOwner} g={g} go={go} st={st} />}
+                  {tab === "gallery" && <GalleryTab gallery={gallery} permissions={permissions} g={g} />}
                   {tab === "members" && <MemberManagementPanel group={g} st={st} go={go} />}
                   {tab === "dashboard" && <GroupDashboard group={g} st={st} go={go} embedded={true} setTab={setTab} members={members} />}
                   {tab === "invites" && <InvitesTab invites={invites} inviteEmail={inviteEmail} setInviteEmail={setInviteEmail} inviteLink={inviteLink} setInviteLink={setInviteLink} fetchInvites={fetchInvites} g={g} />}
