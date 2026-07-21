@@ -1565,7 +1565,7 @@ export function ScanHub({ st, go }) {
                 }}
               >
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 14.5 }}>{ev.title || "Untitled event"}</div>
+                  <div style={{ fontWeight: 600, fontSize: 14.5, color: "var(--ink)" }}>{ev.title || "Untitled event"}</div>
                   <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>
                     {startsAt ? startsAt.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : "Date TBD"}
                   </div>

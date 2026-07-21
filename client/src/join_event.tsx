@@ -727,6 +727,14 @@ export function JoinEventPage({ ev, st, go }) {
                                                                     }
                                                                     setShowCheckoutModal(true);
                                                                 } else {
+                                                                    if (Object.keys(selectedTickets).length === 0) {
+                                                                        const avail = tiers.find(t => !t.isFull && (t.remaining === null || t.remaining > 0));
+                                                                        if (avail) {
+                                                                            setSelectedTickets({
+                                                                                [avail.id]: { ticketId: avail.id, ticketName: avail.n, price: avail.priceVal || 0, qty: 1, maxQty: avail.maxPerBooking || 10, remaining: avail.remaining ?? 9999 }
+                                                                            });
+                                                                        }
+                                                                    }
                                                                     setShowTicketPopup(true);
                                                                 }
                                                             }}

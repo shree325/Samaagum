@@ -1977,46 +1977,11 @@ export class EventService {
 
     const memberMap = new Map();
 
-    for (const a of assignments) {
-      if (a.users_event_team_assignments_user_idTousers) {
-        const u = a.users_event_team_assignments_user_idTousers;
-        const picture = u.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
-        memberMap.set(a.user_id, {
-          id: u.id,
-          name: u.first_name ? `${u.first_name} ${u.last_name || ''}`.trim() : 'Unknown',
-          display_name: u.profiles?.display_name || u.first_name,
-          picture,
-          email: u.primary_email,
-          role: a.roles?.key || 'member',
-          state: a.state
-        });
-      }
-    }
-
-    for (const att of attendees) {
-      // Resolve the true user record: attendee's own user (if claimed) OR the buyer's user
-      const resolvedUser = att.users_attendees_user_idTousers || att.bookings.users;
-      const resolvedUserId = att.user_id || att.bookings.booker_user_id;
-
-      if (resolvedUserId && !memberMap.has(resolvedUserId) && resolvedUser) {
-        const u = resolvedUser;
-        const picture = u.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
-        memberMap.set(resolvedUserId, {
-          id: u.id,
-          name: u.first_name ? `${u.first_name} ${u.last_name || ''}`.trim() : 'Unknown',
-          display_name: u.profiles?.display_name || u.first_name,
-          picture,
-          email: u.primary_email,
-          role: 'member',
-          state: att.status === 'pending' ? 'pending' : 'active'
-        });
-      }
-    }
-
+    // 1. Process Event Owner / Host Entity FIRST so their role is established
     const event = await prisma.events.findUnique({ where: { id: eventId } });
     if (event) {
       const entity = await prisma.entities.findUnique({ where: { id: event.hosted_by_entity_id }, include: { users: { select: { id: true, first_name: true, last_name: true, primary_email: true, profile_image_data: true, profiles: { select: { display_name: true } } } } } });
-      if (entity && (entity.entity_type === 'user' || entity.entity_type === 'group') && !memberMap.has(entity.user_id) && entity.users) {
+      if (entity && (entity.entity_type === 'user' || entity.entity_type === 'group') && entity.user_id && entity.users) {
         const u = entity.users;
         const picture = u.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
         memberMap.set(entity.user_id, {
@@ -2025,9 +1990,56 @@ export class EventService {
           display_name: u.profiles?.display_name || u.first_name,
           picture,
           email: u.primary_email,
-          role: topRoleKey || 'member',
+          role: topRoleKey || 'event_owner',
           state: 'active'
         });
+      }
+    }
+
+    // 2. Process Team Assignments SECOND
+    for (const a of assignments) {
+      if (a.users_event_team_assignments_user_idTousers) {
+        const u = a.users_event_team_assignments_user_idTousers;
+        const picture = u.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
+        const roleKey = a.roles?.key || 'member';
+        const existing = memberMap.get(a.user_id);
+        if (!existing) {
+          memberMap.set(a.user_id, {
+            id: u.id,
+            name: u.first_name ? `${u.first_name} ${u.last_name || ''}`.trim() : 'Unknown',
+            display_name: u.profiles?.display_name || u.first_name,
+            picture,
+            email: u.primary_email,
+            role: roleKey,
+            state: a.state
+          });
+        } else if (existing.role === 'member' && roleKey !== 'member') {
+          existing.role = roleKey;
+        }
+      }
+    }
+
+    // 3. Process Attendees (Ticket Holders/Guests) THIRD
+    for (const att of attendees) {
+      // Resolve the true user record: attendee's own user (if claimed) OR the buyer's user
+      const resolvedUser = att.users_attendees_user_idTousers || att.bookings.users;
+      const resolvedUserId = att.user_id || att.bookings.booker_user_id;
+
+      if (resolvedUserId && resolvedUser) {
+        // If user already has an existing role (Owner, Host, Admin, Moderator, etc.), preserve it completely!
+        if (!memberMap.has(resolvedUserId)) {
+          const u = resolvedUser;
+          const picture = u.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
+          memberMap.set(resolvedUserId, {
+            id: u.id,
+            name: u.first_name ? `${u.first_name} ${u.last_name || ''}`.trim() : 'Unknown',
+            display_name: u.profiles?.display_name || u.first_name,
+            picture,
+            email: u.primary_email,
+            role: 'member',
+            state: att.status === 'pending' ? 'pending' : 'active'
+          });
+        }
       }
     }
 

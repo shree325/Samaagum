@@ -1466,12 +1466,48 @@ useEffect(() => {
                   </label>
                   
                   {field.type === "text" && (
-                    <input
-                      className="cinput"
-                      placeholder={field.responseType === "paragraph" ? "Long answer..." : "Short answer..."}
-                      value={questAnswers[field.id] || ""}
-                      onChange={(e) => setQuestAnswers(prev => ({ ...prev, [field.id]: e.target.value }))}
-                    />
+                    field.responseType === "paragraph" ? (
+                      <textarea
+                        className="cinput"
+                        placeholder="Long answer..."
+                        value={questAnswers[field.id] || ""}
+                        onChange={(e) => setQuestAnswers(prev => ({ ...prev, [field.id]: e.target.value }))}
+                        style={{ minHeight: 80, padding: '12px', resize: 'vertical' }}
+                      />
+                    ) : (
+                      <input
+                        className="cinput"
+                        placeholder="Short answer..."
+                        value={questAnswers[field.id] || ""}
+                        onChange={(e) => setQuestAnswers(prev => ({ ...prev, [field.id]: e.target.value }))}
+                      />
+                    )
+                  )}
+
+                  {field.type === "yes_no" && (
+                    <div style={{ display: "flex", gap: 16 }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                        <input type="radio" name={`q-${field.id}`} checked={questAnswers[field.id] === 'Yes'} onChange={() => setQuestAnswers(prev => ({ ...prev, [field.id]: 'Yes' }))} />
+                        Yes
+                      </label>
+                      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                        <input type="radio" name={`q-${field.id}`} checked={questAnswers[field.id] === 'No'} onChange={() => setQuestAnswers(prev => ({ ...prev, [field.id]: 'No' }))} />
+                        No
+                      </label>
+                    </div>
+                  )}
+
+                  {field.type === "email" && (
+                    <input type="email" className="cinput" placeholder="Email address..." value={questAnswers[field.id] || ""} onChange={(e) => setQuestAnswers(prev => ({ ...prev, [field.id]: e.target.value }))} />
+                  )}
+                  {field.type === "phone" && (
+                    <input type="tel" className="cinput" placeholder="Phone number..." value={questAnswers[field.id] || ""} onChange={(e) => setQuestAnswers(prev => ({ ...prev, [field.id]: e.target.value }))} />
+                  )}
+                  {field.type === "date" && (
+                    <input type="date" className="cinput" value={questAnswers[field.id] || ""} onChange={(e) => setQuestAnswers(prev => ({ ...prev, [field.id]: e.target.value }))} />
+                  )}
+                  {field.type === "time" && (
+                    <input type="time" className="cinput" value={questAnswers[field.id] || ""} onChange={(e) => setQuestAnswers(prev => ({ ...prev, [field.id]: e.target.value }))} />
                   )}
 
                   {field.type === "options" && (
