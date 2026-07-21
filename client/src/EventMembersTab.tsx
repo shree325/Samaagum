@@ -246,7 +246,7 @@ export function EventMembersTab({
 
                 const memberBooking = confirmedAttendees.find((c: any) => c.userId === userId);
                 const memberAnswers = memberBooking?.answers || null;
-                const hasAnswers = memberAnswers && Object.keys(memberAnswers).length > 0;
+                const hasAnswers = memberAnswers && Object.keys(memberAnswers).filter(k => !['ticketTypeId', 'qty', 'ticketName', 'isQuestionnaireSubmit', 'registration_location', 'transactionId', 'buyer', 'attendees', 'tickets'].includes(k)).length > 0;
 
                 return (
                   <div key={userId || name + i}

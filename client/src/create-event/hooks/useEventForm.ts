@@ -12,7 +12,7 @@ export function useEventForm({ go, st, editEv, hostGroupId }: any) {
   const apiBase = window.location.port === '8080' ? 'http://localhost:3000' : '';
   const draftKey = 'sg_draft_event';
   const savedDraft = useMemo(() => JSON.parse(localStorage.getItem(draftKey) || '{}'), []);
-  const draft = editEv && editEv.__draft ? editEv : null;
+  const draft = editEv && editEv.__draft ? editEv.__draft : null;
   const isNewEvent = !editEv?.id || editEv.id === 'new';
 
   const entitlements = st?.entitlements || DEFAULT_FREE_ENTITLEMENTS;
