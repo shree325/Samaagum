@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { GroupCard } from '../home-cards';
 import { COVERS, ME, copyText } from '../home-data';
 import { Discover } from '../home-feed';
@@ -55,12 +55,8 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
 
   const draftKey = "sg_draft_group";
   
-  // Clear draft storage if we are not editing
-  useEffect(() => {
-    if (!isEdit) {
-      localStorage.removeItem(draftKey);
-    }
-  }, [isEdit]);
+  // Removed draft clearing on mount to allow AI drafts to be read.
+  // The draft will be cleared after successful group creation.
 
   useEffect(() => {
     if (isEdit && editGroup) {
@@ -138,7 +134,13 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
     }
   }, [editGroup]);
 
-  const savedDraft = {};
+  const savedDraft = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem(draftKey) || "{}");
+    } catch {
+      return {};
+    }
+  }, [draftKey]);
 
   const [name, setName] = useState(isEdit ? (editGroup.name || "") : (savedDraft.name || ""));
   const [icon, setIcon] = useState(isEdit ? (editGroup.icon || "✺") : (savedDraft.icon || "✺"));
@@ -588,7 +590,7 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
         <div className="cf-inner">
           <div className="create-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => go("home")} style={{ padding: "7px 11px" }}><I.arrowL /></button>
+              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => { localStorage.removeItem(draftKey); if (isEdit) { go('group', editGroup); } else { go('home'); } }} style={{ padding: '7px 11px', background: 'var(--surface)' }}><I.arrowL /></button>
               <div><div className="ck">New Group</div><h1 style={{ margin: 0 }}>Create a group</h1></div>
             </div>
           </div>

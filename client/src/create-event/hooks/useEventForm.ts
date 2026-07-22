@@ -80,13 +80,14 @@ export function useEventForm({ go, st, editEv, hostGroupId }: any) {
     fetchGroups();
   }, [apiBase, editEv]);
 
-  const [title, setTitle] = useState(draft?.title ?? editEv?.title ?? '');
+  const [title, setTitle] = useState(draft?.title ?? editEv?.title ?? savedDraft.title ?? '');
   const [slug, setSlug] = useState(draft?.slug ?? editEv?.venue_raw?.meta?.slug ?? editEv?.venue?.meta?.slug ?? '');
-  const [cover, setCover] = useState(draft?.cover ?? editEv?.cover ?? editEv?.venue_raw?.meta?.cover ?? editEv?.venue?.meta?.cover ?? '');
+  const [cover, setCover] = useState(draft?.cover ?? editEv?.cover ?? editEv?.venue_raw?.meta?.cover ?? editEv?.venue?.meta?.cover ?? savedDraft.cover ?? '');
   const [visibility, setVisibility] = useState(
     draft?.visibility
     ?? editEv?.venue_raw?.visibility
     ?? editEv?.venue?.visibility
+    ?? savedDraft.visibility
     ?? (allowedVisibilities.includes('public') ? 'public' : (allowedVisibilities.includes('unlisted') ? 'unlisted' : (allowedVisibilities[0] || 'unlisted')))
   );
   const [calendar, setCalendar] = useState(draft?.calendar ?? 'Main Calendar');
@@ -157,7 +158,7 @@ export function useEventForm({ go, st, editEv, hostGroupId }: any) {
   }, [startDate, startTime, endDate, endTime, editEv]);
 
   const [timezone, setTimezone] = useState(draft?.timezone ?? editEv?.venue_timezone ?? 'UTC +05:30 India');
-  const [desc, setDesc] = useState(draft?.desc ?? editEv?.description ?? editEv?.desc ?? '');
+  const [desc, setDesc] = useState(draft?.desc ?? editEv?.description ?? editEv?.desc ?? savedDraft.desc ?? '');
   const [instructions, setInstructions] = useState(draft?.instructions ?? editEv?.venue_raw?.meta?.instructions ?? editEv?.venue?.meta?.instructions ?? editEv?.instructions ?? '');
 
   const [tzModalOpen, setTzModalOpen] = useState(false);
@@ -181,7 +182,7 @@ export function useEventForm({ go, st, editEv, hostGroupId }: any) {
 
   const [tags, setTags] = useState(draft?.tags ?? editEv?.venue_raw?.meta?.tags ?? editEv?.venue?.meta?.tags ?? ['Startup', 'Technology']);
   const [tagInput, setTagInput] = useState('');
-  const [cat, setCat] = useState(draft?.cat ?? editEv?.venue_raw?.meta?.category ?? editEv?.venue?.meta?.category ?? '');
+  const [cat, setCat] = useState(draft?.cat ?? editEv?.venue_raw?.meta?.category ?? editEv?.venue?.meta?.category ?? savedDraft.cat ?? '');
   const [categoriesList, setCategoriesList] = useState<any[]>([]);
   const [seoExpanded, setSeoExpanded] = useState(false);
 
@@ -237,7 +238,7 @@ export function useEventForm({ go, st, editEv, hostGroupId }: any) {
 
   // Registration options
   const [registrationStatus, setRegistrationStatus] = useState(
-    draft?.registrationStatus ?? editEv?.registration_status ?? 'OPEN'
+    draft?.registrationStatus ?? editEv?.registration_status ?? savedDraft.registrationStatus ?? 'OPEN'
   );
   const editRegOpensAt  = editEv?.registration_opens_at ? new Date(editEv.registration_opens_at) : null;
   const editRegClosesAt = editEv?.registration_closes_at ? new Date(editEv.registration_closes_at) : null;
@@ -255,11 +256,11 @@ export function useEventForm({ go, st, editEv, hostGroupId }: any) {
     draft?.regEndTime ?? (editRegClosesAt ? `${padTwo(editRegClosesAt.getHours())}:${padTwo(editRegClosesAt.getMinutes())}` : '')
   );
 
-  const [approval, setApproval] = useState(draft?.approval ?? editEv?.approval_required ?? false);
+  const [approval, setApproval] = useState(draft?.approval ?? editEv?.approval_required ?? savedDraft.approval ?? false);
 
   // Sub-hooks invocation
-  const capacityState = useCapacity({ draft, editEv, isNewEvent, entitlements });
-  const questionnaireState = useQuestionnaire({ draft, editEv });
+  const capacityState = useCapacity({ draft, savedDraft, editEv, isNewEvent, entitlements });
+  const questionnaireState = useQuestionnaire({ draft, savedDraft, editEv });
   const locationState = useLocation({ draft, editEv });
   const ticketManager = useTicketManager({
     draft, editEv, canCreatePaidTickets,
