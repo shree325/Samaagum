@@ -586,9 +586,11 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
 
       <div className="create-form">
         <div className="cf-inner">
-          <div className="create-head">
-            <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => go("home")} style={{ padding: "7px 11px" }}><I.arrowL /></button>
-            <div><div className="ck">New Group</div><h1>Create a group</h1></div>
+          <div className="create-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => go("home")} style={{ padding: "7px 11px" }}><I.arrowL /></button>
+              <div><div className="ck">New Group</div><h1 style={{ margin: 0 }}>Create a group</h1></div>
+            </div>
           </div>
 
           <div className="form-card main-info-card">
