@@ -3902,6 +3902,14 @@ export function SubscriptionPlansView({ user, apiBase }) {
                     />
                     Allow Paid Ticket Creations
                   </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer", marginTop: "12px" }}>
+                    <input 
+                      type="checkbox" 
+                      checked={entForm.ai_assistant_enabled || false} 
+                      onChange={e => setEntForm({ ...entForm, ai_assistant_enabled: e.target.checked })} 
+                    />
+                    Enable AI Assistant
+                  </label>
                 </div>
 
               </div>
