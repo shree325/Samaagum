@@ -6,8 +6,6 @@ import { Empty, FilterChip, SectionBar } from './home-shell';
 import { apiBase } from './home-subscription';
 import { I, Grain, Avatar } from './home-icons';
 import { Communities, Events } from './landing-features';
-import { useLocation } from 'react-router-dom';
-
 
 /* ============================================================
    Samaagum Home — Home feed + Discover
@@ -123,37 +121,25 @@ function ErrorBlock({ message, onRetry }: { message: string, onRetry: () => void
 
 /* Hero Carousel */
 export function HeroCarousel({ events, go, wishlisted, wishlistCounts, toggleWishlist, registered }: any) {
-  const total = events?.length || 0;
-  // If there are multiple events, clone first at the end and last at the start for circular looping
-  const slides = events && events.length > 1 ? [events[events.length - 1], ...events, events[0]] : (events || []);
-  
-  const [index, setIndex] = useState(slides.length > 1 ? 1 : 0);
+  const [index, setIndex] = useState(0);
   const [hover, setHover] = useState(false);
-  const [transitionEnabled, setTransitionEnabled] = useState(true);
   const touchStart = useRef(0);
 
-  const nextSlide = () => {
-    if (slides.length <= 1) return;
-    setIndex((prev) => (prev >= slides.length - 1 ? prev : prev + 1));
-  };
-
-  const prevSlide = () => {
-    if (slides.length <= 1) return;
-    setIndex((prev) => (prev <= 0 ? prev : prev - 1));
-  };
-
   useEffect(() => {
-    if (slides.length <= 1 || hover) return;
+    if (events.length <= 1 || hover) return;
     const timer = setInterval(() => {
       const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
       if (!mediaQuery.matches) {
-        nextSlide();
+        setIndex((prev) => (prev + 1) % events.length);
       }
     }, 5000);
     return () => clearInterval(timer);
-  }, [slides, hover, index]);
+  }, [events, hover]);
 
   if (!events || events.length === 0) return null;
+
+  const nextSlide = () => setIndex((prev) => (prev + 1) % events.length);
+  const prevSlide = () => setIndex((prev) => (prev - 1 + events.length) % events.length);
 
   const handleTouchStart = (e: any) => {
     touchStart.current = e.touches[0].clientX;
@@ -170,26 +156,6 @@ export function HeroCarousel({ events, go, wishlisted, wishlistCounts, toggleWis
     else if (e.key === 'ArrowLeft') prevSlide();
   };
 
-  const handleTransitionEnd = () => {
-    if (slides.length <= 1) return;
-    if (index === slides.length - 1) {
-      setTransitionEnabled(false);
-      setIndex(1);
-    } else if (index === 0) {
-      setTransitionEnabled(false);
-      setIndex(slides.length - 2);
-    }
-  };
-
-  useEffect(() => {
-    if (!transitionEnabled) {
-      const raf = requestAnimationFrame(() => {
-        setTransitionEnabled(true);
-      });
-      return () => cancelAnimationFrame(raf);
-    }
-  }, [transitionEnabled]);
-
   return (
     <div
       className="hero-carousel"
@@ -203,15 +169,8 @@ export function HeroCarousel({ events, go, wishlisted, wishlistCounts, toggleWis
       aria-label="Featured events carousel"
       aria-roledescription="carousel"
     >
-      <div 
-        className="hero-track" 
-        onTransitionEnd={handleTransitionEnd}
-        style={{ 
-          transform: `translateX(-${index * 100}%)`,
-          transition: transitionEnabled ? 'transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)' : 'none'
-        }}
-      >
-        {slides.map((ev: any, idx: number) => {
+      <div className="hero-track" style={{ transform: `translateX(-${index * 100}%)` }}>
+        {events.map((ev: any, idx: number) => {
           const coverBg = ev.cover && (ev.cover.startsWith("linear-gradient") || ev.cover.startsWith("radial-gradient") || ev.cover.startsWith("var("))
             ? ev.cover
             : (ev.cover ? `url(${ev.cover}) center/cover no-repeat` : 'var(--sunset)');
@@ -235,7 +194,7 @@ export function HeroCarousel({ events, go, wishlisted, wishlistCounts, toggleWis
 
           return (
             <div
-              key={`${ev.id}-${idx}`}
+              key={ev.id}
               className="hero-slide"
               aria-hidden={idx !== index}
               onClick={() => go('event', ev)}
@@ -307,17 +266,14 @@ export function HeroCarousel({ events, go, wishlisted, wishlistCounts, toggleWis
           <button className="hero-nav-btn next" aria-label="Next slide" onClick={(e) => { e.stopPropagation(); nextSlide(); }}><I.arrowR /></button>
 
           <div className="hero-dots">
-            {events.map((_: any, idx: number) => {
-              const realActiveIdx = index === 0 ? events.length - 1 : (index === slides.length - 1 ? 0 : index - 1);
-              return (
-                <button
-                  key={idx}
-                  className={`hero-dot ${idx === realActiveIdx ? 'active' : ''}`}
-                  aria-label={`Go to slide ${idx + 1}`}
-                  onClick={(e) => { e.stopPropagation(); setIndex(idx + 1); }}
-                />
-              );
-            })}
+            {events.map((_: any, idx: number) => (
+              <button
+                key={idx}
+                className={`hero-dot ${idx === index ? 'active' : ''}`}
+                aria-label={`Go to slide ${idx + 1}`}
+                onClick={(e) => { e.stopPropagation(); setIndex(idx); }}
+              />
+            ))}
           </div>
         </>
       )}
@@ -790,7 +746,7 @@ export function HomeFeed({ st, go }: any) {
         {/* Suggested connections */}
         {token && (
           <div className="section">
-            <SectionBar title="People you may know" onMore={() => go("messages")} moreLabel="View all" />
+            <SectionBar title="People you may know" />
             {sections.people.loading ? (
               <div className="people-rail" style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 8 }}>
                 {[1, 2, 3, 4].map(idx => <SkeletonCard key={idx} type="person" />)}
@@ -815,6 +771,7 @@ export function HomeFeed({ st, go }: any) {
                       p={mapped}
                       connected={localConnected.has(p.id) || connected.has(p.name)}
                       onConnect={() => handleConnectPerson(p.id, p.name)}
+                      onNavigate={(id) => go("public-profile", { id, displayName: p.name || p.display_name, profilePhoto: p.photo })}
                     />
                   );
                 })}
@@ -835,25 +792,15 @@ export function HomeFeed({ st, go }: any) {
 
 /* ---------------- Discover (browse) ---------------- */
 export function Discover({ st, go, param }) {
-  const location = useLocation();
-  const searchParams = new URLSearchParams(location.search || (window.location.hash.includes('?') ? window.location.hash.split('?')[1] : ''));
-  const urlCategory = searchParams.get('category');
-  const urlTab = searchParams.get('tab');
-
-  // param may be a plain string ("events"/"groups") or an object { tab, category }
-  const initialTab      = (typeof param === 'string' ? param : param?.tab) ?? urlTab ?? 'events';
-  const initialCategory = typeof param === 'object' && param !== null ? (param.category ?? null) : urlCategory;
-
-  const [tab, setTab] = useState(initialTab === 'events' ? 'events' : 'groups');
+  const [tab, setTab] = useState(param === "groups" ? "groups" : "events");
 
   useEffect(() => {
-    if (param === 'events' || param === 'groups') setTab(param);
-    else if (param?.tab === 'events' || param?.tab === 'groups') setTab(param.tab);
-    else if (urlTab === 'events' || urlTab === 'groups') setTab(urlTab);
-  }, [param, urlTab]);
+    if (param === "events" || param === "groups") {
+      setTab(param);
+    }
+  }, [param]);
 
   const { wishlisted, wishlistCounts, toggleWishlist, registered, city, addJoined, addPending } = st;
-  const requireAuth = st.requireAuth ?? ((_ctx, action) => action());
   const [dbEvents, setDbEvents] = useState([]);
   const [dbGroups, setDbGroups] = useState([]);
   const [categoriesList, setCategoriesList] = useState([]);
@@ -867,14 +814,7 @@ export function Discover({ st, go, param }) {
   const [filterFormat, setFilterFormat] = useState({ online: false, inPerson: false });
   const [filterTime, setFilterTime] = useState({ today: false, thisWeek: false, other: false });
   const [filterReg, setFilterReg] = useState({ joined: false, notJoined: false });
-  const [selectedCats, setSelectedCats] = useState<Set<string>>(new Set());
-
-  // Pre-apply category filter when navigated from landing page category card
-  useEffect(() => {
-    if (initialCategory) {
-      setSelectedCats(new Set([initialCategory]));
-    }
-  }, []); // only on mount — intentionally not re-running when param changes
+  const [selectedCats, setSelectedCats] = useState(new Set());
 
   const isToday = (date: Date) => {
     const today = new Date();
@@ -1177,97 +1117,100 @@ export function Discover({ st, go, param }) {
 
               {/* Scrollable Filters Content */}
               <div className="scroll" style={{ padding: '20px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 20 }}>
-                
-                {/* Timing filters */}
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Timing</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {[
-                      { key: 'today', label: 'Today' },
-                      { key: 'thisWeek', label: 'This Week' },
-                      { key: 'other', label: 'Later / Other' }
-                    ].map(item => {
-                      const isChecked = filterTime[item.key as keyof typeof filterTime];
-                      return (
-                        <div 
-                          key={item.key} 
-                          onClick={() => setFilterTime(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
-                          style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            background: isChecked ? 'rgba(109, 94, 252, 0.15)' : 'var(--surface-2)',
-                            padding: '8px 16px', borderRadius: 8, 
-                            border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
-                            color: isChecked ? 'var(--accent)' : 'var(--ink-2)',
-                            fontWeight: isChecked ? '600' : 'normal',
-                            cursor: 'pointer', fontSize: 13, userSelect: 'none', transition: 'all 0.2s'
-                          }}
-                        >
-                          {item.label}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                {tab === "events" && (
+                  <>
+                    {/* Timing filters */}
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Timing</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {[
+                          { key: 'today', label: 'Today' },
+                          { key: 'thisWeek', label: 'This Week' },
+                          { key: 'other', label: 'Later / Other' }
+                        ].map(item => {
+                          const isChecked = filterTime[item.key as keyof typeof filterTime];
+                          return (
+                            <div 
+                              key={item.key} 
+                              onClick={() => setFilterTime(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                              style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                background: isChecked ? 'rgba(109, 94, 252, 0.15)' : 'var(--surface-2)',
+                                padding: '8px 16px', borderRadius: 8, 
+                                border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
+                                color: isChecked ? 'var(--accent)' : 'var(--ink-2)',
+                                fontWeight: isChecked ? '600' : 'normal',
+                                cursor: 'pointer', fontSize: 13, userSelect: 'none', transition: 'all 0.2s'
+                              }}
+                            >
+                              {item.label}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
 
-                {/* Cost filters */}
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cost</div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {[
-                      { key: 'free', label: 'Free' },
-                      { key: 'paid', label: 'Paid' }
-                    ].map(item => {
-                      const isChecked = filterMode[item.key as keyof typeof filterMode];
-                      return (
-                        <div 
-                          key={item.key} 
-                          onClick={() => setFilterMode(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
-                          style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            background: isChecked ? 'rgba(109, 94, 252, 0.15)' : 'var(--surface-2)',
-                            padding: '8px 16px', borderRadius: 8, 
-                            border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
-                            color: isChecked ? 'var(--accent)' : 'var(--ink-2)',
-                            fontWeight: isChecked ? '600' : 'normal',
-                            cursor: 'pointer', fontSize: 13, userSelect: 'none', transition: 'all 0.2s'
-                          }}
-                        >
-                          {item.label}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                    {/* Cost filters */}
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cost</div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {[
+                          { key: 'free', label: 'Free' },
+                          { key: 'paid', label: 'Paid' }
+                        ].map(item => {
+                          const isChecked = filterMode[item.key as keyof typeof filterMode];
+                          return (
+                            <div 
+                              key={item.key} 
+                              onClick={() => setFilterMode(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                              style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                background: isChecked ? 'rgba(109, 94, 252, 0.15)' : 'var(--surface-2)',
+                                padding: '8px 16px', borderRadius: 8, 
+                                border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
+                                color: isChecked ? 'var(--accent)' : 'var(--ink-2)',
+                                fontWeight: isChecked ? '600' : 'normal',
+                                cursor: 'pointer', fontSize: 13, userSelect: 'none', transition: 'all 0.2s'
+                              }}
+                            >
+                              {item.label}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
 
-                {/* Location Format filters */}
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Location Format</div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {[
-                      { key: 'online', label: 'Online' },
-                      { key: 'inPerson', label: 'In-person' }
-                    ].map(item => {
-                      const isChecked = filterFormat[item.key as keyof typeof filterFormat];
-                      return (
-                        <div 
-                          key={item.key} 
-                          onClick={() => setFilterFormat(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
-                          style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            background: isChecked ? 'rgba(109, 94, 252, 0.15)' : 'var(--surface-2)',
-                            padding: '8px 16px', borderRadius: 8, 
-                            border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
-                            color: isChecked ? 'var(--accent)' : 'var(--ink-2)',
-                            fontWeight: isChecked ? '600' : 'normal',
-                            cursor: 'pointer', fontSize: 13, userSelect: 'none', transition: 'all 0.2s'
-                          }}
-                        >
-                          {item.label}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                    {/* Location Format filters */}
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Location Format</div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {[
+                          { key: 'online', label: 'Online' },
+                          { key: 'inPerson', label: 'In-person' }
+                        ].map(item => {
+                          const isChecked = filterFormat[item.key as keyof typeof filterFormat];
+                          return (
+                            <div 
+                              key={item.key} 
+                              onClick={() => setFilterFormat(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                              style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                background: isChecked ? 'rgba(109, 94, 252, 0.15)' : 'var(--surface-2)',
+                                padding: '8px 16px', borderRadius: 8, 
+                                border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
+                                color: isChecked ? 'var(--accent)' : 'var(--ink-2)',
+                                fontWeight: isChecked ? '600' : 'normal',
+                                cursor: 'pointer', fontSize: 13, userSelect: 'none', transition: 'all 0.2s'
+                              }}
+                            >
+                              {item.label}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {/* Registration / Membership Status */}
                 <div>
@@ -1435,30 +1378,14 @@ export function Discover({ st, go, param }) {
             <Empty icon={<I.ticket />} title="No events found" text="There are no events scheduled in this category matching the filters." />
           ) : (
             <div className="ev-grid">
-              {evs.map(ev => <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)}
-                wishlisted={wishlisted.has(ev.id)}
-                wishlistCount={wishlistCounts[ev.id] !== undefined ? wishlistCounts[ev.id] : (ev.wishlistCount || 0)}
-                onWishlist={() => requireAuth(
-                  { reason: 'bookmark',
-                    pendingNavigation: { view: 'event', param: { id: ev.id } },
-                    pendingAction: { type: 'bookmark', eventId: ev.id } },
-                  () => toggleWishlist(ev.id, ev.wishlistCount)
-                )}
-                registered={registered.has(ev.id)} />)}
+              {evs.map(ev => <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)} wishlisted={wishlisted.has(ev.id)} wishlistCount={wishlistCounts[ev.id] !== undefined ? wishlistCounts[ev.id] : (ev.wishlistCount || 0)} onWishlist={() => toggleWishlist(ev.id, ev.wishlistCount)} registered={registered.has(ev.id)} />)}
             </div>
           )
         ) : (
           <div className="ev-grid">
             {loading ? <div style={{ color: "var(--ink-3)", padding: 20 }}>Loading groups...</div> : grps.length === 0 ? (
               <Empty icon={<I.groups />} title="No groups found" text="There are no groups scheduled in this category matching the filters." />
-            ) : grps.map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)}
-              joined={g.isJoined || st.joined?.has(g.id) ? true : (g.isPending || st.pending?.has(g.id)) ? "pending" : false}
-              onJoin={(g) => requireAuth(
-                { reason: 'join-group',
-                  pendingNavigation: { view: 'group', param: { id: g.id } },
-                  pendingAction: { type: 'join-group', groupId: g.id } },
-                () => st.toggleJoin(g)
-              )} />)}
+            ) : grps.map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={g.isJoined || st.joined?.has(g.id) ? true : (g.isPending || st.pending?.has(g.id)) ? "pending" : false} onJoin={(g)=>{ st.toggleJoin(g); }} />)}
           </div>
         )}
       </div>

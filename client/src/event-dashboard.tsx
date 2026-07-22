@@ -90,7 +90,7 @@ interface EventMember {
 }
 interface BulkActionResult {
   successful: string[];
-  failed: { bookingId: string; error: string }[];
+  failed: { id: string; error: string }[];
 }
 
 /* ================================================================
@@ -416,7 +416,7 @@ function ExportCsvModal({ ev, onClose }: { ev: any; onClose: () => void }) {
 /* ================================================================
    MAIN COMPONENT
    ================================================================ */
-export function EventDashboard({ ev, st, go, embedded = false }: any) {
+export function EventDashboard({ ev, st, go, embedded = false, onTabChange }: any) {
   const e = ev || st?.createdEvents?.[0] || {};
   const apiBase = window.location.port === '8080' ? 'http://localhost:3000' : '';
   const token = localStorage.getItem('token');
@@ -468,7 +468,7 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
   const [overviewScale, setOverviewScale] = useState<'today' | 'week' | 'month'>('week');
   const [mapViewMode, setMapViewMode] = useState<'auto' | 'india' | 'world'>('auto');
   const [selectedCity, setSelectedCity] = useState<any>(null);
-  const [mapCenter, setMapCenter]       = useState<[number, number]>([0, 20]);
+  const [mapCenter, setMapCenter]       = useState<[number, number]>([83, 22]);
   const [mapZoom, setMapZoom]           = useState<number>(1);
   // Check-in Timeline chart scale filter
   const [checkinScale, setCheckinScale] = useState<'today' | 'week' | 'month'>('today');
@@ -783,14 +783,28 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
   const revenueToday = useMemo(() => {
     if (isDemoMode) return 12400;
     const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
-    const todayList = confirmed.filter(u => u.amountMinor > 0 && u.createdAt && new Date(u.createdAt).toLocaleDateString('en-CA') === todayStr);
+    const seen = new Set<string>();
+    const unique = confirmed.filter(u => {
+      if (!u.bookingId) return true;
+      if (seen.has(u.bookingId)) return false;
+      seen.add(u.bookingId);
+      return true;
+    });
+    const todayList = unique.filter(u => u.amountMinor > 0 && u.createdAt && new Date(u.createdAt).toLocaleDateString('en-CA') === todayStr);
     return todayList.reduce((sum, u) => sum + (u.amountMinor / 100), 0);
   }, [confirmed, isDemoMode]);
 
   const revenueTimeline = useMemo(() => {
     if (isDemoMode) return demoRevenueGrowth[revenueFilter];
 
-    const paidList = confirmed.filter(u => u.amountMinor > 0);
+    const seen = new Set<string>();
+    const unique = confirmed.filter(u => {
+      if (!u.bookingId) return true;
+      if (seen.has(u.bookingId)) return false;
+      seen.add(u.bookingId);
+      return true;
+    });
+    const paidList = unique.filter(u => u.amountMinor > 0);
     if (!paidList.length) return [];
 
     const now = new Date();
@@ -977,10 +991,10 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
         const result: BulkActionResult = { successful: [], failed: [] };
         results.forEach((r, i) => {
           if (r.status === 'fulfilled') result.successful.push(selectedRequests[i]);
-          else result.failed.push({ bookingId: selectedRequests[i], error: (r as any).reason?.message ?? 'Unknown' });
+          else result.failed.push({ id: selectedRequests[i], error: (r as any).reason?.message ?? 'Unknown' });
         });
         setBulkResult(result);
-        setSelectedRequests(result.failed.map(f => f.bookingId));
+        setSelectedRequests(result.failed.map(f => f.id));
         setActionLoading(false);
         await refetch();
       }
@@ -1179,7 +1193,14 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--ink)' }}>Recent Members</h3>
-            <button className="hbtn hbtn--soft hbtn--sm" style={{ color: '#6366f1', background: 'transparent', border: 'none', fontWeight: 600 }}>
+            <button className="hbtn hbtn--soft hbtn--sm" style={{ color: '#6366f1', background: 'transparent', border: 'none', fontWeight: 600 }}
+              onClick={() => {
+                if (embedded && onTabChange) {
+                  onTabChange('members');
+                } else {
+                  go('event', { ...e, initialTab: 'members' });
+                }
+              }}>
               View all
             </button>
           </div>
@@ -1842,9 +1863,17 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
             key={item.label}
             onClick={() => {
               if (item.action === 'members') {
-                go('event', { ...e, initialTab: 'members' });
+                if (embedded && onTabChange) {
+                  onTabChange('members');
+                } else {
+                  go('event', { ...e, initialTab: 'members' });
+                }
               } else if (item.action === 'invite') {
-                go('event', { ...e, initialTab: 'invite' });
+                if (embedded && onTabChange) {
+                  onTabChange('invite');
+                } else {
+                  go('event', { ...e, initialTab: 'invite' });
+                }
               } else if (item.action === 'gallery') {
                 let isGalleryEnabled = false;
                 if (e.gallery?.enabled) {
@@ -1867,13 +1896,25 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
                 }
 
                 if (isGalleryEnabled) {
-                  go('event', { ...e, initialTab: 'gallery' });
+                  if (embedded && onTabChange) {
+                    onTabChange('gallery');
+                  } else {
+                    go('event', { ...e, initialTab: 'gallery' });
+                  }
                 } else {
                   if (window.toast) window.toast("Enable gallery to view it", "warning");
-                  go('event', { ...e, initialTab: 'settings' });
+                  if (embedded && onTabChange) {
+                    onTabChange('settings');
+                  } else {
+                    go('event', { ...e, initialTab: 'settings' });
+                  }
                 }
               } else if (item.action === 'settings') {
-                go('event', { ...e, initialTab: 'settings' });
+                if (embedded && onTabChange) {
+                  onTabChange('settings');
+                } else {
+                  go('event', { ...e, initialTab: 'settings' });
+                }
               }
             }}
             style={{
@@ -2032,7 +2073,7 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontSize: 13, color: 'var(--ink-3)' }}>
             <input type="checkbox"
               checked={selectedRequests.length === requests.length && requests.length > 0}
-              onChange={e => setSelectedRequests(e.target.checked ? requests.map(r => r.bookingId) : [])}
+              onChange={e => setSelectedRequests(e.target.checked ? requests.map(r => r.id) : [])}
             /> Select All
           </div>
         )}
@@ -2045,8 +2086,8 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
               <div key={u.id} style={{ display: 'flex', flexDirection: 'column', background: 'var(--field)', borderRadius: 10, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <input type="checkbox" checked={selectedRequests.includes(u.bookingId)}
-                      onChange={ev => setSelectedRequests(prev => ev.target.checked ? [...prev, u.bookingId] : prev.filter(id => id !== u.bookingId))}
+                    <input type="checkbox" checked={selectedRequests.includes(u.id)}
+                      onChange={ev => setSelectedRequests(prev => ev.target.checked ? [...prev, u.id] : prev.filter(id => id !== u.id))}
                     />
                     <Avatar name={u.name} size={38} img={u.picture ?? undefined} />
                     <div>
@@ -2060,8 +2101,8 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
                   </div>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       {u.isCash && u.transactionId && u.transactionId !== 'N/A' && (
-                        <div style={{ fontSize: 11, color: '#f59e0b', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 6, padding: '3px 8px', fontWeight: 600 }}>
-                          Txn: {u.transactionId}
+                        <div style={{ fontSize: 11, color: '#f59e0b', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 6, padding: '3px 8px', fontWeight: 600, maxWidth: 150, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {(typeof u.transactionId === 'string' && (u.transactionId.startsWith('data:image/') || u.transactionId.match(/\.(jpeg|jpg|gif|png)$/) || u.transactionId.startsWith('http'))) ? 'Txn: Image Proof Attached' : `Txn: ${u.transactionId}`}
                         </div>
                       )}
                       {u.isCash && !u.transactionId && (
@@ -2088,7 +2129,7 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
                     </div>
                     {(() => {
                       const filteredEntries = Object.entries(u.answers || {}).filter(
-                        ([key]) => !['ticketTypeId', 'qty', 'ticketName', 'registration_location'].includes(key)
+                        ([key]) => !['ticketTypeId', 'qty', 'ticketName', 'registration_location', 'transactionId', 'buyer', 'attendees'].includes(key)
                       );
                       if (filteredEntries.length === 0) {
                         return (
@@ -2106,11 +2147,27 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
                               <div key={key} style={{ fontSize: 13 }}>
                                 <div style={{ color: 'var(--ink-2)', fontWeight: 500, marginBottom: 2 }}>Q: {questionText}</div>
                                 <div style={{ color: 'var(--ink)', padding: '6px 10px', background: 'var(--surface-2)', borderRadius: 6, border: '1px solid var(--border)', whiteSpace: 'pre-wrap' }}>
-                                  {String(val)}
+                                  {typeof val === 'string' && (val.startsWith('data:image/') || val.match(/\.(jpeg|jpg|gif|png)$/) || val.startsWith('http')) && (val.startsWith('data:image/') || val.includes('res.cloudinary') || val.includes('firebasestorage')) ? (
+                                    <img src={val} alt={questionText} style={{ maxWidth: 200, maxHeight: 200, borderRadius: 8, marginTop: 4, objectFit: 'contain', background: '#000' }} />
+                                  ) : (
+                                    <>{String(val)}</>
+                                  )}
                                 </div>
                               </div>
                             );
                           })}
+                          {u.transactionId && u.transactionId !== 'N/A' && (
+                            <div style={{ fontSize: 13, marginTop: 4, paddingTop: 12, borderTop: "1px dashed var(--border)" }}>
+                              <div style={{ color: 'var(--ink-2)', fontWeight: 500, marginBottom: 2 }}>Payment Proof / Transaction ID</div>
+                              <div style={{ color: 'var(--ink)', padding: '6px 10px', background: 'var(--surface-2)', borderRadius: 6, border: '1px solid var(--border)', whiteSpace: 'pre-wrap' }}>
+                                {(typeof u.transactionId === 'string' && (u.transactionId.startsWith('data:image/') || u.transactionId.match(/\.(jpeg|jpg|gif|png)$/) || u.transactionId.startsWith('http'))) ? (
+                                  <img src={u.transactionId} alt="Payment Proof" style={{ maxWidth: 200, maxHeight: 200, borderRadius: 8, marginTop: 4, objectFit: 'contain', background: '#000' }} />
+                                ) : (
+                                  <>{u.transactionId}</>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })()}
@@ -2436,7 +2493,14 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
           <button className="hbtn hbtn--soft hbtn--sm">View All</button>
         </div>
         {(() => {
-          const transactions = confirmed.filter(u => u.amountMinor > 0);
+          const seen = new Set<string>();
+          const transactions = confirmed.filter(u => {
+            if (u.amountMinor <= 0) return false;
+            if (!u.bookingId) return true;
+            if (seen.has(u.bookingId)) return false;
+            seen.add(u.bookingId);
+            return true;
+          });
           if (transactions.length === 0 && !isDemoMode)
             return <EmptyState title="No transactions yet" message="Paid bookings will appear here." icon={<I.wallet style={{ width: 28, height: 28, opacity: 0.35 }} />} />;
           return (
@@ -2783,7 +2847,7 @@ export function EventDashboard({ ev, st, go, embedded = false }: any) {
           )}
 
           {/* Tab Navigation Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${allTabs.length}, 1fr)`, gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
             {allTabs.map(t => (
               <div key={t.id} onClick={() => setActiveTab(t.id as any)} style={{
                 background: 'var(--surface)', borderRadius: 16, padding: 20, cursor: 'pointer',

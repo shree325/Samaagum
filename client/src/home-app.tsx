@@ -2,9 +2,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { HashRouter, useNavigate, useLocation } from 'react-router-dom';
-import { Mark, LocationSelector } from './components';
+import { LocationSelector } from './components';
 (window as any).LocationSelector = LocationSelector;
-import { CreateEvent } from './create_event';
+import { CreateEvent } from './create-event';
 import { CreateGroup } from './home-create';
 import { EVENTS, FEATURED, GROUPS, ME, MY_TICKETS } from './home-data';
 import { EventDetail } from './home-event';
@@ -25,7 +25,7 @@ import { ClaimFlow, MyTickets, AllTickets, TicketDetail, ScanHub, ScanEventPage 
 import { EventDashboard } from './event-dashboard';
 import { GroupDashboard } from './group-dashboard';
 import { Waitlist } from './home-waitlist';
-import { I, tick } from './home-icons';
+import { I, tick, Mark } from './home-icons';
 import { PublicProfile } from './public-profile';
 import { useTweaks } from './tweaks-panel';
 import { usePlanEntitlements } from './usePlanEntitlements';
@@ -116,8 +116,31 @@ export function DashboardApp() {
   // Guests are allowed — onboardingChecked starts true for guests
   const [onboardingChecked, setOnboardingChecked] = useState(!token);
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  // Auth guard hook — must be at top level (React rules of hooks)
-  const { requireAuth, modal: authModal, closeModal } = useRequireAuth();
+  const [aiFeatureEnabled, setAiFeatureEnabled] = useState(true);
+
+  useEffect(() => {
+    const checkFlags = () => {
+      try {
+        const flagsStr = localStorage.getItem("samaagum_admin_featureFlags");
+        if (flagsStr) {
+          const flags = JSON.parse(flagsStr);
+          const aiFlag = flags.find((f: any) => f.id === "ff-5");
+          if (aiFlag) {
+            setAiFeatureEnabled(aiFlag.active);
+          }
+        }
+      } catch (e) {}
+    };
+
+    checkFlags();
+    window.addEventListener('storage', checkFlags);
+    const intervalId = setInterval(checkFlags, 2000);
+
+    return () => {
+      window.removeEventListener('storage', checkFlags);
+      clearInterval(intervalId);
+    };
+  }, []);
 
   // ── Auth guard + Pending Navigation Resume ───────────────────────────────────
   // Uses the declarative route registry to decide if a guest may see this view.
@@ -1001,7 +1024,7 @@ export function DashboardApp() {
           if (res.status === 'confirmed') {
             registerAdd(id);
             setMyTickets(prev => {
-              if (prev.some(t => t.ev === evObj.title)) return prev;
+              if (prev.some(t => t.ev === evObj.title && t.status !== 'cancelled' && t.status !== 'rejected')) return prev;
               return [
                 {
                   id: "BL-" + Math.floor(2000 + Math.random() * 500),
@@ -1017,7 +1040,7 @@ export function DashboardApp() {
                   attendee: window.ME?.name || ME.name,
                   status: "confirmed"
                 },
-                ...prev
+                ...prev.filter(t => t.ev !== evObj.title)
               ];
             });
             if (window.toast) window.toast("Joined event successfully! 🎉", "success");
@@ -1028,7 +1051,7 @@ export function DashboardApp() {
           } else if (res.status === 'pending_payment') {
             registerAdd(id);
             setMyTickets(prev => {
-              if (prev.some(t => t.ev === evObj.title)) return prev;
+              if (prev.some(t => t.ev === evObj.title && t.status !== 'cancelled' && t.status !== 'rejected')) return prev;
               return [
                 {
                   id: "BL-" + Math.floor(2000 + Math.random() * 500),
@@ -1044,7 +1067,7 @@ export function DashboardApp() {
                   attendee: window.ME?.name || ME.name,
                   status: "pending_payment"
                 },
-                ...prev
+                ...prev.filter(t => t.ev !== evObj.title)
               ];
             });
             if (window.toast) window.toast("Booking registered! Please pay at the venue.", "info");
@@ -1085,7 +1108,7 @@ export function DashboardApp() {
         if (!isRestricted) {
           registerAdd(id);
           setMyTickets(prev => {
-            if (prev.some(t => t.ev === evObj.title)) return prev;
+            if (prev.some(t => t.ev === evObj.title && t.status !== 'cancelled' && t.status !== 'rejected')) return prev;
             return [
               {
                 id: "BL-" + Math.floor(2000 + Math.random() * 500),
@@ -1101,7 +1124,7 @@ export function DashboardApp() {
                 attendee: window.ME?.name || ME.name,
                 status: "confirmed"
               },
-              ...prev
+              ...prev.filter(t => t.ev !== evObj.title)
             ];
           });
           setTimeout(() => {
@@ -1349,6 +1372,7 @@ useEffect(() => {
 
   const renderView = () => {
     const v = cur.view;
+
     if (v === "invite") return <InviteLanding token={cur.param} go={go} />;
     if (v === "event-invite") return <EventInviteLanding token={cur.param} go={go} />;
     if (v === "event-join") return <JoinEventPage ev={cur.param} st={st} go={go} />;
@@ -1434,8 +1458,8 @@ useEffect(() => {
       />
     );
     if (v === "edit-event") return <CreateEvent editEv={cur.param} go={go} mobile={mobile} st={st} />;
-    if (v === "create-group") return <CreateGroup go={go} mobile={mobile} st={st} />;
-    if (v === "edit-group") return <CreateGroup mode="edit" editGroup={cur.param} go={go} mobile={mobile} st={st} />;
+    if (v === "create-group") return <CreateGroup key={cur.param?.id || "create"} mode={cur.param?.settings?.isDraft ? "edit" : "create"} editGroup={cur.param} go={go} mobile={mobile} st={st} />;
+    if (v === "edit-group") return <CreateGroup key={cur.param?.id || "edit"} mode="edit" editGroup={cur.param} go={go} mobile={mobile} st={st} />;
     if (v === "event-dashboard") return <EventDashboard ev={cur.param} st={st} go={go} />;
     if (v === "group-dashboard") return <GroupDashboard group={cur.param} st={st} go={go} />;
     if (v === "scan") return <ScanHub st={st} go={go} />;
@@ -1527,12 +1551,48 @@ useEffect(() => {
                   </label>
                   
                   {field.type === "text" && (
-                    <input
-                      className="cinput"
-                      placeholder={field.responseType === "paragraph" ? "Long answer..." : "Short answer..."}
-                      value={questAnswers[field.id] || ""}
-                      onChange={(e) => setQuestAnswers(prev => ({ ...prev, [field.id]: e.target.value }))}
-                    />
+                    field.responseType === "paragraph" ? (
+                      <textarea
+                        className="cinput"
+                        placeholder="Long answer..."
+                        value={questAnswers[field.id] || ""}
+                        onChange={(e) => setQuestAnswers(prev => ({ ...prev, [field.id]: e.target.value }))}
+                        style={{ minHeight: 80, padding: '12px', resize: 'vertical' }}
+                      />
+                    ) : (
+                      <input
+                        className="cinput"
+                        placeholder="Short answer..."
+                        value={questAnswers[field.id] || ""}
+                        onChange={(e) => setQuestAnswers(prev => ({ ...prev, [field.id]: e.target.value }))}
+                      />
+                    )
+                  )}
+
+                  {field.type === "yes_no" && (
+                    <div style={{ display: "flex", gap: 16 }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                        <input type="radio" name={`q-${field.id}`} checked={questAnswers[field.id] === 'Yes'} onChange={() => setQuestAnswers(prev => ({ ...prev, [field.id]: 'Yes' }))} />
+                        Yes
+                      </label>
+                      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                        <input type="radio" name={`q-${field.id}`} checked={questAnswers[field.id] === 'No'} onChange={() => setQuestAnswers(prev => ({ ...prev, [field.id]: 'No' }))} />
+                        No
+                      </label>
+                    </div>
+                  )}
+
+                  {field.type === "email" && (
+                    <input type="email" className="cinput" placeholder="Email address..." value={questAnswers[field.id] || ""} onChange={(e) => setQuestAnswers(prev => ({ ...prev, [field.id]: e.target.value }))} />
+                  )}
+                  {field.type === "phone" && (
+                    <input type="tel" className="cinput" placeholder="Phone number..." value={questAnswers[field.id] || ""} onChange={(e) => setQuestAnswers(prev => ({ ...prev, [field.id]: e.target.value }))} />
+                  )}
+                  {field.type === "date" && (
+                    <input type="date" className="cinput" value={questAnswers[field.id] || ""} onChange={(e) => setQuestAnswers(prev => ({ ...prev, [field.id]: e.target.value }))} />
+                  )}
+                  {field.type === "time" && (
+                    <input type="time" className="cinput" value={questAnswers[field.id] || ""} onChange={(e) => setQuestAnswers(prev => ({ ...prev, [field.id]: e.target.value }))} />
                   )}
 
                   {field.type === "options" && (
@@ -1655,11 +1715,32 @@ useEffect(() => {
                 onClick={() => {
                   const fields = questEvent.venue_obj?.meta?.formFields || [];
                   for (const f of fields) {
+                    const val = questAnswers[f.id];
                     if (f.required) {
-                      const val = questAnswers[f.id];
                       if (!val || (Array.isArray(val) && val.length === 0) || (typeof val === 'object' && !val.company)) {
                         if (window.toast) window.toast(`Please answer all required questions.`, "warning");
                         return;
+                      }
+                    }
+                    if (val && typeof val === 'string' && val.trim().length > 0) {
+                      if (f.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+                        if (window.toast) window.toast(`Please enter a valid email address for "${f.question}".`, "warning");
+                        return;
+                      }
+                      if (f.type === 'phone' && !/^(\+91[\s-]?)?\d{10}$/.test(val.trim())) {
+                        if (window.toast) window.toast(`Please enter a valid 10-digit phone number for "${f.question}".`, "warning");
+                        return;
+                      }
+                      if (f.type === 'date') {
+                        if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+                          if (window.toast) window.toast(`Please enter a valid date (YYYY-MM-DD) for "${f.question}".`, "warning");
+                          return;
+                        }
+                        const year = parseInt(val.split('-')[0], 10);
+                        if (year < 1900 || year > 2100) {
+                          if (window.toast) window.toast(`Please enter a realistic year for "${f.question}".`, "warning");
+                          return;
+                        }
                       }
                     }
                   }
@@ -1675,6 +1756,7 @@ useEffect(() => {
           </div>
         </div>
       )}
+      <GlobalAIAssistantWidget aiEnabled={aiFeatureEnabled && (entitlements?.ai_assistant_enabled || false)} />
     </div>
   );
 }

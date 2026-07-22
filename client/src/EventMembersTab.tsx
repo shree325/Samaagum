@@ -48,6 +48,13 @@ export function EventMembersTab({
 }: EventMembersTabProps) {
   const [memberSearch, setMemberSearch] = useState("");
   const [memberRoleFilter, setMemberRoleFilter] = useState("all");
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  const performAction = async (id: string, action: 'accept' | 'decline') => {
+    setActionLoading(id);
+    await handleHostRequestAction(id, action);
+    setActionLoading(null);
+  };
 
   const pendingRequests = hostStats?.requests || [];
   const confirmedAttendees = hostStats?.confirmed || [];
@@ -84,19 +91,21 @@ export function EventMembersTab({
                   </div>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button className="hbtn hbtn--ghost hbtn--sm"
-                      style={{ color: "#ef4444", background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: "20px", padding: "6px 16px", fontSize: 13, fontWeight: 600 }}
-                      onClick={() => handleHostRequestAction(r.bookingId, 'decline')}>
-                      Decline
+                      disabled={actionLoading === (r.id || r.bookingId)}
+                      style={{ color: "#ef4444", background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: "20px", padding: "6px 16px", fontSize: 13, fontWeight: 600, opacity: actionLoading === (r.id || r.bookingId) ? 0.5 : 1 }}
+                      onClick={() => performAction(r.id || r.bookingId, 'decline')}>
+                      {actionLoading === (r.id || r.bookingId) ? '...' : 'Decline'}
                     </button>
                     <button className="hbtn hbtn--primary hbtn--sm"
-                      style={{ background: "linear-gradient(135deg,#ff6b4a,#ff4d8d)", border: "none", borderRadius: "20px", padding: "6px 18px", fontSize: 13, fontWeight: 600, color: "#fff" }}
-                      onClick={() => handleHostRequestAction(r.bookingId, 'accept')}>
-                      Approve
+                      disabled={actionLoading === (r.id || r.bookingId)}
+                      style={{ background: "linear-gradient(135deg,#ff6b4a,#ff4d8d)", border: "none", borderRadius: "20px", padding: "6px 18px", fontSize: 13, fontWeight: 600, color: "#fff", opacity: actionLoading === (r.id || r.bookingId) ? 0.5 : 1 }}
+                      onClick={() => performAction(r.id || r.bookingId, 'accept')}>
+                      {actionLoading === (r.id || r.bookingId) ? '...' : 'Approve'}
                     </button>
                   </div>
                 </div>
                 {/* Questionnaire answers box */}
-                {r.answers && Object.keys(r.answers).length > 0 && (
+                {((r.answers && Object.keys(r.answers).length > 0) || r.transactionId) && (
                   <div style={{
                     padding: "16px",
                     background: "var(--bg-2)",
@@ -109,15 +118,43 @@ export function EventMembersTab({
                     <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                       Questionnaire Answers
                     </div>
-                    {Object.entries(r.answers).filter(([k]) => !['ticketTypeId', 'qty', 'ticketName', 'isQuestionnaireSubmit', 'registration_location'].includes(k)).map(([key, val]) => {
+                    {Object.entries(r.answers).filter(([k]) => !['ticketTypeId', 'qty', 'ticketName', 'isQuestionnaireSubmit', 'registration_location', 'transactionId', 'buyer', 'attendees', 'tickets'].includes(k)).map(([key, val]) => {
                       const label = getQuestionLabel(key);
                       return (
                         <div key={key} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                           <div style={{ fontSize: 13, color: "var(--ink-2)", fontWeight: 500 }}>Q: {label}</div>
-                          <div style={{ fontSize: 13, color: "var(--ink)", fontWeight: 600 }}>A: {String(val)}</div>
+                          <div style={{ fontSize: 13, color: "var(--ink)", fontWeight: 600 }}>
+                            {typeof val === 'string' && (val.startsWith('data:image/') || val.match(/\.(jpeg|jpg|gif|png)$/) || val.startsWith('http')) && (val.startsWith('data:image/') || val.includes('res.cloudinary') || val.includes('firebasestorage')) ? (
+                              <img src={val} alt={label} style={{ maxWidth: 200, maxHeight: 200, borderRadius: 8, marginTop: 4, objectFit: 'contain', background: '#000' }} />
+                            ) : (
+                              <>A: {String(val)}</>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
+                    {r.answers.tickets && Array.isArray(r.answers.tickets) && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 4 }}>
+                        <div style={{ fontSize: 13, color: "var(--ink-2)", fontWeight: 500 }}>Ticket Type</div>
+                        <div style={{ fontSize: 13, color: "var(--ink)", fontWeight: 600 }}>
+                          {r.answers.tickets.map((t: any, i: number) => (
+                            <div key={i}>{t.ticketName || t.ticketTypeId}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {r.transactionId && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 4, paddingTop: 12, borderTop: "1px dashed var(--border)" }}>
+                        <div style={{ fontSize: 13, color: "var(--ink-2)", fontWeight: 500 }}>Payment Proof / Transaction ID</div>
+                        <div style={{ fontSize: 13, color: "var(--ink)", fontWeight: 600 }}>
+                          {typeof r.transactionId === 'string' && (r.transactionId.startsWith('data:image/') || r.transactionId.match(/\.(jpeg|jpg|gif|png)$/) || r.transactionId.startsWith('http')) ? (
+                            <img src={r.transactionId} alt="Payment Proof" style={{ maxWidth: 200, maxHeight: 200, borderRadius: 8, marginTop: 4, objectFit: 'contain', background: '#000' }} />
+                          ) : (
+                            String(r.transactionId)
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -209,7 +246,7 @@ export function EventMembersTab({
 
                 const memberBooking = confirmedAttendees.find((c: any) => c.userId === userId);
                 const memberAnswers = memberBooking?.answers || null;
-                const hasAnswers = memberAnswers && Object.keys(memberAnswers).length > 0;
+                const hasAnswers = memberAnswers && Object.keys(memberAnswers).filter(k => !['ticketTypeId', 'qty', 'ticketName', 'isQuestionnaireSubmit', 'registration_location', 'transactionId', 'buyer', 'attendees', 'tickets'].includes(k)).length > 0;
 
                 return (
                   <div key={userId || name + i}
@@ -257,7 +294,7 @@ export function EventMembersTab({
                           Remove
                         </button>
                       )}
-                      {(isHostOrCoHost || isAdmin || isModerator) && (
+                      {(isHostOrCoHost || isAdmin || isModerator) && hasAnswers && (
                         <button
                           className="hbtn hbtn--soft hbtn--sm"
                           style={{ fontSize: 11.5, padding: "4px 10px" }}

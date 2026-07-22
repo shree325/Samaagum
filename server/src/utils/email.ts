@@ -153,7 +153,8 @@ export function generateTicketHtml({
   cover = '',
   quantity = 1,
   totalAmountMinor,
-  currency = 'INR'
+  currency = 'INR',
+  bookingIdCode
 }: {
   qrToken: string;
   ticketCode: string;
@@ -168,6 +169,7 @@ export function generateTicketHtml({
   quantity?: number;
   totalAmountMinor?: number | bigint | null;
   currency?: string;
+  bookingIdCode?: string;
 }) {
   function detectProvider(url: string) {
     if (!url) return { id: 'custom', icon: '🌐', text: 'Virtual Meeting', color: '#4b5563', bg: '#f3f4f6' };
@@ -252,7 +254,6 @@ export function generateTicketHtml({
   <div class="qr-section">
     <img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrToken)}" alt="QR Code" />
     <div class="scan-text">Show this at the gate for scanning</div>
-    <div class="token-text">Token: ${qrToken}</div>
   </div>
   `}
   <div class="divider"></div>
@@ -261,6 +262,12 @@ export function generateTicketHtml({
       <div class="label">Ticket ID</div>
       <div class="value">${ticketCode}</div>
     </div>
+    ${bookingIdCode ? `
+    <div class="row">
+      <div class="label">Booking ID</div>
+      <div class="value">${bookingIdCode}</div>
+    </div>
+    ` : ''}
     <div class="row">
       <div class="label">Attendee</div>
       <div class="value">${attendeeName}</div>

@@ -44,6 +44,20 @@ function setCached(key: string, data: any, ttlMs: number): void {
     cache.set(key, { data, expiresAt: Date.now() + ttlMs });
 }
 
+/**
+ * Removes all cache entries whose keys start with a given prefix.
+ * Called whenever a user's group membership changes (join / leave)
+ * so personalized dashboards reflect the new state immediately.
+ */
+export function invalidateUserCache(userId: string): void {
+    const prefixes = [`hero_events_${userId}`, `rec_${userId}_`];
+    for (const [key] of cache) {
+        if (prefixes.some(p => key.startsWith(p))) {
+            cache.delete(key);
+        }
+    }
+}
+
 // Coordinate distance utility (Haversine Formula)
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
     const R = 6371; // Earth radius in km
@@ -62,9 +76,15 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
     // 1. GET /hero-events
     fastify.get('/hero-events', async (request: any, reply) => {
         try {
-            const cacheKey = 'hero_events';
+            const userId = tryDecodeUserId(request);
+            const cacheKey = `hero_events_${userId || 'anon'}`;
             const cached = getCached(cacheKey);
             if (cached) return reply.send({ success: true, data: cached });
+
+            // Pre-fetch the user's group memberships once to avoid N+1 queries
+            const userGroupSet = userId
+                ? await EventService.fetchUserGroupSet(userId).catch(() => new Set<string>())
+                : new Set<string>();
 
             const sevenDaysAgo = new Date();
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -82,16 +102,18 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                 }
             });
 
-            // Filter to ensure public visibility and cover exists in venue JSON
-            let filteredEvents = recentEvents.filter(ev => {
+            // Filter to accessible events with a cover image
+            let filteredEvents: typeof recentEvents = [];
+            for (const ev of recentEvents) {
                 const venueObj = ev.venue as any;
-                const visibility = venueObj?.visibility;
                 const cover = venueObj?.meta?.cover;
-                return (!visibility || visibility === 'public') && !!cover;
-            }).slice(0, 10);
+                if (!cover) continue;
+                const allowed = await EventService.canUserAccessEvent(ev, userId, userGroupSet, true);
+                if (allowed) filteredEvents.push(ev);
+            }
 
-            // Fallback: If less than 10 events, fill with most-attended upcoming public events with cover
-            if (filteredEvents.length < 10) {
+            // Fallback: If less than 3 events, fill with most-attended upcoming accessible events
+            if (filteredEvents.length < 3) {
                 const excludedIds = filteredEvents.map(e => e.id);
                 const backupEvents = await prisma.events.findMany({
                     where: {
@@ -107,13 +129,13 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                     }
                 });
 
-                const sortedBackups = backupEvents
-                    .filter(ev => {
-                        const venueObj = ev.venue as any;
-                        const visibility = venueObj?.visibility;
-                        const cover = venueObj?.meta?.cover;
-                        return (!visibility || visibility === 'public') && !!cover;
-                    })
+                const accessibleBackups: typeof backupEvents = [];
+                for (const ev of backupEvents) {
+                    const allowed = await EventService.canUserAccessEvent(ev, userId, userGroupSet, true);
+                    if (allowed) accessibleBackups.push(ev);
+                }
+
+                const sortedBackups = accessibleBackups
                     .sort((a, b) => b.bookings.length - a.bookings.length)
                     .slice(0, 10 - filteredEvents.length);
 
@@ -121,7 +143,6 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
             }
 
             // Enrich host info, wishlist counts
-            const userId = tryDecodeUserId(request);
             const enriched = await Promise.all(filteredEvents.map(async (ev) => {
                 const hostInfo = await EventService.resolveHostInfo(ev.hosted_by_entity_id).catch(() => ({
                     hostType: null, hostName: null, hostUserId: null, hostPhoto: null
@@ -173,7 +194,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                 };
             }));
 
-            // Cache for 5 minutes
+            // Cache for 5 minutes (keyed per user so custom events don't bleed through)
             setCached(cacheKey, enriched, 5 * 60 * 1000);
             return reply.send({ success: true, data: enriched });
         } catch (e: any) {
@@ -199,6 +220,10 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
             let userGroups: string[] = [];
             let pastAttendedCategories: string[] = [];
             let userPreferredLocation = '';
+            // Pre-fetch group memberships once — used both for scoring and visibility filtering
+            const userGroupSet = userId
+                ? await EventService.fetchUserGroupSet(userId).catch(() => new Set<string>())
+                : new Set<string>();
 
             if (userId) {
                 const interests = await prisma.user_interests.findMany({
@@ -207,11 +232,8 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                 });
                 userInterests = interests.map(i => i.categories.name.toLowerCase());
 
-                const memberships = await prisma.group_memberships.findMany({
-                    where: { user_id: userId, state: 'active' },
-                    select: { group_id: true }
-                });
-                userGroups = memberships.map(m => m.group_id);
+                // userGroups array for scoring (derived from the same set to avoid double query)
+                userGroups = Array.from(userGroupSet);
 
                 const pastBookings = await prisma.bookings.findMany({
                     where: { booker_user_id: userId, status: 'confirmed' },
@@ -244,14 +266,15 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                 }
             });
 
-            // Filter to public events and calculate scores in memory
-            const scoredEvents = await Promise.all(upcomingEvents
-                .filter(ev => {
-                    const venueObj = ev.venue as any;
-                    const visibility = venueObj?.visibility;
-                    return !visibility || visibility === 'public';
-                })
-                .map(async (ev) => {
+            // ── Step 1: Filter by visibility BEFORE scoring ──────────────────────────
+            const visibleEvents: typeof upcomingEvents = [];
+            for (const ev of upcomingEvents) {
+                const allowed = await EventService.canUserAccessEvent(ev, userId, userGroupSet, true);
+                if (allowed) visibleEvents.push(ev);
+            }
+
+            // ── Step 2: Score the visibility-filtered events ─────────────────────────
+            const scoredEvents = await Promise.all(visibleEvents.map(async (ev) => {
                     const venueObj = ev.venue as any;
                     const meta = venueObj?.meta || {};
                     const evCategory = (meta.category || '').toLowerCase();
@@ -283,7 +306,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                         }
                     }
 
-                    // E. Trending (booking count in last 7 days / overall): +10
+                    // E. Trending (booking count): +10
                     if (ev.bookings.length > 10) {
                         score += 10;
                     }
@@ -346,11 +369,11 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                     };
                 }));
 
-            // Sort descending by score, apply pagination
+            // ── Step 3: Sort by score, paginate ──────────────────────────────────────
             scoredEvents.sort((a, b) => b.score - a.score);
             const paginated = scoredEvents.slice(offset, offset + size);
 
-            // Cache for 5 minutes
+            // Cache for 5 minutes (keyed per user)
             setCached(cacheKey, paginated, 5 * 60 * 1000);
             return reply.send({ success: true, data: paginated });
         } catch (e: any) {

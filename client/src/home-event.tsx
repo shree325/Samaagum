@@ -29,7 +29,7 @@ function EventDetail({ ev, st, go }) {
       ...e,
       desc: e.description || e.desc,
       cover: e.cover || meta.cover || "",
-      cat: meta.category || e.cat || "General",
+      cat: e.category || meta.category || e.cat || "General",
       type: (e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : 'Paid',
       online: e.location_type === 'online',
       month,
@@ -80,7 +80,7 @@ function EventDetail({ ev, st, go }) {
 
   const { wishlisted, toggleWishlist, registered, register, city, waitlisted } = st;
   const isSaved = wishlisted ? wishlisted.has(e.id) : false;
-  const isReg = registered.has(e.id);
+  const isReg = registered.has(e.id) && e.bookingStatus !== 'cancelled';
   const isWaitlisted = (waitlisted ? waitlisted.has(e.id) : false) || (st.joinedEvents?.some(je => je.id === e.id && je.bookingStatus === 'waitlisted') ?? false);
   const isSoldOut = e.going >= (e.cap || 9999) || e.id === "ev-feat";
 
@@ -124,9 +124,9 @@ function EventDetail({ ev, st, go }) {
   );
 
   const priceStr = e.price || "₹500";
-  const rawTiers = (e.tickets && e.tickets.length > 0)
-    ? e.tickets.filter((t: any) => !t.visibility || t.visibility === 'public')
-    : null;
+    const rawTiers = (e.tickets && e.tickets.length > 0)
+      ? e.tickets.filter((t: any) => !t.visibility || t.visibility === 'public')
+      : null;
 
   const tiers = rawTiers 
     ? rawTiers.map((t: any) => {
@@ -141,6 +141,7 @@ function EventDetail({ ev, st, go }) {
             isFull: t.isFull,
             capacity: t.capacity || null,
             remaining: t.remaining !== undefined ? t.remaining : null,
+            maxPerBooking: t.max_per_booking || null,
             desc: t.description || "",
             salesEndAt: t.sales_end_at || t.salesEndAt || null
         };
@@ -167,6 +168,8 @@ function EventDetail({ ev, st, go }) {
 
   const [showShareSheet, setShowShareSheet] = useState(false);
   const [localStatus, setLocalStatus] = useState(e.status || "published");
+  const isEnded = liveEvent.ends_at ? new Date(liveEvent.ends_at) < new Date() : (liveEvent.starts_at ? new Date(liveEvent.starts_at) < new Date() : false);
+  const displayStatus = isEnded ? 'completed' : localStatus;
 
   React.useEffect(() => {
     if (window.io && liveEvent.id && liveEvent.id !== "ev-feat") {
@@ -261,12 +264,37 @@ function EventDetail({ ev, st, go }) {
         <div className="ev-detail">
           <div className="ev-head">
             <div className="card-top">
-              <div className="tags">
-                <span className="fchip on" style={{ pointerEvents: "none" }}>{e.cat}</span>
-                <span className="fchip" style={{ pointerEvents: "none" }}>{e.online ? <><I.online style={{ width: 14, height: 14 }} /> Online</> : <><I.pin style={{ width: 14, height: 14 }} /> {e.city || city}</>}</span>
-                <span className="fchip" style={{ pointerEvents: "none" }}>{e.type}</span>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+                <div style={{
+                  width: 44, height: 44, borderRadius: 12,
+                  background: "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "22px",
+                  boxShadow: "0 4px 12px rgba(59, 130, 246, 0.2)"
+                }}>
+                  {/* 
+                    NOTE: Inline useState/useEffect causes React hook violations inside mapped items. 
+                    Categories should be fetched once in the parent component and passed down. 
+                    Using a static icon for now to prevent application crashes.
+                  */}
+                  {'📅'}
+                </div>
+                <div className="tags" style={{ margin: 0 }}>
+                  {e.cat && (
+                    <span className="fchip on" style={{ pointerEvents: "none", textTransform: 'capitalize' }}>{e.cat}</span>
+                  )}
+                  <span className="fchip" style={{ pointerEvents: "none" }}>
+                    {e.online ? <><I.online style={{ width: 14, height: 14 }} /> Online</> : <><I.pin style={{ width: 14, height: 14 }} /> {e.city || city}</>}
+                  </span>
+                  <span className="fchip" style={{ pointerEvents: "none" }}>
+                    <I.ticket style={{ width: 14, height: 14 }} /> {e.type || ((e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : (e.cash_enabled ? 'Cash' : 'Paid'))}
+                  </span>
+                </div>
               </div>
-              <div className="ttl">{e.title}</div>
+            </div>
+            <div className="ttl">{e.title}</div>
               <div 
                 className="ev-host"
                 style={{ cursor: e.hostUserId || e.hosted_by_entity_id || e.host_entity_id ? 'pointer' : 'default' }}
@@ -392,12 +420,12 @@ function EventDetail({ ev, st, go }) {
               <div className="ev-block">
                 <h3>{e.going} attending</h3>
                 <div className="att-grid">
-                  {attendees.map(n => {
+                  {attendees.map((n, index) => {
                     const name = typeof n === 'object' ? (n.name || n.display_name) : n;
                     const userId = typeof n === 'object' ? n.id : undefined;
                     const picture = typeof n === 'object' ? n.picture : undefined;
                     return (
-                      <div key={name} className="att">
+                      <div key={`${name}-${index}`} className="att">
                         <Avatar name={name} userId={userId} img={picture} size={28} />
                         <span className="nm">{name}</span>
                       </div>
@@ -406,7 +434,7 @@ function EventDetail({ ev, st, go }) {
                   <div className="att" style={{ paddingRight: 14 }}><div className="av" style={{ width: 28, height: 28, fontSize: 11, background: "var(--surface-2)", color: "var(--ink-2)" }}>+{Math.max(0, e.going - attendees.length)}</div><span className="nm">more</span></div>
                 </div>
               </div>
-              {isWaitlisted && localStatus !== 'completed' && (
+              {isWaitlisted && displayStatus !== 'completed' && (
                 <div style={{ marginTop: 20 }}>
                   <Waitlist ev={e} st={st} go={go} />
                 </div>
@@ -415,24 +443,69 @@ function EventDetail({ ev, st, go }) {
 
             {/* Ticket sidebar */}
             <div className="ev-aside">
-              <div className="ticket-box">
+              <div className="ticket-box" style={{
+                  position: 'relative',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 22,
+                  padding: '28px 24px 24px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  boxShadow: '0 2px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04)',
+              }}>
+                {/* Ticket Icon Badge */}
+                <div style={{
+                  width: 52, height: 52, borderRadius: '50%',
+                  background: 'linear-gradient(135deg, rgba(168,85,247,0.1), rgba(99,102,241,0.1))',
+                  border: '1px solid rgba(168,85,247,0.2)',
+                  boxShadow: '0 4px 12px rgba(168,85,247,0.12)',
+                  display: 'flex', justifyContent: 'center', alignItems: 'center',
+                  marginBottom: 18,
+                }}>
+                  <I.ticket style={{ width: 22, height: 22, color: '#a855f7' }} />
+                </div>
+
+                {/* Heading */}
+                <h2 style={{
+                  color: 'var(--ink)',
+                  fontSize: 22,
+                  fontWeight: 700,
+                  margin: '0 0 6px 0',
+                  textAlign: 'center',
+                  letterSpacing: '-0.3px',
+                  lineHeight: 1.2,
+                }}>Ready to Join?</h2>
+
+                {/* Subtitle */}
+                <p style={{
+                  color: 'var(--ink-3)',
+                  fontSize: 13.5,
+                  margin: '0 0 24px 0',
+                  textAlign: 'center',
+                  lineHeight: 1.5,
+                  maxWidth: 220,
+                }}>Book your tickets securely in just a few clicks.</p>
+
+                {/* Ticket type selector & quantity */}
+                <div style={{ width: '100%' }}>
                 {e.type !== "Free" && (
-                  <div style={{ marginBottom: 16, marginTop: 12 }}>
+                  <div style={{ marginBottom: 14 }}>
                     {!tier ? (
                       <button
                         className="hbtn hbtn--soft hbtn--block"
                         onClick={() => setShowTicketPopup(true)}
-                        style={{ justifyContent: 'center', fontWeight: 600, height: 46 }}
+                        style={{ justifyContent: 'center', fontWeight: 600, height: 44, borderRadius: 10 }}
                       >
                         🎟 Select Ticket
                       </button>
                     ) : (
-                      <div 
+                      <div
                         onClick={() => setShowTicketPopup(true)}
                         style={{
-                          background: 'var(--surface-2)', padding: '12px 14px', borderRadius: 8,
+                          background: 'var(--surface-2)', padding: '11px 14px', borderRadius: 10,
                           border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between',
-                          alignItems: 'center', cursor: 'pointer', transition: 'border-color 0.2s', height: 46
+                          alignItems: 'center', cursor: 'pointer', transition: 'border-color 0.2s',
                         }}
                         onMouseEnter={ev => ev.currentTarget.style.borderColor = 'var(--accent)'}
                         onMouseLeave={ev => ev.currentTarget.style.borderColor = 'var(--border)'}
@@ -446,54 +519,91 @@ function EventDetail({ ev, st, go }) {
                     )}
                   </div>
                 )}
-                <div className="ticket-foot" style={e.type === "Free" ? { paddingTop: 16 } : {}}>
+                <div className="ticket-foot" style={{ padding: 0 }}>
                   {e.type !== "Free" && (
-                    <div className="qty">
+                    <div className="qty" style={{ marginBottom: 16 }}>
                       <span className="lbl">Quantity</span>
                       <div className="stepper">
                         <button onClick={() => setQty(q => Math.max(1, q - 1))}>–</button>
                         <span className="n">{qty}</span>
-                        <button onClick={() => setQty(q => Math.min(6, q + 1))}>+</button>
+                        <button onClick={() => setQty(q => Math.min(sel?.maxPerBooking || 10, q + 1))}>+</button>
                       </div>
                     </div>
                   )}
-                   {localStatus === 'completed' && (
-                <div style={{ padding: 12, background: "rgba(34, 197, 94, 0.1)", color: "var(--accent-1)", border: "1px solid rgba(34, 197, 94, 0.2)", borderRadius: 8, marginTop: 16, textAlign: "center", fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                  <I.cal /> EVENT COMPLETED
-                </div>
-              )}
-              {localStatus !== 'completed' && (
-                isReg || e.bookingStatus === 'confirmed' || e.bookingStatus === 'pending_payment' ? (
-                  <button className="hbtn hbtn--ghost hbtn--block" style={{ color: "var(--accent-2)" }} onClick={() => go("events")}>
-                    <I.check />You're registered (View Ticket)
-                  </button>
-                ) : e.bookingStatus === 'pending_approval' ? (
-                  <button className="hbtn hbtn--soft hbtn--block" disabled>
-                    Pending Approval
-                  </button>
-                ) : isSoldOut ? (
-                  isWaitlisted ? (
-                    <button className="hbtn hbtn--soft hbtn--block" style={{ color: "var(--accent-2)" }} onClick={() => go("waitlist", e)}>
-                      <I.users /> View Waitlist Status
-                    </button>
-                  ) : (
-                    <button className="hbtn hbtn--primary hbtn--block" onClick={() => { st.toggleWaitlist(e.id); go("waitlist", e); }}>
-                      Join Waitlist
-                    </button>
-                  )
-                ) : (
-                  <button 
-                    className="hbtn hbtn--primary hbtn--block" 
-                    disabled={e.type !== "Free" && !tier}
-                    onClick={() => { register(e.id, false, { ticketTypeId: tier, qty, ticketName: sel?.n }); go("events"); }}
-                  >
-                    {e.type === "Free" ? "Request to join" : `Get ${qty > 1 ? qty + " tickets" : "ticket"}`}
-                  </button>
-                )
-              )}
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center", marginTop: 11, fontSize: 12, color: "var(--ink-3)" }}>
-                    <I.check style={{ width: 13, height: 13, color: "#1f9d57" }} /> {isSoldOut ? "Waitlist claim window: 15 mins" : e.type === "Free" ? "Approval-based · free" : "Secure checkout · instant ticket"}
+                  {displayStatus === 'completed' && (
+                    <div style={{ padding: 12, background: "rgba(34,197,94,0.1)", color: "var(--accent-1)", border: "1px solid rgba(34,197,94,0.2)", borderRadius: 10, textAlign: "center", fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                      <I.cal /> EVENT IS ENDED
+                    </div>
+                  )}
+                  {displayStatus !== 'completed' && (
+                    isReg || e.bookingStatus === 'confirmed' ? (
+                      <button className="hbtn hbtn--ghost hbtn--block" style={{ color: "var(--accent-2)", borderRadius: 14 }} onClick={() => go("events")}>
+                        <I.check />You're registered (View Ticket)
+                      </button>
+                    ) : e.bookingStatus === 'pending_payment' ? (
+                      <button className="hbtn hbtn--soft hbtn--block" disabled style={{ borderRadius: 14 }}>
+                        Pending Approval
+                      </button>
+                    ) : e.bookingStatus === 'pending_approval' ? (
+                      <button className="hbtn hbtn--soft hbtn--block" disabled style={{ borderRadius: 14 }}>
+                        Pending Approval
+                      </button>
+                    ) : isSoldOut ? (
+                      isWaitlisted ? (
+                        <button className="hbtn hbtn--soft hbtn--block" style={{ color: "var(--accent-2)", borderRadius: 14 }} onClick={() => go("waitlist", e)}>
+                          <I.users /> View Waitlist Status
+                        </button>
+                      ) : (
+                        <button className="hbtn hbtn--primary hbtn--block" style={{ borderRadius: 14 }} onClick={() => { st.toggleWaitlist(e.id); go("waitlist", e); }}>
+                          Join Waitlist
+                        </button>
+                      )
+                    ) : (
+                      <button
+                        disabled={e.type !== "Free" && !tier}
+                        onClick={() => { register(e.id, false, { ticketTypeId: tier, qty, ticketName: sel?.n }); go("events"); }}
+                        style={{
+                          width: '100%',
+                          background: (e.type !== "Free" && !tier) ? 'var(--surface-3)' : 'linear-gradient(90deg, #FF7A6B 0%, #D95CF5 50%, #6B63FF 100%)',
+                          border: 'none',
+                          borderRadius: 16,
+                          height: 54,
+                          fontSize: 15.5,
+                          fontWeight: 600,
+                          color: '#fff',
+                          cursor: (e.type !== "Free" && !tier) ? 'not-allowed' : 'pointer',
+                          opacity: (e.type !== "Free" && !tier) ? 0.5 : 1,
+                          boxShadow: (e.type !== "Free" && !tier) ? 'none' : '0 4px 20px rgba(169, 92, 245, 0.35)',
+                          transition: 'transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 8,
+                          letterSpacing: '-0.1px',
+                        }}
+                        onMouseEnter={ev => {
+                          if (e.type !== "Free" && !tier) return;
+                          ev.currentTarget.style.transform = 'translateY(-2px)';
+                          ev.currentTarget.style.boxShadow = '0 8px 28px rgba(169, 92, 245, 0.45)';
+                        }}
+                        onMouseLeave={ev => {
+                          if (e.type !== "Free" && !tier) return;
+                          ev.currentTarget.style.transform = 'translateY(0)';
+                          ev.currentTarget.style.boxShadow = '0 4px 20px rgba(169, 92, 245, 0.35)';
+                        }}
+                      >
+                        {e.type === "Free" ? "Request to join" : `Get ${qty > 1 ? qty + " tickets" : "ticket"}`}
+                        {e.type !== "Free" && tier && (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                        )}
+                      </button>
+                    )
+                  )}
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, justifyContent: "center", marginTop: 14, fontSize: 11.5, color: "var(--ink-3)" }}>
+                    <I.check style={{ width: 12, height: 12, color: "var(--accent-1)" }} />
+                    {isSoldOut ? "Waitlist claim window: 15 mins" : e.type === "Free" ? "Approval-based · free" : "Secure checkout · instant ticket"}
                   </div>
+                </div>
                 </div>
               </div>
 
@@ -527,6 +637,7 @@ function EventDetail({ ev, st, go }) {
                           onClick={() => {
                             if (!t.isFull) {
                               setTier(t.id);
+                              setQty(q => t.maxPerBooking ? Math.min(q, t.maxPerBooking) : q);
                               setShowTicketPopup(false);
                             }
                           }}
@@ -596,13 +707,11 @@ function EventDetail({ ev, st, go }) {
               <div className="host-card">
                  <div className="hh"><Avatar name={e.hostBy || e.host} userId={e.hostUserId} img={e.hostPhoto} size={46} /><div><div className="n">{e.host}</div><div className="r">Organizer · 24 events</div></div></div>
                 <div className="hb">Curating the best gatherings in {e.city || city}. Follow to never miss a drop.</div>
-
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
   );
 }
 

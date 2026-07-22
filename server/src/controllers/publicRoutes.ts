@@ -9,6 +9,24 @@ import prisma from '../config/prisma';
 import { locationService } from '../services/locationService';
 import { EventService } from '../services/EventService';
 
+// Best-effort JWT decode helper — mirrors the one in dashboardRoutes.ts
+function tryDecodeUserId(request: any): string | undefined {
+  const authHeader = request.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return undefined;
+  try {
+    const token = authHeader.substring(7);
+    const parts = token.split('.');
+    if (parts.length !== 3) return undefined;
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+    const uid = payload?.id;
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (uid && UUID_REGEX.test(uid)) return uid;
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export const publicRoutes = async (fastify: FastifyInstance) => {
   const categoryRepo = new R_categories();
   const cityRepo = new R_cityControls();
@@ -200,7 +218,7 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
     }
   });
 
-  // Global search for public events and groups
+  // Global search for public + eligible events and groups
   fastify.get('/global-search', async (request: any, reply: any) => {
     try {
       const { q } = request.query;
@@ -209,7 +227,14 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
       }
       const searchStr = q.trim().toLowerCase();
 
-      // Search public events
+      // Resolve authenticated user (if a token is present)
+      const userId = tryDecodeUserId(request);
+      // Pre-fetch group memberships once to avoid N+1 queries across event visibility checks
+      const userGroupSet = userId
+        ? await EventService.fetchUserGroupSet(userId).catch(() => new Set<string>())
+        : new Set<string>();
+
+      // Search published events matching the query
       const allEvents = await prisma.events.findMany({
         where: {
           status: 'published',
@@ -217,11 +242,16 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
         },
         take: 20
       });
-      const publicEvents = allEvents.filter((ev: any) => {
-        const venue = ev.venue ? (typeof ev.venue === 'string' ? JSON.parse(ev.venue) : ev.venue) : {};
-        const visibility = venue.visibility || 'public';
-        return visibility === 'public';
-      }).slice(0, 5);
+
+      // Filter by visibility: authenticated users see events they are eligible for.
+      // discoveryMode=true skips the booking bypass — leaving a group removes
+      // that group's events from search results immediately.
+      const eligibleEvents: typeof allEvents = [];
+      for (const ev of allEvents) {
+        const allowed = await EventService.canUserAccessEvent(ev, userId, userGroupSet, true);
+        if (allowed) eligibleEvents.push(ev);
+      }
+      const publicEvents = eligibleEvents.slice(0, 5);
 
       const enrichedEvents = await Promise.all(publicEvents.map(async (e: any) => {
         const attendeeCount = await prisma.attendees.count({
@@ -552,7 +582,7 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
         data: {
           id: user.id,
           user_id: user.id,
-          displayName: [user.first_name, user.last_name].filter(Boolean).join(' ') || profile?.display_name || '',
+          displayName: [user.first_name, user.last_name].filter(Boolean).join(' ') || profile?.display_name || profile?.user_name || user.primary_email?.split('@')[0] || 'User',
           headline: finalHeadline,
           bio: finalBio,
           email: finalEmail,

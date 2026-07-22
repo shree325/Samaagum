@@ -4,7 +4,7 @@ import { VirtualCard } from './VirtualCard';
 import { authHeaders } from './home-notifications';
 import { Profile } from './home-profile';
 import { apiBase } from './home-subscription';
-import { I } from './home-icons';
+import { I, Avatar } from './home-icons';
 
 /**
  * public-profile.tsx
@@ -504,35 +504,38 @@ export function PublicProfile({ profile, go, socket }) {
           <div style={{ flex: 1, minHeight: "18vh" }} />
 
           {/* User Info (overlaid on cover) */}
-          <div style={{ padding: "0 40px 32px 40px", maxWidth: 880, margin: "0 auto", width: "100%", display: "flex", alignItems: "flex-end", gap: 24 }}>
-            <div style={{ position: "relative", zIndex: 2 }}>
-              <div style={{ width: 116, height: 116, borderRadius: "50%", border: `4px solid ${colors.bgContainer}`, overflow: "hidden", background: "var(--bg-1)", boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }}>
-                {p.profilePhoto ? (
-                  <img src={p.profilePhoto} alt={p.displayName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                ) : (
-                  <div style={{ width: "100%", height: "100%", background: "var(--bg-3)", color: "var(--ink-3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <User className="w-12 h-12 text-gray-400" />
-                  </div>
-                )}
+          {(() => {
+            const displayName = p.displayName || p.display_name || p.userName || p.user_name || p.email?.split('@')[0] || 'User';
+            return (
+              <div style={{ padding: "0 40px 32px 40px", maxWidth: 880, margin: "0 auto", width: "100%", display: "flex", alignItems: "flex-end", gap: 24 }}>
+                <div style={{ position: "relative", zIndex: 2 }}>
+                  <Avatar 
+                    userId={targetId}
+                    name={displayName}
+                    img={p.profilePhoto}
+                    size={108}
+                    style={{ borderRadius: "50%", border: `4px solid ${colors.bgContainer}`, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" }}
+                  />
+                </div>
+                <div style={{ flex: 1, paddingBottom: 8 }}>
+                  <h1 style={{ fontSize: 38, fontWeight: 800, color: colors.textMain, letterSpacing: "-0.5px", margin: 0, textShadow: isDark ? "0 2px 12px rgba(0,0,0,0.4)" : "none" }}>
+                    {displayName}
+                  </h1>
+                  {p.headline && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, color: isDark ? "rgba(255,255,255,0.85)" : colors.textSub, fontSize: 16, fontWeight: 500, textShadow: isDark ? "0 1px 4px rgba(0,0,0,0.3)" : "none" }}>
+                      {p.headline}
+                    </div>
+                  )}
+                  {p.location && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, color: isDark ? "rgba(255,255,255,0.85)" : colors.textSub, fontSize: 16, fontWeight: 500, textShadow: isDark ? "0 1px 4px rgba(0,0,0,0.3)" : "none" }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                      {p.location}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-            <div style={{ flex: 1, paddingBottom: 8 }}>
-              <h1 style={{ fontSize: 38, fontWeight: 800, color: colors.textMain, letterSpacing: "-0.5px", margin: 0, textShadow: isDark ? "0 2px 12px rgba(0,0,0,0.4)" : "none" }}>
-                {p.displayName}
-              </h1>
-              {p.headline && (
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, color: isDark ? "rgba(255,255,255,0.85)" : colors.textSub, fontSize: 16, fontWeight: 500, textShadow: isDark ? "0 1px 4px rgba(0,0,0,0.3)" : "none" }}>
-                  {p.headline}
-                </div>
-              )}
-              {p.location && (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, color: isDark ? "rgba(255,255,255,0.85)" : colors.textSub, fontSize: 16, fontWeight: 500, textShadow: isDark ? "0 1px 4px rgba(0,0,0,0.3)" : "none" }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                  {p.location}
-                </div>
-              )}
-            </div>
-          </div>
+            );
+          })()}
 
           {/* Bottom Card */}
           <div style={{ background: colors.cardBg, borderTopLeftRadius: 40, borderTopRightRadius: 40, padding: "40px 24px 100px 24px", flex: 1, display: "flex", flexDirection: "column", boxShadow: colors.cardShadow, transition: "background 0.3s ease" }}>

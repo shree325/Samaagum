@@ -72,7 +72,25 @@ export function EventHeaderSection({
             fontSize: "28px",
             boxShadow: "0 8px 24px rgba(59, 130, 246, 0.25)"
           }}>
-            📅
+            {(() => {
+              // We'll dynamically resolve this using state or props
+              const [categories, setCategories] = React.useState<any[]>([]);
+              React.useEffect(() => {
+                const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
+                fetch(`${apiBase}/api/public/categories`)
+                  .then(r => r.json())
+                  .then(res => {
+                    if (res.success && res.data) {
+                      setCategories(res.data);
+                    }
+                  })
+                  .catch(() => {});
+              }, []);
+              
+              const catName = e.category || e.cat || '';
+              const matched = categories.find(c => c.name?.toLowerCase() === catName.toLowerCase());
+              return matched?.icon_value || '📅';
+            })()}
           </div>
 
           <div className="gh-meta">
@@ -86,11 +104,13 @@ export function EventHeaderSection({
                 {e.online ? "Online" : "In-person"}
               </span>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                🎫 {e.price}
+                🎫 {e.type || ((e.registration_mode === 'free' || e.registration_mode === 'free_rsvp') ? 'Free' : (e.cash_enabled ? 'Cash' : 'Paid'))}
               </span>
-              <span className="fchip on" style={{ pointerEvents: "none", padding: "4px 11px", fontSize: 12 }}>
-                {e.cat || "Event"}
-              </span>
+              {(e.category || e.cat) && (
+                <span className="fchip on" style={{ pointerEvents: "none", padding: "4px 11px", fontSize: 12, textTransform: 'capitalize' }}>
+                  {e.category || e.cat}
+                </span>
+              )}
               {e.hostName && (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                   <I.users /> Hosted by {e.hostName}{e.hostType === 'group' ? ' (Group)' : ''}

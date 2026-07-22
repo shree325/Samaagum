@@ -161,79 +161,97 @@ function CommentItem({ c, depth, canReply, isOwner, currentUserId, replyingToId,
   const isReplying = replyingToId === c.id;
   const replies = c.replies || [];
   return (
-    <div style={{ display: "flex", gap: 10, paddingLeft: depth > 0 ? 18 : 0, borderLeft: depth > 0 ? "2px solid var(--border)" : "none", marginTop: depth > 0 ? 10 : 0 }}>
-      <Avatar name={c.author_name || "Unknown"} userId={c.author_user_id} img={c.author_photo} size={28} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-          <div style={{ fontSize: 13 }}>
-            <span style={{ fontWeight: 600 }}>{c.author_name || "Unknown"}</span>
-            <span style={{ color: "var(--ink-3)", marginLeft: 6 }}>@{c.author_username || "unknown"}</span>
-            <span style={{ color: "var(--ink-3)", marginLeft: 8 }}>· {timeStr}</span>
-          </div>
-          <div style={{ display: "flex", gap: 4 }}>
-            {c.author_user_id === currentUserId && canEdit && canEdit(c.created_at) && (
-              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => onEditStart(c)} title="Edit" style={{ color: "var(--ink-3)", padding: "2px 6px" }}>
-                <I.edit style={{ width: 11, height: 11 }} />
-              </button>
-            )}
-            {(isOwner || c.author_user_id === currentUserId) && (
-              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => onDelete(c.id)} title="Delete" style={{ color: "var(--ink-3)", padding: "2px 6px" }}>
-                <I.trash style={{ width: 11, height: 11 }} />
-              </button>
-            )}
-          </div>
-        </div>
-        {editingCommentId === c.id ? (
-          <div style={{ marginBottom: 8 }}>
-            <textarea
-              autoFocus
-              value={editCommentDraft}
-              onChange={e => onEditChange(e.target.value)}
-              rows={2}
-              style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 14, fontFamily: "inherit", resize: "none", outline: "none", background: "var(--surface)", color: "var(--ink)", boxSizing: "border-box" }}
-            />
-            <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", marginTop: 4 }}>
-              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => onEditCancel(c.id)}>Cancel</button>
-              <button className="hbtn hbtn--primary hbtn--sm" onClick={() => onEditSubmit(c.id)}>Save</button>
-            </div>
-          </div>
-        ) : (
-          <div style={{ fontSize: 14, lineHeight: 1.6, color: "var(--ink)", whiteSpace: "pre-wrap", wordBreak: "break-word", marginBottom: 8 }}>{c.body}</div>
-        )}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <button onClick={() => onVote(c.id, userVote === 1 ? 0 : 1)} style={{ background: "none", border: "none", cursor: "pointer", fontWeight: 800, color: userVote === 1 ? "var(--accent-2)" : "var(--ink-3)", padding: "1px 4px", fontSize: 12 }}>▲</button>
-            <span style={{ fontWeight: 600, color: "var(--ink-2)", minWidth: 16, textAlign: "center" }}>{score}</span>
-            <button onClick={() => onVote(c.id, userVote === -1 ? 0 : -1)} style={{ background: "none", border: "none", cursor: "pointer", fontWeight: 800, color: userVote === -1 ? "#e74c3c" : "var(--ink-3)", padding: "1px 4px", fontSize: 12 }}>▼</button>
-          </div>
-          {canReply && depth < 4 && (
-            <button onClick={() => isReplying ? onCancelReply() : onStartReply(c.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", fontSize: 12, display: "flex", alignItems: "center", gap: 3, padding: "2px 4px", borderRadius: 4 }}>
-              <I.reply style={{ width: 11, height: 11 }} /> {isReplying ? "Cancel" : "Reply"}
-            </button>
+    <div style={{ marginTop: depth > 0 ? 12 : 16 }}>
+      <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 28, flexShrink: 0 }}>
+          <Avatar name={c.author_name || "Unknown"} userId={c.author_user_id} img={c.author_photo} size={28} />
+          {(replies.length > 0 || isReplying) && (
+            <div style={{ 
+              width: 2, 
+              flex: 1, 
+              backgroundColor: 'var(--border)', 
+              marginTop: 8, 
+              marginBottom: 4, 
+              borderRadius: 2 
+            }} />
           )}
         </div>
-        {isReplying && (
-          <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
-            <Avatar name="Me" size={24} />
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
-              <textarea
-                autoFocus
-                placeholder="Write a reply…"
-                value={inlineReplyDraft}
-                onChange={e => onInlineReplyChange(e.target.value)}
-                rows={2}
-                style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 13, fontFamily: "inherit", resize: "none", outline: "none", background: "var(--surface)", color: "var(--ink)", boxSizing: "border-box" }}
-              />
-              <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                <button className="hbtn hbtn--ghost hbtn--sm" onClick={onCancelReply}>Cancel</button>
-                <button className="hbtn hbtn--primary hbtn--sm" disabled={!inlineReplyDraft.trim() || submittingInlineReply} onClick={() => onSubmitInlineReply(c.id)}>{submittingInlineReply ? "Posting…" : "Reply"}</button>
-              </div>
+        <div style={{ flex: 1, minWidth: 0, paddingBottom: 4 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+            <div style={{ fontSize: 13 }}>
+              <span style={{ fontWeight: 600 }}>{c.author_name || "Unknown"}</span>
+              <span style={{ color: "var(--ink-3)", marginLeft: 6 }}>@{c.author_username || "unknown"}</span>
+              <span style={{ color: "var(--ink-3)", marginLeft: 8 }}>· {timeStr}</span>
+            </div>
+            <div style={{ display: "flex", gap: 4 }}>
+              {c.author_user_id === currentUserId && canEdit && canEdit(c.created_at) && (
+                <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => onEditStart(c)} title="Edit" style={{ color: "var(--ink-3)", padding: "2px 6px" }}>
+                  <I.edit style={{ width: 11, height: 11 }} />
+                </button>
+              )}
+              {(isOwner || c.author_user_id === currentUserId) && (
+                <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => onDelete(c.id)} title="Delete" style={{ color: "var(--ink-3)", padding: "2px 6px" }}>
+                  <I.trash style={{ width: 11, height: 11 }} />
+                </button>
+              )}
             </div>
           </div>
-        )}
-        {replies.map(r => (
-          <CommentItem key={r.id} c={r} depth={depth + 1} canReply={canReply} isOwner={isOwner} currentUserId={currentUserId} replyingToId={replyingToId} inlineReplyDraft={inlineReplyDraft} submittingInlineReply={submittingInlineReply} commentVotes={commentVotes} onVote={onVote} onDelete={onDelete} onStartReply={onStartReply} onCancelReply={onCancelReply} onInlineReplyChange={onInlineReplyChange} onSubmitInlineReply={onSubmitInlineReply} canEdit={canEdit} editingCommentId={editingCommentId} editCommentDraft={editCommentDraft} onEditStart={onEditStart} onEditCancel={onEditCancel} onEditChange={onEditChange} onEditSubmit={onEditSubmit} />
-        ))}
+          {editingCommentId === c.id ? (
+            <div style={{ marginBottom: 8 }}>
+              <textarea
+                autoFocus
+                value={editCommentDraft}
+                onChange={e => onEditChange(e.target.value)}
+                rows={2}
+                style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 14, fontFamily: "inherit", resize: "none", outline: "none", background: "var(--surface)", color: "var(--ink)", boxSizing: "border-box" }}
+              />
+              <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", marginTop: 4 }}>
+                <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => onEditCancel(c.id)}>Cancel</button>
+                <button className="hbtn hbtn--primary hbtn--sm" onClick={() => onEditSubmit(c.id)}>Save</button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ fontSize: 14, lineHeight: 1.6, color: "var(--ink)", whiteSpace: "pre-wrap", wordBreak: "break-word", marginBottom: 8 }}>{c.body}</div>
+          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <button onClick={() => onVote(c.id, userVote === 1 ? 0 : 1)} style={{ background: "none", border: "none", cursor: "pointer", fontWeight: 800, color: userVote === 1 ? "var(--accent-2)" : "var(--ink-3)", padding: "1px 4px", fontSize: 12 }}>▲</button>
+              <span style={{ fontWeight: 600, color: "var(--ink-2)", minWidth: 16, textAlign: "center" }}>{score}</span>
+              <button onClick={() => onVote(c.id, userVote === -1 ? 0 : -1)} style={{ background: "none", border: "none", cursor: "pointer", fontWeight: 800, color: userVote === -1 ? "#e74c3c" : "var(--ink-3)", padding: "1px 4px", fontSize: 12 }}>▼</button>
+            </div>
+            {canReply && depth < 4 && (
+              <button onClick={() => isReplying ? onCancelReply() : onStartReply(c.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", fontSize: 12, display: "flex", alignItems: "center", gap: 3, padding: "2px 4px", borderRadius: 4 }}>
+                <I.reply style={{ width: 11, height: 11 }} /> {isReplying ? "Cancel" : "Reply"}
+              </button>
+            )}
+          </div>
+          {isReplying && (
+            <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+              <Avatar name="Me" size={24} />
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+                <textarea
+                  autoFocus
+                  placeholder="Write a reply…"
+                  value={inlineReplyDraft}
+                  onChange={e => onInlineReplyChange(e.target.value)}
+                  rows={2}
+                  style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: "1px solid var(--border)", fontSize: 13, fontFamily: "inherit", resize: "none", outline: "none", background: "var(--surface)", color: "var(--ink)", boxSizing: "border-box" }}
+                />
+                <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                  <button className="hbtn hbtn--ghost hbtn--sm" onClick={onCancelReply}>Cancel</button>
+                  <button className="hbtn hbtn--primary hbtn--sm" disabled={!inlineReplyDraft.trim() || submittingInlineReply} onClick={() => onSubmitInlineReply(c.id)}>{submittingInlineReply ? "Posting…" : "Reply"}</button>
+                </div>
+              </div>
+            </div>
+          )}
+          {replies.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {replies.map(r => (
+                <CommentItem key={r.id} c={r} depth={depth + 1} canReply={canReply} isOwner={isOwner} currentUserId={currentUserId} replyingToId={replyingToId} inlineReplyDraft={inlineReplyDraft} submittingInlineReply={submittingInlineReply} commentVotes={commentVotes} onVote={onVote} onDelete={onDelete} onStartReply={onStartReply} onCancelReply={onCancelReply} onInlineReplyChange={onInlineReplyChange} onSubmitInlineReply={onSubmitInlineReply} canEdit={canEdit} editingCommentId={editingCommentId} editCommentDraft={editCommentDraft} onEditStart={onEditStart} onEditCancel={onEditCancel} onEditChange={onEditChange} onEditSubmit={onEditSubmit} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -968,13 +986,21 @@ function DiscussionPanel({ entityType, entityId, token, currentUserId, isOwner, 
           </button>
 
           <div className={`post ${activeThread.pinned ? "pinned" : ""}`}>
-            <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-              <VoteWidget
-                score={atVoteScore}
-                userVote={atUserVote}
-                onUpvote={() => handleVoteThread(activeThread.id, atUserVote === 1 ? 0 : 1)}
-                onDownvote={() => handleVoteThread(activeThread.id, atUserVote === -1 ? 0 : -1)}
-              />
+            <div style={{ display: "flex", gap: 12, alignItems: "stretch" }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 36, flexShrink: 0 }}>
+                <Avatar name={activeThread.author_name || "Unknown"} userId={activeThread.author_user_id} img={activeThread.author_photo} size={36} />
+                {((activeThread.comments || []).length > 0 || (canReply && !activeThread.locked)) && (
+                  <div style={{ 
+                    width: 2, 
+                    flex: 1, 
+                    backgroundColor: 'var(--border)', 
+                    marginTop: 8, 
+                    marginBottom: 4, 
+                    borderRadius: 2 
+                  }} />
+                )}
+              </div>
+
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
                   {activeThread.pinned && <span style={{ fontSize: 11, fontWeight: 600, color: "var(--accent-2)", display: "flex", alignItems: "center", gap: 3 }}><I.bookmarkF style={{ width: 10, height: 10 }} />Pinned</span>}
@@ -984,7 +1010,6 @@ function DiscussionPanel({ entityType, entityId, token, currentUserId, isOwner, 
                 </div>
                 {activeThread.title && <h2 style={{ margin: "0 0 8px 0", fontSize: 20, fontWeight: 700, lineHeight: 1.3 }}>{activeThread.title}</h2>}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--ink-3)", marginBottom: 12 }}>
-                  <Avatar name={activeThread.author_name || "Unknown"} userId={activeThread.author_user_id} img={activeThread.author_photo} size={22} />
                   <span style={{ fontWeight: 500, color: "var(--ink-2)" }}>{activeThread.author_name || "Unknown"}</span>
                   <span>·</span>
                   <span>{activeThread.created_at ? getRelativeTime(activeThread.created_at) : 'Just now'}</span>
@@ -1007,9 +1032,18 @@ function DiscussionPanel({ entityType, entityId, token, currentUserId, isOwner, 
                 ) : (
                   activeThread.body && <div className="pbody" style={{ marginBottom: 12 }}>{activeThread.body}</div>
                 )}
-                <EmojiBar counts={atReactions} onReact={emoji => handleReactThread(activeThread.id, emoji)} />
+
+                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                    <button onClick={() => handleVoteThread(activeThread.id, atUserVote === 1 ? 0 : 1)} style={{ background: "none", border: "none", cursor: "pointer", fontWeight: 800, color: atUserVote === 1 ? "var(--accent-2)" : "var(--ink-3)", padding: "4px 6px", fontSize: 14 }}>▲</button>
+                    <span style={{ fontWeight: 600, color: "var(--ink-2)", minWidth: 16, textAlign: "center" }}>{atVoteScore}</span>
+                    <button onClick={() => handleVoteThread(activeThread.id, atUserVote === -1 ? 0 : -1)} style={{ background: "none", border: "none", cursor: "pointer", fontWeight: 800, color: atUserVote === -1 ? "#e74c3c" : "var(--ink-3)", padding: "4px 6px", fontSize: 14 }}>▼</button>
+                  </div>
+                  <EmojiBar counts={atReactions} onReact={emoji => handleReactThread(activeThread.id, emoji)} />
+                </div>
+
                 {isOwner && (
-                  <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
                     <button className="hbtn hbtn--ghost hbtn--sm" onClick={async () => {
                       const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
                       const r = await fetch(`${apiBase}${apiPathBase}/posts/${activeThread.id}/pin`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }, body: JSON.stringify({ pinned: !activeThread.pinned }) });
@@ -1028,7 +1062,7 @@ function DiscussionPanel({ entityType, entityId, token, currentUserId, isOwner, 
                   </div>
                 )}
                 {(isOwner || activeThread.author_user_id === currentUserId) && (
-                  <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+                  <div style={{ marginBottom: 12, display: "flex", gap: 8 }}>
                     {canEdit(activeThread.created_at) && activeThread.author_user_id === currentUserId && (
                       <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => { setEditingPostId(activeThread.id); setEditPostDraft(activeThread.body); }}>
                         <I.edit style={{ width: 13, height: 13 }} /> Edit thread
@@ -1039,57 +1073,62 @@ function DiscussionPanel({ entityType, entityId, token, currentUserId, isOwner, 
                     </button>
                   </div>
                 )}
-              </div>
-            </div>
-          </div>
 
-          <div style={{ fontWeight: 600, fontSize: 15, borderBottom: "1px solid var(--border)", paddingBottom: 10 }}>
-            {loadingThread ? "Loading replies…" : `${(activeThread.comments || []).length} ${(activeThread.comments || []).length === 1 ? 'Reply' : 'Replies'}`}
-          </div>
-
-          {loadingThread && (
-            <div style={{ textAlign: "center", padding: "24px 0", color: "var(--ink-3)" }}>
-              <div className="spinner" style={{ margin: "0 auto" }} />
-            </div>
-          )}
-
-          {!loadingThread && (activeThread.comments || []).length === 0 && (
-            <div style={{ textAlign: "center", padding: "32px 20px", color: "var(--ink-3)", background: "var(--surface)", borderRadius: "var(--r-md)", border: "1px dashed var(--border)" }}>
-              <p style={{ margin: 0, fontSize: 14 }}>{canReply && !activeThread.locked ? "Be the first to reply!" : "No replies yet."}</p>
-            </div>
-          )}
-
-          {!loadingThread && (activeThread.comments || []).map(c => (
-            <div key={c.id} style={{ padding: "14px 16px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)" }}>
-              <CommentItem c={c} depth={0} canReply={canReply && !activeThread.locked} isOwner={isOwner} currentUserId={currentUserId} replyingToId={replyingToId} inlineReplyDraft={inlineReplyDraft} submittingInlineReply={submittingInlineReply} commentVotes={commentVotes} onVote={handleVoteComment} onDelete={handleDeleteComment} onStartReply={handleStartReply} onCancelReply={handleCancelReply} onInlineReplyChange={setInlineReplyDraft} onSubmitInlineReply={handleSubmitInlineReply} canEdit={canEdit} editingCommentId={editingCommentId} editCommentDraft={editCommentDraft} onEditStart={(c) => { setEditingCommentId(c.id); setEditCommentDraft(c.body); }} onEditCancel={() => { setEditingCommentId(null); setEditCommentDraft(""); }} onEditChange={v => setEditCommentDraft(v)} onEditSubmit={handleEditComment} />
-            </div>
-          ))}
-
-          {canReply && !activeThread.locked && (
-            <div className="composer">
-              <Avatar name={ME.name} img={ME.img} size={36} />
-              <div className="ci">
-                <textarea placeholder="Write a reply…" value={replyDraft} onChange={e => setReplyDraft(e.target.value)} rows={replyDraft ? 3 : 1} />
-                <div className="cbar">
-                  <button className="hbtn hbtn--primary hbtn--sm" style={{ marginLeft: "auto" }} disabled={!replyDraft.trim() || submittingReply} onClick={handleSubmitReply}>
-                    {submittingReply ? 'Posting…' : 'Reply'}
-                  </button>
+                <div style={{ fontWeight: 600, fontSize: 13, color: "var(--ink-3)", marginTop: 16, marginBottom: 16 }}>
+                  {loadingThread ? "Loading replies…" : `${(activeThread.comments || []).length} ${(activeThread.comments || []).length === 1 ? 'reply' : 'replies'}`}
                 </div>
+
+                {loadingThread && (
+                  <div style={{ textAlign: "center", padding: "16px 0", color: "var(--ink-3)" }}>
+                    <div className="spinner" style={{ margin: "0 auto" }} />
+                  </div>
+                )}
+
+                {!loadingThread && (activeThread.comments || []).length === 0 && (
+                  <div style={{ textAlign: "center", padding: "32px 20px", color: "var(--ink-3)", background: "var(--surface)", borderRadius: "var(--r-md)", border: "1px dashed var(--border)" }}>
+                    <p style={{ margin: 0, fontSize: 14 }}>{canReply && !activeThread.locked ? "Be the first to reply!" : "No replies yet."}</p>
+                  </div>
+                )}
+
+                {!loadingThread && (activeThread.comments || []).map(c => (
+                  <CommentItem key={c.id} c={c} depth={0} canReply={canReply && !activeThread.locked} isOwner={isOwner} currentUserId={currentUserId} replyingToId={replyingToId} inlineReplyDraft={inlineReplyDraft} submittingInlineReply={submittingInlineReply} commentVotes={commentVotes} onVote={handleVoteComment} onDelete={handleDeleteComment} onStartReply={handleStartReply} onCancelReply={handleCancelReply} onInlineReplyChange={setInlineReplyDraft} onSubmitInlineReply={handleSubmitInlineReply} canEdit={canEdit} editingCommentId={editingCommentId} editCommentDraft={editCommentDraft} onEditStart={(c) => { setEditingCommentId(c.id); setEditCommentDraft(c.body); }} onEditCancel={() => { setEditingCommentId(null); setEditCommentDraft(""); }} onEditChange={v => setEditCommentDraft(v)} onEditSubmit={handleEditComment} />
+                ))}
+
+                {canReply && !activeThread.locked && (
+                  <div style={{ marginTop: 20, display: "flex", gap: 12 }}>
+                    <Avatar name={ME.name} img={ME.img} size={28} />
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+                      <textarea 
+                        placeholder="Write a reply…" 
+                        value={replyDraft} 
+                        onChange={e => setReplyDraft(e.target.value)} 
+                        rows={replyDraft ? 3 : 1} 
+                        style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", fontSize: 14, fontFamily: "inherit", resize: "vertical", outline: "none", background: "var(--surface)", color: "var(--ink)", boxSizing: "border-box" }}
+                      />
+                      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                        <button className="hbtn hbtn--primary hbtn--sm" disabled={!replyDraft.trim() || submittingReply} onClick={handleSubmitReply}>
+                          {submittingReply ? 'Posting…' : 'Reply'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeThread.locked && (
+                  <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, color: "var(--ink-2)", marginTop: 16 }}>
+                    <I.lock style={{ width: 16, height: 16, opacity: 0.6 }} />
+                    <span style={{ fontSize: 13 }}>This thread is locked. No new replies.</span>
+                  </div>
+                )}
+                {!canReply && !activeThread.locked && forumsEnabled && (
+                  <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, color: "var(--ink-2)", marginTop: 16 }}>
+                    <I.lock style={{ width: 16, height: 16, opacity: 0.6 }} />
+                    <span style={{ fontSize: 13 }}>Only selected roles can reply here.</span>
+                  </div>
+                )}
               </div>
             </div>
-          )}
-          {activeThread.locked && (
-            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, color: "var(--ink-2)" }}>
-              <I.lock style={{ width: 16, height: 16, opacity: 0.6 }} />
-              <span style={{ fontSize: 13 }}>This thread is locked. No new replies.</span>
-            </div>
-          )}
-          {!canReply && !activeThread.locked && forumsEnabled && (
-            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "14px 18px", display: "flex", alignItems: "center", gap: 10, color: "var(--ink-2)" }}>
-              <I.lock style={{ width: 16, height: 16, opacity: 0.6 }} />
-              <span style={{ fontSize: 13 }}>Only selected roles can reply here.</span>
-            </div>
-          )}
+          </div>
         </div>
       )}
 

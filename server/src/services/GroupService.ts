@@ -999,6 +999,28 @@ export class GroupService {
         const activeUsers = await this.usersRepo.findAll({ id: { in: userIds } });
         const usersMap = new Map(activeUsers.map(u => [u.id, u]));
 
+        const profiles = await prisma.profiles.findMany({
+            where: { user_id: { in: userIds } }
+        });
+        const profilesMap = new Map(profiles.map(p => [p.user_id, p]));
+
+        let connections: any[] = [];
+        if (requestingUser?.id) {
+            connections = await prisma.connections.findMany({
+                where: {
+                    OR: [
+                        { requester_user_id: requestingUser.id, addressee_user_id: { in: userIds } },
+                        { requester_user_id: { in: userIds }, addressee_user_id: requestingUser.id }
+                    ]
+                }
+            });
+        }
+        const connectionsMap = new Map<string, string>();
+        for (const conn of connections) {
+            const peerId = conn.requester_user_id === requestingUser.id ? conn.addressee_user_id : conn.requester_user_id;
+            connectionsMap.set(peerId, conn.state);
+        }
+
         const roleAssignments = await this.roleAssignmentsRepo.findAll({
             scope_entity_id: groupId,
             user_id: { in: userIds }
@@ -1012,15 +1034,31 @@ export class GroupService {
             return acc;
         }, {});
 
+        const hasForm = !!(group?.join_form_id || ((group?.settings as any)?.questionnaires && Array.isArray((group.settings as any).questionnaires) && (group.settings as any).questionnaires.length > 0));
+
         return members.map(m => {
             const u = usersMap.get(m.user_id);
+            const prof = profilesMap.get(m.user_id);
             const username = u?.primary_email ? u.primary_email.split('@')[0] : 'unknown';
             const displayName = u ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : username;
             const profilePhoto = u?.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
+            
+            let parsedAnswers = m.answers;
+            if (typeof parsedAnswers === 'string') {
+                try { parsedAnswers = JSON.parse(parsedAnswers); } catch (e) {}
+            }
+            const hasResponses = hasForm && !!(
+                m.form_response_id ||
+                (parsedAnswers && typeof parsedAnswers === 'object' && Object.keys(parsedAnswers).length > 0)
+            );
+
             return {
                 ...m,
                 users: u ? { id: u.id, first_name: u.first_name, last_name: u.last_name, primary_email: u.primary_email, display_name: displayName || username, username, profilePhoto } : null,
-                roles: rolesByUser[m.user_id] || ['group_member']
+                roles: rolesByUser[m.user_id] || ['group_member'],
+                messagingRestriction: prof?.messaging_restriction || 'anyone',
+                connectionState: connectionsMap.get(m.user_id) || 'none',
+                hasResponses
             };
         });
     }
@@ -1397,6 +1435,48 @@ export class GroupService {
         }
 
         await this.groupMembershipsRepo.leaveGroupTx(groupId, userId);
+
+        // Cancel bookings and tickets for all events hosted by this group for the removed member
+        try {
+            const groupEvents = await prisma.events.findMany({
+                where: { hosted_by_entity_id: groupId }
+            });
+            const eventIds = groupEvents.map(e => e.id);
+
+            if (eventIds.length > 0) {
+                // Remove targetUserId from all event team assignments for these events
+                await prisma.event_team_assignments.deleteMany({
+                    where: { event_id: { in: eventIds }, user_id: userId }
+                });
+
+                // Find bookings for these events
+                const bookings = await prisma.bookings.findMany({
+                    where: { event_id: { in: eventIds }, booker_user_id: userId }
+                });
+
+                const { TicketRealtimeService } = require('./TicketRealtimeService');
+                for (const b of bookings) {
+                    await prisma.bookings.update({
+                        where: { id: b.id },
+                        data: { status: 'cancelled' }
+                    });
+                    const lineItems = await prisma.booking_line_items.findMany({ where: { booking_id: b.id } });
+                    const liIds = lineItems.map(li => li.id);
+                    if (liIds.length > 0) {
+                        await prisma.tickets.updateMany({ where: { line_item_id: { in: liIds } }, data: { status: 'cancelled' } });
+                    }
+                    // Sync tickets for this event
+                    TicketRealtimeService.syncUser(userId, b.event_id).catch(() => {});
+                    TicketRealtimeService.syncScanner(b.event_id).catch(() => {});
+                }
+            }
+
+            // Sync user's global events list
+            const { MyEventsRealtimeService } = require('./MyEventsRealtimeService');
+            MyEventsRealtimeService.syncUser(userId).catch(() => {});
+        } catch (syncErr) {
+            console.error('Error synchronizing events/tickets after group membership removal:', syncErr);
+        }
     }
 
     static async cancelJoinRequest(groupId: string, userId: string) {
@@ -1534,6 +1614,20 @@ export class GroupService {
             whereExtra += ` AND (fp.title ILIKE $5 OR fp.body ILIKE $5)`;
         }
 
+        let isPrivileged = false;
+        if (userId) {
+            const highestRole = await this.getHighestGroupRole(userId, groupId);
+            isPrivileged = ['group_owner', 'group_admin', 'group_moderator'].includes(highestRole);
+        }
+        
+        if (isPrivileged) {
+            whereExtra += ` AND fp.status IN ('active', 'hidden')`;
+        } else if (userId) {
+            whereExtra += ` AND (fp.status = 'active' OR (fp.status = 'hidden' AND fp.author_user_id = $2::uuid))`;
+        } else {
+            whereExtra += ` AND fp.status = 'active'`;
+        }
+
         const posts = await this.forumPostsRepo.getGroupPostsRaw(groupId, userId, lim, skip, orderBy, whereExtra, queryParams);
 
         const postIds = posts.map((p: any) => String(p.id));
@@ -1595,6 +1689,11 @@ export class GroupService {
         const allowed = await this.checkForumPermission(user.id, groupId, 'create_thread', settings);
         if (!allowed) throw new Error('You do not have permission to post in this group');
 
+        const highestRole = await this.getHighestGroupRole(user.id, groupId);
+        const isAdminOrMod = ['group_owner', 'group_admin', 'group_moderator'].includes(highestRole);
+        const needsApproval = settings?.forums?.approve && !isAdminOrMod;
+        const postStatus = needsApproval ? 'hidden' : 'active';
+
         const post = await this.forumPostsRepo.create({
             tenant_id: user.tenantId,
             scope_type: 'group',
@@ -1602,7 +1701,7 @@ export class GroupService {
             author_user_id: user.id,
             title: body.title || null,
             body: body.body,
-            status: 'active'
+            status: postStatus
         });
 
         const tagColorMap: Record<string, string> = {
@@ -1619,16 +1718,28 @@ export class GroupService {
                      RETURNING id`,
                     user.tenantId, groupId, tagName, tagColorMap[tagName] || 'gray'
                 );
-                if (tagRows[0]) {
-                    await this.postTagsRepo.create({
-                        post_id: post.id!,
-                        tag_id: String(tagRows[0].id)
-                    });
+                if (tagRows[0]?.id) {
+                    await prisma.$queryRawUnsafe(
+                        `INSERT INTO forum_post_tags(post_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+                        post.id, tagRows[0].id
+                    );
                 }
             }
         }
 
-        return { ...post, tags: body.tags || [], reactions: {}, vote_score: 0, user_vote: 0, comments_count: 0 };
+        return { ...post, tags: body.tags || [], reactions: {}, vote_score: 0, user_vote: 0, comments_count: 0, status: postStatus };
+    }
+
+    static async approveGroupPost(groupId: string, postId: string, userId: string) {
+        const highestRole = await this.getHighestGroupRole(userId, groupId);
+        const isAdminOrMod = ['group_owner', 'group_admin', 'group_moderator'].includes(highestRole);
+        if (!isAdminOrMod) throw new Error('Forbidden: Only admins and moderators can approve threads');
+
+        const post = await this.forumPostsRepo.findOne({ id: postId, scope_type: 'group', scope_id: groupId, deleted_at: null } as any);
+        if (!post) throw new Error('Thread not found');
+        if ((post as any).status !== 'hidden') throw new Error('Thread is not pending approval');
+
+        await prisma.$executeRaw`UPDATE forum_posts SET status = 'active', updated_at = NOW() WHERE id = ${postId}::uuid`;
     }
 
     static async editGroupPost(groupId: string, postId: string, user: any, body: any) {
@@ -1963,19 +2074,25 @@ export class GroupService {
             await this.requireActiveMember(groupId, user);
         }
 
-        const statusFilter = isAdmin ? undefined : 'approved';
-        const filter: any = { group_id: groupId };
-        if (statusFilter) filter.status = statusFilter;
-
-        const rows = await this.groupGalleryRepo.findAll(filter);
+        const rows = isAdmin
+            ? await prisma.group_gallery.findMany({ where: { group_id: groupId } })
+            : await prisma.group_gallery.findMany({
+                where: {
+                    group_id: groupId,
+                    OR: [
+                        { status: 'approved' },
+                        ...(user?.id ? [{ uploader_user_id: user.id }] : [])
+                    ]
+                }
+              });
         const userIds = rows.map(r => r.uploader_user_id);
-        const users = await this.usersRepo.findAll({ id: { in: userIds } });
+        const users = await prisma.users.findMany({ where: { id: { in: userIds } } });
 
         return rows.map(r => {
             const u = users.find(userItem => userItem.id === r.uploader_user_id);
             // Only admins see who uploaded each item; members see null
             const uploaderName = isAdmin && u
-                ? `${u.first_name || ''} ${u.last_name || ''}`.trim() || 'Unknown'
+                ? `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.username || u.primary_email?.split('@')[0] || 'Unknown'
                 : null;
             return {
                 id: String(r.id),

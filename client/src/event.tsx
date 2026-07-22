@@ -141,7 +141,8 @@ export function EventPage({ ev, st, go }: { ev: any; st: any; go: (view: string,
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${apiBase}/api/events/${e.id}`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        cache: 'no-store'
       });
       const data = await res.json();
       if (data.success && data.data) {
@@ -210,7 +211,8 @@ export function EventPage({ ev, st, go }: { ev: any; st: any; go: (view: string,
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${apiBase}/api/events/${e.id}/dashboard-stats`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        cache: 'no-store'
       });
       const data = await res.json();
       if (data.success) {
@@ -226,7 +228,8 @@ export function EventPage({ ev, st, go }: { ev: any; st: any; go: (view: string,
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${apiBase}/api/events/${e.id}/members`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        cache: 'no-store'
       });
       const data = await res.json();
       if (data.success) {
@@ -270,7 +273,8 @@ export function EventPage({ ev, st, go }: { ev: any; st: any; go: (view: string,
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${apiBase}/api/events/${e.id}/gallery`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        cache: 'no-store'
       });
       const data = await res.json();
       if (data.success && data.data) {
@@ -704,7 +708,7 @@ export function EventPage({ ev, st, go }: { ev: any; st: any; go: (view: string,
             )}
 
             {tab === "dashboard" && (
-              <EventDashboard ev={currentEvent || e} st={st} go={go} embedded={true} />
+              <EventDashboard ev={currentEvent || e} st={st} go={go} embedded={true} onTabChange={setTab} />
             )}
 
             {tab === "members" && (

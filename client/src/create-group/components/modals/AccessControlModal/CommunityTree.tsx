@@ -229,7 +229,8 @@ export function CommunityTree({ selectedAccess, setSelectedAccess, dynamicTree, 
   };
 
   return (
-    <div className="modal" onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", width: 520, borderRadius: "var(--r-lg)", overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: "85vh", boxShadow: "var(--sh-lg)", border: "1px solid var(--border)" }}>
+    <div className="modal-backdrop" onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", width: 520, borderRadius: "var(--r-lg)", overflow: "hidden", display: "flex", flexDirection: "column", maxHeight: "85vh", boxShadow: "var(--sh-lg)", border: "1px solid var(--border)" }}>
       <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h3 style={{ margin: 0, fontSize: 17, color: "var(--ink)", fontWeight: 600 }}>
           Allowed Access Control
@@ -331,6 +332,7 @@ export function CommunityTree({ selectedAccess, setSelectedAccess, dynamicTree, 
       <div style={{ padding: "16px 20px", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end", background: "var(--field)" }}>
         <button type="button" className="hbtn hbtn--primary" onClick={onClose} style={{ padding: "8px 18px", fontSize: 13 }}>Save Settings</button>
       </div>
+    </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useRef, useState } from 'react';
-import { Toggle } from './create_event';
+import { Toggle } from './create-event';
 import { ME } from './home-data';
 import { Profile } from './home-profile';
 import { Empty, Sidebar } from './home-shell';

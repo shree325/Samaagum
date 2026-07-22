@@ -149,7 +149,7 @@ export const GroupDashboard: React.FC<GroupDashboardProps> = ({
   const [selectedMetric, setSelectedMetric] = React.useState<'members' | 'pending_requests' | 'revenue' | 'ongoing_events' | 'pending_events' | 'events_conducted'>('members');
   const [mapViewMode, setMapViewMode] = React.useState<'auto' | 'india' | 'world'>('auto');
   const [selectedCity, setSelectedCity] = React.useState<any>(null);
-  const [mapCenter, setMapCenter]       = React.useState<[number, number]>([0, 20]);
+  const [mapCenter, setMapCenter]       = React.useState<[number, number]>([83, 22]);
   const [mapZoom, setMapZoom]           = React.useState<number>(1);
   const [overviewScale, setOverviewScale] = React.useState<'today' | 'week' | 'month'>('week');
   const [revenueViewMode, setRevenueViewMode] = React.useState<'total' | 'event-wise'>('total');
@@ -182,14 +182,7 @@ export const GroupDashboard: React.FC<GroupDashboardProps> = ({
         color: 'orange' as const,
         subtitle: 'Awaiting review'
       },
-      {
-        key: 'revenue' as const,
-        title: 'Revenue',
-        value: `₹${revenueStats.totalRevenue}`,
-        icon: <I.wallet style={{ width: 20, height: 20 }} />,
-        color: 'purple' as const,
-        subtitle: 'total collected'
-      },
+
       {
         key: 'ongoing_events' as const,
         title: 'Ongoing Events',

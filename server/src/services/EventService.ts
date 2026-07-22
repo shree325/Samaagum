@@ -441,31 +441,99 @@ export class EventService {
   // 'unlisted' events are never listed on Discover and are only directly reachable via a
   // one-time invite link (handled at the route layer) or by hosts/co-hosts/already-joined users.
   // 'custom' events are restricted to selected groups (plus hosts/co-hosts/already-joined users).
-  private static async canUserAccessEvent(ev: any, userId?: string): Promise<boolean> {
-    const visibility = (ev.venue as any)?.visibility;
+  /**
+   * Determines whether a user can view a given event.
+   *
+   * Two modes:
+   *
+   * **Discovery mode** (`discoveryMode: true`) — used for home feed, recommended
+   * events, and search.  Answers "should this event appear in the user's feed?"
+   * Only current, **active** group membership is considered.  A booking that
+   * was made when the user was still a member does NOT grant discovery rights
+   * after they leave the group.  This ensures leaving a group immediately
+   * removes that group's private events from the user's feed.
+   *
+   * **Access mode** (`discoveryMode: false`, the default) — used for direct
+   * event detail pages.  If the user already has a confirmed booking they can
+   * still view the event page even after leaving the group.
+   *
+   * @param ev             - The event row (venue may be a JSON string or object).
+   * @param userId         - Optional authenticated user id.
+   * @param userGroupSet   - Optional pre-fetched set of active group ids for the
+   *                         user (avoids N+1 DB calls when checking many events).
+   *                         When omitted the function falls back to individual queries.
+   * @param discoveryMode  - When true, skips the booking bypass so only current
+   *                         group membership grants visibility. Defaults to false.
+   */
+  public static async canUserAccessEvent(
+    ev: any,
+    userId?: string,
+    userGroupSet?: Set<string>,
+    discoveryMode = false
+  ): Promise<boolean> {
+    // Robustly parse venue — it may be stored as a JSON string or as an object
+    const venueObj: any =
+      ev.venue == null
+        ? {}
+        : typeof ev.venue === 'string'
+        ? (() => { try { return JSON.parse(ev.venue); } catch { return {}; } })()
+        : ev.venue;
+
+    const visibility = venueObj?.visibility;
+
+    // Public events are always discoverable / accessible
     if (!visibility || visibility === 'public') return true;
 
+    // Unlisted and custom events require an authenticated user
     if (!userId) return false;
 
+    // Hosts and co-hosts always have access (and are discoverable) regardless of mode
     const isHostOrCoHost = await this.verifyEventCapability(userId, ev.id, 'event.manage').catch(() => false);
     if (isHostOrCoHost) return true;
 
-    const hasBooking = await prisma.bookings.findFirst({
-      where: { event_id: ev.id, booker_user_id: userId, status: { in: ['confirmed', 'pending_approval', 'pending_payment'] } }
-    });
-    if (hasBooking) return true;
+    // Booking bypass — only for direct access, NOT for discovery.
+    // Rationale: a user who left the group shouldn't see the event in their
+    // feed just because they once registered while they were a member.
+    if (!discoveryMode) {
+      const hasBooking = await prisma.bookings.findFirst({
+        where: { event_id: ev.id, booker_user_id: userId, status: { in: ['confirmed', 'pending_approval', 'pending_payment'] } }
+      });
+      if (hasBooking) return true;
+    }
 
+    // Check if user is an active member of the group that hosts this event
     if (ev.hosted_by_entity_id) {
-      const isGroupMember = await GroupService.userInGroups(userId, [ev.hosted_by_entity_id]).catch(() => false);
+      const isGroupMember = userGroupSet
+        ? userGroupSet.has(ev.hosted_by_entity_id)
+        : await GroupService.userInGroups(userId, [ev.hosted_by_entity_id]).catch(() => false);
       if (isGroupMember) return true;
     }
 
+    // For 'custom' visibility, also check the explicitly allowed group list
     if (visibility === 'custom') {
-      const groups: string[] = (ev.venue as any)?.meta?.selectedAccess?.restricted?.groups || [];
-      if (groups.length > 0 && await GroupService.userInGroups(userId, groups)) return true;
+      const allowedGroups: string[] = venueObj?.meta?.selectedAccess?.restricted?.groups || [];
+      if (allowedGroups.length > 0) {
+        const eligible = userGroupSet
+          ? allowedGroups.some(gid => userGroupSet.has(gid))
+          : await GroupService.userInGroups(userId, allowedGroups).catch(() => false);
+        if (eligible) return true;
+      }
     }
 
     return false;
+  }
+
+  /**
+   * Pre-fetches all active group memberships for a user into a Set.
+   * Pass this to `canUserAccessEvent` to avoid N+1 queries when iterating
+   * over many events in a single request.
+   */
+  public static async fetchUserGroupSet(userId: string): Promise<Set<string>> {
+    const memberships = await prisma.group_memberships.findMany({
+      where: { user_id: userId, state: 'active' },
+      select: { group_id: true }
+    });
+    return new Set(memberships.map((m: any) => m.group_id));
   }
 
   static async getPublicEvents(tenantId: string, userId?: string, cityQuery?: string) {
@@ -1023,6 +1091,10 @@ export class EventService {
             await tx.tickets.updateMany({
               where: { line_item_id: { in: liIds } },
               data: { status: 'confirmed' }
+            });
+            await tx.attendees.updateMany({
+              where: { booking_id: { in: bookingIds }, status: 'pending' },
+              data: { status: 'approved' }
             });
           });
 
@@ -1860,6 +1932,27 @@ export class EventService {
     await this.forumPostsRepo.updateLockStatus(postId, locked);
   }
 
+  /**
+   * Resolves the canonical list of user IDs for all attendees of an event.
+   * If an attendee has a claimed user_id, it is used. Otherwise it falls back to the booking's booker_user_id.
+   */
+  static async getEventParticipantUserIds(eventId: string, includePending = false): Promise<string[]> {
+    const statuses = includePending ? ['approved', 'checked_in', 'pending'] : ['approved', 'checked_in'];
+    const attendees = await prisma.attendees.findMany({
+      where: {
+        bookings: { event_id: eventId, status: { not: 'cancelled' } },
+        status: { in: statuses as any[] }
+      },
+      select: {
+        user_id: true,
+        bookings: { select: { booker_user_id: true } }
+      }
+    });
+
+    const userIds = attendees.map(a => a.user_id || a.bookings.booker_user_id).filter(Boolean) as string[];
+    return [...new Set(userIds)];
+  }
+
   static async getEventMembers(eventId: string) {
     const topRoleKey = await this.getTopEventRoleKey();
     const assignments = await prisma.event_team_assignments.findMany({
@@ -1870,51 +1963,29 @@ export class EventService {
       }
     });
 
-    const bookings = await prisma.bookings.findMany({
-      where: { event_id: eventId, status: { in: ['confirmed', 'pending_approval', 'pending_payment'] } },
+    const attendees = await prisma.attendees.findMany({
+      where: { 
+        bookings: { event_id: eventId, status: { not: 'cancelled' } },
+        status: { in: ['approved', 'checked_in', 'pending'] }
+      },
       include: {
-        users: { select: { id: true, first_name: true, last_name: true, primary_email: true, profile_image_data: true, profiles: { select: { display_name: true } } } }
+        users_attendees_user_idTousers: { select: { id: true, first_name: true, last_name: true, primary_email: true, profile_image_data: true, profiles: { select: { display_name: true } } } },
+        bookings: { 
+          select: { 
+            booker_user_id: true,
+            users: { select: { id: true, first_name: true, last_name: true, primary_email: true, profile_image_data: true, profiles: { select: { display_name: true } } } }
+          }
+        }
       }
     });
 
     const memberMap = new Map();
 
-    for (const a of assignments) {
-      if (a.users_event_team_assignments_user_idTousers) {
-        const u = a.users_event_team_assignments_user_idTousers;
-        const picture = u.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
-        memberMap.set(a.user_id, {
-          id: u.id,
-          name: u.first_name ? `${u.first_name} ${u.last_name || ''}`.trim() : 'Unknown',
-          display_name: u.profiles?.display_name || u.first_name,
-          picture,
-          email: u.primary_email,
-          role: a.roles?.key || 'member',
-          state: a.state
-        });
-      }
-    }
-
-    for (const b of bookings) {
-      if (!memberMap.has(b.booker_user_id) && b.users) {
-        const u = b.users;
-        const picture = u.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
-        memberMap.set(b.booker_user_id, {
-          id: u.id,
-          name: u.first_name ? `${u.first_name} ${u.last_name || ''}`.trim() : 'Unknown',
-          display_name: u.profiles?.display_name || u.first_name,
-          picture,
-          email: u.primary_email,
-          role: 'member',
-          state: b.status === 'pending_approval' ? 'pending' : 'active'
-        });
-      }
-    }
-
+    // 1. Process Event Owner / Host Entity FIRST so their role is established
     const event = await prisma.events.findUnique({ where: { id: eventId } });
     if (event) {
       const entity = await prisma.entities.findUnique({ where: { id: event.hosted_by_entity_id }, include: { users: { select: { id: true, first_name: true, last_name: true, primary_email: true, profile_image_data: true, profiles: { select: { display_name: true } } } } } });
-      if (entity && (entity.entity_type === 'user' || entity.entity_type === 'group') && !memberMap.has(entity.user_id) && entity.users) {
+      if (entity && (entity.entity_type === 'user' || entity.entity_type === 'group') && entity.user_id && entity.users) {
         const u = entity.users;
         const picture = u.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
         memberMap.set(entity.user_id, {
@@ -1923,9 +1994,56 @@ export class EventService {
           display_name: u.profiles?.display_name || u.first_name,
           picture,
           email: u.primary_email,
-          role: topRoleKey || 'member',
+          role: topRoleKey || 'event_owner',
           state: 'active'
         });
+      }
+    }
+
+    // 2. Process Team Assignments SECOND
+    for (const a of assignments) {
+      if (a.users_event_team_assignments_user_idTousers) {
+        const u = a.users_event_team_assignments_user_idTousers;
+        const picture = u.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
+        const roleKey = a.roles?.key || 'member';
+        const existing = memberMap.get(a.user_id);
+        if (!existing) {
+          memberMap.set(a.user_id, {
+            id: u.id,
+            name: u.first_name ? `${u.first_name} ${u.last_name || ''}`.trim() : 'Unknown',
+            display_name: u.profiles?.display_name || u.first_name,
+            picture,
+            email: u.primary_email,
+            role: roleKey,
+            state: a.state
+          });
+        } else if (existing.role === 'member' && roleKey !== 'member') {
+          existing.role = roleKey;
+        }
+      }
+    }
+
+    // 3. Process Attendees (Ticket Holders/Guests) THIRD
+    for (const att of attendees) {
+      // Resolve the true user record: attendee's own user (if claimed) OR the buyer's user
+      const resolvedUser = att.users_attendees_user_idTousers || att.bookings.users;
+      const resolvedUserId = att.user_id || att.bookings.booker_user_id;
+
+      if (resolvedUserId && resolvedUser) {
+        // If user already has an existing role (Owner, Host, Admin, Moderator, etc.), preserve it completely!
+        if (!memberMap.has(resolvedUserId)) {
+          const u = resolvedUser;
+          const picture = u.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
+          memberMap.set(resolvedUserId, {
+            id: u.id,
+            name: u.first_name ? `${u.first_name} ${u.last_name || ''}`.trim() : 'Unknown',
+            display_name: u.profiles?.display_name || u.first_name,
+            picture,
+            email: u.primary_email,
+            role: 'member',
+            state: att.status === 'pending' ? 'pending' : 'active'
+          });
+        }
       }
     }
 
@@ -2039,6 +2157,26 @@ export class EventService {
           await tx.tickets.updateMany({ where: { line_item_id: { in: liIds } }, data: { status: 'cancelled' } });
         }
       }
+
+      // Also update any attendee records for this user in this event to 'rejected'
+      // This handles cases where they were added as a guest by someone else
+      const attendeesToReject = await tx.attendees.findMany({
+        where: { user_id: targetUserId, bookings: { event_id: eventId } }
+      });
+      
+      for (const att of attendeesToReject) {
+        await tx.attendees.update({
+          where: { id: att.id },
+          data: { status: 'rejected' }
+        });
+        // Also cancel their specific ticket
+        if (att.ticket_id) {
+          await tx.tickets.update({
+            where: { id: att.ticket_id },
+            data: { status: 'cancelled' }
+          });
+        }
+      }
     });
 
     await EventService.reconcileWaitlist(eventId);
@@ -2146,7 +2284,7 @@ export class EventService {
     if (isPrivileged) {
       return items;
     }
-    return items.filter((item: any) => item.approved);
+    return items.filter((item: any) => item.approved || item.uploaderId === userId);
   }
 
   static async uploadToEventGallery(eventId: string, userId: string, body: any) {
@@ -2327,23 +2465,28 @@ export class EventService {
 
       if (promoted) {
         try {
-          // Notify the waitlisted user of their promotion
+          // Notify the waitlisted users of their promotion
           if (newStatus === 'confirmed') {
-            sendNotificationToUser(wb.booker_user_id, 'group.notification', {
-              type: 'event',
-              text: `You have been moved from the waitlist. Your ticket has been confirmed for <b>${event.title}</b>! 🎉`,
-              eventId: event.id
-            });
-            await prisma.notification_log.create({
-              data: {
-                user_id: wb.booker_user_id,
-                tenant_id: event.tenant_id,
-                channel: 'app',
-                template_key: 'event_waitlist_promoted',
-                status: 'queued',
-                provider_ref: JSON.stringify({ eventId: event.id, eventTitle: event.title })
-              }
-            }).catch(() => {});
+            const atts = await prisma.attendees.findMany({ where: { booking_id: wb.id } });
+            const notifyIds = [...new Set(atts.map(a => a.user_id || wb.booker_user_id).filter(Boolean))] as string[];
+
+            for (const nId of notifyIds) {
+              sendNotificationToUser(nId, 'group.notification', {
+                type: 'event',
+                text: `You have been moved from the waitlist. Your ticket has been confirmed for <b>${event.title}</b>! 🎉`,
+                eventId: event.id
+              });
+              await prisma.notification_log.create({
+                data: {
+                  user_id: nId,
+                  tenant_id: event.tenant_id,
+                  channel: 'app',
+                  template_key: 'event_waitlist_promoted',
+                  status: 'queued',
+                  provider_ref: JSON.stringify({ eventId: event.id, eventTitle: event.title })
+                }
+              }).catch(() => {});
+            }
 
             // Fetch the buyer's email and name
             const buyerUser = await prisma.users.findUnique({ where: { id: wb.booker_user_id }, include: { profiles: true } });
@@ -2365,22 +2508,27 @@ export class EventService {
               }
             }
           } else {
-            // pending_approval — notify user
-            sendNotificationToUser(wb.booker_user_id, 'group.notification', {
-              type: 'registration',
-              text: `A seat opened up for <b>${event.title}</b>. Your join request is now pending host approval.`,
-              eventId: event.id
-            });
-            await prisma.notification_log.create({
-              data: {
-                user_id: wb.booker_user_id,
-                tenant_id: event.tenant_id,
-                channel: 'app',
-                template_key: 'event_waitlist_to_pending',
-                status: 'queued',
-                provider_ref: JSON.stringify({ eventId: event.id, eventTitle: event.title })
-              }
-            }).catch(() => {});
+            // pending_approval — notify users
+            const atts = await prisma.attendees.findMany({ where: { booking_id: wb.id } });
+            const notifyIds = [...new Set(atts.map(a => a.user_id || wb.booker_user_id).filter(Boolean))] as string[];
+
+            for (const nId of notifyIds) {
+              sendNotificationToUser(nId, 'group.notification', {
+                type: 'registration',
+                text: `A seat opened up for <b>${event.title}</b>. Your join request is now pending host approval.`,
+                eventId: event.id
+              });
+              await prisma.notification_log.create({
+                data: {
+                  user_id: nId,
+                  tenant_id: event.tenant_id,
+                  channel: 'app',
+                  template_key: 'event_waitlist_to_pending',
+                  status: 'queued',
+                  provider_ref: JSON.stringify({ eventId: event.id, eventTitle: event.title })
+                }
+              }).catch(() => {});
+            }
 
             // Notify host in real-time with group.notification (triggers toast + notification badge)
             if (ownerUserId) {
@@ -2482,21 +2630,26 @@ export class EventService {
 
     for (const b of waitlistedBookings) {
       try {
-        sendNotificationToUser(b.booker_user_id, 'group.notification', {
-          type: 'waitlist_closed',
-          text: `The waitlist for <b>${event.title}</b> has been closed by the host. You have been removed from the waitlist.`,
-          eventId: event.id
-        });
-        await prisma.notification_log.create({
-          data: {
-            user_id: b.booker_user_id,
-            tenant_id: event.tenant_id,
-            channel: 'app',
-            template_key: 'event_waitlist_closed',
-            status: 'queued',
-            provider_ref: JSON.stringify({ eventId: event.id, eventTitle: event.title })
-          }
-        }).catch(() => {});
+        const atts = await prisma.attendees.findMany({ where: { booking_id: b.id } });
+        const notifyIds = [...new Set(atts.map(a => a.user_id || b.booker_user_id).filter(Boolean))] as string[];
+        
+        for (const nId of notifyIds) {
+          sendNotificationToUser(nId, 'group.notification', {
+            type: 'waitlist_closed',
+            text: `The waitlist for <b>${event.title}</b> has been closed by the host. You have been removed from the waitlist.`,
+            eventId: event.id
+          });
+          await prisma.notification_log.create({
+            data: {
+              user_id: nId,
+              tenant_id: event.tenant_id,
+              channel: 'app',
+              template_key: 'event_waitlist_closed',
+              status: 'queued',
+              provider_ref: JSON.stringify({ eventId: event.id, eventTitle: event.title })
+            }
+          }).catch(() => {});
+        }
       } catch {}
     }
 
@@ -2586,10 +2739,38 @@ export class EventService {
       where: { event_id: eventId, user_id: userId }
     });
 
-    const bookings = await prisma.bookings.findMany({
-      where: { event_id: eventId, booker_user_id: userId }
-    });
     let canceledConfirmedCount = 0;
+
+    // 1. Cancel attendance for the user if they are a specific attendee (e.g. a guest)
+    const userAttendees = await prisma.attendees.findMany({
+      where: { 
+        bookings: { event_id: eventId },
+        user_id: userId,
+        status: { in: ['pending', 'approved', 'checked_in', 'waitlisted'] }
+      }
+    });
+
+    for (const att of userAttendees) {
+      if (att.status === 'approved' || att.status === 'checked_in') canceledConfirmedCount++;
+      await prisma.$transaction(async (tx) => {
+        await tx.attendees.update({
+          where: { id: att.id },
+          data: { status: 'rejected' }
+        });
+        if (att.ticket_id) {
+          await tx.tickets.update({
+            where: { id: att.ticket_id },
+            data: { status: 'cancelled' }
+          });
+        }
+      });
+    }
+
+    // 2. If the user is the booker of any bookings, cancel those entirely
+    const bookings = await prisma.bookings.findMany({
+      where: { event_id: eventId, booker_user_id: userId, status: { not: 'cancelled' } }
+    });
+    
     for (const b of bookings) {
       if (b.status === 'confirmed' || b.status === 'pending_approval') {
         canceledConfirmedCount++;
@@ -2606,6 +2787,10 @@ export class EventService {
         await tx.tickets.updateMany({
           where: { line_item_id: { in: liIds } },
           data: { status: 'cancelled' }
+        });
+        await tx.attendees.updateMany({
+          where: { booking_id: b.id, status: { not: 'rejected' } },
+          data: { status: 'rejected' }
         });
       });
     }

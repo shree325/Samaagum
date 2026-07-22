@@ -720,63 +720,7 @@
   align-items: start;
 }
 
-/* forum composer + post */
-.composer {
-  display: flex;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--surface);
-  box-shadow: var(--sh-sm);
-}
 
-.composer .ci {
-  flex: 1;
-}
-
-.composer textarea {
-  width: 100%;
-  border: none;
-  background: none;
-  resize: none;
-  font-family: inherit;
-  font-size: 14.5px;
-  color: var(--ink);
-  outline: none;
-  min-height: 24px;
-  line-height: 1.5;
-}
-
-.composer textarea::placeholder {
-  color: var(--ink-3);
-}
-
-.composer .cbar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.composer .cbar .tool {
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  border: none;
-  background: var(--field);
-  color: var(--ink-3);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--t-fast);
-}
-
-.composer .cbar .tool:hover {
-  background: var(--accent-soft);
-  color: var(--accent-2);
-}
 
 .post {
   padding: 16px 18px;
@@ -1781,17 +1725,18 @@
 
 .form-card.main-info-card {
   display: flex;
+  flex-wrap: wrap;
   gap: 24px;
 }
 
 .form-card.main-info-card .card-left {
-  flex: 1;
-  min-width: 250px;
+  flex: 1 1 250px;
+  min-width: 0;
 }
 
 .form-card.main-info-card .card-right {
-  flex: 1.2;
-  min-width: 250px;
+  flex: 1.2 1 250px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -1808,6 +1753,11 @@
     flex-direction: column;
     gap: 16px;
   }
+  .form-card.main-info-card .card-left,
+  .form-card.main-info-card .card-right {
+    min-width: 0;
+    width: 100%;
+  }
   .form-card.main-info-card .card-divider {
     height: 1px;
     width: 100%;
@@ -1816,6 +1766,7 @@
 
 .vis-pills {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 4px;
 }
@@ -1947,7 +1898,9 @@
 
 .cinput,
 .ctext,
+.ctextarea,
 .cselect {
+  box-sizing: border-box;
   width: 100%;
   font-family: inherit;
   font-size: 14.5px;
@@ -1961,12 +1914,14 @@
 }
 
 .cinput::placeholder,
-.ctext::placeholder {
+.ctext::placeholder,
+.ctextarea::placeholder {
   color: var(--ink-3);
 }
 
 .cinput:focus,
 .ctext:focus,
+.ctextarea:focus,
 .cselect:focus {
   border-color: color-mix(in oklch, var(--accent-2) 55%, var(--border));
   box-shadow: var(--sh-focus);

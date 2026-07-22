@@ -99,10 +99,6 @@ export class R_group_memberships extends PostgresBaseRepository<IGroupMembership
       await tx.group_memberships.deleteMany({
         where: { group_id: groupId, user_id: userId }
       });
-      await tx.$executeRawUnsafe(
-        `DELETE FROM forum_member_permissions WHERE group_id=$1::uuid AND user_id=$2::uuid`,
-        groupId, userId
-      );
     });
   }
 }

@@ -8,6 +8,7 @@ export interface Group {
   online?: number;
   posts?: number;
   cat?: string;
+  category?: string;
   cover?: string;
   banner?: string;
   icon?: string | React.ReactNode;
@@ -24,8 +25,8 @@ export interface Group {
       enabled?: boolean;
       threadPerm?: 'everyone' | 'members' | 'selected' | 'admins';
       replyPerm?: 'everyone' | 'members' | 'selected' | 'admins';
-      threadRoles?: { public?: boolean };
-      replyRoles?: { public?: boolean };
+      threadRoles?: { public?: boolean; roles?: string[] };
+      replyRoles?: { public?: boolean; roles?: string[] };
     };
     gallery?: {
       enabled?: boolean;
@@ -75,6 +76,7 @@ export interface Post {
   archived?: boolean;
   view_count?: number;
   comments?: Comment[];
+  status?: string;
 }
 
 export interface Comment {

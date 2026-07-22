@@ -39,6 +39,9 @@ export function EventSidebar({
 
   const confirmedList = hostStats?.confirmed || attendees || [];
 
+  const settingsObj = typeof e.settings === 'string' ? JSON.parse(e.settings) : (e.settings || {});
+  const allowImg = settingsObj.allow_image_proof === true;
+
   const [transactionId, setTransactionId] = useState('');
   const [uploadingProof, setUploadingProof] = useState(false);
 
@@ -132,17 +135,21 @@ export function EventSidebar({
               ) : (
                 <>
                   <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-                    <div style={{ fontSize: 13, color: 'var(--ink-2)', fontWeight: 600 }}>Submit Transaction ID or Upload Proof:</div>
-                    {transactionId && transactionId.startsWith('data:') && (
-                      <div style={{ width: '100%', height: 120, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', marginBottom: 8, background: 'var(--bg-2)' }}>
-                        <img src={transactionId} alt="Proof" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      </div>
+                    <div style={{ fontSize: 13, color: 'var(--ink-2)', fontWeight: 600 }}>Submit Transaction ID {allowImg && 'or Upload Proof'}:</div>
+                    {allowImg && (
+                      <>
+                        {transactionId && transactionId.startsWith('data:') && (
+                          <div style={{ width: '100%', height: 120, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', marginBottom: 8, background: 'var(--bg-2)' }}>
+                            <img src={transactionId} alt="Proof" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          </div>
+                        )}
+                        <label className="hbtn hbtn--ghost" style={{ cursor: 'pointer', textAlign: 'center', display: 'block', width: '100%' }}>
+                          {transactionId.startsWith('data:') ? 'Change Image' : 'Upload Image Proof'}
+                          <input type="file" accept="image/*" onChange={handleImageChange} style={{ display: 'none' }} />
+                        </label>
+                        <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--ink-3)', margin: '4px 0' }}>OR</div>
+                      </>
                     )}
-                    <label className="hbtn hbtn--ghost" style={{ cursor: 'pointer', textAlign: 'center', display: 'block', width: '100%' }}>
-                      {transactionId.startsWith('data:') ? 'Change Image' : 'Upload Image Proof'}
-                      <input type="file" accept="image/*" onChange={handleImageChange} style={{ display: 'none' }} />
-                    </label>
-                    <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--ink-3)', margin: '4px 0' }}>OR</div>
                     <input 
                       type="text" 
                       className="cinput" 
@@ -192,9 +199,12 @@ export function EventSidebar({
             const name = typeof a === 'object' ? (a.name || a.display_name) : a;
             const userId = typeof a === 'object' ? (a.userId || a.id || a.bookingId) : undefined;
             const picture = typeof a === 'object' ? a.picture : undefined;
+            const uniqueKey = typeof a === 'object'
+              ? `${a.id || a.userId || a.bookingId || 'att'}-${i}`
+              : `guest-${i}`;
             return (
               <div
-                key={userId || i}
+                key={uniqueKey}
                 className="att"
                 style={{ cursor: userId ? "pointer" : "default" }}
                 onClick={() => userId && go("profile", { id: userId })}

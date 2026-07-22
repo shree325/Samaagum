@@ -29,19 +29,39 @@ export function EventMemberResponseModal({
           <button className="hbtn hbtn--ghost hbtn--sm" onClick={onClose} style={{ border: "none" }}>✕</button>
         </div>
         <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
-          {member.answers && Object.keys(member.answers).length > 0 ? (
-            Object.entries(member.answers).filter(([k]) => !['ticketTypeId', 'qty', 'ticketName', 'isQuestionnaireSubmit', 'registration_location'].includes(k)).map(([key, val]) => {
-              const label = getQuestionLabel(key);
-              return (
-                <div key={key}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>{label}</div>
-                  <div style={{ fontSize: 14, color: "var(--ink)", background: "var(--field)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px" }}>{String(val)}</div>
+          {((member.answers && Object.keys(member.answers).length > 0) || member.transactionId) ? (
+            <>
+              {member.answers && Object.keys(member.answers).length > 0 && Object.entries(member.answers).filter(([k]) => !['ticketTypeId', 'qty', 'ticketName', 'isQuestionnaireSubmit', 'registration_location', 'transactionId', 'buyer', 'attendees'].includes(k)).map(([key, val]) => {
+                const label = getQuestionLabel(key);
+                return (
+                  <div key={key}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>{label}</div>
+                    <div style={{ fontSize: 14, color: "var(--ink)", background: "var(--field)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px" }}>
+                      {typeof val === 'string' && (val.startsWith('data:image/') || val.match(/\.(jpeg|jpg|gif|png)$/) || val.startsWith('http')) && (val.startsWith('data:image/') || val.includes('res.cloudinary') || val.includes('firebasestorage')) ? (
+                        <img src={val} alt={label} style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, objectFit: 'contain', background: '#000' }} />
+                      ) : (
+                        String(val)
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {member.transactionId && (
+                <div style={{ marginTop: 4, paddingTop: 16, borderTop: "1px dashed var(--border)" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Payment Proof / Transaction ID</div>
+                  <div style={{ fontSize: 14, color: "var(--ink)", background: "var(--field)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px" }}>
+                    {typeof member.transactionId === 'string' && (member.transactionId.startsWith('data:image/') || member.transactionId.match(/\.(jpeg|jpg|gif|png)$/) || member.transactionId.startsWith('http')) ? (
+                      <img src={member.transactionId} alt="Payment Proof" style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, objectFit: 'contain', background: '#000' }} />
+                    ) : (
+                      member.transactionId
+                    )}
+                  </div>
                 </div>
-              );
-            })
+              )}
+            </>
           ) : (
             <div style={{ textAlign: "center", padding: "24px 0", color: "var(--ink-3)", fontSize: 13.5 }}>
-              This member didn't submit any questionnaire responses.
+              This member didn't submit any questionnaire responses or payment proof.
             </div>
           )}
         </div>

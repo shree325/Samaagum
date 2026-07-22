@@ -25,15 +25,35 @@ export function usePermissions(
   const forumPermissions = g.forumPermissions || [];
   const isArchived = Boolean(g.settings?.isArchived);
 
-  const canPost = !isArchived && forumsEnabled && isMember && (
-    isOwner || threadPerm === "everyone" || threadPerm === "members" || 
-    (threadPerm === "selected" && forumPermissions.includes("create_thread"))
-  );
+  const canPost = (() => {
+    if (isArchived || !forumsEnabled) return false;
+    const threadRoles = g.settings?.forums?.threadRoles;
+    if (threadRoles) {
+      if (threadRoles.public) return true;
+      if (isOwner) return true;
+      if (!isJoined) return false;
+      return (threadRoles.roles || []).includes(myRoleKey);
+    }
+    // Fallback
+    if (!isMember) return false;
+    return isOwner || threadPerm === "everyone" || threadPerm === "members" || 
+      (threadPerm === "selected" && forumPermissions.includes("create_thread"));
+  })();
 
-  const canReply = !isArchived && forumsEnabled && isMember && (
-    isOwner || replyPerm === "everyone" || replyPerm === "members" || 
-    (replyPerm === "selected" && forumPermissions.includes("reply_thread"))
-  );
+  const canReply = (() => {
+    if (isArchived || !forumsEnabled) return false;
+    const replyRoles = g.settings?.forums?.replyRoles;
+    if (replyRoles) {
+      if (replyRoles.public) return true;
+      if (isOwner) return true;
+      if (!isJoined) return false;
+      return (replyRoles.roles || []).includes(myRoleKey);
+    }
+    // Fallback
+    if (!isMember) return false;
+    return isOwner || replyPerm === "everyone" || replyPerm === "members" || 
+      (replyPerm === "selected" && forumPermissions.includes("reply_thread"));
+  })();
 
   const forumsPublic = g.settings?.forums?.threadRoles
     ? (g.settings.forums.threadRoles.public === true || g.settings.forums.replyRoles?.public === true)
@@ -64,6 +84,7 @@ export function usePermissions(
   };
 
   const canUpload = !isArchived && galleryEnabled && (isOwner || isJoined);
+  const canModerateForums = isOwner || ['group_admin', 'group_moderator'].includes(myRoleKey);
 
   return {
     isMember,
@@ -80,6 +101,7 @@ export function usePermissions(
     isAccessRestricted,
     isPublicGroup,
     showMemberOnlyScreen,
-    canUpload
+    canUpload,
+    canModerateForums
   };
 }
