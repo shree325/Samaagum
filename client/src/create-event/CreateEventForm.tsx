@@ -14,8 +14,6 @@ import { AccessControlModal } from './features/Access/AccessControlModal';
 import { TicketSettingsModal } from './features/Ticketing/TicketSettingsModal';
 import { QuestionnaireModal } from './features/Questionnaire/QuestionnaireModal';
 import { Toggle } from './ui/Toggle';
-import { AIGeneratorModal } from '../components/modals/AIGeneratorModal';
-import { useState } from 'react';
 
 import { format24to12, getDurationText, getTzInfo, parse12to24, addOneHour } from './utils/time';
 import { getSelectedNodesWithDetails } from './utils/access-tree';
@@ -24,7 +22,6 @@ import { ACCESS_TREE, TIMEZONES, DEFAULT_FREE_ENTITLEMENTS } from './constants';
 export function CreateEventForm({ go, mobile, st, editEv, hostGroupId }: any) {
   const form = useEventForm({ go, st, editEv, hostGroupId });
   const isEditing = editEv?.id && editEv.id !== 'new';
-  const [aiModal, setAiModal] = useState(false);
 
   const entitlements = st?.entitlements || DEFAULT_FREE_ENTITLEMENTS;
   const allowedVisibilities = entitlements.event_allowed_visibility || ['unlisted', 'custom'];
@@ -370,13 +367,11 @@ export function CreateEventForm({ go, mobile, st, editEv, hostGroupId }: any) {
         <style dangerouslySetInnerHTML={{ __html: CREATE_EVENT_CSS }} />
         <div className="create-form" style={{ backgroundColor: 'var(--bg-2)', padding: mobile ? '14px 12px 40px' : '24px 32px 40px', position: 'relative' }}>
           <div className="cf-inner" style={{ maxWidth: 1080, margin: '0 auto' }}>
-            <div className="create-head" style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => { localStorage.removeItem('sg_draft_event'); if (isEditing) { go('event', editEv); } else { go('home'); } }} style={{ padding: '7px 11px', background: 'var(--surface)' }}><I.arrowL /></button>
-                <div>
-                  {!isEditing && <div className="ck">New event</div>}
-                  <h1 style={{ margin: 0 }}>{isEditing ? 'Edit Event' : 'Create an event'}</h1>
-                </div>
+            <div className="create-head" style={{ marginBottom: 20 }}>
+              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => { localStorage.removeItem('sg_draft_event'); if (isEditing) { go('event', editEv); } else { go('home'); } }} style={{ padding: '7px 11px', background: 'var(--surface)' }}><I.arrowL /></button>
+              <div>
+                {!isEditing && <div className="ck">New event</div>}
+                <h1>{isEditing ? 'Edit Event' : 'Create an event'}</h1>
               </div>
             </div>
 
@@ -720,45 +715,6 @@ export function CreateEventForm({ go, mobile, st, editEv, hostGroupId }: any) {
             </div>
           </div>
         </div>
-      )}
-
-      {aiModal && (
-        <AIGeneratorModal
-          type="event"
-          onClose={() => setAiModal(false)}
-          onGenerate={(data) => {
-            if (data.title) form.setTitle(data.title);
-            if (data.description) form.setDesc(data.description);
-            if (data.category) form.setCat(data.category);
-            
-            if (data.startDate) form.setStartDate(data.startDate);
-            if (data.startTime) form.setStartTime(data.startTime);
-            if (data.endDate) form.setEndDate(data.endDate);
-            if (data.endTime) form.setEndTime(data.endTime);
-            
-            if (data.visibility) {
-              if (allowedVisibilities.includes(data.visibility)) {
-                form.setVisibility(data.visibility);
-              }
-            }
-            
-            if (data.registrationStatus) form.setRegistrationStatus(data.registrationStatus);
-            if (data.regStartDate) form.setRegStartDate(data.regStartDate);
-            if (data.regStartTime) form.setRegStartTime(data.regStartTime);
-            
-            if (data.requireApproval !== undefined) form.setApproval(data.requireApproval);
-            if (data.questionnaireEnabled) form.questionnaireState.setEnableRegForm(true);
-            if (data.capacity) {
-              form.capacityState.setCapacityEnabled(true);
-              form.capacityState.setCapacity(String(data.capacity));
-            }
-
-            if (data.imagePrompt) {
-              const encodedPrompt = encodeURIComponent(data.imagePrompt);
-              form.setCover(`https://image.pollinations.ai/prompt/${encodedPrompt}?width=1080&height=1080&nologo=true`);
-            }
-          }}
-        />
       )}
 
       {/* Host Selection Modal */}

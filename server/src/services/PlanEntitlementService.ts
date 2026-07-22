@@ -228,7 +228,6 @@ export class PlanEntitlementService {
           event_max_participants: typeof entObj.event_max_participants === 'number' ? entObj.event_max_participants : DEFAULT_FREE_ENTITLEMENTS.event_max_participants,
           event_checkin_methods: Array.isArray(entObj.event_checkin_methods) ? entObj.event_checkin_methods : DEFAULT_FREE_ENTITLEMENTS.event_checkin_methods,
           event_can_create_paid_tickets: typeof entObj.event_can_create_paid_tickets === 'boolean' ? entObj.event_can_create_paid_tickets : DEFAULT_FREE_ENTITLEMENTS.event_can_create_paid_tickets,
-          ai_assistant_enabled: typeof entObj.ai_assistant_enabled === 'boolean' ? entObj.ai_assistant_enabled : DEFAULT_FREE_ENTITLEMENTS.ai_assistant_enabled,
         };
       }
 

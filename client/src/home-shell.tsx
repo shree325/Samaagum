@@ -6,6 +6,7 @@ import { ME } from './home-data';
 import { Discover } from './home-feed';
 import { Avatar } from './home-icons';
 import { Messages } from './home-messages';
+import { Notifications } from './home-notifications';
 import { Profile } from './home-profile';
 import { apiBase } from './home-subscription';
 import { I } from './home-icons';

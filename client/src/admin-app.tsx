@@ -3269,8 +3269,7 @@ export function SubscriptionPlansView({ user, apiBase }) {
     event_allowed_join_modes: [],
     event_max_participants: 100,
     event_checkin_methods: [],
-    event_can_create_paid_tickets: false,
-    ai_assistant_enabled: false
+    event_can_create_paid_tickets: false
   });
 
   const openEntitlements = (p) => {
@@ -3287,8 +3286,7 @@ export function SubscriptionPlansView({ user, apiBase }) {
       event_allowed_join_modes: Array.isArray(limits.event_allowed_join_modes) ? limits.event_allowed_join_modes : ['restricted', 'invite'],
       event_max_participants: typeof limits.event_max_participants === 'number' ? limits.event_max_participants : 100,
       event_checkin_methods: Array.isArray(limits.event_checkin_methods) ? limits.event_checkin_methods : ['scanner'],
-      event_can_create_paid_tickets: typeof limits.event_can_create_paid_tickets === 'boolean' ? limits.event_can_create_paid_tickets : false,
-      ai_assistant_enabled: typeof limits.ai_assistant_enabled === 'boolean' ? limits.ai_assistant_enabled : false
+      event_can_create_paid_tickets: typeof limits.event_can_create_paid_tickets === 'boolean' ? limits.event_can_create_paid_tickets : false
     });
     setEntitlementsOpen(true);
   };
@@ -3903,20 +3901,6 @@ export function SubscriptionPlansView({ user, apiBase }) {
                       onChange={e => setEntForm({ ...entForm, event_can_create_paid_tickets: e.target.checked })} 
                     />
                     Allow Paid Ticket Creations
-                  </label>
-                </div>
-
-                {/* AI Features Section */}
-                <div style={{ border: "1px solid var(--border)", borderRadius: "8px", padding: "16px", background: "var(--surface-2)" }}>
-                  <h4 style={{ margin: "0 0 12px 0", fontSize: "14px", fontWeight: "600", color: "var(--accent-2)" }}>✨ AI Entitlements</h4>
-
-                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
-                    <input 
-                      type="checkbox" 
-                      checked={entForm.ai_assistant_enabled} 
-                      onChange={e => setEntForm({ ...entForm, ai_assistant_enabled: e.target.checked })} 
-                    />
-                    Enable AI Features (Assistant & Generator)
                   </label>
                 </div>
 

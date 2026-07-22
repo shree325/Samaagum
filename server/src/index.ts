@@ -33,7 +33,6 @@ import { groupRoutes } from './controllers/groupRoutes';
 import { publicRoutes } from './controllers/publicRoutes';
 import { dashboardRoutes } from './controllers/dashboardRoutes';
 import { integrationRoutes } from './controllers/integrationRoutes';
-import aiRoutes from './controllers/aiRoutes';
 import { userRoutes } from './controllers/userRoutes';
 import { ticketRoutes } from './controllers/ticketRoutes';
 
@@ -231,7 +230,6 @@ fastify.register(groupRoutes, { prefix: '/api/groups' });
 fastify.register(eventRoutes, { prefix: '/api/events' });
 fastify.register(dashboardRoutes, { prefix: '/api/dashboard' });
 fastify.register(integrationRoutes, { prefix: '/api/integrations' });
-fastify.register(aiRoutes, { prefix: '/api/ai' });
 import { notificationPreferencesRoutes } from './controllers/notificationPreferencesRoutes';
 fastify.register(notificationPreferencesRoutes, { prefix: '/api/notification-preferences' });
 

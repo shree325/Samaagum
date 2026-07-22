@@ -11,7 +11,6 @@ export interface PlanEntitlements {
   event_max_participants: number; // -1 for unlimited
   event_checkin_methods: string[]; // e.g. ["scanner", "manual", "gate"]
   event_can_create_paid_tickets: boolean;
-  ai_assistant_enabled: boolean;
 }
 
 export const DEFAULT_FREE_ENTITLEMENTS: PlanEntitlements = {
@@ -26,5 +25,4 @@ export const DEFAULT_FREE_ENTITLEMENTS: PlanEntitlements = {
   event_max_participants: 100,
   event_checkin_methods: ["scanner", "manual", "gate"],
   event_can_create_paid_tickets: false,
-  ai_assistant_enabled: false,
 };
