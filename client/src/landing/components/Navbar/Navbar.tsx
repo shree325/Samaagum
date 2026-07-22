@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { CityPicker } from "../../../home-shell";
 
 const AUTH_PATH = "/pages/Samaagum Auth.html";
 const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
@@ -8,6 +9,7 @@ export function Navbar() {
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [cityOpen, setCityOpen] = useState(false);
 
   useEffect(() => {
     const currentTheme = (document.documentElement.getAttribute("data-theme") as "light" | "dark") || "dark";
@@ -33,6 +35,25 @@ export function Navbar() {
   useEffect(() => {
     const fetchLocation = async () => {
       let found = false;
+
+      // 1. First check if user already set or detected a city previously
+      try {
+        const savedStr = localStorage.getItem("samaagum_detected_city");
+        if (savedStr) {
+          const savedLoc = JSON.parse(savedStr);
+          if (savedLoc && savedLoc.city_name) {
+            const displayLoc = savedLoc.state_name 
+              ? `${savedLoc.city_name}, ${savedLoc.state_name}` 
+              : `${savedLoc.city_name}, ${savedLoc.country_name || ''}`;
+            setLocation(displayLoc.replace(/, $/, '')); // strip trailing comma if country is missing
+            return; // Exit early since we found the cached location
+          }
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
+
+      // 2. Try backend API next
       try {
         const res = await fetch(`${apiBase}/api/public/detect-location`);
         const result = await res.json();
@@ -50,12 +71,13 @@ export function Navbar() {
 
       if (!found) {
         try {
-          const res = await fetch("https://ipapi.co/json/");
+          const res = await fetch("https://ipwho.is/");
           const data = await res.json();
-          if (data && data.city) {
+          if (data && data.success && data.city) {
             const displayLoc = data.region 
               ? `${data.city}, ${data.region}` 
-              : `${data.city}, ${data.country_name}`;
+              : `${data.city}, ${data.country}`;
+
             setLocation(displayLoc);
           }
         } catch (err) {
@@ -76,7 +98,7 @@ export function Navbar() {
       <div className="nav-inner" style={{ maxWidth: 1280, display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "0 24px" }}>
         
         {/* Left: Search pill */}
-        <form onSubmit={handleSearch} onClick={() => window.location.href = "/pages/Samaagum Home.html#discover"} style={{
+        <form onSubmit={handleSearch} style={{
           display: "flex",
           alignItems: "center",
           background: "var(--card-bg)",
@@ -85,17 +107,13 @@ export function Navbar() {
           padding: "4px 4px 4px 16px",
           width: "100%",
           maxWidth: 420,
-          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
-          cursor: "pointer"
+          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)"
         }}>
           <input
             type="text"
             placeholder="Search events..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            readOnly
-            onClick={() => window.location.href = "/pages/Samaagum Home.html#discover"}
-            onFocus={() => window.location.href = "/pages/Samaagum Home.html#discover"}
             style={{
               background: "transparent",
               border: "none",
@@ -112,10 +130,8 @@ export function Navbar() {
             type="text"
             placeholder="Location"
             value={location}
-            onChange={(e) => setLocation(e.target.value)}
             readOnly
-            onClick={() => window.location.href = "/pages/Samaagum Home.html#discover"}
-            onFocus={() => window.location.href = "/pages/Samaagum Home.html#discover"}
+            onClick={() => setCityOpen(true)}
             style={{
               background: "transparent",
               border: "none",
@@ -210,6 +226,15 @@ export function Navbar() {
         </div>
 
       </div>
+      <CityPicker 
+        open={cityOpen} 
+        onClose={() => setCityOpen(false)} 
+        city={location} 
+        onPick={(picked) => {
+          setLocation(picked);
+          setCityOpen(false);
+        }} 
+      />
     </nav>
   );
 }

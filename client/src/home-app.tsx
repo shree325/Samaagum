@@ -112,6 +112,7 @@ export const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 
 export function DashboardApp() {
   const token = localStorage.getItem('token');
+  const { requireAuth, modal, closeModal } = useRequireAuth();
 
   // Guests are allowed — onboardingChecked starts true for guests
   const [onboardingChecked, setOnboardingChecked] = useState(!token);
@@ -306,12 +307,32 @@ export function DashboardApp() {
 
     fetch(`${apiBase}/api/public/detect-location`)
       .then(r => r.json())
-      .then(res => {
+      .then(async (res) => {
         localStorage.setItem('samaagum_detect_attempted_at', new Date().toISOString());
         if (res.success && res.data?.city_name) {
           localStorage.setItem('samaagum_detected_city', JSON.stringify(res.data));
           if (!localStorage.getItem('samaagum_location_locked') && !window.ME?.location) {
             setCity(res.data.city_name);
+          }
+        } else {
+          try {
+            const fallbackRes = await fetch("https://ipwho.is/");
+            const fallbackData = await fallbackRes.json();
+            if (fallbackData && fallbackData.success && fallbackData.city) {
+               const cityData = {
+                 city_name: fallbackData.city,
+                 state_name: fallbackData.region,
+                 country_name: fallbackData.country,
+                 latitude: fallbackData.latitude,
+                 longitude: fallbackData.longitude
+               };
+               localStorage.setItem('samaagum_detected_city', JSON.stringify(cityData));
+               if (!localStorage.getItem('samaagum_location_locked') && !window.ME?.location) {
+                 setCity(fallbackData.city);
+               }
+            }
+          } catch (err) {
+            console.error("Local IP location fallback failed:", err);
           }
         }
       })
@@ -1505,7 +1526,7 @@ useEffect(() => {
       </div>
 
       {/* Auth Required Modal — shown for any guarded guest action */}
-      <AuthRequiredModal modal={authModal} onClose={closeModal} />
+      <AuthRequiredModal modal={modal} onClose={closeModal} />
 
       {/* Visual Toast Notification Container */}
       <div className="toast-container">
@@ -1756,7 +1777,6 @@ useEffect(() => {
           </div>
         </div>
       )}
-      <GlobalAIAssistantWidget aiEnabled={aiFeatureEnabled && (entitlements?.ai_assistant_enabled || false)} />
     </div>
   );
 }
