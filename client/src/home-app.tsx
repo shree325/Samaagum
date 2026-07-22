@@ -17,7 +17,9 @@ import { Messages } from './home-messages';
 import { Notifications } from './home-notifications';
 import { Profile } from './home-profile';
 import { SettingsPage } from './home-settings';
-import { CityPicker, Sidebar, Topbar } from './home-shell';
+import { CityPicker, Sidebar, Topbar, GuestSidebar, GuestTopbar } from './home-shell';
+import { canAccess } from './route-registry';
+import { useRequireAuth, AuthRequiredModal } from './auth-guard';
 import { apiBase, UpgradePage, CheckoutPage, CheckoutSuccessPage } from './home-subscription';
 import { ClaimFlow, MyTickets, AllTickets, TicketDetail, ScanHub, ScanEventPage } from './home-tickets';
 import { EventDashboard } from './event-dashboard';
@@ -111,7 +113,8 @@ export const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 export function DashboardApp() {
   const token = localStorage.getItem('token');
 
-  const [onboardingChecked, setOnboardingChecked] = useState(!token); // skip check if no token (will redirect anyway)
+  // Guests are allowed — onboardingChecked starts true for guests
+  const [onboardingChecked, setOnboardingChecked] = useState(!token);
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [aiFeatureEnabled, setAiFeatureEnabled] = useState(true);
 
@@ -139,19 +142,45 @@ export function DashboardApp() {
     };
   }, []);
 
-  // ── Onboarding gate ──────────────────────────────────────────────────────────
-  // On every home-page load, verify the user has completed onboarding.
-  // If not, redirect back to the auth page at the step they left off at.
+  // ── Auth guard + Pending Navigation Resume ───────────────────────────────────
+  // Uses the declarative route registry to decide if a guest may see this view.
+  // If not, saves destination to pendingNavigation and redirects to auth.
+  // After login, DashboardApp reads pendingNavigation and resumes the right page.
   useEffect(() => {
-    const hash = window.location.hash;
-    const isPublicRoute = hash.startsWith('#event=') || hash.startsWith('#/event/');
-    if (!token && !isPublicRoute) {
+    const hash = window.location.hash; // e.g. #/event?id=uuid
+    // Parse view from hash  (#/discover?category=Arts → 'discover')
+    const hashPath = hash.replace(/^#\/?/, '').split('?')[0];
+    const currentView = hashPath || 'home';
+
+    if (!canAccess(currentView, token)) {
+      // Save where the guest was trying to go (only id, not full objects)
+      const params = new URLSearchParams(hash.split('?')[1] || '');
+      const id = params.get('id');
+      localStorage.setItem('pendingNavigation', JSON.stringify({
+        view: currentView,
+        param: id ? { id } : undefined
+      }));
       window.location.replace('/');
       return;
     }
-    if (!token && isPublicRoute) {
+
+    if (!token) {
+      // Guest on an allowed route — no onboarding needed
       setOnboardingChecked(true);
-      return; // Skip onboarding check for public routes
+      return;
+    }
+
+    // Authenticated: resume pending navigation if any
+    const pending = localStorage.getItem('pendingNavigation');
+    if (pending) {
+      localStorage.removeItem('pendingNavigation');
+      try {
+        const { view: pv, param: pp } = JSON.parse(pending);
+        if (pv && pv !== 'home') {
+          // Slight delay so the app renders first
+          setTimeout(() => go(pv, pp), 50);
+        }
+      } catch {}
     }
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const base = isLocalhost ? 'http://localhost:3000' : window.location.origin;
@@ -210,6 +239,18 @@ export function DashboardApp() {
     };
   }, []);
   const [city, setCity] = useState(() => {
+    const hash = window.location.hash;
+    let urlLoc = "";
+    if (hash.includes('?')) {
+      const params = new URLSearchParams(hash.split('?')[1]);
+      urlLoc = params.get('location') || "";
+    } else {
+      const params = new URLSearchParams(window.location.search);
+      urlLoc = params.get('location') || "";
+    }
+    if (urlLoc) {
+      return urlLoc.split(',')[0].trim();
+    }
     if (window.ME?.location) return window.ME.location;
     const manual = localStorage.getItem('samaagum_selected_city');
     if (manual) { try { return JSON.parse(manual).city_name || "Global"; } catch { return manual; } }
@@ -1351,7 +1392,9 @@ useEffect(() => {
           </div>
         );
       }
-      const e = cur.param || FEATURED;
+      const queryParams = new URLSearchParams(location.search);
+      const queryId = queryParams.get('id');
+      const e = cur.param || (queryId ? { id: queryId } : FEATURED);
       const isOwner = window.ME && (e.hostBy === window.ME.name || e.host === window.ME.name || e.created_by === window.ME.id || (st.createdEvents && st.createdEvents.some(ce => ce.id === e.id)));
       const isAdmin = window.ME?.role && window.ME.role.toLowerCase().includes("admin");
       const isModerator = window.ME?.role && window.ME.role.toLowerCase().includes("moderator");
@@ -1388,7 +1431,12 @@ useEffect(() => {
         return <JoinEventPage ev={evWithStatus} st={st} go={go} />;
       }
     }
-    if (v === "group") return <GroupDetail group={cur.param} st={st} go={go} />;
+    if (v === "group") {
+      const queryParams = new URLSearchParams(location.search);
+      const queryId = queryParams.get('id');
+      const gObj = cur.param || (queryId ? { id: queryId } : null);
+      return <GroupDetail group={gObj} st={st} go={go} />;
+    }
     if (v === "profile") return <Profile st={st} go={go} />;
     if (v === "settings") return <SettingsPage st={st} go={go} activeTabParam={cur.param} />;
     if (v === "public-profile") return <PublicProfile profile={cur.param} go={go} socket={socket} />;
@@ -1436,16 +1484,28 @@ useEffect(() => {
   // Don't render anything until we know if onboarding is complete
   if (!onboardingChecked) return null;
 
+  // Expose requireAuth on st so Discover/HomeFeed can guard mutations
+  st.requireAuth = requireAuth;
+
   return (
-    <div className={`app ${mobile?"mobile":""} ${sidebarCollapsed?"collapsed":""}`}>
-      {!mobile && <Sidebar view={navKey} go={go} counts={counts} collapsed={sidebarCollapsed} onToggleCollapse={()=>setSidebarCollapsed(v=>!v)} chatSettings={chatSettings} hasScannerEvents={scannerEvents.length > 0} />}
+    <div className={`app ${mobile?"mobile":""} ${!token?"no-sidebar":""} ${sidebarCollapsed?"collapsed":""}`}>
+      {!mobile && token && (
+        <Sidebar view={navKey} go={go} counts={counts} collapsed={sidebarCollapsed} onToggleCollapse={()=>setSidebarCollapsed(v=>!v)} chatSettings={chatSettings} hasScannerEvents={scannerEvents.length > 0} />
+      )}
       <div className="content">
-        {mobile ? <MobileTop go={go} counts={counts} city={city} chatSettings={chatSettings} hasScannerEvents={scannerEvents.length > 0} />
-          : <Topbar go={go} counts={counts} dark={t.dark} onToggleTheme={() => setTweak("dark", !t.dark)} city={city} onCity={() => setCityOpen(true)} chatSettings={chatSettings} />}
+        {mobile
+          ? <MobileTop go={go} counts={counts} city={city} chatSettings={chatSettings} hasScannerEvents={scannerEvents.length > 0} />
+          : token
+            ? <Topbar go={go} counts={counts} dark={t.dark} onToggleTheme={() => setTweak("dark", !t.dark)} city={city} onCity={() => setCityOpen(true)} chatSettings={chatSettings} />
+            : <GuestTopbar go={go} city={city} onCity={() => setCityOpen(true)} onCreateClick={() => requireAuth({ reason: 'create' }, () => go('create-event'))} />
+        }
         {renderView()}
-        {mobile && <TabBar view={cur.view} go={go} counts={counts} chatSettings={chatSettings} />}
+        {mobile && token && <TabBar view={cur.view} go={go} counts={counts} chatSettings={chatSettings} />}
         <CityPicker open={cityOpen} onClose={() => setCityOpen(false)} city={city} onPick={setCity} />
       </div>
+
+      {/* Auth Required Modal — shown for any guarded guest action */}
+      <AuthRequiredModal modal={authModal} onClose={closeModal} />
 
       {/* Visual Toast Notification Container */}
       <div className="toast-container">

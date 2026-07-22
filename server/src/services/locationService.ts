@@ -151,7 +151,16 @@ class LocationService {
   }
 
   public async detectByIp(ip: string): Promise<DetectedLocation | null> {
-    if (!ip || this.isPrivateIp(ip)) return null;
+    if (!ip || this.isPrivateIp(ip)) {
+      const activeCityRow = await prisma.city_controls.findFirst({
+        where: { is_active: true },
+        orderBy: { city_name: 'asc' }
+      });
+      if (activeCityRow) {
+        return this.toDetectedLocation(activeCityRow);
+      }
+      return null;
+    }
 
     const block = await this.blocksRepo.findByIp(ip);
     if (!block?.geoname_id) return null;

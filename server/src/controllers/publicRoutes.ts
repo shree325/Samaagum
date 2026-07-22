@@ -91,12 +91,80 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
       const categories = await categoryRepo.findAll();
       // Sort alphabetically in JS since findAll doesn't accept order directly
       categories.sort((a: ICategory, b: ICategory) => (a.name || '').localeCompare(b.name || ''));
+      
+      const enriched = await Promise.all(categories.map(async (c: any) => {
+        const count = await prisma.groups.count({
+          where: { category: c.name }
+        });
+        return {
+          id: c.id,
+          name: c.name,
+          icon: c.icon_value || c.icon || "📁",
+          icon_value: c.icon_value || c.icon || "📁",
+          groupCount: count,
+          status: c.status || 'active',
+          is_deleted: c.is_deleted || false
+        };
+      }));
+
       return {
         success: true,
-        data: categories
+        data: enriched
       };
     } catch (error: any) {
       return reply.status(500).send({ success: false, message: error.message || 'Failed to fetch categories.' });
+    }
+  });
+
+  // Get dynamic database statistics
+  fastify.get('/statistics', async (request, reply) => {
+    try {
+      const userCount = await prisma.users.count();
+      const groupCount = await prisma.groups.count();
+      const eventCount = await prisma.events.count();
+      
+      let cityCount = 0;
+      try {
+        const activeCities = await prisma.$queryRawUnsafe<any[]>(
+          `SELECT COUNT(DISTINCT city_name) as count FROM city_controls WHERE is_active = true`
+        );
+        cityCount = Number(activeCities[0]?.count || 0);
+      } catch (err) {
+        cityCount = 0;
+      }
+
+      const formatStat = (count: number, defaultSuffix = "+") => {
+        if (count >= 1000) {
+          const val = Math.round(count / 100) / 10;
+          return {
+            value: val,
+            suffix: "K+",
+            decimals: val % 1 === 0 ? 0 : 1
+          };
+        }
+        return {
+          value: count,
+          suffix: defaultSuffix,
+          decimals: 0
+        };
+      };
+
+      const members = formatStat(userCount, "+");
+      const groups = formatStat(groupCount, "+");
+      const events = formatStat(eventCount, "+");
+      const cities = formatStat(cityCount, "+");
+
+      return {
+        success: true,
+        data: [
+          { id: "s1", value: members.value, suffix: members.suffix, decimals: members.decimals, label: "Members worldwide", c1: "#ff6b4a", c2: "#ff4d8d" },
+          { id: "s2", value: groups.value, suffix: groups.suffix, decimals: groups.decimals, label: "Active Groups", c1: "#6d5efc", c2: "#2a7fff" },
+          { id: "s3", value: events.value, suffix: events.suffix, decimals: events.decimals, label: "Events hosted", c1: "#10b981", c2: "#22d3ee" },
+          { id: "s4", value: cities.value, suffix: cities.suffix, decimals: cities.decimals, label: "Cities & growing", c1: "#f59e0b", c2: "#ef6f53" }
+        ]
+      };
+    } catch (error: any) {
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to fetch statistics.' });
     }
   });
 
@@ -245,6 +313,114 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
       };
     } catch (error: any) {
       return reply.status(500).send({ success: false, message: error.message || 'Search failed' });
+    }
+  });
+
+  // Public featured events for landing page
+  fastify.get('/featured-events', async (request, reply) => {
+    try {
+      const events = await prisma.events.findMany({
+        where: {
+          status: 'published',
+          starts_at: { gt: new Date() }
+        },
+        orderBy: { starts_at: 'asc' },
+        take: 12
+      });
+
+      const enriched = await Promise.all(events.map(async (ev: any) => {
+        const attendeeCount = await prisma.attendees.count({
+          where: {
+            bookings: {
+              event_id: ev.id,
+              status: 'confirmed'
+            }
+          }
+        });
+        const venueObj = ev.venue ? (typeof ev.venue === 'string' ? JSON.parse(ev.venue) : ev.venue) : {};
+        const visibility = venueObj?.visibility || 'public';
+        if (visibility !== 'public') return null;
+
+        // Extract speaker / host info if present
+        let hostName = 'Samaagum Host';
+        try {
+          const hostInfo = await EventService.resolveHostInfo(ev.hosted_by_entity_id).catch(() => null);
+          if (hostInfo && hostInfo.hostName) {
+            hostName = hostInfo.hostName;
+          }
+        } catch (e) {}
+
+        return {
+          id: ev.id,
+          title: ev.title,
+          cover: venueObj?.meta?.cover || null,
+          starts_at: ev.starts_at,
+          location_type: ev.location_type,
+          loc: venueObj?.name || venueObj?.address || 'Venue TBA',
+          attendeeCount,
+          category: venueObj?.meta?.category || 'Meetup',
+          isFree: String(ev.registration_mode) === 'free' || String(ev.registration_mode) === 'free_rsvp',
+          price: String(ev.registration_mode) === 'free' ? 'Free' : 'Paid',
+          speaker: venueObj?.meta?.speaker || null,
+          duration: venueObj?.meta?.duration || null,
+          host: hostName
+        };
+      }));
+
+      return { success: true, data: enriched.filter(Boolean).slice(0, 6) };
+    } catch (error: any) {
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to fetch featured events' });
+    }
+  });
+
+  // Public popular groups for landing page
+  fastify.get('/popular-groups', async (request, reply) => {
+    try {
+      const groups = await prisma.groups.findMany({
+        where: {
+          entities: {
+            visibility: 'public'
+          }
+        },
+        include: {
+          entities: true
+        },
+        take: 20
+      });
+
+      const enriched = await Promise.all(groups.map(async (g: any) => {
+        const settings = g.settings ? (typeof g.settings === 'string' ? JSON.parse(g.settings) : g.settings) : {};
+        if (settings.isDraft || settings.isArchived) return null;
+
+        const memberCount = await prisma.group_memberships.count({
+          where: {
+            group_id: g.entity_id,
+            state: 'active'
+          }
+        });
+
+        const id = g.entity_id;
+        const bannerUrl = g.banner_data ? `/api/groups/${id}/banner` : (g.banner && !g.banner.startsWith('blob:') ? g.banner : null);
+        const iconUrl = g.icon_data ? `/api/groups/${id}/icon` : (g.icon && !g.icon.startsWith('blob:') ? g.icon : null);
+
+        return {
+          id: g.entity_id,
+          name: g.name,
+          desc: g.description || 'Join our group to learn, share, and connect with like-minded individuals.',
+          logo: iconUrl || g.icon || '👥',
+          cover: bannerUrl || g.cover || null,
+          members: memberCount,
+          category: g.category || 'General',
+          tags: g.settings?.tags || []
+        };
+      }));
+
+      const filtered = enriched.filter(Boolean);
+      filtered.sort((a: any, b: any) => b.members - a.members);
+
+      return { success: true, data: filtered.slice(0, 6) };
+    } catch (error: any) {
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to fetch popular groups' });
     }
   });
 

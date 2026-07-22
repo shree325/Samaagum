@@ -184,6 +184,10 @@ html, body {
   grid-template-columns: 72px 1fr;
 }
 
+.app.no-sidebar {
+  grid-template-columns: 1fr;
+}
+
 .app.mobile {
   grid-template-columns: 1fr;
   display: flex;
@@ -403,6 +407,10 @@ html, body {
   z-index: 20;
   flex-shrink: 0;
   box-sizing: border-box;
+}
+
+.tb-spacer {
+  flex: 1;
 }
 
 .tb-search {

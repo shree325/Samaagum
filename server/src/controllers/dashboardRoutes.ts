@@ -89,7 +89,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
             const sevenDaysAgo = new Date();
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-            // Fetch events created within 7 days, published, starts in future, and has cover
+            // Fetch events created within 7 days, published, starts in future
             const recentEvents = await prisma.events.findMany({
                 where: {
                     status: 'published',
@@ -97,7 +97,6 @@ export const dashboardRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
                     created_at: { gte: sevenDaysAgo }
                 },
                 orderBy: { created_at: 'desc' },
-                take: 10,
                 include: {
                     ticket_types: true
                 }

@@ -1116,7 +1116,8 @@ export function Discover({ st, go, param }) {
               </div>
 
               {/* Scrollable Filters Content */}
-              <div className="scroll" style={{ padding: '20px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 20 }}>                {tab === "events" && (
+              <div className="scroll" style={{ padding: '20px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {tab === "events" && (
                   <>
                     {/* Timing filters */}
                     <div>

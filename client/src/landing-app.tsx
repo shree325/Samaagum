@@ -13,10 +13,6 @@ import { Hero, Nav, TrustStrip } from './landing-hero';
 var { useEffect: useEffectApp } = React;
 
 export function App() {
-  useEffectApp(() => {
-    const lenis = initLenis();
-    return () => { if (lenis && lenis.destroy) lenis.destroy(); };
-  }, []);
   return (
     <React.Fragment>
       <Nav />
@@ -43,4 +39,5 @@ if (!root) {
   (container as any).__reactRoot = root;
 }
 root.render(<App />);
+
 

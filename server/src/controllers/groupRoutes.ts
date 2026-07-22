@@ -224,7 +224,7 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
 
 
     // GET /:id
-    fastify.get('/:id', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+    fastify.get('/:id', { preHandler: [(fastify as any).optionalAuthenticate] }, async (request: any, reply) => {
 
         try {
             const { id } = request.params as any;
@@ -656,7 +656,7 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
     });
 
     // GET /:id/posts
-    fastify.get('/:id/posts', { preHandler: [(fastify as any).authenticate] }, async (request: any, reply) => {
+    fastify.get('/:id/posts', { preHandler: [(fastify as any).optionalAuthenticate] }, async (request: any, reply) => {
         try {
             const { id } = request.params as any;
             const data = await GroupService.getGroupPosts(id, request.query, request.user);
