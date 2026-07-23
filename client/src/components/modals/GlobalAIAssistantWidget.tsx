@@ -56,9 +56,8 @@ export function GlobalAIAssistantWidget({ aiEnabled }: { aiEnabled?: boolean }) 
                 setMessages(prev => [...prev, { role: 'ai', content: "Generating your event and redirecting..." }]);
                 
                 const draft = json.data.data || {};
-                if (draft.imagePrompt) {
-                    draft.cover = `https://image.pollinations.ai/prompt/${encodeURIComponent(draft.imagePrompt)}?width=1080&height=1080&nologo=true`;
-                }
+                const promptForImage = draft.imagePrompt || `A beautiful, high quality cover image for an event titled "${draft.title}"`;
+                draft.cover = `https://image.pollinations.ai/prompt/${encodeURIComponent(promptForImage)}?width=1080&height=1080&nologo=true`;
                 
                 localStorage.setItem('sg_draft_event', JSON.stringify({
                     title: draft.title,
@@ -85,9 +84,8 @@ export function GlobalAIAssistantWidget({ aiEnabled }: { aiEnabled?: boolean }) 
                 setMessages(prev => [...prev, { role: 'ai', content: "Generating your group and redirecting..." }]);
                 
                 const draft = json.data.data || {};
-                if (draft.imagePrompt) {
-                    draft.banner = `https://image.pollinations.ai/prompt/${encodeURIComponent(draft.imagePrompt)}?width=1080&height=1080&nologo=true`;
-                }
+                const promptForImage = draft.imagePrompt || `A beautiful, high quality cover banner for a group named "${draft.name}"`;
+                draft.banner = `https://image.pollinations.ai/prompt/${encodeURIComponent(promptForImage)}?width=1080&height=1080&nologo=true`;
 
                 localStorage.setItem('sg_draft_group', JSON.stringify({
                     name: draft.name,

@@ -94,7 +94,12 @@ export const adminRbacRoutes: FastifyPluginAsync = async (fastify: FastifyInstan
 
             if (search) { sql += ` AND (name ILIKE $${i} OR display_name ILIKE $${i})`; params.push(`%${search}%`); i++; }
             if (isSystemRole !== undefined) { sql += ` AND is_system_role = $${i}`; params.push(isSystemRole === 'true'); i++; }
-            if (isActive !== undefined) { sql += ` AND is_active = $${i}`; params.push(isActive === 'true'); i++; }
+            if (isActive !== undefined) { 
+                sql += ` AND is_active = $${i}`; params.push(isActive === 'true'); i++; 
+            } else {
+                // Default to only showing active roles in the UI
+                sql += ` AND is_active = true`;
+            }
             if (isDefault !== undefined) { sql += ` AND is_default = $${i}`; params.push(isDefault === 'true'); i++; }
 
             if (request.user?.role !== 'super_admin' && request.user?.tenantId) {

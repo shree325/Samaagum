@@ -30,7 +30,7 @@ For a GROUP, use this JSON schema:
   "description": "A well-written, engaging description explaining the purpose of the group (at least 2 paragraphs).",
   "category": "One of: Technology, Business, Arts, Social, Sports, Education, Health, Other",
   "tags": ["tag1", "tag2", "tag3", "tag4"],
-  "imagePrompt": "A highly descriptive, vivid prompt to generate a 1:1 aspect ratio cover image/banner for this group. (e.g., 'A vibrant futuristic cityscape with neon lights at night, highly detailed, 4k')",
+  "imagePrompt": "A highly descriptive, vivid prompt to generate a 1:1 aspect ratio cover image/banner for this group. YOU MUST PROVIDE THIS.",
   "visibility": "One of: public, private, hidden. Default to public unless implied otherwise.",
   "joinElig": "One of: anyone, restricted, invite. Default to anyone.",
   "approval": boolean, // True if user asks for join approvals to be enabled
@@ -43,7 +43,7 @@ For an EVENT, use this JSON schema:
   "description": "A well-written, engaging description explaining what the event is about, who should attend, and what to expect (at least 2 paragraphs).",
   "category": "One of: Conference, Meetup, Workshop, Party, Seminar, Networking, Other",
   "tags": ["tag1", "tag2", "tag3"],
-  "imagePrompt": "A highly descriptive, vivid prompt to generate a 1:1 aspect ratio cover banner for this event. (e.g., 'A professional tech conference stage with bright purple lighting, audience in shadows')",
+  "imagePrompt": "A highly descriptive, vivid prompt to generate a 1:1 aspect ratio cover banner for this event. YOU MUST PROVIDE THIS.",
   "startDate": "YYYY-MM-DD" // Required if relative or exact date is specified, otherwise null,
   "startTime": "HH:MM" // 24-hour format string (e.g., '15:00' for 3 PM). Required if specified, otherwise null,
   "endDate": "YYYY-MM-DD",
@@ -138,7 +138,7 @@ If "create_event" or "create_group", return:
     "questionnaireEnabled": true_or_false,
     "joinElig": "anyone, restricted, or invite",
     "capacity": 100,
-    "imagePrompt": "A highly descriptive prompt to generate a 1:1 aspect ratio cover banner/image for this..."
+    "imagePrompt": "A highly descriptive prompt to generate a 1:1 aspect ratio cover banner/image for this. YOU MUST PROVIDE THIS."
   }
 }
 `;
