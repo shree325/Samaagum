@@ -14,6 +14,7 @@ import { AccessControlModal } from './features/Access/AccessControlModal';
 import { TicketSettingsModal } from './features/Ticketing/TicketSettingsModal';
 import { QuestionnaireModal } from './features/Questionnaire/QuestionnaireModal';
 import { Toggle } from './ui/Toggle';
+import { HtmlRenderer } from '../components/HtmlRenderer';
 
 import { format24to12, getDurationText, getTzInfo, parse12to24, addOneHour } from './utils/time';
 import { getSelectedNodesWithDetails } from './utils/access-tree';
