@@ -1058,6 +1058,39 @@ export function PublicProfile({ profile, go, socket }) {
                 </div>
               )}
 
+              {/* Personal Details Grid */}
+              {(p.dob || p.gender) && (
+                <div style={{ marginTop: 32, paddingBottom: 24, borderBottom: `1px solid ${colors.border}` }}>
+                  <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0, color: colors.textMain, marginBottom: 16 }}>Personal Details</h2>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 24 }}>
+                    {p.dob && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-500">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 12, color: colors.textMuted }}>Date of Birth</div>
+                          <div style={{ fontSize: 14, color: colors.textMain, fontWeight: 500 }}>
+                            {new Date(p.dob).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {p.gender && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div className="w-10 h-10 rounded-xl bg-pink-500/10 flex items-center justify-center text-pink-500">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="10" r="4"/><path d="M12 14v7"/><path d="M9 18h6"/></svg>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 12, color: colors.textMuted }}>Gender</div>
+                          <div style={{ fontSize: 14, color: colors.textMain, fontWeight: 500, textTransform: "capitalize" }}>{p.gender}</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Interests Section */}
               {p.skills && p.skills.length > 0 && (
                 <div style={{ marginTop: 32, paddingBottom: 24, borderBottom: `1px solid ${colors.border}` }}>

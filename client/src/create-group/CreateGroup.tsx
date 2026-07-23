@@ -374,8 +374,10 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
       };
 
       const apiBaseUrl = window.location.port === "8080" ? "http://localhost:3000" : "";
-      const endpoint = isEdit ? `${apiBaseUrl}/api/groups/${editGroup.id}` : `${apiBaseUrl}/api/groups`;
-      const method = isEdit ? 'PUT' : 'POST';
+      
+      const isRealEdit = isEdit && editGroup?.id && editGroup.id !== 'new' && editGroup.id !== 'local' && editGroup.id !== 'undefined';
+      const endpoint = isRealEdit ? `${apiBaseUrl}/api/groups/${editGroup.id}` : `${apiBaseUrl}/api/groups`;
+      const method = isRealEdit ? 'PUT' : 'POST';
 
       const res = await fetch(endpoint, {
         method,
@@ -388,11 +390,20 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
       const data = await res.json();
 
       if (data.success) {
-        if (!isEdit) localStorage.removeItem(draftKey);
+        if (!isRealEdit || editGroup?.__isLocalDraft) {
+          localStorage.removeItem(draftKey);
+        }
+        
+        if (!isRealEdit && editGroup?.__deleteOldDraftId) {
+          fetch(`${apiBaseUrl}/api/drafts/${editGroup.__oldDraftType}/${editGroup.__deleteOldDraftId}`, {
+            method: 'DELETE',
+            headers: token ? { Authorization: `Bearer ${token}` } : {}
+          }).catch(e => console.warn('Failed to delete old draft', e));
+        }
 
         if (joinElig === "invite") {
           const groupId = data.data.id;
-          if (!isEdit && pendingInviteEmails.length > 0) {
+          if (!isRealEdit && pendingInviteEmails.length > 0) {
             for (const email of pendingInviteEmails) {
               try {
                 await fetch(`${apiBaseUrl}/api/groups/${groupId}/invites`, {
@@ -415,7 +426,7 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
               const linkData = await linkRes.json();
               if (linkData.success && linkData.data.token) {
                 const inviteLink = `${window.location.origin}${window.location.pathname}#/groups/invite/${linkData.data.token}`;
-                if (!isEdit) {
+                if (!isRealEdit) {
                   alert(`Group created successfully!\n\nHere is your invite link:\n${inviteLink}\n\nUsers can only join using this link. You can also find it in your Group Dashboard.`);
                 }
               }
@@ -427,7 +438,7 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
 
         const navDest = isDraftSubmit
           ? { view: "groups", param: { tab: "created", createdSub: "drafts" } }
-          : isEdit
+          : isRealEdit
             ? { view: "group", param: { ...editGroup, name, category: cat, description: desc, icon, cover, banner, visibility, joinMode: approval ? "approval" : joinElig === "invite" ? "invite_only" : joinElig === "communities" ? "restricted" : "open" } }
             : { view: "group", param: { ...previewG, id: data.data.id, posts: 0, members: 1 } };
 

@@ -611,7 +611,21 @@ export function MyTickets({ st, go }) {
                 </div>
                 <span className="perf l" /><span className="perf r" />
                 <div className="tkt-body">
-                  <div className="tkt-ttl">{e.title}</div>
+                  <div className="tkt-ttl" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.title}</span>
+                    {e.status === "draft" && (
+                      <span style={{ 
+                        display: "inline-flex", alignItems: "center", gap: 4,
+                        padding: "2px 8px", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em",
+                        background: "linear-gradient(135deg, rgba(245,158,11,0.1), rgba(245,158,11,0.2))",
+                        color: "#f59e0b", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 12, flexShrink: 0,
+                        boxShadow: "0 2px 8px rgba(245,158,11,0.1)"
+                      }}>
+                        <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#f59e0b", opacity: 0.8 }} />
+                        Draft
+                      </span>
+                    )}
+                  </div>
                   <div className="tkt-meta">
                     <span><I.cal style={{ width: 14, height: 14 }} /> {e.date} · {e.time}</span>
                     <span>{e.online ? <I.online style={{ width: 14, height: 14 }} /> : <I.pin style={{ width: 14, height: 14 }} />} {e.venue}</span>
@@ -683,7 +697,7 @@ export function MyTickets({ st, go }) {
                   </div>
                   <span className="perf l" /><span className="perf r" />
                   <div className="tkt-body">
-                    <div className="tkt-ttl">{t.ev}</div>
+                    <div className="tkt-ttl">{t.title || t.ev}</div>
                     <div className="tkt-meta">
                       <span><I.cal style={{ width: 14, height: 14 }} /> {t.date} · {t.time}</span>
                       <span>{t.online ? <I.online style={{ width: 14, height: 14 }} /> : <I.pin style={{ width: 14, height: 14 }} />} {t.venue}</span>

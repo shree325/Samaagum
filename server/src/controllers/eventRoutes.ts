@@ -2232,7 +2232,18 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
             if (!request.user) return reply.status(401).send({ success: false, message: 'Unauthorized' });
             const { id, ttId } = request.params as any;
             await assertHostOrCoHost(id, request.user.id);
-            await prisma.ticket_types.delete({ where: { id: ttId } });
+            try {
+                await prisma.ticket_types.delete({ where: { id: ttId } });
+            } catch (err: any) {
+                if (err.code === 'P2003') {
+                    throw new Error('Cannot delete this ticket type because it is already in use by existing bookings. Please hide it instead.');
+                }
+                if (err.code === 'P2025') {
+                    // Record doesn't exist, treat as success
+                } else {
+                    throw err;
+                }
+            }
             return reply.send({ success: true });
         } catch (e: any) {
             const status = e.message?.startsWith('Forbidden') ? 403 : 500;

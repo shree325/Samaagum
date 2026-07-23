@@ -219,7 +219,7 @@ export function Topbar({ go, counts, dark, onToggleTheme, city, onCity, chatSett
       <div className="tb-search" ref={searchContainerRef} style={{ position: "relative" }}>
         <span className="ic"><I.search/></span>
         <input 
-          placeholder="Search events, groups, people, interests…" 
+          placeholder="Search events, groups..." 
           value={searchQuery}
           onChange={handleSearchChange}
           onFocus={() => { if (searchQuery.trim()) setSearchOpen(true); }}

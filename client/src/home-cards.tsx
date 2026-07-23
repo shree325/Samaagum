@@ -206,7 +206,7 @@ export const GroupCard = React.memo(function GroupCard({ g, onOpen, joined, onJo
   }
 
   return (
-    <div className="gcard rise" onClick={()=>onOpen(g)}>
+    <div className="gcard rise" onClick={()=> onOpen?.(g)}>
       <div className="gcov" style={{
           backgroundImage: bannerSrc ? `url("${bannerSrc}")` : undefined,
           backgroundColor: g.cover,

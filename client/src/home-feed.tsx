@@ -651,7 +651,7 @@ export function HomeFeed({ st, go }: any) {
                     <DiscussionRow
                       key={d.id}
                       d={mapped}
-                      onOpen={() => go("group", { id: d.group?.id, name: d.group?.name })}
+                      onOpen={() => go("group", { id: d.group?.id, name: d.group?.name, postId: d.id })}
                     />
                   );
                 })}
