@@ -17,6 +17,7 @@ interface DiscussionTabProps {
   handleJoinClick: () => void;
   isPending: boolean;
   canEdit: (createdAt: any) => boolean;
+  g: any;
 }
 
 export function DiscussionTab({
@@ -29,7 +30,8 @@ export function DiscussionTab({
   ME,
   handleJoinClick,
   isPending,
-  canEdit
+  canEdit,
+  g
 }: DiscussionTabProps) {
   const {
     posts,
@@ -197,7 +199,7 @@ export function DiscussionTab({
           <span style={{ fontSize: 13 }}>Only moderators, admins or selected members can create new threads.</span>
         </div>
       )}
-      {!isMember && isPublicGroup && forumsEnabled && (
+      {!isMember && isPublicGroup && forumsEnabled && g.join_mode !== 'invite_only' && g.settings?.joinElig !== 'invite' && (
         <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-md)", padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <span style={{ fontSize: 13, color: "var(--ink-2)" }}>Join this group to create threads and reply to discussions.</span>
           <button className="hbtn hbtn--primary hbtn--sm" onClick={handleJoinClick}>{isPending ? "Pending" : "Join group"}</button>

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FEATURED, ME } from './home-data';
+import { CheckoutModal } from './checkout_modal';
+import { HtmlRenderer } from './components/HtmlRenderer';
 import { Avatar, Grain } from './home-icons';
 import { Waitlist } from './home-waitlist';
 import { I } from './home-icons';
@@ -372,7 +374,7 @@ function EventDetail({ ev, st, go }) {
                   </div>
                 </div>
                 <div className="ev-about">
-                  <p>{e.desc || "Join us for an unforgettable evening bringing together the most interesting people in the city. Whether you're here to learn, connect, or simply enjoy the atmosphere — there's a place for you."}</p>
+                  {e.desc ? <HtmlRenderer content={e.desc} /> : <p>Join us for an unforgettable evening bringing together the most interesting people in the city. Whether you're here to learn, connect, or simply enjoy the atmosphere — there's a place for you.</p>}
                   <p>Expect curated conversations, a welcoming community, and the kind of serendipity that only happens in the same room. Doors open 30 minutes early — come say hi.</p>
                 </div>
               </div>

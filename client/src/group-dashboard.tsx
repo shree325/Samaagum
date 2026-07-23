@@ -962,7 +962,7 @@ export const GroupDashboard: React.FC<GroupDashboardProps> = ({
                               <div style={{ marginTop: 8, padding: 12, background: "var(--bg)", borderRadius: 8, fontSize: 13, border: "1px solid var(--border)" }}>
                                 <h5 style={{ margin: "0 0 8px 0", fontSize: 11, textTransform: "uppercase", color: "var(--ink-3)", letterSpacing: "0.05em", fontWeight: 600 }}>Questionnaire Answers</h5>
                                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                                  {Object.entries(m.answers).map(([key, ans]) => {
+                                  {Object.entries(m.answers).filter(([k]) => !['ticketName', 'isQuestionnaireSubmit', 'tickets', 'buyer', 'attendees', 'transactionId', 'registration_location'].includes(k)).map(([key, ans]) => {
                                     const qidx = parseInt(key);
                                     const qs = group?.settings?.questionnaires || [];
                                     const q = (!isNaN(qidx) && qidx < 1000) ? qs[qidx] : qs.find(x => x.id === key);

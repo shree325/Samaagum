@@ -55,7 +55,12 @@ export interface EventDraft {
   visibility: string;
   joinMode: string;
   selectedAccess: {
-    restricted: {
+    visibility: {
+      communities: string[];
+      subCommunities: string[];
+      groups: string[];
+    };
+    join: {
       communities: string[];
       subCommunities: string[];
       groups: string[];

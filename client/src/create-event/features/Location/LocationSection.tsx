@@ -1,67 +1,7 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react';
 import { I } from '../../../home-icons';
-
-function detectProvider(url: string): 'zoom' | 'google' | null {
-  if (!url) return null;
-  if (url.includes('zoom.us')) return 'zoom';
-  if (url.includes('meet.google.com')) return 'google';
-  return null;
-}
-
-function MeetingLinkModal({
-  provider,
-  initialUrl,
-  onClose,
-  onSave,
-}: { provider: 'zoom' | 'google'; initialUrl: string; onClose: () => void; onSave: (url: string) => void }) {
-  const [url, setUrl] = useState(initialUrl);
-  const isGoogle = provider === 'google';
-  const icon = isGoogle ? '📹' : '🎥';
-  const name = isGoogle ? 'Google Meet' : 'Zoom';
-  const placeholder = isGoogle ? 'https://meet.google.com/xxx-xxxx-xxx' : 'https://zoom.us/j/xxxxxxxxxx';
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}>
-      <div style={{ background: 'var(--surface)', width: 400, borderRadius: '20px', padding: 28, boxShadow: 'var(--sh-xl)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-          <span style={{ fontSize: 28 }}>{icon}</span>
-          <div>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--ink)' }}>Add {name} Link</h3>
-            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--ink-3)' }}>Paste your meeting link below</p>
-          </div>
-        </div>
-        <input className="cinput" type="text" placeholder={placeholder} value={url} onChange={e => setUrl(e.target.value)}
-          style={{ width: '100%', background: 'var(--field)', border: '1px solid var(--border)', marginBottom: 16 }} />
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button type="button" className="hbtn hbtn--ghost" style={{ flex: 1 }} onClick={onClose}>Cancel</button>
-          <button type="button" className="hbtn hbtn--primary" style={{ flex: 1 }} onClick={() => { if (url.trim()) onSave(url.trim()); }}>Save Link</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MeetingPreviewCard({ url, onEdit, onRemove }: { url: string; onEdit: () => void; onRemove: () => void }) {
-  const provider = detectProvider(url);
-  const icon = provider === 'google' ? '📹' : provider === 'zoom' ? '🎥' : '🔗';
-  const name = provider === 'google' ? 'Google Meet' : provider === 'zoom' ? 'Zoom Meeting' : 'Virtual Link';
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--field)', border: '1px solid var(--border)', borderRadius: 12, marginTop: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-        <span style={{ fontSize: 20 }}>{icon}</span>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>{name}</div>
-          <div style={{ fontSize: 11, color: 'var(--ink-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>{url}</div>
-        </div>
-      </div>
-      <div style={{ display: 'flex', gap: 6 }}>
-        <button type="button" onClick={onEdit} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--accent-2)', fontSize: 12, fontWeight: 600 }}>Edit</button>
-        <button type="button" onClick={onRemove} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#e5484d', fontSize: 12, fontWeight: 600 }}>Remove</button>
-      </div>
-    </div>
-  );
-}
+import { MeetingLinkModal, MeetingPreviewCard, detectProvider } from '../../../VirtualMeetings';
 
 export function LocationSection({
   venue,

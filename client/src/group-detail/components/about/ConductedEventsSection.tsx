@@ -1,6 +1,7 @@
 import React from 'react';
 import { Grain } from '../../../home-icons';
 import { formatDate, formatTime } from '../../utils/date';
+import { HtmlRenderer } from '../../../components/HtmlRenderer/HtmlRenderer';
 
 interface ConductedEventsSectionProps {
   groupId: string;
@@ -137,7 +138,7 @@ export function ConductedEventsSection({ groupId }: ConductedEventsSectionProps)
                 </div>
                 {(ev.description || ev.desc) && (
                   <div style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: 8 }}>
-                    {ev.description || ev.desc}
+                    <HtmlRenderer content={ev.description || ev.desc} />
                   </div>
                 )}
                 {category && (

@@ -1161,6 +1161,7 @@ export function DashboardApp() {
 
   const [createdEvents, setCreatedEvents] = useState(() => []);
   const [joinedEvents, setJoinedEvents] = useState([]);
+  const [joinedGroups, setJoinedGroups] = useState([]);
   const [eventRoles, setEventRoles] = useState([]);
   const [scannerEvents, setScannerEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
@@ -1193,6 +1194,21 @@ export function DashboardApp() {
         }
       })
       .catch(err => console.error('Error fetching joined events', err));
+  }, [apiBase]);
+
+  const fetchJoinedGroups = useCallback(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    fetch(`${apiBase}/api/groups/my`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.data) {
+          setJoinedGroups(res.data.joinedGroups || []);
+        }
+      })
+      .catch(err => console.error('Error fetching joined groups', err));
   }, [apiBase]);
 
   const fetchEventRoles = useCallback(() => {
@@ -1249,9 +1265,10 @@ useEffect(() => {
   fetchEvents();
   fetchEventRoles();
   fetchJoinedEvents();
+  fetchJoinedGroups();
   fetchCreatedEvents();
   fetchScannerEvents();
-}, [fetchEvents, fetchEventRoles, fetchJoinedEvents, fetchCreatedEvents, fetchScannerEvents]);
+}, [fetchEvents, fetchEventRoles, fetchJoinedEvents, fetchJoinedGroups, fetchCreatedEvents, fetchScannerEvents]);
 
 // Listen for external triggers to refresh joined events (e.g., waitlist_closed from home-tickets.tsx)
 useEffect(() => {
@@ -1297,6 +1314,7 @@ useEffect(() => {
     myTickets, setMyTickets, waitlisted, toggleWaitlist, addClaimedTicket,
     createdEvents, setCreatedEvents, createdGroups, setCreatedGroups, fetchCreatedEvents,
     joinedEvents, setJoinedEvents, fetchJoinedEvents,
+    joinedGroups, setJoinedGroups, fetchJoinedGroups,
     eventRoles, fetchEventRoles,
     scannerEvents, fetchScannerEvents,
     fetchEvents,
@@ -1626,15 +1644,6 @@ useEffect(() => {
                         <span style={{ fontSize: 12, color: "var(--ink-3)" }}>I accept the terms</span>
                       </label>
                     </div>
-                  )}
-
-                  {field.type === "phone" && (
-                    <input
-                      className="cinput"
-                      placeholder="+91..."
-                      value={questAnswers[field.id] || ""}
-                      onChange={(e) => setQuestAnswers(prev => ({ ...prev, [field.id]: e.target.value }))}
-                    />
                   )}
 
                   {field.type === "website" && (

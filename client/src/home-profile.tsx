@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useEffect, useRef, useState } from 'react';
 import { VirtualCard } from './VirtualCard';
-import { LocationSelector } from './components';
+import { LocationSelector, INTERESTS } from './components';
 import { GroupCard } from './home-cards';
 import { COVERS, EVENTS, GROUPS, ME } from './home-data';
 import { Avatar } from './home-icons';
@@ -336,7 +336,7 @@ export function Profile({ st, go }) {
       const nameParts = (ME.name || "").trim().split(" ");
       const firstName = nameParts[0] || "";
       const lastName = nameParts.slice(1).join(" ") || "";
-      
+
       formData.append("firstName", firstName);
       formData.append("lastName", lastName);
       formData.append("displayName", ME.name || "");
@@ -367,7 +367,7 @@ export function Profile({ st, go }) {
           },
           body: formData
         });
-        
+
         if (res.ok) {
           ME.img = base64Data;
           window.dispatchEvent(new CustomEvent('samaagum:profileSync', {
@@ -508,6 +508,18 @@ export function Profile({ st, go }) {
   };
 
   const handleSaveLinks = async () => {
+    // Validate URLs
+    for (const [key, value] of Object.entries(linkForm)) {
+      if (value && typeof value === 'string' && value.trim() !== '') {
+        const url = value.trim();
+        const isValid = /^(https?:\/\/)?([\w\-]+\.)+[a-z]{2,}(\/.*)?$/i.test(url);
+        if (!isValid) {
+          alert(`Please enter a valid URL for ${key.charAt(0).toUpperCase() + key.slice(1)}`);
+          return;
+        }
+      }
+    }
+
     setSavingLinks(true);
     try {
       const api = window.location.port === "8080" ? "http://localhost:3000" : window.location.origin;
@@ -631,17 +643,17 @@ export function Profile({ st, go }) {
               {/* Stats Row */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 32, borderBottom: `1px solid ${colors.border}` }}>
                 <div style={{ flex: 1, textAlign: "center" }}>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: colors.textMain }}>{ME.stats.groups}</div>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: colors.textMain }}>{st?.joinedGroups?.length || 0}</div>
                   <div style={{ fontSize: 14, color: colors.textMuted, marginTop: 6, fontWeight: 500 }}>Group</div>
                 </div>
                 <div style={{ color: colors.sparkle, fontSize: 18 }}>✦</div>
                 <div style={{ flex: 1, textAlign: "center" }}>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: colors.textMain }}>1</div>
-                  <div style={{ fontSize: 14, color: colors.textMuted, marginTop: 6, fontWeight: 500 }}>Interest</div>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: colors.textMain }}>{ME.skills?.length || 0}</div>
+                  <div style={{ fontSize: 14, color: colors.textMuted, marginTop: 6, fontWeight: 500 }}>Interest{(ME.skills?.length || 0) !== 1 ? 's' : ''}</div>
                 </div>
                 <div style={{ color: colors.sparkle, fontSize: 18 }}>✦</div>
                 <div style={{ flex: 1, textAlign: "center" }}>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: colors.textMain }}>{ME.stats.events}</div>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: colors.textMain }}>{st?.joinedEvents?.length || 0}</div>
                   <div style={{ fontSize: 14, color: colors.textMuted, marginTop: 6, fontWeight: 500 }}>RSVPs</div>
                 </div>
               </div>
@@ -1012,28 +1024,62 @@ export function Profile({ st, go }) {
                 {isEditingInterests ? (
                   <div style={{ marginTop: 24, background: colors.cardBg, border: `1px solid ${colors.border}`, padding: 24, borderRadius: 20 }}>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>
-                      {interestsForm.map((skill, i) => (
-                        <div key={i} style={{ background: "var(--bg-1)", border: `1px solid ${colors.border}`, borderRadius: 24, padding: "8px 16px", color: colors.textMain, fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
-                          {skill}
-                          <button onClick={() => handleRemoveInterest(skill)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", display: "flex", alignItems: "center", padding: 2, borderRadius: "50%" }} className="hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                      {/* Render predefined INTERESTS */}
+                      {INTERESTS.map(([name, col], i) => {
+                        const isSelected = interestsForm.includes(name);
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => {
+                              if (isSelected) setInterestsForm(interestsForm.filter(x => x !== name));
+                              else setInterestsForm([...interestsForm, name]);
+                            }}
+                            style={{
+                              background: isSelected ? "var(--accent-1)" : "var(--bg-1)",
+                              border: `1px solid ${isSelected ? "var(--accent-1)" : colors.border}`,
+                              borderRadius: 24,
+                              padding: "8px 16px",
+                              color: isSelected ? "white" : colors.textMain,
+                              fontSize: 14,
+                              fontWeight: 600,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              cursor: "pointer",
+                              transition: "all 0.2s"
+                            }}
+                            className="hover:opacity-80"
+                          >
+                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: isSelected ? "white" : col, display: "inline-block" }}></span>
+                            {name}
                           </button>
-                        </div>
+                        );
+                      })}
+                      {/* Render custom user interests that aren't in predefined INTERESTS */}
+                      {interestsForm.filter(name => !INTERESTS.some(i => i[0] === name)).map((name, i) => (
+                        <button
+                          key={'custom-' + i}
+                          onClick={() => setInterestsForm(interestsForm.filter(x => x !== name))}
+                          style={{
+                            background: "var(--accent-1)",
+                            border: `1px solid var(--accent-1)`,
+                            borderRadius: 24,
+                            padding: "8px 16px",
+                            color: "white",
+                            fontSize: 14,
+                            fontWeight: 600,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            cursor: "pointer",
+                            transition: "all 0.2s"
+                          }}
+                          className="hover:opacity-80"
+                        >
+                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "white", display: "inline-block" }}></span>
+                          {name}
+                        </button>
                       ))}
-                    </div>
-
-                    <div style={{ display: "flex", gap: 12 }}>
-                      <input
-                        className="cfield"
-                        placeholder="Add a new interest..."
-                        value={newInterest}
-                        onChange={(e) => setNewInterest(e.target.value)}
-                        onKeyDown={handleAddInterest}
-                        style={{ background: colors.bgContainer, border: `1px solid ${colors.border}`, color: colors.textMain, padding: "12px 16px", borderRadius: 10, fontSize: 15, outline: "none", flex: 1, boxSizing: "border-box" }}
-                      />
-                      <button onClick={handleAddInterest} style={{ background: "var(--accent-1)", color: "white", border: "none", padding: "0 20px", borderRadius: 10, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
-                        <I.plus style={{ width: 18, height: 18 }} /> Add
-                      </button>
                     </div>
 
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 24, paddingTop: 20, borderTop: `1px solid ${colors.border}` }}>

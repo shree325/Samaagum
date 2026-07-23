@@ -40,8 +40,17 @@ export function apiEventToFormState(apiEvent: any): Partial<EventDraft> {
 
     visibility:   apiEvent.venue_raw?.visibility ?? apiEvent.venue?.visibility ?? 'unlisted',
     joinMode:     apiEvent.join_mode ?? 'restricted',
-    selectedAccess: meta.selectedAccess ?? {
-      restricted: { communities: [], subCommunities: [], groups: [] },
+    selectedAccess: {
+      visibility: {
+        communities: meta.selectedAccess?.visibility?.communities ?? meta.selectedAccess?.restricted?.communities ?? [],
+        subCommunities: meta.selectedAccess?.visibility?.subCommunities ?? meta.selectedAccess?.restricted?.subCommunities ?? [],
+        groups: meta.selectedAccess?.visibility?.groups ?? meta.selectedAccess?.restricted?.groups ?? [],
+      },
+      join: {
+        communities: meta.selectedAccess?.join?.communities ?? meta.selectedAccess?.restricted?.communities ?? [],
+        subCommunities: meta.selectedAccess?.join?.subCommunities ?? meta.selectedAccess?.restricted?.subCommunities ?? [],
+        groups: meta.selectedAccess?.join?.groups ?? meta.selectedAccess?.restricted?.groups ?? [],
+      },
     },
 
     locType:          apiEvent.location_type === 'online' ? 'online' : 'offline',

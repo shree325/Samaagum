@@ -1,6 +1,6 @@
 import React from 'react';
-import { Avatar, Grain } from './home-icons';
-import { I } from './home-icons';
+import { I, Avatar, Grain } from './home-icons';
+import { HtmlRenderer } from './components/HtmlRenderer';
 
 /* ============================================================
    Samaagum Home — shared cards (event, group, person, discussion)
@@ -126,7 +126,7 @@ export const FeatureCard = React.memo(function FeatureCard({ ev, onOpen, wishlis
       <div className="fbody">
         <span className="eyebrow2">Featured this week</span>
         <div className="ttl">{ev.title}</div>
-        <p className="dsc">{ev.desc}</p>
+        <div className="dsc">{ev.desc ? <HtmlRenderer content={ev.desc} /> : null}</div>
         <div className="fmeta">
           <div className="row"><span className="ico"><I.cal/></span><span><span className="k">When</span><br/><span className="v">{dateStr} · {timeStr}</span></span></div>
           <div className="row"><span className="ico"><I.pin/></span><span><span className="k">Where</span><br/><span className="v">{venueStr}, {ev.city || ''}</span></span></div>
@@ -222,7 +222,7 @@ export const GroupCard = React.memo(function GroupCard({ g, onOpen, joined, onJo
           {g.visibility === "private" && <I.lock style={{ width: 14, height: 14, color: "var(--ink-3)" }} title="Private Group" />}
           {g.visibility === "hidden" && <I.eyeOff style={{ width: 14, height: 14, color: "var(--ink-3)" }} title="Hidden Group" />}
         </div>
-        <div className="gdsc">{g.description || g.desc}</div>
+        <div className="gdsc">{g.description || g.desc ? <HtmlRenderer content={g.description || g.desc} /> : null}</div>
         {displayLocation && (
           <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--ink)", fontSize: 13, fontWeight: 500, margin: "8px 0", overflow: "hidden" }}>
             <I.pin style={{ width: 14, height: 14, flexShrink: 0, color: "var(--ink-2)" }} />

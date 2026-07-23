@@ -1670,10 +1670,10 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       const meta = venueObj.meta || {};
       const isRestricted = meta.joinEligibility === 'restricted';
       const isInviteOnly = meta.joinEligibility === 'invite';
-      const approvalRequired = event.approval_required || isRestricted;
+      const approvalRequired = event.approval_required;
 
       if (isRestricted && !isHostOrCoHost) {
-        const allowedGroups: string[] = meta.selectedAccess?.restricted?.groups || [];
+        const allowedGroups: string[] = meta.selectedAccess?.join?.groups || meta.selectedAccess?.restricted?.groups || [];
         const hasAccess = allowedGroups.length > 0 && await GroupService.userInGroups(userId, allowedGroups);
         if (!hasAccess) {
           return reply.status(403).send({ success: false, message: "You don't have access to join this event." });

@@ -403,7 +403,7 @@ export function CreateEventForm({ go, mobile, st, editEv, hostGroupId }: any) {
                           if (val === 'unlisted' && !allowedVisibilities.includes('unlisted')) { form.triggerUpgrade('Unlisted Event Visibility'); return; }
                           if (val === 'custom' && !allowedVisibilities.includes('custom')) { form.triggerUpgrade('Custom Access Event Visibility'); return; }
                           form.setVisibility(val);
-                          if (val === 'custom') form.setAccessModalOpen(true);
+                          if (val === 'custom') { form.setAccessModalMode('visibility'); form.setAccessModalOpen(true); }
                         }} style={{ background: 'var(--field)', border: '1px solid var(--border)', height: 42 }}>
                           <option value="public">{!allowedVisibilities.includes('public') && '🔒 '}Public</option>
                           <option value="unlisted">{!allowedVisibilities.includes('unlisted') && '🔒 '}Unlisted</option>
@@ -417,19 +417,19 @@ export function CreateEventForm({ go, mobile, st, editEv, hostGroupId }: any) {
                     <div style={{ marginBottom: 16, padding: 12, background: 'var(--field)', borderRadius: 'var(--r-md)', border: '1px solid var(--border)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                         <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-3)' }}>Custom Visible Entities</span>
-                        <button type="button" className="hbtn hbtn--ghost hbtn--sm" onClick={() => form.setAccessModalOpen(true)} style={{ padding: '4px 8px', fontSize: 11 }}>Configure Access</button>
+                        <button type="button" className="hbtn hbtn--ghost hbtn--sm" onClick={() => { form.setAccessModalMode('visibility'); form.setAccessModalOpen(true); }} style={{ padding: '4px 8px', fontSize: 11 }}>Configure Access</button>
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                        {getSelectedNodesWithDetails(ACCESS_TREE, form.selectedAccess.restricted).map(entity => {
+                        {getSelectedNodesWithDetails(ACCESS_TREE, form.selectedAccess.visibility).map(entity => {
                           const icon = entity.type === 'community' ? '🏛️' : entity.type === 'subcommunity' ? '📁' : '👥';
                           return (
-                            <span key={entity.id} onClick={() => form.setAccessModalOpen(true)}
+                            <span key={entity.id} onClick={() => { form.setAccessModalMode('visibility'); form.setAccessModalOpen(true); }}
                               style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--accent-soft)', color: 'var(--accent-2)', fontSize: 12, fontWeight: 600, padding: '6px 12px', borderRadius: 999, cursor: 'pointer' }}>
                               <span>{icon}</span><span>{entity.name}</span>
                             </span>
                           );
                         })}
-                        {getSelectedNodesWithDetails(ACCESS_TREE, form.selectedAccess.restricted).length === 0 && (
+                        {getSelectedNodesWithDetails(ACCESS_TREE, form.selectedAccess.visibility).length === 0 && (
                           <div style={{ fontSize: 13, color: 'var(--ink-3)', fontStyle: 'italic' }}>No visible entities selected yet. Click "Configure Access" to customize.</div>
                         )}
                       </div>
@@ -438,8 +438,8 @@ export function CreateEventForm({ go, mobile, st, editEv, hostGroupId }: any) {
 
                   <div className="cfield" style={{ marginBottom: 0 }}>
                     <label>Event Description</label>
-                    <div style={{ minHeight: 64, background: 'var(--field)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '12px 16px', color: form.desc ? 'var(--ink)' : 'var(--ink-3)', cursor: 'pointer', fontSize: 14 }} onClick={() => form.setDescModalOpen(true)}>
-                      {form.desc ? form.desc : "Click to open editor. Tell people what to expect — the vibe, who it's for, what they'll leave with."}
+                    <div style={{ minHeight: 64, background: 'var(--field)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '12px 16px', cursor: 'pointer' }} onClick={() => form.setDescModalOpen(true)}>
+                      {form.desc ? <HtmlRenderer content={form.desc} /> : <span style={{ color: 'var(--ink-3)', fontSize: 14 }}>Click to open editor. Tell people what to expect — the vibe, who it's for, what they'll leave with.</span>}
                     </div>
                   </div>
                 </div>
@@ -535,7 +535,7 @@ export function CreateEventForm({ go, mobile, st, editEv, hostGroupId }: any) {
                         {!allowedJoinModes.includes('public') && '🔒 '}🌐 Public Event
                         <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--ink-3)', marginTop: 4 }}>Anyone can view and register for this event.</div>
                       </button>
-                      <button type="button" onClick={() => { if (!allowedJoinModes.includes('restricted')) { form.triggerUpgrade('Restricted Access Event Join Eligibility'); return; } form.setJoinEligibility('restricted'); form.setAccessModalOpen(true); }}
+                      <button type="button" onClick={() => { if (!allowedJoinModes.includes('restricted')) { form.triggerUpgrade('Restricted Access Event Join Eligibility'); return; } form.setJoinEligibility('restricted'); form.setAccessModalMode('join'); form.setAccessModalOpen(true); }}
                         style={{ padding: '12px', borderRadius: 'var(--r-md)', border: form.joinEligibility === 'restricted' ? '1.5px solid var(--accent-2)' : '1px solid var(--border)', background: form.joinEligibility === 'restricted' ? 'var(--accent-soft)' : 'var(--field)', color: 'var(--ink)', fontWeight: 600, cursor: 'pointer', textAlign: 'left', outline: 'none', fontFamily: 'inherit' }}>
                         {!allowedJoinModes.includes('restricted') && '🔒 '}👥 Restricted Access
                         <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--ink-3)', marginTop: 4 }}>Only members of selected groups can join.</div>
@@ -552,19 +552,19 @@ export function CreateEventForm({ go, mobile, st, editEv, hostGroupId }: any) {
                     <div style={{ marginBottom: 16, padding: 12, background: 'var(--field)', borderRadius: 'var(--r-md)', border: '1px solid var(--border)', marginTop: -4 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                         <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-2)' }}>Allowed Groups</span>
-                        <button type="button" className="hbtn hbtn--ghost hbtn--sm" onClick={() => form.setAccessModalOpen(true)} style={{ padding: '4px 8px', fontSize: 11 }}>⚙️ Configure</button>
+                        <button type="button" className="hbtn hbtn--ghost hbtn--sm" onClick={() => { form.setAccessModalMode('join'); form.setAccessModalOpen(true); }} style={{ padding: '4px 8px', fontSize: 11 }}>⚙️ Configure</button>
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                        {getSelectedNodesWithDetails(ACCESS_TREE, form.selectedAccess.restricted).map(entity => {
+                        {getSelectedNodesWithDetails(ACCESS_TREE, form.selectedAccess.join).map(entity => {
                           const icon = entity.type === 'community' ? '🏛️' : entity.type === 'subcommunity' ? '📁' : '👥';
                           return (
-                            <span key={entity.id} onClick={() => form.setAccessModalOpen(true)}
+                            <span key={entity.id} onClick={() => { form.setAccessModalMode('join'); form.setAccessModalOpen(true); }}
                               style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--accent-soft)', color: 'var(--accent-2)', fontSize: 12, fontWeight: 600, padding: '6px 12px', borderRadius: 999, cursor: 'pointer' }}>
                               <span>{icon}</span><span>{entity.name}</span>
                             </span>
                           );
                         })}
-                        {getSelectedNodesWithDetails(ACCESS_TREE, form.selectedAccess.restricted).length === 0 && (
+                        {getSelectedNodesWithDetails(ACCESS_TREE, form.selectedAccess.join).length === 0 && (
                           <div style={{ fontSize: 13, color: 'var(--ink-3)', fontStyle: 'italic' }}>No groups selected yet. Click "Configure" to select.</div>
                         )}
                       </div>
@@ -813,7 +813,7 @@ export function CreateEventForm({ go, mobile, st, editEv, hostGroupId }: any) {
               <h2 style={{ fontSize: 16, fontWeight: 600 }}>Event Description</h2>
               <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => form.setDescModalOpen(false)}><I.x /></button>
             </div>
-            <textarea className="ctext" style={{ flex: 1, border: 'none', borderRadius: 0, padding: 24, fontSize: 15, resize: 'none' }} placeholder="Write your full description here..." value={form.desc} onChange={e => form.setDesc(e.target.value)} autoFocus />
+            <RichTextEditor className="ctext" style={{ flex: 1, border: 'none', borderRadius: 0, fontSize: 15, overflowY: 'auto' }} placeholder="Write your full description here..." value={form.desc} onChange={html => form.setDesc(html)} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', borderTop: '1px solid var(--border)', background: 'var(--bg-2)' }}>
               <button className="hbtn hbtn--ghost" onClick={() => form.setAiModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(120,90,255,.08)', border: '1px solid rgba(120,90,255,.25)', color: '#c8bcff', borderRadius: '999px', padding: '10px 16px' }}>✨ Suggest with AI</button>
               <button className="hbtn hbtn--primary" onClick={() => form.setDescModalOpen(false)}>Done</button>
@@ -893,7 +893,7 @@ export function CreateEventForm({ go, mobile, st, editEv, hostGroupId }: any) {
       <AccessControlModal
         open={form.accessModalOpen}
         onClose={() => form.setAccessModalOpen(false)}
-        mode="restricted"
+        mode={form.accessModalMode}
         selectedAccess={form.selectedAccess}
         setSelectedAccess={form.setSelectedAccess}
       />

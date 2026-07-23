@@ -148,7 +148,7 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
   const [banner, setBanner] = useState(isEdit ? (editGroup.banner || "") : (savedDraft.banner || ""));
   const [cat, setCat] = useState(isEdit ? (editGroup.category || "Design") : (savedDraft.cat || "Design"));
   const [desc, setDesc] = useState(isEdit ? (editGroup.description || "") : (savedDraft.desc || ""));
-  
+
   const [categoriesList, setCategoriesList] = useState([]);
   useEffect(() => {
     const fetchCategories = async () => {
@@ -190,7 +190,7 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
     if (sje === 'invite' || editGroup.joinMode === 'invite_only') return 'invite';
     return 'anyone';
   })() : (savedDraft.joinElig || (canJoinOpen ? "anyone" : (canJoinRestricted ? "restricted" : "invite")))); // anyone, restricted, invite
-  
+
   const [accessModal, setAccessModal] = useState(false);
   const [selectedAccess, setSelectedAccess] = useState(() => {
     const d = isEdit ? (editGroup.settings?.restrictedAccess?.join || {}) : (savedDraft.selectedAccess || {});
@@ -260,7 +260,7 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
   const [limitCap, setLimitCap] = useState(isEdit ? (editGroup.settings?.capacity?.limit || false) : (savedDraft.limitCap || false));
   const [maxCap, setMaxCap] = useState(isEdit ? (editGroup.settings?.capacity?.max?.toString() || "") : (savedDraft.maxCap || ""));
   const [waitlist, setWaitlist] = useState(isEdit ? (editGroup.settings?.capacity?.waitlist || false) : (savedDraft.waitlist || false));
-  
+
   const [approval, setApproval] = useState(isEdit ? (editGroup.joinMode === 'approval') : (savedDraft.approval || false));
 
   // Advanced Settings Toggles
@@ -311,12 +311,12 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
     fetch(`${apiBaseUrl}/api/public/groups-hierarchy`)
       .then(r => r.json())
       .then(d => { if (d.success) setHierarchy(d.data); })
-      .catch(() => {});
+      .catch(() => { });
     if (token) {
       fetch(`${apiBaseUrl}/api/groups/my-managed`, { headers: { 'Authorization': `Bearer ${token}` } })
         .then(r => r.json())
         .then(d => { if (d.success) setMyManagedGroups(d.data); })
-        .catch(() => {});
+        .catch(() => { });
     }
   }, []);
 
@@ -386,7 +386,7 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
         body: JSON.stringify(payload)
       });
       const data = await res.json();
-      
+
       if (data.success) {
         if (!isEdit) localStorage.removeItem(draftKey);
 
@@ -428,8 +428,8 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
         const navDest = isDraftSubmit
           ? { view: "groups", param: { tab: "created", createdSub: "drafts" } }
           : isEdit
-          ? { view: "group", param: { ...editGroup, name, category: cat, description: desc, icon, cover, banner, visibility, joinMode: approval ? "approval" : joinElig === "invite" ? "invite_only" : joinElig === "communities" ? "restricted" : "open" } }
-          : { view: "group", param: { ...previewG, id: data.data.id, posts: 0, members: 1 } };
+            ? { view: "group", param: { ...editGroup, name, category: cat, description: desc, icon, cover, banner, visibility, joinMode: approval ? "approval" : joinElig === "invite" ? "invite_only" : joinElig === "communities" ? "restricted" : "open" } }
+            : { view: "group", param: { ...previewG, id: data.data.id, posts: 0, members: 1 } };
 
         if (visibility === "private" && !isDraftSubmit) {
           try {
@@ -668,8 +668,8 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-2)", display: "block", marginBottom: 6 }}>Category</label>
-                  <select 
-                    className="cselect" 
+                  <select
+                    className="cselect"
                     style={{ width: "100%", padding: "8px 12px", fontSize: 13, height: 36, border: "1.5px solid var(--border)", background: "var(--field)", borderRadius: "var(--r-sm)" }}
                     value={cat}
                     onChange={e => setCat(e.target.value)}
@@ -720,9 +720,9 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
               <div className="cfield">
                 <label>Visibility</label>
                 <div className="vis-pills">
-                  <button 
-                    type="button" 
-                    className={`vis-pill ${visibility === "public" ? "on" : ""}`} 
+                  <button
+                    type="button"
+                    className={`vis-pill ${visibility === "public" ? "on" : ""}`}
                     onClick={() => {
                       if (!canPublic) {
                         triggerUpgrade("Public Group Visibility");
@@ -733,9 +733,9 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
                   >
                     {!canPublic && "🔒 "}Public
                   </button>
-                  <button 
-                    type="button" 
-                    className={`vis-pill ${visibility === "private" ? "on" : ""}`} 
+                  <button
+                    type="button"
+                    className={`vis-pill ${visibility === "private" ? "on" : ""}`}
                     onClick={() => {
                       if (!canUnlisted) {
                         triggerUpgrade("Unlisted Group Visibility");
@@ -746,9 +746,9 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
                   >
                     {!canUnlisted && "🔒 "}Unlisted
                   </button>
-                  <button 
-                    type="button" 
-                    className={`vis-pill ${visibility === "hidden" ? "on" : ""}`} 
+                  <button
+                    type="button"
+                    className={`vis-pill ${visibility === "hidden" ? "on" : ""}`}
                     onClick={() => {
                       if (!canRestricted) {
                         triggerUpgrade("Restricted-Access Group Visibility");
@@ -1054,18 +1054,18 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
 
           <div style={{ display: "flex", gap: 12, marginTop: 20 }}>
             {!isEdit && (
-              <button 
-                type="button" 
-                className="hbtn hbtn--ghost" 
+              <button
+                type="button"
+                className="hbtn hbtn--ghost"
                 style={{ flex: 1, padding: "12px", fontWeight: 600, fontSize: 14.5, justifyContent: "center" }}
                 onClick={() => handleCreateGroup(true)}
               >
                 Save as Draft
               </button>
             )}
-            <button 
-              type="button" 
-              className="hbtn hbtn--primary" 
+            <button
+              type="button"
+              className="hbtn hbtn--primary"
               style={{ flex: 2, padding: "12px", fontWeight: 600, fontSize: 14.5, justifyContent: "center" }}
               disabled={loading}
               onClick={() => handleCreateGroup(false)}
@@ -1080,7 +1080,7 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
         <div style={{ position: "sticky", top: 40, width: "100%", display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--ink-3)" }}>Live Preview</div>
           <GroupCard g={previewG} />
-          
+
           <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "16px 20px", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--r-md)", position: "relative" }}>
             <span style={{ fontSize: 20 }}>🎨</span>
             <div style={{ flex: 1 }}>
@@ -1093,12 +1093,12 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
       </div>
 
       {upgradeModalOpen && (
-        <UpgradePlanModal 
-          open={upgradeModalOpen} 
-          onClose={() => setUpgradeModalOpen(false)} 
-          feature={upgradeFeature} 
-          go={go} 
-          currentPlanName={st?.plan_name} 
+        <UpgradePlanModal
+          open={upgradeModalOpen}
+          onClose={() => setUpgradeModalOpen(false)}
+          feature={upgradeFeature}
+          go={go}
+          currentPlanName={st?.plan_name}
         />
       )}
 
@@ -1112,8 +1112,8 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
             </p>
             <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
               <input readOnly value={shareLinkForModal} className="cinput" style={{ flex: 1, padding: "10px 14px", fontSize: 13 }} onClick={e => (e.target as HTMLInputElement).select()} />
-              <button 
-                className="hbtn hbtn--primary" 
+              <button
+                className="hbtn hbtn--primary"
                 style={{ padding: "0 16px" }}
                 onClick={async () => {
                   await copyText(shareLinkForModal);
@@ -1124,8 +1124,8 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
                 {shareCopied ? "Copied!" : "Copy"}
               </button>
             </div>
-            <button 
-              className="hbtn hbtn--primary" 
+            <button
+              className="hbtn hbtn--primary"
               style={{ width: "100%", justifyContent: "center", padding: "12px", fontSize: 15, fontWeight: 600 }}
               onClick={() => {
                 setShowShareModal(false);

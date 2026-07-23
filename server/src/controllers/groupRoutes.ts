@@ -5,6 +5,7 @@ import { GroupNotificationService } from '../services/GroupNotificationService';
 import { notificationService } from '../services/NotificationService';
 import { invalidateUserCache } from './dashboardRoutes';
 import prisma from '../config/prisma';
+import { EventService } from '../services/EventService';
 
 
 export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
@@ -155,6 +156,23 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
         try {
             const { id } = request.params as any;
             const now = new Date();
+            
+            let userId: string | undefined = undefined;
+            const authHeader = request.headers.authorization;
+            if (authHeader && authHeader.startsWith('Bearer ')) {
+                const token = authHeader.substring(7);
+                try {
+                    const parts = token.split('.');
+                    if (parts.length === 3) {
+                        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+                        const uid = payload?.id;
+                        const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                        if (uid && UUID_REGEX.test(uid)) {
+                            userId = uid;
+                        }
+                    }
+                } catch {}
+            }
 
             // Fetch events hosted by this group's entity that are completed or in the past
             const events = await prisma.events.findMany({
@@ -192,7 +210,18 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 } as any
             });
 
-            const data = events.map((ev: any) => {
+            // Pre-fetch group memberships if authenticated to avoid N+1 queries
+            const userGroupSet = userId 
+                ? await EventService.fetchUserGroupSet(userId).catch(() => new Set<string>())
+                : new Set<string>();
+
+            const filteredEvents = [];
+            for (const ev of events) {
+                const allowed = await EventService.canUserAccessEvent(ev, userId, userGroupSet, true);
+                if (allowed) filteredEvents.push(ev);
+            }
+
+            const data = filteredEvents.map((ev: any) => {
                 const settings = ev.settings && typeof ev.settings === 'object' ? ev.settings : {};
                 const venue = ev.venue && typeof ev.venue === 'object' ? ev.venue : {};
                 const meta = venue.meta && typeof venue.meta === 'object' ? venue.meta : {};
