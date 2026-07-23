@@ -141,6 +141,7 @@ export const FEATURE_FLAGS = [
   { id: "ff-2", name: "Offline Proof Verification", desc: "Allows uploading cash payment proofs for event tickets.", active: true },
   { id: "ff-3", name: "PWA Check-in Gate", desc: "Enables host-side offline QR validation.", active: false },
   { id: "ff-4", name: "Maker-Checker Refunds", desc: "Enforces two-admin verification for any refund settlement.", active: true },
+  { id: "ff-5", name: "Global AI Assistant", desc: "Enables the AI Assistant globally across the platform.", active: true },
 ];
 
 // --- UNIFIED API CLIENT FOR ADMIN PANEL ---
@@ -1043,6 +1044,12 @@ export function App() {
           <button className={`sidebar-item ${activeTab === "settings" ? "active" : ""}`} onClick={() => setActiveTab("settings")}>
             <Icons.settings /> System Settings
           </button>
+
+          {isSuperAdmin && (
+            <button className={`sidebar-item ${activeTab === "feature-flags" ? "active" : ""}`} onClick={() => setActiveTab("feature-flags")}>
+              <Icons.settings /> Feature Flags
+            </button>
+          )}
         </nav>
 
         <div className="sidebar-user">
@@ -1154,6 +1161,13 @@ export function App() {
               onFormChange={setNewTenant}
               onCheckboxChange={handleTenantCheckboxChange}
               onSubmit={createTenant}
+              featureFlags={featureFlags}
+              onToggleFlag={toggleFeatureFlag}
+            />
+          )}
+
+          {activeTab === "feature-flags" && (
+            <FeatureFlagsView
               featureFlags={featureFlags}
               onToggleFlag={toggleFeatureFlag}
             />
@@ -1829,27 +1843,37 @@ export function TenantsView({ tenants, newTenant, onFormChange, onCheckboxChange
           </form>
         </div>
 
-        {/* Feature flags */}
-        <div className="data-panel" style={{ padding: "24px" }}>
-          <h3 style={{ margin: "0 0 16px 0", fontSize: "16px", fontWeight: "600" }}>System-Wide Feature Flags</h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            {featureFlags.map(flag => (
-              <div key={flag.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: "13.5px", fontWeight: "600" }}>{flag.name}</div>
-                  <div style={{ fontSize: "11px", color: "var(--ink-3)" }}>{flag.desc}</div>
-                </div>
-                <label className="switch">
-                  <input
-                    type="checkbox"
-                    checked={flag.active}
-                    onChange={() => onToggleFlag(flag.id)}
-                  />
-                  <span className="slider"></span>
-                </label>
+        {/* Feature flags removed from here to separate page */}
+      </div>
+    </div>
+  );
+}
+
+export function FeatureFlagsView({ featureFlags, onToggleFlag }) {
+  return (
+    <div className="admin-fade-in view-container">
+      <div className="data-panel" style={{ padding: "24px", maxWidth: "800px" }}>
+        <h3 style={{ margin: "0 0 16px 0", fontSize: "16px", fontWeight: "600" }}>System-Wide Feature Flags</h3>
+        <p style={{ margin: "0 0 24px 0", fontSize: "13px", color: "var(--ink-3)" }}>
+          Control platform-wide feature toggles. Disabling a feature here affects all users globally, even if their individual tenant entitlements allow it.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {featureFlags.map((flag: any) => (
+            <div key={flag.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: "13.5px", fontWeight: "600" }}>{flag.name}</div>
+                <div style={{ fontSize: "11px", color: "var(--ink-3)" }}>{flag.desc}</div>
               </div>
-            ))}
-          </div>
+              <label className="switch">
+                <input
+                  type="checkbox"
+                  checked={flag.active}
+                  onChange={() => onToggleFlag(flag.id)}
+                />
+                <span className="slider"></span>
+              </label>
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -3245,8 +3269,7 @@ export function SubscriptionPlansView({ user, apiBase }) {
     event_allowed_join_modes: [],
     event_max_participants: 100,
     event_checkin_methods: [],
-    event_can_create_paid_tickets: false,
-    ai_assistant_enabled: false
+    event_can_create_paid_tickets: false
   });
 
   const openEntitlements = (p) => {
@@ -3263,8 +3286,7 @@ export function SubscriptionPlansView({ user, apiBase }) {
       event_allowed_join_modes: Array.isArray(limits.event_allowed_join_modes) ? limits.event_allowed_join_modes : ['restricted', 'invite'],
       event_max_participants: typeof limits.event_max_participants === 'number' ? limits.event_max_participants : 100,
       event_checkin_methods: Array.isArray(limits.event_checkin_methods) ? limits.event_checkin_methods : ['scanner'],
-      event_can_create_paid_tickets: typeof limits.event_can_create_paid_tickets === 'boolean' ? limits.event_can_create_paid_tickets : false,
-      ai_assistant_enabled: typeof limits.ai_assistant_enabled === 'boolean' ? limits.ai_assistant_enabled : false
+      event_can_create_paid_tickets: typeof limits.event_can_create_paid_tickets === 'boolean' ? limits.event_can_create_paid_tickets : false
     });
     setEntitlementsOpen(true);
   };
@@ -3880,19 +3902,13 @@ export function SubscriptionPlansView({ user, apiBase }) {
                     />
                     Allow Paid Ticket Creations
                   </label>
-                </div>
-
-                {/* AI Features Section */}
-                <div style={{ border: "1px solid var(--border)", borderRadius: "8px", padding: "16px", background: "var(--surface-2)" }}>
-                  <h4 style={{ margin: "0 0 12px 0", fontSize: "14px", fontWeight: "600", color: "var(--accent-2)" }}>✨ AI Entitlements</h4>
-
-                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer", marginTop: "12px" }}>
                     <input 
                       type="checkbox" 
-                      checked={entForm.ai_assistant_enabled} 
+                      checked={entForm.ai_assistant_enabled || false} 
                       onChange={e => setEntForm({ ...entForm, ai_assistant_enabled: e.target.checked })} 
                     />
-                    Enable AI Features (Assistant & Generator)
+                    Enable AI Assistant
                   </label>
                 </div>
 

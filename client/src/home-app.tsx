@@ -114,6 +114,31 @@ export function DashboardApp() {
 
   const [onboardingChecked, setOnboardingChecked] = useState(!token); // skip check if no token (will redirect anyway)
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const [aiFeatureEnabled, setAiFeatureEnabled] = useState(true);
+
+  useEffect(() => {
+    const checkFlags = () => {
+      try {
+        const flagsStr = localStorage.getItem("samaagum_admin_featureFlags");
+        if (flagsStr) {
+          const flags = JSON.parse(flagsStr);
+          const aiFlag = flags.find((f: any) => f.id === "ff-5");
+          if (aiFlag) {
+            setAiFeatureEnabled(aiFlag.active);
+          }
+        }
+      } catch (e) {}
+    };
+
+    checkFlags();
+    window.addEventListener('storage', checkFlags);
+    const intervalId = setInterval(checkFlags, 2000);
+
+    return () => {
+      window.removeEventListener('storage', checkFlags);
+      clearInterval(intervalId);
+    };
+  }, []);
 
   // ── Onboarding gate ──────────────────────────────────────────────────────────
   // On every home-page load, verify the user has completed onboarding.
@@ -1404,8 +1429,8 @@ useEffect(() => {
       />
     );
     if (v === "edit-event") return <CreateEvent editEv={cur.param} go={go} mobile={mobile} st={st} />;
-    if (v === "create-group") return <CreateGroup mode={cur.param?.settings?.isDraft ? "edit" : "create"} editGroup={cur.param} go={go} mobile={mobile} st={st} />;
-    if (v === "edit-group") return <CreateGroup mode="edit" editGroup={cur.param} go={go} mobile={mobile} st={st} />;
+    if (v === "create-group") return <CreateGroup key={cur.param?.id || "create"} mode={cur.param?.settings?.isDraft ? "edit" : "create"} editGroup={cur.param} go={go} mobile={mobile} st={st} />;
+    if (v === "edit-group") return <CreateGroup key={cur.param?.id || "edit"} mode="edit" editGroup={cur.param} go={go} mobile={mobile} st={st} />;
     if (v === "event-dashboard") return <EventDashboard ev={cur.param} st={st} go={go} />;
     if (v === "group-dashboard") return <GroupDashboard group={cur.param} st={st} go={go} />;
     if (v === "scan") return <ScanHub st={st} go={go} />;
@@ -1681,7 +1706,7 @@ useEffect(() => {
           </div>
         </div>
       )}
-      <GlobalAIAssistantWidget aiEnabled={entitlements?.ai_assistant_enabled || false} />
+      <GlobalAIAssistantWidget aiEnabled={aiFeatureEnabled && (entitlements?.ai_assistant_enabled || false)} />
     </div>
   );
 }

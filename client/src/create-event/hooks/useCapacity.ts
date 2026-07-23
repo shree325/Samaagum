@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react';
 
-export function useCapacity({ draft, editEv, isNewEvent, entitlements }: any) {
+export function useCapacity({ draft, savedDraft, editEv, isNewEvent, entitlements }: any) {
   const [capacityEnabled, setCapacityEnabled] = useState(
-    draft?.capacityEnabled ?? (isNewEvent ? entitlements?.event_max_participants !== -1 : !!editEv?.capacity_total)
+    draft?.capacityEnabled ?? savedDraft?.capacityEnabled ?? (isNewEvent ? entitlements?.event_max_participants !== -1 : !!editEv?.capacity_total)
   );
   const [capacity, setCapacity] = useState(
-    draft?.capacity
+    draft?.capacity ?? savedDraft?.capacity
     ?? (isNewEvent
         ? (entitlements?.event_max_participants !== -1 ? String(entitlements?.event_max_participants) : '')
         : (editEv?.capacity_total ?? ''))
   );
   const [waitlist, setWaitlist] = useState(
-    draft?.waitlist ?? (editEv?.settings?.capacity?.waitlist ?? editEv?.waitlist ?? false)
+    draft?.waitlist ?? savedDraft?.waitlist ?? (editEv?.settings?.capacity?.waitlist ?? editEv?.waitlist ?? false)
   );
   const [capacityModalOpen, setCapacityModalOpen] = useState(false);
 

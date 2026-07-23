@@ -31,7 +31,6 @@ import { ForumSettingsModal } from './components/modals/ForumSettingsModal';
 import { GallerySettingsModal } from './components/modals/GallerySettingsModal';
 import { DescriptionModal } from './components/modals/DescriptionModal';
 import { IconPickerModal } from './components/modals/IconPickerModal';
-import { AIGeneratorModal } from '../components/modals/AIGeneratorModal';
 
 export function CreateGroup({ mode, editGroup, go, mobile, st }) {
   const entitlements = st?.entitlements || DEFAULT_FREE_ENTITLEMENTS;
@@ -55,16 +54,93 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
   const isEdit = mode === "edit" && editGroup;
 
   const draftKey = "sg_draft_group";
-  const savedDraft = useMemo(() => {
-    try { return JSON.parse(localStorage.getItem(draftKey) || "{}"); } catch { return {}; }
-  }, []);
+  
+  // Removed draft clearing on mount to allow AI drafts to be read.
+  // The draft will be cleared after successful group creation.
 
-  // Clear draft storage if we are not editing
   useEffect(() => {
-    if (!isEdit) {
-      localStorage.removeItem(draftKey);
+    if (isEdit && editGroup) {
+      setName(editGroup.name || "");
+      setIcon(editGroup.icon || "✺");
+      setCover(editGroup.cover || COVERS.violet);
+      setBanner(editGroup.banner || "");
+      setCat(editGroup.category || "Design");
+      setDesc(editGroup.description || "");
+
+      const s = editGroup.settings || {};
+
+      if (s.location) {
+        setCity(s.location.city || s.city || "");
+        setLocationState(s.location.state || "");
+        setLocationCountry(s.location.country || "");
+      } else if (s.city) {
+        setCity(s.city || "");
+      }
+
+      if (s.capacity) {
+        setLimitCap(s.capacity.limit || false);
+        setMaxCap(s.capacity.max ? s.capacity.max.toString() : "");
+        setWaitlist(s.capacity.waitlist || false);
+      }
+
+      if (s.forums) {
+        setForums(s.forums.enabled || false);
+        setForumsThreadRoles(s.forums.threadRoles || { public: true, roles: [] });
+        setForumsReplyRoles(s.forums.replyRoles || { public: true, roles: [] });
+        setForumsApprove(s.forums.approve || false);
+      }
+
+      if (s.gallery) {
+        setGallery(s.gallery.enabled || false);
+        setGalleryAllow(s.gallery.allow !== false);
+        setGalleryImageOnly(s.gallery.imageOnly || false);
+        setGalleryVideoOnly(s.gallery.videoOnly || false);
+        setGalleryApprove(s.gallery.approve || false);
+        setGalleryUploadRoles(s.gallery.uploadRoles || { public: false, roles: ['group_owner', 'group_admin', 'group_moderator'] });
+        setGalleryViewRoles(s.gallery.viewRoles || { public: true, roles: [] });
+      }
+
+      if (s.questionnaires && s.questionnaires.length > 0) {
+        setQuestionnaire(true);
+        setQuestions(s.questionnaires);
+      }
+
+      let je = "anyone";
+      if (s.joinElig === 'restricted' || s.joinElig === 'communities' || editGroup.joinMode === 'restricted') je = 'restricted';
+      else if (s.joinElig === 'invite' || editGroup.joinMode === 'invite_only') je = 'invite';
+      setJoinElig(je);
+
+      setApproval(editGroup.joinMode === 'approval');
+
+      if (s.originalVisibility) {
+        setVisibility(s.originalVisibility);
+      } else if (editGroup.visibility) {
+        let v = editGroup.visibility;
+        if (v === 'private') {
+           const vis = s.restrictedAccess?.visibility || {};
+           if ((vis.communities && vis.communities.length > 0) || 
+               (vis.groups && vis.groups.length > 0) || 
+               (vis.subCommunities && vis.subCommunities.length > 0)) {
+             v = 'hidden';
+           }
+        }
+        setVisibility(v);
+      }
+
+      if (s.restrictedAccess) {
+        if (s.restrictedAccess.join) setSelectedAccess(s.restrictedAccess.join);
+        if (s.restrictedAccess.visibility) setVisibilityAccess(s.restrictedAccess.visibility);
+      }
     }
-  }, [isEdit]);
+  }, [editGroup]);
+
+  const savedDraft = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem(draftKey) || "{}");
+    } catch {
+      return {};
+    }
+  }, [draftKey]);
 
   const [name, setName] = useState(isEdit ? (editGroup.name || "") : (savedDraft.name || ""));
   const [icon, setIcon] = useState(isEdit ? (editGroup.icon || "✺") : (savedDraft.icon || "✺"));
@@ -104,10 +180,10 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
   const [iconDrawer, setIconDrawer] = useState(false);
   const [descModal, setDescModal] = useState(false);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
-  const [aiModal, setAiModal] = useState(false);
 
   // Options Modals
-  const [visibility, setVisibility] = useState(isEdit ? (editGroup.visibility || "public") : (savedDraft.visibility || "public"));
+  const [visibility, setVisibility] = useState(isEdit ? (editGroup.visibility || "public") : (savedDraft.visibility || (canPublic ? "public" : (canUnlisted ? "private" : "hidden"))));
+
   const [joinElig, setJoinElig] = useState(isEdit ? (() => {
     const sje = editGroup.settings?.joinElig;
     if (sje === 'restricted' || sje === 'communities' || editGroup.joinMode === 'restricted') return 'restricted';
@@ -181,8 +257,8 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
   const [accessModalTarget, setAccessModalTarget] = useState("join");
 
   const [capModal, setCapModal] = useState(false);
-  const [limitCap, setLimitCap] = useState(isEdit ? (editGroup.settings?.capacity?.limit || false) : (savedDraft.capacityEnabled || savedDraft.limitCap || false));
-  const [maxCap, setMaxCap] = useState(isEdit ? (editGroup.settings?.capacity?.max?.toString() || "") : (savedDraft.capacity || savedDraft.maxCap || ""));
+  const [limitCap, setLimitCap] = useState(isEdit ? (editGroup.settings?.capacity?.limit || false) : (savedDraft.limitCap || false));
+  const [maxCap, setMaxCap] = useState(isEdit ? (editGroup.settings?.capacity?.max?.toString() || "") : (savedDraft.maxCap || ""));
   const [waitlist, setWaitlist] = useState(isEdit ? (editGroup.settings?.capacity?.waitlist || false) : (savedDraft.waitlist || false));
 
   const [approval, setApproval] = useState(isEdit ? (editGroup.joinMode === 'approval') : (savedDraft.approval || false));
@@ -269,6 +345,7 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
         visibility,
         listed: isDraftSubmit ? "unlisted" : (visibility === "public" ? "listed" : "unlisted"),
         settings: {
+          originalVisibility: visibility,
           isDraft: isDraftSubmit,
           joinElig: joinElig === "communities" ? "restricted" : joinElig,
           location: { city, state: locationState, country: locationCountry },
@@ -513,14 +590,9 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
         <div className="cf-inner">
           <div className="create-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => go("home")} style={{ padding: "7px 11px" }}><I.arrowL /></button>
+              <button className="hbtn hbtn--ghost hbtn--sm" onClick={() => { localStorage.removeItem(draftKey); if (isEdit) { go('group', editGroup); } else { go('home'); } }} style={{ padding: '7px 11px', background: 'var(--surface)' }}><I.arrowL /></button>
               <div><div className="ck">New Group</div><h1 style={{ margin: 0 }}>Create a group</h1></div>
             </div>
-            {entitlements?.ai_assistant_enabled && (
-              <button className="hbtn hbtn--primary hbtn--sm" onClick={() => setAiModal(true)} style={{ gap: 6 }}>
-                ✨ Generate with AI
-              </button>
-            )}
           </div>
 
           <div className="form-card main-info-card">
@@ -1019,53 +1091,6 @@ export function CreateGroup({ mode, editGroup, go, mobile, st }) {
           </div>
         </div>
       </div>
-
-      {locationModalOpen && (
-        <LocationModal
-          locationType={locationType} setLocationType={setLocationType}
-          venueName={venueName} setVenueName={setVenueName}
-          address={address} setAddress={setAddress}
-          city={city} setCity={setCity}
-          locationState={locationState} setLocationState={setLocationState}
-          locationCountry={locationCountry} setLocationCountry={setLocationCountry}
-          platform={platform} setPlatform={setPlatform}
-          meetingLink={meetingLink} setMeetingLink={setMeetingLink}
-          onClose={() => setLocationModalOpen(false)}
-        />
-      )}
-
-      {aiModal && (
-        <AIGeneratorModal
-          type="group"
-          onClose={() => setAiModal(false)}
-          onGenerate={(data) => {
-            if (data.name) setName(data.name);
-            if (data.description) setDesc(data.description);
-            if (data.category) setCat(data.category);
-
-            if (data.visibility) {
-              if (allowedVisibilities.includes(data.visibility)) {
-                setVisibility(data.visibility);
-              }
-            }
-            if (data.joinElig) {
-              if (data.joinElig === 'anyone' && canJoinOpen) setJoinElig('anyone');
-              else if (data.joinElig === 'restricted' && canJoinRestricted) setJoinElig('restricted');
-              else if (data.joinElig === 'invite' && canJoinInvite) setJoinElig('invite');
-            }
-            if (data.approval !== undefined) setApproval(data.approval);
-            if (data.capacity) {
-              setLimitCap(true);
-              setMaxCap(String(data.capacity));
-            }
-
-            if (data.imagePrompt) {
-              const encodedPrompt = encodeURIComponent(data.imagePrompt);
-              setBanner(`https://image.pollinations.ai/prompt/${encodedPrompt}?width=1080&height=1080&nologo=true`);
-            }
-          }}
-        />
-      )}
 
       {upgradeModalOpen && (
         <UpgradePlanModal
