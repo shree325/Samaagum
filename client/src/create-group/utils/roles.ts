@@ -9,7 +9,7 @@ export const getRolesSummaryText = (bucket) => {
       if (k === 'group_owner') return 'Owner';
       if (k === 'group_admin') return 'Admin';
       if (k === 'group_moderator') return 'Moderator';
-      if (k === 'group_member') return 'Member';
+      if (k === 'registered_user') return 'Member';
       return k;
     });
     if (names.length === 1) return names[0];

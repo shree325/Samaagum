@@ -10,5 +10,5 @@ export const getHighestRole = (roles: string[] = []): string => {
   if (roles.includes('group_owner')) return 'group_owner';
   if (roles.includes('group_admin')) return 'group_admin';
   if (roles.includes('group_moderator')) return 'group_moderator';
-  return 'group_member';
+  return 'registered_user';
 };

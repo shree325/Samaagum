@@ -430,7 +430,7 @@ export const GroupDashboard: React.FC<GroupDashboardProps> = ({
               {activeMembersList.slice(0, 5).map((m: any, i: number) => {
                 const name = typeof m === 'object' ? (m.users?.display_name || m.name || m) : m;
                 const username = typeof m === 'object' ? `@${m.users?.username || m.username || 'unknown'}` : '';
-                const role = typeof m === 'object' ? (m.role || 'group_member') : 'group_member';
+                const role = typeof m === 'object' ? (m.role || 'registered_user') : 'registered_user';
                 const roleLabel = role.replace('group_', '');
 
                 const bgColors = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6'];

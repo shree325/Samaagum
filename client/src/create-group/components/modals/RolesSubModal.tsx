@@ -21,7 +21,7 @@ export function RolesSubModal({ open, onClose, bucket, setBucket, titleText }) {
     { key: 'group_owner', label: 'Group Owner' },
     { key: 'group_admin', label: 'Group Admin' },
     { key: 'group_moderator', label: 'Group Moderator' },
-    { key: 'group_member', label: 'Group Member' }
+    { key: 'registered_user', label: 'Group Member' }
   ];
 
   return (

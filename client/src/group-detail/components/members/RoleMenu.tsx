@@ -46,7 +46,7 @@ export function RoleMenu({
       showMakeOwner = currentUserRole === 'group_owner';
       showMakeAdmin = myLevel <= 110 && targetRole !== 'group_admin';
       showMakeMod = myLevel <= 120 && targetRole !== 'group_moderator';
-      showMakeMember = myLevel <= 1000 && targetRole !== 'group_member';
+      showMakeMember = myLevel <= 1000 && targetRole !== 'registered_user';
       showRemove = true;
     }
   }
@@ -64,7 +64,7 @@ export function RoleMenu({
           {showMakeOwner && <button className="menu-btn" onClick={() => onRoleChange(memberId, 'group_owner')} style={{ width: "100%", textAlign: "left", padding: "8px 12px", fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--ink)" }}>Make Owner</button>}
           {showMakeAdmin && <button className="menu-btn" onClick={() => onRoleChange(memberId, 'group_admin')} style={{ width: "100%", textAlign: "left", padding: "8px 12px", fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--ink)" }}>Make Admin</button>}
           {showMakeMod && <button className="menu-btn" onClick={() => onRoleChange(memberId, 'group_moderator')} style={{ width: "100%", textAlign: "left", padding: "8px 12px", fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--ink)" }}>Make Moderator</button>}
-          {showMakeMember && <button className="menu-btn" onClick={() => onRoleChange(memberId, 'group_member')} style={{ width: "100%", textAlign: "left", padding: "8px 12px", fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--ink)" }}>Make Member</button>}
+          {showMakeMember && <button className="menu-btn" onClick={() => onRoleChange(memberId, 'registered_user')} style={{ width: "100%", textAlign: "left", padding: "8px 12px", fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--ink)" }}>Make Member</button>}
           {showRemove && <button className="menu-btn" onClick={() => onRemove(memberId)} style={{ width: "100%", textAlign: "left", padding: "8px 12px", fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "#ef4444", borderTop: "1px solid var(--border)", marginTop: 4, paddingTop: 6 }}>Remove Member</button>}
         </div>
       )}

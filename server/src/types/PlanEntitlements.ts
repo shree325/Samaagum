@@ -26,5 +26,5 @@ export const DEFAULT_FREE_ENTITLEMENTS: PlanEntitlements = {
   event_max_participants: 100,
   event_checkin_methods: ["scanner", "manual", "gate"],
   event_can_create_paid_tickets: false,
-  ai_assistant_enabled: false,
+  ai_assistant_enabled: true,
 };

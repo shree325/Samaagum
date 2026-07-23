@@ -130,7 +130,7 @@ export function GroupDetail({ group, st, go }: GroupDetailProps) {
   const myRoleKey = isOwner ? 'group_owner' :
                     (myMemberEntry?.role === 'owner' ? 'group_owner' :
                      myMemberEntry?.role === 'admin' ? 'group_admin' :
-                     myMemberEntry?.role === 'moderator' ? 'group_moderator' : 'group_member');
+                     myMemberEntry?.role === 'moderator' ? 'group_moderator' : 'registered_user');
 
   const myRoleRef = React.useRef(myRoleKey);
   React.useEffect(() => {
@@ -561,7 +561,7 @@ export function GroupDetail({ group, st, go }: GroupDetailProps) {
                   {members.slice(0, 5).map((m: any, i: number) => {
                     const mName = typeof m === 'object' ? (m.users?.display_name || m.name || m) : m;
                     const mUsername = typeof m === 'object' ? `@${m.users?.username || m.username || 'unknown'}` : '';
-                    const targetRole = typeof m === 'object' ? (m.role || (m.roles ? getHighestRole(m.roles) : (i === 0 ? "group_owner" : i < 3 ? "group_moderator" : "group_member"))) : "group_member";
+                    const targetRole = typeof m === 'object' ? (m.role || (m.roles ? getHighestRole(m.roles) : (i === 0 ? "group_owner" : i < 3 ? "group_moderator" : "registered_user"))) : "registered_user";
                     const mRole = targetRole.replace('group_', '');
                     const targetUserId = m.users?.id || m.id || m.user_id;
                     const isSelf = currentUserId === targetUserId;

@@ -14,7 +14,7 @@ export function MemberManagementPanel({ group, st, go }: MemberManagementPanelPr
   const g = group || st.createdGroups[0];
   const [members, setMembers] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
-  const [currentUserRole, setCurrentUserRole] = useState('group_member');
+  const [currentUserRole, setCurrentUserRole] = useState('registered_user');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [groupSettings, setGroupSettings] = useState(g?.settings || {});
@@ -61,7 +61,7 @@ export function MemberManagementPanel({ group, st, go }: MemberManagementPanelPr
           if (roles.includes('group_owner')) setCurrentUserRole('group_owner');
           else if (roles.includes('group_admin')) setCurrentUserRole('group_admin');
           else if (roles.includes('group_moderator')) setCurrentUserRole('group_moderator');
-          else setCurrentUserRole('group_member');
+          else setCurrentUserRole('registered_user');
         }
       }
       const groupData = await groupRes.json();
@@ -133,7 +133,7 @@ export function MemberManagementPanel({ group, st, go }: MemberManagementPanelPr
       });
       if (res.ok) {
         setRequests(prev => prev.filter(req => req.user_id !== r.user_id));
-        setMembers(prev => [...prev, { ...r, state: 'active', roles: ['group_member'] }]);
+        setMembers(prev => [...prev, { ...r, state: 'active', roles: ['registered_user'] }]);
       } else {
         const data = await res.json().catch(() => ({}));
         alert(data.message || "Failed to approve request.");
@@ -193,6 +193,8 @@ export function MemberManagementPanel({ group, st, go }: MemberManagementPanelPr
           }
         } else if (data.data) {
           setMembers(prev => prev.map(m => m.user_id === memberId ? data.data : m));
+        } else {
+          setMembers(prev => prev.map(m => m.user_id === memberId ? { ...m, role: roleKey, roles: [roleKey] } : m));
         }
       } else {
         alert(data.message || "Failed to update role");
@@ -223,13 +225,13 @@ export function MemberManagementPanel({ group, st, go }: MemberManagementPanelPr
     'group_owner': '#eab308',
     'group_admin': '#a855f7',
     'group_moderator': '#3b82f6',
-    'group_member': 'var(--ink-3)'
+    'registered_user': 'var(--ink-3)'
   };
   const roleLabels: Record<string, string> = {
     'group_owner': 'Owner',
     'group_admin': 'Admin',
     'group_moderator': 'Moderator',
-    'group_member': 'Member'
+    'registered_user': 'Member'
   };
 
   return (

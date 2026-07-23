@@ -1268,11 +1268,11 @@ export class GroupService {
         }
 
         const roleDef = (await this.rolesRepo.findAll({ key: role }))[0];
-        if (!roleDef && role !== 'group_member') throw new Error('Invalid role');
+        if (!roleDef && role !== 'registered_user') throw new Error('Invalid role');
 
         if (role === 'group_owner') {
             const adminRoleDef = (await this.rolesRepo.findAll({ key: 'group_admin' }))[0];
-            const groupRoles = await this.rolesRepo.findAll({ key: { in: ['group_owner', 'group_admin', 'group_moderator', 'group_member'] } });
+            const groupRoles = await this.rolesRepo.findAll({ key: { in: ['group_owner', 'group_admin', 'group_moderator', 'registered_user'] } });
             const groupRoleIds = groupRoles.map(r => r.id);
 
             await prisma.$transaction(async (tx: any) => {
@@ -1315,14 +1315,14 @@ export class GroupService {
             return { message: 'Ownership transferred' };
         }
 
-        const groupRoles = await this.rolesRepo.findAll({ key: { in: ['group_owner', 'group_admin', 'group_moderator', 'group_member'] } });
+        const groupRoles = await this.rolesRepo.findAll({ key: { in: ['group_owner', 'group_admin', 'group_moderator', 'registered_user'] } });
         const groupRoleIds = groupRoles.map(r => r.id);
 
         await this.roleAssignmentsRepo.dbModel.deleteMany({
             where: { user_id: memberId, scope_entity_id: groupId, role_id: { in: groupRoleIds } }
         });
 
-        if (role !== 'group_member' && roleDef) {
+        if (role !== 'registered_user' && roleDef) {
             await this.roleAssignmentsRepo.create({
                 tenant_id: adminUser.tenantId,
                 user_id: memberId,
