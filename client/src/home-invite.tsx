@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Grain } from './home-icons';
 import { apiBase } from './home-subscription';
 import { I } from './home-icons';
+import { HtmlRenderer } from './components/HtmlRenderer/HtmlRenderer';
 
 /* ============================================================
    Samaagum Home — Invite Landing
@@ -336,9 +337,9 @@ export function InviteLanding({ token, go }) {
                     </p>
 
                     {group.description && (
-                        <p style={{ margin: "16px 0 0 0", color: "var(--ink-3)", fontSize: 13, lineHeight: 1.5, background: "var(--field)", padding: 12, borderRadius: "var(--r-sm)" }}>
-                            "{group.description}"
-                        </p>
+                        <div style={{ margin: "16px 0 0 0", color: "var(--ink-3)", fontSize: 13, lineHeight: 1.5, background: "var(--field)", padding: 12, borderRadius: "var(--r-sm)" }}>
+                            <HtmlRenderer content={group.description} />
+                        </div>
                     )}
 
                     {questionnaires.length > 0 && (

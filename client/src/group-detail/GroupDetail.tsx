@@ -532,6 +532,7 @@ export function GroupDetail({ group, st, go }: GroupDetailProps) {
                         handleJoinClick={handleJoinClick}
                         isPending={isPending}
                         canEdit={canEdit}
+                        g={g}
                       />
                     )
                   )}

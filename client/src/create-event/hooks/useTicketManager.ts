@@ -12,6 +12,8 @@ export function useTicketManager({ draft, editEv, canCreatePaidTickets, locType 
 
   const initialTickets = editEv?.tickets
     ? editEv.tickets.map((t: any) => ({
+        ...t,
+        id: t.id,
         n: t.name || t.n || '',
         cap: String(t.capacity !== undefined && t.capacity !== null ? t.capacity : (t.cap || '')),
         price: String(t.price_minor !== undefined && t.price_minor !== null ? (t.price_minor / 100) : (t.price || ''))

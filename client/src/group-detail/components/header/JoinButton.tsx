@@ -62,6 +62,15 @@ export function JoinButton({
     );
   }
 
+  const isInviteOnly = g.join_mode === 'invite_only' || g.settings?.joinElig === 'invite';
+  if (isInviteOnly && !isJoined && !isPending) {
+    return (
+      <button className="hbtn hbtn--sm hbtn--ghost" disabled style={{ opacity: 0.6, cursor: "not-allowed" }}>
+        <I.lock style={{ width: 14, height: 14 }} /> Invite Only
+      </button>
+    );
+  }
+
   return (
     <div style={{ display: "flex", gap: 8 }}>
       <button className={`hbtn hbtn--sm ${isJoined || isPending ? "hbtn--ghost" : "hbtn--primary"}`} onClick={isPending ? undefined : handleJoinClick} style={isPending ? { cursor: 'default' } : undefined}>

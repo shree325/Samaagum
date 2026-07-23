@@ -68,9 +68,23 @@ export function useEventForm({ go, st, editEv, hostGroupId }: any) {
           setDbGroups(data.data);
           // Mutate constant tree to load live db groups
           while (ACCESS_TREE.length > 0) ACCESS_TREE.pop();
+
+          const catMap: Record<string, any[]> = {};
           data.data.forEach((g: any) => {
-            ACCESS_TREE.push({ id: g.id, name: g.name, type: 'group' });
+            const catName = g.category || 'Uncategorized';
+            if (!catMap[catName]) catMap[catName] = [];
+            catMap[catName].push({ id: g.id, name: g.name, type: 'group' });
           });
+
+          Object.keys(catMap).sort().forEach(cat => {
+            ACCESS_TREE.push({
+              id: `cat_${cat}`,
+              name: cat,
+              type: 'community',
+              children: catMap[cat],
+            });
+          });
+
           setAccessTreeUpdated(prev => prev + 1);
         }
       } catch (e) {
@@ -110,13 +124,13 @@ export function useEventForm({ go, st, editEv, hostGroupId }: any) {
   }, []);
 
   const startsAt = editEv?.starts_at ? new Date(editEv.starts_at) : null;
-  const endsAt   = editEv?.ends_at ? new Date(editEv.ends_at) : null;
+  const endsAt = editEv?.ends_at ? new Date(editEv.ends_at) : null;
 
   const padTwo = (n: number) => String(n).padStart(2, '0');
   const editStartDate = startsAt ? `${startsAt.getFullYear()}-${padTwo(startsAt.getMonth() + 1)}-${padTwo(startsAt.getDate())}` : '';
   const editStartTime = startsAt ? `${padTwo(startsAt.getHours())}:${padTwo(startsAt.getMinutes())}` : '';
-  const editEndDate   = endsAt ? `${endsAt.getFullYear()}-${padTwo(endsAt.getMonth() + 1)}-${padTwo(endsAt.getDate())}` : '';
-  const editEndTime   = endsAt ? `${padTwo(endsAt.getHours())}:${padTwo(endsAt.getMinutes())}` : '';
+  const editEndDate = endsAt ? `${endsAt.getFullYear()}-${padTwo(endsAt.getMonth() + 1)}-${padTwo(endsAt.getDate())}` : '';
+  const editEndTime = endsAt ? `${padTwo(endsAt.getHours())}:${padTwo(endsAt.getMinutes())}` : '';
 
   const [startDate, setStartDate] = useState(draft?.startDate ?? (editEv ? editStartDate : savedDraft.startDate) ?? initDT.currentDate);
   const [startTime, setStartTime] = useState(draft?.startTime ?? (editEv ? editStartTime : savedDraft.startTime) ?? initDT.currentTime);
@@ -171,13 +185,24 @@ export function useEventForm({ go, st, editEv, hostGroupId }: any) {
   const [aiInstModalOpen, setAiInstModalOpen] = useState(false);
   const [joinEligibility, setJoinEligibility] = useState(draft?.joinEligibility ?? editEv?.venue_raw?.meta?.joinEligibility ?? editEv?.venue?.meta?.joinEligibility ?? 'public');
   const [accessModalOpen, setAccessModalOpen] = useState(false);
+  const [accessModalMode, setAccessModalMode] = useState<'visibility' | 'join'>('visibility');
   const [hostModalOpen, setHostModalOpen] = useState(false);
   const [hostSearchQuery, setHostSearchQuery] = useState('');
   const [hostFilterType, setHostFilterType] = useState('all');
 
-  const [selectedAccess, setSelectedAccess] = useState(draft?.selectedAccess ?? editEv?.venue_raw?.meta?.selectedAccess ?? editEv?.venue?.meta?.selectedAccess ?? {
-    restricted: { communities: [], subCommunities: [], groups: [] },
-    selectedMembers: [],
+  const rawAccess = draft?.selectedAccess ?? editEv?.venue_raw?.meta?.selectedAccess ?? editEv?.venue?.meta?.selectedAccess;
+  const [selectedAccess, setSelectedAccess] = useState({
+    visibility: {
+      communities: rawAccess?.visibility?.communities ?? rawAccess?.restricted?.communities ?? [],
+      subCommunities: rawAccess?.visibility?.subCommunities ?? rawAccess?.restricted?.subCommunities ?? [],
+      groups: rawAccess?.visibility?.groups ?? rawAccess?.restricted?.groups ?? []
+    },
+    join: {
+      communities: rawAccess?.join?.communities ?? rawAccess?.restricted?.communities ?? [],
+      subCommunities: rawAccess?.join?.subCommunities ?? rawAccess?.restricted?.subCommunities ?? [],
+      groups: rawAccess?.join?.groups ?? rawAccess?.restricted?.groups ?? []
+    },
+    selectedMembers: rawAccess?.selectedMembers ?? []
   });
 
   const [tags, setTags] = useState(draft?.tags ?? editEv?.venue_raw?.meta?.tags ?? editEv?.venue?.meta?.tags ?? ['Startup', 'Technology']);
@@ -240,7 +265,7 @@ export function useEventForm({ go, st, editEv, hostGroupId }: any) {
   const [registrationStatus, setRegistrationStatus] = useState(
     draft?.registrationStatus ?? savedDraft?.registrationStatus ?? editEv?.registration_status ?? 'OPEN'
   );
-  const editRegOpensAt  = editEv?.registration_opens_at ? new Date(editEv.registration_opens_at) : null;
+  const editRegOpensAt = editEv?.registration_opens_at ? new Date(editEv.registration_opens_at) : null;
   const editRegClosesAt = editEv?.registration_closes_at ? new Date(editEv.registration_closes_at) : null;
 
   const [regStartDate, setRegStartDate] = useState(
@@ -403,7 +428,7 @@ export function useEventForm({ go, st, editEv, hostGroupId }: any) {
     tzModalOpen, setTzModalOpen, tzSearchQuery, setTzSearchQuery,
     upgradeModalOpen, setUpgradeModalOpen, upgradeFeature, setUpgradeFeature, triggerUpgrade,
     calModalOpen, setCalModalOpen, descModalOpen, setDescModalOpen, instModalOpen, setInstModalOpen,
-    aiModalOpen, setAiModalOpen, aiInstModalOpen, setAiInstModalOpen, accessModalOpen, setAccessModalOpen,
+    aiModalOpen, setAiModalOpen, aiInstModalOpen, setAiInstModalOpen, accessModalOpen, setAccessModalOpen, accessModalMode, setAccessModalMode,
     hostModalOpen, setHostModalOpen, hostSearchQuery, setHostSearchQuery, hostFilterType, setHostFilterType,
 
     // Sub-hooks consolidated

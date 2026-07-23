@@ -1535,7 +1535,26 @@ export function VerifyTicketPanel({ eventId, onCheckedIn }) {
    role carrying the checkin.gate_staff capability), sorted soonest-first. Only
    events currently within their check-in window are clickable. */
 export function ScanHub({ st, go }) {
-  const events = [...(st.scannerEvents || [])].sort((a, b) => new Date(a.starts_at || 0) - new Date(b.starts_at || 0));
+  const getStatusOrder = (ev) => {
+    const win = checkinWindow(ev);
+    if (!win) return 1; // Future/No date
+    const now = Date.now();
+    if (now >= win.opensAt.getTime() && now <= win.closesAt.getTime()) return 0; // Open now
+    if (now < win.opensAt.getTime()) return 1; // Upcoming
+    return 2; // Closed
+  };
+
+  const events = [...(st.scannerEvents || [])].sort((a, b) => {
+    const statusA = getStatusOrder(a);
+    const statusB = getStatusOrder(b);
+    if (statusA !== statusB) return statusA - statusB;
+    return new Date(a.starts_at || 0) - new Date(b.starts_at || 0);
+  });
+  const [_, setTick] = useState(0);
+  useEffect(() => {
+    const int = setInterval(() => setTick(t => t + 1), 60000); // 1 minute
+    return () => clearInterval(int);
+  }, []);
 
   return (
     <div className="scroll" style={{ padding: "24px 20px", maxWidth: 720, margin: "0 auto" }}>

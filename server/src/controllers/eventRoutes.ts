@@ -197,7 +197,8 @@ export const eventRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                     status: { in: ['confirmed', 'pending_approval', 'pending_payment', 'cancelled', 'waitlisted'] as any },
                     attendees: {
                         some: {
-                            user_id: userId
+                            user_id: userId,
+                            status: { not: 'rejected' }
                         }
                     }
                 },
@@ -1455,6 +1456,33 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
             const booking = attendee.bookings;
             const nextAttendeeStatus = action === 'accept' ? 'approved' : 'rejected';
 
+            // ── Capacity Guard ───────────────────────────────────────────────────────
+            // Before approving, check if the event is already at full capacity.
+            let shouldMoveRemainingToWaitlist = false;
+            if (action === 'accept') {
+                const eventForCapacity = await prisma.events.findUnique({
+                    where: { id },
+                    select: { settings: true }
+                });
+                const cap = (eventForCapacity?.settings as any)?.capacity || {};
+                if (cap.limit === true && cap.max > 0) {
+                    // Only count permanently taken spots. This booking is currently pending_approval.
+                    const permanentOccupiedCount = await prisma.bookings.count({
+                        where: { event_id: id, status: { in: ['confirmed', 'pending_payment'] } }
+                    });
+                    
+                    if (permanentOccupiedCount >= cap.max) {
+                        return reply.status(400).send({ success: false, message: 'Event is at full capacity. Cannot approve more requests.' });
+                    }
+                    
+                    // If approving this request will fill the last slot, flag to move remaining to waitlist.
+                    if (permanentOccupiedCount + 1 >= cap.max) {
+                        shouldMoveRemainingToWaitlist = cap.waitlist === true;
+                    }
+                }
+            }
+            // ── End Capacity Guard ───────────────────────────────────────────────────
+
             await prisma.$transaction(async (tx) => {
                 const isCash = booking.payment_method === 'cash';
                 const cashAlreadyPaid = isCash && !!booking.payment_proof_url;
@@ -1498,6 +1526,54 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
                     });
                 }
             });
+
+            // ── Auto-move remaining pending_approval → waitlisted ────────────────────
+            if (shouldMoveRemainingToWaitlist) {
+                const remainingPending = await prisma.bookings.findMany({
+                    where: {
+                        event_id: id,
+                        status: 'pending_approval',
+                        id: { not: booking.id }
+                    },
+                    select: { id: true, booker_user_id: true }
+                });
+
+                if (remainingPending.length > 0) {
+                    const remainingIds = remainingPending.map(b => b.id);
+
+                    // Move bookings to waitlisted
+                    await prisma.bookings.updateMany({
+                        where: { id: { in: remainingIds } },
+                        data: { status: 'waitlisted' }
+                    });
+
+                    // Move their attendees to waitlisted status
+                    await prisma.attendees.updateMany({
+                        where: { booking_id: { in: remainingIds } },
+                        data: { status: 'waitlisted' as any }
+                    });
+
+                    // Sync real-time for each affected user
+                    const { MyEventsRealtimeService } = require('../services/MyEventsRealtimeService');
+                    for (const b of remainingPending) {
+                        if (b.booker_user_id) {
+                            TicketRealtimeService.syncUser(b.booker_user_id, id).catch(() => {});
+                            MyEventsRealtimeService.syncUser(b.booker_user_id).catch(() => {});
+                        }
+                    }
+
+                    // Tell the waitlist logic to broadcast updated position sockets to everyone
+                    await EventService.broadcastWaitlistPositions(id).catch(() => {});
+
+                    // Tell the host dashboard to refresh the waitlist widget immediately
+                    const groupsNamespace = (fastify as any).io?.of('/groups');
+                    if (groupsNamespace) {
+                        groupsNamespace.to(`event_${id}`).emit('waitlist_updated', { eventId: id });
+                    }
+                }
+            }
+            // ── End Auto-move ────────────────────────────────────────────────────────
+
 
             // Write audit log
             const auditAction = action === 'accept' ? 'attendee_approved' : 'attendee_rejected';

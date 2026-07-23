@@ -35,7 +35,8 @@ export function useMembership(
           fetchGroupDetails();
         }
       } else {
-        alert(data.message || "Failed to join");
+        if ((window as any).toast) (window as any).toast(data.message || "Failed to join", "error");
+        else alert(data.message || "Failed to join");
       }
     } catch (e) {
       console.error(e);
@@ -46,7 +47,11 @@ export function useMembership(
     if (isJoined || isPending) return;
     try {
       const token = localStorage.getItem('token');
-      if (!token) return alert("Please log in to join groups.");
+      if (!token) {
+        if ((window as any).toast) (window as any).toast("Please log in to join groups.", "warning");
+        else alert("Please log in to join groups.");
+        return;
+      }
 
       if (g.settings && g.settings.questionnaires && g.settings.questionnaires.length > 0) {
         setShowQModal(true);
@@ -74,13 +79,16 @@ export function useMembership(
       if (data.success) {
         setMembershipState(null);
         fetchGroupDetails();
-        alert("You have left the group successfully.");
+        if ((window as any).toast) (window as any).toast("You have left the group successfully.", "success");
+        else alert("You have left the group successfully.");
       } else {
-        alert(data.message || "Failed to leave group");
+        if ((window as any).toast) (window as any).toast(data.message || "Failed to leave group", "error");
+        else alert(data.message || "Failed to leave group");
       }
     } catch (e) {
       console.error(e);
-      alert("Failed to leave group due to a network error.");
+      if ((window as any).toast) (window as any).toast("Failed to leave group due to a network error.", "error");
+      else alert("Failed to leave group due to a network error.");
     }
   };
 
@@ -98,14 +106,15 @@ export function useMembership(
       const data = await res.json();
       if (data.success) {
         setMembershipState(null);
-        fetchGroupDetails();
-        if (window.toast) window.toast("Join request cancelled.");
+        if ((window as any).toast) (window as any).toast("Request cancelled.", "success");
       } else {
-        alert(data.message || "Failed to cancel request");
+        if ((window as any).toast) (window as any).toast(data.message || "Failed to cancel request", "error");
+        else alert(data.message || "Failed to cancel request");
       }
     } catch (e) {
       console.error(e);
-      alert("Failed to cancel request due to a network error.");
+      if ((window as any).toast) (window as any).toast("Failed to cancel request due to a network error.", "error");
+      else alert("Failed to cancel request due to a network error.");
     }
   };
 

@@ -209,7 +209,37 @@ export class EventService {
     }
   }
 
+  private static enforceSelectedAccess(body: any) {
+    try {
+      let venueObj = body.venue;
+      let isString = false;
+      if (typeof venueObj === 'string') {
+        venueObj = JSON.parse(venueObj);
+        isString = true;
+      }
+      
+      if (venueObj && typeof venueObj === 'object' && venueObj.meta && venueObj.meta.selectedAccess) {
+        const selectedAccess = venueObj.meta.selectedAccess;
+        if (selectedAccess.join?.groups?.length > 0) {
+          const visibilityGroups = new Set<string>(selectedAccess.visibility?.groups || []);
+          selectedAccess.join.groups.forEach((g: string) => visibilityGroups.add(g));
+          if (!selectedAccess.visibility) selectedAccess.visibility = {};
+          selectedAccess.visibility.groups = Array.from(visibilityGroups);
+        }
+      }
+      
+      if (isString && typeof body.venue === 'string') {
+        body.venue = JSON.stringify(venueObj);
+      } else if (venueObj !== undefined) {
+        body.venue = venueObj;
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
   static async createEvent(userId: string, tenantId: string, body: any) {
+    this.enforceSelectedAccess(body);
     // 0. Enforce plan entitlements before doing any writes
     await this.validateEventEntitlements(userId, body);
     await this.validateEventLocation(body);
@@ -497,23 +527,25 @@ export class EventService {
       if (hasBooking) return true;
     }
 
-    // Check if user is an active member of the group that hosts this event
-    if (ev.hosted_by_entity_id) {
-      const isGroupMember = userGroupSet
-        ? userGroupSet.has(ev.hosted_by_entity_id)
-        : await GroupService.userInGroups(userId, [ev.hosted_by_entity_id]).catch(() => false);
-      if (isGroupMember) return true;
-    }
-
-    // For 'custom' visibility, also check the explicitly allowed group list
+    // For 'custom' visibility, explicitly check the allowed group list
     if (visibility === 'custom') {
-      const allowedGroups: string[] = venueObj?.meta?.selectedAccess?.restricted?.groups || [];
+      const allowedGroups: string[] = venueObj?.meta?.selectedAccess?.visibility?.groups || venueObj?.meta?.selectedAccess?.restricted?.groups || [];
       if (allowedGroups.length > 0) {
         const eligible = userGroupSet
           ? allowedGroups.some(gid => userGroupSet.has(gid))
           : await GroupService.userInGroups(userId, allowedGroups).catch(() => false);
         if (eligible) return true;
       }
+      return false; // If custom visibility and not in allowed groups, they cannot see it.
+    }
+
+    // Default for 'unlisted' or legacy missing visibility:
+    // Check if user is an active member of the group that hosts this event
+    if (ev.hosted_by_entity_id) {
+      const isGroupMember = userGroupSet
+        ? userGroupSet.has(ev.hosted_by_entity_id)
+        : await GroupService.userInGroups(userId, [ev.hosted_by_entity_id]).catch(() => false);
+      if (isGroupMember) return true;
     }
 
     return false;
@@ -931,6 +963,7 @@ export class EventService {
   }
 
   static async updateEvent(id: string, userId: string, body: any) {
+    this.enforceSelectedAccess(body);
     const event = await this.eventsRepo.getById(id);
     if (!event) throw new Error('Event not found');
 
@@ -1017,7 +1050,7 @@ export class EventService {
     const newWaitlistEnabled = newSettings.capacity?.waitlist === true;
 
     const capacityIncreased = (newLimitEnabled && newMax > (oldMax || 0))
-      || (!oldLimitEnabled && newLimitEnabled);
+      || (oldLimitEnabled && !newLimitEnabled);
       
     // If waitlist was toggled off, or approval required toggled off, we should also reconcile
     const waitlistToggledOn = !oldWaitlistEnabled && newWaitlistEnabled;
@@ -1063,9 +1096,7 @@ export class EventService {
 
     if (isFullyAuthorized) {
       const venueObj = body.venue || {};
-      const meta = venueObj.meta || {};
-      const isRestricted = meta.joinEligibility === 'restricted';
-      const approvalRequired = body.approval_required === true || isRestricted;
+      const approvalRequired = body.approval_required === true;
 
       if (!approvalRequired) {
         const pendingBookings = await prisma.bookings.findMany({
@@ -1131,6 +1162,57 @@ export class EventService {
           body.registration_opens_at ? new Date(body.registration_opens_at) : null,
           body.registration_closes_at ? new Date(body.registration_closes_at) : null
         );
+      }
+
+      // Sync Tickets if provided in the payload
+      if ((isFullyAuthorized || isTicketManager) && body.tickets && Array.isArray(body.tickets)) {
+        const existingTickets = await this.ticketTypesRepo.getByEventId(id);
+        const existingIds = existingTickets.map(t => t.id);
+        
+        const newIds = [];
+        for (let i = 0; i < body.tickets.length; i++) {
+          const t = body.tickets[i];
+          if (t.id && !t.id.startsWith('t-') && existingIds.includes(t.id)) {
+            newIds.push(t.id);
+            await this.ticketTypesRepo.update(t.id, {
+              name: t.name,
+              description: t.description,
+              price_minor: t.price_minor,
+              currency: t.price_currency || 'INR',
+              capacity: t.capacity !== undefined ? t.capacity : null,
+              max_per_booking: t.max_per_booking !== undefined ? t.max_per_booking : null,
+              sale_start_at: t.sale_start,
+              sale_end_at: t.sale_end,
+              visibility: t.visibility ? t.visibility.toLowerCase() : 'public'
+            });
+          } else {
+            const created = await this.ticketTypesRepo.create({
+              tenant_id: event.tenant_id,
+              event_id: id,
+              name: t.name || 'General Admission',
+              description: t.description || null,
+              price_minor: t.price_minor || 0,
+              currency: t.price_currency || 'INR',
+              capacity: t.capacity !== undefined ? t.capacity : null,
+              max_per_booking: t.max_per_booking !== undefined ? t.max_per_booking : null,
+              sale_start_at: t.sale_start || null,
+              sale_end_at: t.sale_end || null,
+              visibility: t.visibility ? t.visibility.toLowerCase() : 'public'
+            } as any);
+            newIds.push(created.id);
+          }
+        }
+        
+        // Attempt to delete removed tickets
+        for (const eid of existingIds) {
+          if (!newIds.includes(eid)) {
+            try {
+               await prisma.ticket_types.delete({ where: { id: eid } });
+            } catch (err) {
+               // Ignore deletion to prevent FK errors or orphaned bookings
+            }
+          }
+        }
       }
 
       // Notify all active event members about the update (excluding the user making the edit)
@@ -1873,10 +1955,15 @@ export class EventService {
   }
 
   static async reactEventPost(eventId: string, postId: string, user: any, emoji: string) {
-    const existing = await this.reactionsRepo.findAll({ user_id: user.id, target_id: postId, target_type: 'post', emoji });
-    if (existing.length > 0) {
-      await this.reactionsRepo.delete(existing[0].id);
-    } else {
+    const existingAll = await this.reactionsRepo.findAll({ user_id: user.id, target_id: postId, target_type: 'post' });
+
+    const isSameEmoji = existingAll.some((r: any) => r.emoji === emoji);
+
+    for (const r of existingAll) {
+      await this.reactionsRepo.delete(r.id);
+    }
+
+    if (!isSameEmoji) {
       await this.reactionsRepo.create({
         tenant_id: user.tenantId,
         user_id: user.id,
@@ -2437,7 +2524,7 @@ export class EventService {
         if (capacity.limit === true) {
           // Count both confirmed AND pending_approval as capacity-consuming
           const currentOccupied = await tx.bookings.count({
-            where: { event_id: eventId, status: { in: ['confirmed', 'pending_payment'] } }
+            where: { event_id: eventId, status: { in: ['confirmed', 'pending_payment', 'pending_approval'] } }
           });
           if (currentOccupied >= capacity.max) {
             return; // Abort this promotion if we just hit max capacity
@@ -2456,8 +2543,22 @@ export class EventService {
           where: { line_item_id: { in: liIds } },
           data: { status: newTicketStatus }
         });
+
+        // ── CRITICAL FIX ────────────────────────────────────────────────────────
+        // Update the attendees for this booking so they show up in the host's
+        // Pending Requests tab. The dashboard-stats route queries attendees with
+        // status='pending', so if we only update bookings, the promoted user is
+        // completely invisible to the host.
+        const newAttendeeStatus = event.approval_required ? 'pending' : 'approved';
+        await (tx.attendees as any).updateMany({
+          where: { booking_id: wb.id, status: 'waitlisted' },
+          data: { status: newAttendeeStatus }
+        });
+        // ── END CRITICAL FIX ─────────────────────────────────────────────────────
+
         promoted = true;
       });
+
 
       if (promoted) {
         try {
@@ -2667,18 +2768,7 @@ export class EventService {
     if (!event) return;
 
     const capacity = (event.settings as any)?.capacity || {};
-    if (capacity.waitlist !== true || capacity.limit !== true) {
-      await this.broadcastWaitlistPositions(eventId);
-      return;
-    }
-
-    // Count confirmed + pending_approval as both "occupying" a slot
-    const occupiedCount = await prisma.bookings.count({
-      where: { event_id: eventId, status: { in: ['confirmed', 'pending_payment'] } }
-    });
-
-    const availableSeats = capacity.max - occupiedCount;
-    if (availableSeats <= 0) {
+    if (capacity.waitlist !== true) {
       await this.broadcastWaitlistPositions(eventId);
       return;
     }
@@ -2691,6 +2781,23 @@ export class EventService {
       await this.broadcastWaitlistPositions(eventId);
       return;
     }
+
+    let availableSeats = waitlistCount; // if no limit, promote everyone
+
+    if (capacity.limit === true) {
+      // Count confirmed + pending_approval as both "occupying" a slot
+      const occupiedCount = await prisma.bookings.count({
+        where: { event_id: eventId, status: { in: ['confirmed', 'pending_payment', 'pending_approval'] } }
+      });
+
+      availableSeats = capacity.max - occupiedCount;
+      if (availableSeats <= 0) {
+        await this.broadcastWaitlistPositions(eventId);
+        return;
+      }
+    }
+
+
 
     // Always promote from waitlist — if approval_required, promoteFromWaitlist
     // will set them to pending_approval and notify the host in real-time

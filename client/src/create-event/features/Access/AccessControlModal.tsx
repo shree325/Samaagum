@@ -18,7 +18,7 @@ export function AccessControlModal({
 }: {
   open: boolean;
   onClose: () => void;
-  mode?: string;
+  mode: 'visibility' | 'join';
   selectedAccess: any;
   setSelectedAccess: (v: any) => void;
 }) {
@@ -44,23 +44,79 @@ export function AccessControlModal({
         (sub.children ?? []).forEach((grp: any) => groups.push(grp.id));
       });
     });
-    setSelectedAccess({ ...selectedAccess, restricted: { communities, subCommunities, groups } });
+    const nextModeSelection = { communities, subCommunities, groups };
+    let nextJoin = selectedAccess.join;
+    if (mode === 'join') {
+      // Rule 1: Selecting in join adds to visibility
+      setSelectedAccess({
+        ...selectedAccess,
+        join: nextModeSelection,
+        visibility: {
+          communities: Array.from(new Set([...selectedAccess.visibility.communities, ...communities])),
+          subCommunities: Array.from(new Set([...selectedAccess.visibility.subCommunities, ...subCommunities])),
+          groups: Array.from(new Set([...selectedAccess.visibility.groups, ...groups])),
+        }
+      });
+    } else {
+      setSelectedAccess({ ...selectedAccess, visibility: nextModeSelection });
+    }
   };
 
-  const clearAllNodes = () =>
-    setSelectedAccess({ ...selectedAccess, restricted: { communities: [], subCommunities: [], groups: [] } });
+  const clearAllNodes = () => {
+    if (mode === 'visibility') {
+      // Rule 3: Clearing all visibility must clear join as well
+      setSelectedAccess({ 
+        ...selectedAccess, 
+        visibility: { communities: [], subCommunities: [], groups: [] },
+        join: { communities: [], subCommunities: [], groups: [] }
+      });
+    } else {
+      setSelectedAccess({ 
+        ...selectedAccess, 
+        join: { communities: [], subCommunities: [], groups: [] } 
+      });
+    }
+  };
 
   const renderTreeNode = (node: any, level = 0) => {
     if (search && !nodeMatchesSearch(node, search)) return null;
-    const nodeChecked       = isChecked(node, selectedAccess.restricted);
-    const nodeIndeterminate = isIndeterminate(node, selectedAccess.restricted);
+    const currentSelection = selectedAccess[mode];
+    const nodeChecked       = isChecked(node, currentSelection);
+    const nodeIndeterminate = isIndeterminate(node, currentSelection);
     const hasChildren = node.children && node.children.length > 0;
     const expanded    = isNodeExpanded(node.id);
     const icon = node.type === 'community' ? '🏛️' : node.type === 'subcommunity' ? '📁' : '👥';
 
     const doToggle = () => {
-      const nextRestricted = toggleNodeCheck(node, selectedAccess.restricted);
-      setSelectedAccess({ ...selectedAccess, restricted: nextRestricted });
+      const nextSelection = toggleNodeCheck(node, currentSelection);
+      const isNowChecked = !nodeChecked; // basic heuristic; toggleNodeCheck is complex but we can just use the resulting state
+
+      if (mode === 'join') {
+        let nextVisibility = selectedAccess.visibility;
+        // Rule 1: if adding to join, add to visibility
+        if (isNowChecked) {
+          nextVisibility = {
+            communities: Array.from(new Set([...selectedAccess.visibility.communities, ...nextSelection.communities])),
+            subCommunities: Array.from(new Set([...selectedAccess.visibility.subCommunities, ...nextSelection.subCommunities])),
+            groups: Array.from(new Set([...selectedAccess.visibility.groups, ...nextSelection.groups])),
+          };
+        }
+        // Rule 2: Removing from join does not remove from visibility
+        setSelectedAccess({ ...selectedAccess, join: nextSelection, visibility: nextVisibility });
+      } else {
+        // mode === 'visibility'
+        let nextJoin = selectedAccess.join;
+        // Rule 3: if removing from visibility, remove from join
+        if (!isNowChecked) {
+          // Recompute join to only include things that are in nextSelection
+          nextJoin = {
+            communities: selectedAccess.join.communities.filter((id: string) => nextSelection.communities.includes(id)),
+            subCommunities: selectedAccess.join.subCommunities.filter((id: string) => nextSelection.subCommunities.includes(id)),
+            groups: selectedAccess.join.groups.filter((id: string) => nextSelection.groups.includes(id)),
+          };
+        }
+        setSelectedAccess({ ...selectedAccess, visibility: nextSelection, join: nextJoin });
+      }
     };
 
     return (
@@ -90,7 +146,7 @@ export function AccessControlModal({
     );
   };
 
-  const allSelectedDetails = getSelectedNodesWithDetails(ACCESS_TREE, selectedAccess.restricted);
+  const allSelectedDetails = getSelectedNodesWithDetails(ACCESS_TREE, selectedAccess[mode]);
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}>
@@ -98,7 +154,9 @@ export function AccessControlModal({
       <div style={{ background: 'var(--surface)', width: 500, maxHeight: '85vh', borderRadius: 'var(--r-xl)', display: 'flex', flexDirection: 'column', boxShadow: 'var(--sh-xl)', overflow: 'hidden' }}>
         {/* Header */}
         <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: 'var(--ink)' }}>Restricted Access Settings</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: 'var(--ink)' }}>
+            {mode === 'visibility' ? 'Custom Visibility Settings' : 'Join Eligibility Settings'}
+          </h2>
           <button type="button" className="hbtn hbtn--ghost hbtn--sm" onClick={onClose} style={{ border: 'none' }}><I.x /></button>
         </div>
         {/* Body */}
@@ -107,7 +165,7 @@ export function AccessControlModal({
           <div style={{ marginBottom: 12, padding: '0 4px' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', textTransform: 'uppercase', marginBottom: 6 }}>Selection Summary</div>
             <div style={{ display: 'flex', gap: 16, fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 8 }}>
-              <span>👥 {selectedAccess.restricted.groups.length} Groups</span>
+              <span>👥 {selectedAccess[mode].groups.length} Groups</span>
             </div>
             {allSelectedDetails.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '8px 12px', background: 'var(--field)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', maxHeight: 120, overflowY: 'auto' }}>
@@ -118,7 +176,21 @@ export function AccessControlModal({
                       <span>{icon} {node.name}</span>
                       <span style={{ cursor: 'pointer', marginLeft: 4, opacity: 0.8 }} onClick={() => {
                         const fullNode = findNodeInTree(node.id, ACCESS_TREE);
-                        if (fullNode) setSelectedAccess({ ...selectedAccess, restricted: toggleNodeCheck(fullNode, selectedAccess.restricted) });
+                        if (fullNode) {
+                          const nextSelection = toggleNodeCheck(fullNode, selectedAccess[mode]);
+                          if (mode === 'visibility') {
+                            // Rule 3: remove from join as well
+                            const nextJoin = {
+                              communities: selectedAccess.join.communities.filter((id: string) => nextSelection.communities.includes(id)),
+                              subCommunities: selectedAccess.join.subCommunities.filter((id: string) => nextSelection.subCommunities.includes(id)),
+                              groups: selectedAccess.join.groups.filter((id: string) => nextSelection.groups.includes(id)),
+                            };
+                            setSelectedAccess({ ...selectedAccess, visibility: nextSelection, join: nextJoin });
+                          } else {
+                            // mode === 'join' (removing from join does not affect visibility)
+                            setSelectedAccess({ ...selectedAccess, join: nextSelection });
+                          }
+                        }
                       }}>✕</span>
                     </span>
                   );

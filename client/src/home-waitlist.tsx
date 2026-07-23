@@ -56,7 +56,7 @@ export function useWaitlistCountdown(initialSeconds, active, onExpire) {
 }
 
 export function Waitlist({ ev, st, go }) {
-  const base = WAITLIST_ME;
+  const base = WAITLIST_ME || { position: 100, boostPerRef: 10, total: 200, boostCap: 50, claimWindowMins: 10, ev: "Event", cover: "", date: "", time: "", venue: "" };
   const targetId = ev?.id || "ev-feat";
   const e = ev ? { ...base, ev: ev.title || base.ev, cover: ev.cover || base.cover, date: ev.date || base.date, time: ev.time || base.time, venue: ev.venue || base.venue } : base;
   

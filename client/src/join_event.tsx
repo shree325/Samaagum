@@ -4,6 +4,7 @@ import { FEATURED, ME } from './home-data';
 import { Waitlist } from './home-waitlist';
 import { CheckoutModal } from './checkout_modal';
 import { ClaimFlow } from './home-tickets';
+import { HtmlRenderer } from './components/HtmlRenderer';
 
 export function JoinEventPage({ ev, st, go }) {
     const [fetchedEvent, setFetchedEvent] = useState<any>(null);
@@ -456,7 +457,7 @@ export function JoinEventPage({ ev, st, go }) {
                             <div className="ev-block">
                                 <h3>About this event</h3>
                                 <div className="ev-about">
-                                    <p>{liveEvent.desc || "Join us for an unforgettable evening bringing together the most interesting people in the city. Whether you're here to learn, connect, or simply enjoy the atmosphere — there's a place for you."}</p>
+                                    {liveEvent.desc ? <HtmlRenderer content={liveEvent.desc} /> : <p>Join us for an unforgettable evening bringing together the most interesting people in the city. Whether you're here to learn, connect, or simply enjoy the atmosphere — there's a place for you.</p>}
                                     <p>Expect curated conversations, a welcoming community, and the kind of serendipity that only happens in the same room. Doors open 30 minutes early — come say hi.</p>
                                 </div>
                             </div>

@@ -907,6 +907,10 @@ export class GroupService {
 
         const settings = group.settings as any || {};
         const joinElig = settings.joinElig || 'anyone';
+        if (joinElig === 'invite') {
+            throw new Error('This group is invite only');
+        }
+
         if (joinElig === 'restricted' || joinElig === 'communities') {
             let allowed = false;
             const reqEnts = settings.restrictedAccess?.join?.selectedMembers || [];

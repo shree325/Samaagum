@@ -47,7 +47,7 @@ export function PendingRequests({
               <div style={{ marginTop: 12, padding: 12, background: "var(--bg)", borderRadius: 6, fontSize: 13, border: "1px solid var(--border)" }}>
                 <h5 style={{ margin: "0 0 8px 0", fontSize: 12, textTransform: "uppercase", color: "var(--ink-3)", letterSpacing: "0.05em" }}>Questionnaire Answers</h5>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {Object.entries(r.answers).map(([key, ans]) => {
+                  {Object.entries(r.answers).filter(([k]) => !['ticketName', 'isQuestionnaireSubmit', 'tickets', 'buyer', 'attendees', 'transactionId', 'registration_location'].includes(k)).map(([key, ans]) => {
                     const idx = parseInt(key);
                     const qs = groupSettings?.questionnaires || [];
                     const q = (!isNaN(idx) && idx < 1000) ? qs[idx] : qs.find((x: any) => x.id === key);

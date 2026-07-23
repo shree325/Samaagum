@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Grain, I } from '../home-icons';
+import { ME } from '../home-data';
+import { I, Grain } from '../home-icons';
+import { HtmlRenderer } from '../components/HtmlRenderer';
 import { Empty } from '../home-shell';
 
 interface MyGroupsProps {
@@ -73,7 +75,7 @@ export function MyGroups({ go, param, st }: MyGroupsProps) {
             {g.settings?.isDraft && <span className="type-pill" style={{ padding: "2px 6px", fontSize: 10 }}>Draft</span>}
             {g.settings?.isArchived && <span className="type-pill" style={{ padding: "2px 6px", fontSize: 10, background: "var(--surface-2)", color: "var(--ink-3)" }}>Archived</span>}
           </div>
-          <p style={{ fontSize: 12.5, color: "var(--ink-2)", margin: "8px 0 16px", flex: 1, lineBreak: "anywhere", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{g.description || g.desc}</p>
+          <div style={{ fontSize: 12.5, color: "var(--ink-2)", margin: "8px 0 16px", flex: 1, lineBreak: "anywhere", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{g.description || g.desc ? <HtmlRenderer content={g.description || g.desc} /> : null}</div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "var(--ink-3)", borderTop: "1px solid var(--border)", paddingTop: 10 }}>
             <span>{g.members?.toLocaleString() || 1} members</span>
             {tab === "created" ? (

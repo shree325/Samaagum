@@ -6,6 +6,7 @@ import { Empty, FilterChip, SectionBar } from './home-shell';
 import { apiBase } from './home-subscription';
 import { I, Grain, Avatar } from './home-icons';
 import { Communities, Events } from './landing-features';
+import { HtmlRenderer } from './components/HtmlRenderer';
 
 /* ============================================================
    Samaagum Home — Home feed + Discover
@@ -211,7 +212,7 @@ export function HeroCarousel({ events, go, wishlisted, wishlistCounts, toggleWis
                 <div className="fbody">
                   <span className="eyebrow2">Featured Event</span>
                   <div className="ttl">{ev.title}</div>
-                  <p className="dsc">{ev.description || ev.desc || 'No description available.'}</p>
+                  <div className="dsc">{ev.description || ev.desc ? <HtmlRenderer content={ev.description || ev.desc} /> : 'No description available.'}</div>
                   <div className="fmeta">
                     <div className="row">
                       <span className="ico"><I.cal /></span>

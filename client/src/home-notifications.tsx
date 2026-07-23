@@ -208,7 +208,7 @@ export function NotifRow({ n, st, go, onRead }) {
                 <div style={{ fontSize: 10, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   Questionnaire Answers
                 </div>
-                {Object.entries(n.answers).filter(([k]) => !['ticketName', 'isQuestionnaireSubmit'].includes(k)).map(([key, val]) => {
+                {Object.entries(n.answers).filter(([k]) => !['ticketName', 'isQuestionnaireSubmit', 'tickets', 'buyer', 'attendees', 'transactionId', 'registration_location'].includes(k)).map(([key, val]) => {
                   const label = (n.questionLabels && n.questionLabels[key]) || key;
                   return (
                     <div key={key} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -266,7 +266,7 @@ export function NotifRow({ n, st, go, onRead }) {
                 <div style={{ fontSize: 10, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   Questionnaire Answers
                 </div>
-                {Object.entries(n.answers).filter(([k]) => !['ticketName', 'isQuestionnaireSubmit'].includes(k)).map(([key, val]) => {
+                {Object.entries(n.answers).filter(([k]) => !['ticketName', 'isQuestionnaireSubmit', 'tickets', 'buyer', 'attendees', 'transactionId', 'registration_location'].includes(k)).map(([key, val]) => {
                   const label = (n.questionLabels && n.questionLabels[key]) || key;
                   return (
                     <div key={key} style={{ display: "flex", flexDirection: "column", gap: 2 }}>

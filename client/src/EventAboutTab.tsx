@@ -1,5 +1,6 @@
 import React from 'react';
 import { I } from './home-icons';
+import { HtmlRenderer } from './components/HtmlRenderer';
 
 interface EventAboutTabProps {
   e: any;
@@ -61,7 +62,7 @@ export function EventAboutTab({
       <div className="ev-block">
         <h3>About this event</h3>
         <div className="ev-about">
-          <p>{e.desc || "No description provided."}</p>
+          {e.desc ? <HtmlRenderer content={e.desc} /> : <p>No description provided.</p>}
         </div>
       </div>
 
