@@ -25,7 +25,7 @@ export interface LocationState {
 interface LocationContextType {
   location: LocationState;
   requestGPS: (highAccuracy?: boolean) => Promise<void>;
-  selectCity: (cityName: string) => void;
+  selectCity: (cityName: string, latitude?: number | null, longitude?: number | null) => void;
   setMode: (mode: LocationMode) => void;
   deleteGPSData: () => void;
   refreshLocation: () => Promise<void>;
@@ -62,6 +62,26 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return { ...defaultLocationState, ...parsed };
       }
     } catch {}
+
+    // Fallback: check manual city selection from samaagum_selected_city
+    try {
+      const manual = localStorage.getItem('samaagum_selected_city');
+      if (manual) {
+        const parsed = JSON.parse(manual);
+        if (parsed.city_name) {
+          return {
+            ...defaultLocationState,
+            city: parsed.city_name,
+            latitude: parsed.latitude ?? null,
+            longitude: parsed.longitude ?? null,
+            mode: 'MANUAL',
+            source: parsed.city_name === 'Global' ? 'GLOBAL' : 'MANUAL',
+            status: 'success',
+          };
+        }
+      }
+    } catch {}
+
     return defaultLocationState;
   });
 
@@ -186,10 +206,12 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     );
   }, [broadcastChange]);
 
-  const selectCity = useCallback((cityName: string) => {
+  const selectCity = useCallback((cityName: string, latitude: number | null = null, longitude: number | null = null) => {
     const updated: LocationState = {
       ...location,
       city: cityName,
+      latitude: latitude,
+      longitude: longitude,
       mode: 'MANUAL',
       source: cityName === 'Global' ? 'GLOBAL' : 'MANUAL',
       status: 'success',

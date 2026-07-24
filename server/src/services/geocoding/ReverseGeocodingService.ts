@@ -77,6 +77,29 @@ class ReverseGeocodingService {
       return cached.data;
     }
 
+    // 1. Try Nominatim Geocoder first for specific coordinates
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'Samaagum-App/1.0' }
+      });
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const result: ForwardGeocodeResult = {
+          latitude: Number(data[0].lat),
+          longitude: Number(data[0].lon),
+          normalizedAddress: data[0].display_name,
+          confidence: 'HIGH',
+          provider: 'nominatim',
+        };
+        this.setCache(cacheKey, result, 30 * 24 * 3600 * 1000);
+        return result;
+      }
+    } catch (e) {
+      console.warn('[ReverseGeocodingService] Nominatim forwardGeocode failed, falling back to local DB:', e);
+    }
+
+    // 2. Fallback to Local DB Provider (matches city name in address string)
     const localResult = await this.localProvider.forwardGeocode(address);
     if (localResult) {
       this.setCache(cacheKey, localResult, 30 * 24 * 3600 * 1000);

@@ -33,7 +33,7 @@ import { JoinEventPage } from './join_event';
 import { GlobalAIAssistantWidget } from './components/modals/GlobalAIAssistantWidget';
 import { useDraftRecovery } from './hooks/useDraftRecovery';
 import { DraftRecoveryModal, DraftInfo } from './components/modals/DraftRecoveryModal';
-import { LocationProvider } from './context/LocationContext';
+import { LocationProvider, useLocation as useGeoLocation } from './context/LocationContext';
 
 /* ============================================================
    Samaagum Home — main app (routing, frame, theme, tweaks)
@@ -113,6 +113,7 @@ export const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 }/*EDITMODE-END*/;
 
 export function DashboardApp() {
+  const geoLocation = useGeoLocation();
   const token = localStorage.getItem('token');
 
   const [onboardingChecked, setOnboardingChecked] = useState(!token); // skip check if no token (will redirect anyway)
@@ -1479,7 +1480,10 @@ useEffect(() => {
           : <Topbar go={go} counts={counts} dark={t.dark} onToggleTheme={() => setTweak("dark", !t.dark)} city={city} onCity={() => setCityOpen(true)} chatSettings={chatSettings} />}
         {renderView()}
         {mobile && <TabBar view={cur.view} go={go} counts={counts} chatSettings={chatSettings} />}
-        <CityPicker open={cityOpen} onClose={() => setCityOpen(false)} city={city} onPick={setCity} />
+        <CityPicker open={cityOpen} onClose={() => setCityOpen(false)} city={city} onPick={(cityName, lat, lon) => {
+          setCity(cityName);
+          geoLocation.selectCity(cityName, lat, lon);
+        }} />
       </div>
 
       {/* Visual Toast Notification Container */}
