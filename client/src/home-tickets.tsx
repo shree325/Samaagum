@@ -140,6 +140,7 @@ function dropSupersededLocalTickets(tickets, joinedEvents) {
 
 export function MyTickets({ st, go }) {
   const [tab, setTab] = useState("upcoming");
+  const [createdSubTab, setCreatedSubTab] = useState("active");
   const [waitlistPositions, setWaitlistPositions] = useState({});
   const joinedEvents = st.joinedEvents || [];
   const tickets = dropSupersededLocalTickets(st.myTickets || [], joinedEvents);
@@ -454,12 +455,15 @@ export function MyTickets({ st, go }) {
     }
   }
 
+  const activeCreated = createdList.filter(e => e.status !== 'draft');
+  const draftCreated = createdList.filter(e => e.status === 'draft');
+
   const list = tab === "upcoming" ? upcoming
     : tab === "pending" ? pending
       : tab === "past" ? pastList
         : tab === "waitlist" ? waitlistedEvents
           : tab === "wishlist" ? (st.wishlistEvents || [])
-            : createdList;
+            : (createdSubTab === 'active' ? activeCreated : draftCreated);
 
   return (
     <div className="scroll">
@@ -484,10 +488,23 @@ export function MyTickets({ st, go }) {
           </div>
         </div>
 
+        {tab === "created" && (
+          <div className="seg-tabs" style={{ marginBottom: 16, maxWidth: 380 }}>
+            <button className={createdSubTab === "active" ? "on" : ""} onClick={() => setCreatedSubTab("active")}>Active · {activeCreated.length}</button>
+            <button className={createdSubTab === "drafts" ? "on" : ""} onClick={() => setCreatedSubTab("drafts")}>Drafts · {draftCreated.length}</button>
+          </div>
+        )}
+
         {tab === "waitlist" && waitlistedEvents.length === 0 ? (
           <Empty icon={<I.groups />} title="No waitlisted events" text="You aren't on the waitlist for any events yet." action={<button className="hbtn hbtn--primary" onClick={() => go("discover", "events")}>Discover events</button>} />
         ) : tab === "created" && createdList.length === 0 ? (
           <Empty icon={<I.plus />} title="No hosted events" text="Create and share your first event to host it here." action={<button className="hbtn hbtn--primary" onClick={() => go("create-event")}>Create Event</button>} />
+        ) : tab === "created" && list.length === 0 ? (
+          createdSubTab === "active" ? (
+            <Empty icon={<I.plus />} title="No active events" text="You have no active events right now." action={<button className="hbtn hbtn--primary" onClick={() => go("create-event")}>Create Event</button>} />
+          ) : (
+            <Empty icon={<I.plus />} title="No draft events" text="You have no draft events saved." action={<button className="hbtn hbtn--primary" onClick={() => go("create-event")}>Create Event</button>} />
+          )
         ) : tab === "wishlist" && (st.wishlistEvents?.length || 0) === 0 ? (
           <Empty icon={<I.heart />} title="Your wishlist is empty" text="Save events you're interested in to easily find them later." action={<button className="hbtn hbtn--primary" onClick={() => go("discover", "events")}>Discover events</button>} />
         ) : list.length === 0 ? (
@@ -602,7 +619,7 @@ export function MyTickets({ st, go }) {
           </div>
         ) : tab === "created" ? (
           <div className="wallet-grid">
-            {createdList.map(e => (
+            {list.map(e => (
               <div key={e.id} className="tkt" onClick={() => go("event", e)}>
                 <div className="tkt-cov" style={{ background: e.cover && (e.cover.startsWith("linear-gradient") || e.cover.startsWith("radial-gradient") || e.cover.startsWith("var(")) ? e.cover : `url(${e.cover}) center/cover no-repeat` }}>
                   <Grain />
