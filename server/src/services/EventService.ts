@@ -872,7 +872,7 @@ export class EventService {
        WHERE ar.is_active = true
          AND ar.tenant_id IS NULL
          AND ar.responsibility_ids @> jsonb_build_array(resp.id::text)
-         AND (r.level = 'event' OR r.key = 'member')
+         AND (r.level = 'event' OR r.key = 'registered_user')
        ORDER BY ar.hierarchy_level ASC`
     );
   }
@@ -2088,7 +2088,7 @@ export class EventService {
       if (a.users_event_team_assignments_user_idTousers) {
         const u = a.users_event_team_assignments_user_idTousers;
         const picture = u.profile_image_data ? `data:image/jpeg;base64,${Buffer.from(u.profile_image_data).toString('base64')}` : null;
-        const roleKey = a.roles?.key || 'member';
+        const roleKey = a.roles?.key || 'registered_user';
         const existing = memberMap.get(a.user_id);
         if (!existing) {
           memberMap.set(a.user_id, {
@@ -2100,7 +2100,7 @@ export class EventService {
             role: roleKey,
             state: a.state
           });
-        } else if (existing.role === 'member' && roleKey !== 'member') {
+        } else if (existing.role === 'registered_user' && roleKey !== 'registered_user') {
           existing.role = roleKey;
         }
       }
@@ -2123,7 +2123,7 @@ export class EventService {
             display_name: u.profiles?.display_name || u.first_name,
             picture,
             email: u.primary_email,
-            role: 'member',
+            role: 'registered_user',
             state: att.status === 'pending' ? 'pending' : 'active'
           });
         }
@@ -2150,7 +2150,7 @@ export class EventService {
     ]);
 
     const callerRoleKey = callerAssignment?.roles?.key;
-    const currentTargetRoleKey = targetAssignment?.roles?.key || 'member';
+    const currentTargetRoleKey = targetAssignment?.roles?.key || 'registered_user';
     const hierarchy = await this.getRoleHierarchyLevels([callerRoleKey, newRoleKey, currentTargetRoleKey]);
     const callerLevel = isOwner ? 0 : hierarchy[callerRoleKey!] ?? Infinity;
     const targetLevel = hierarchy[newRoleKey];
@@ -2211,7 +2211,7 @@ export class EventService {
     ]);
 
     const callerRoleKey = callerAssignment?.roles?.key;
-    const targetRoleKey = targetAssignment?.roles?.key || 'member';
+    const targetRoleKey = targetAssignment?.roles?.key || 'registered_user';
     const hierarchy = await this.getRoleHierarchyLevels([callerRoleKey, targetRoleKey]);
     const callerLevel = isOwner ? 0 : hierarchy[callerRoleKey!] ?? Infinity;
     const targetLevel = hierarchy[targetRoleKey] ?? Infinity;
@@ -2292,7 +2292,7 @@ export class EventService {
       `SELECT user_id FROM entities WHERE id = $1::uuid LIMIT 1`,
       event.hosted_by_entity_id
     );
-    if (entityRows[0]?.user_id === userId) return (await this.getTopEventRoleKey()) || 'member';
+    if (entityRows[0]?.user_id === userId) return (await this.getTopEventRoleKey()) || 'registered_user';
 
     const assignment = await prisma.event_team_assignments.findFirst({
       where: { event_id: eventId, user_id: userId, state: 'active' },
@@ -2305,7 +2305,7 @@ export class EventService {
     const booking = await prisma.bookings.findFirst({
       where: { event_id: eventId, booker_user_id: userId, status: { in: ['confirmed', 'pending_payment'] } }
     });
-    if (booking) return 'member';
+    if (booking) return 'registered_user';
 
     return 'none';
   }
@@ -2331,7 +2331,7 @@ export class EventService {
     // Legacy shape
     const isScanner = await this.verifyEventCapability(userId, eventId, 'checkin.gate_staff');
     const role = await this.getEventUserRole(userId, eventId);
-    const isMember = role === 'member';
+    const isMember = role === 'registered_user';
     return !!(
       bucket.public ||
       (isMember && bucket.member) ||

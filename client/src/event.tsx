@@ -496,7 +496,7 @@ export function EventPage({ ev, st, go }: { ev: any; st: any; go: (view: string,
   const isScanner = !isTicketManager && !!(myMemberEntry && roleHasCap(myMemberEntry.role, 'checkin.gate_staff'));
   const effectiveIsMember = isMember || !!myMemberEntry;
 
-  const myRoleKey = isOwner ? (availableRoles || [])[0]?.key : (myMemberEntry?.role || (effectiveIsMember ? 'member' : null));
+  const myRoleKey = isOwner ? (availableRoles || [])[0]?.key : (myMemberEntry?.role || (effectiveIsMember ? 'registered_user' : null));
 
   const checkRoleBucket = (bucket: any, bypass: boolean) => {
     if (bucket && Array.isArray(bucket.roles)) {
@@ -639,7 +639,7 @@ export function EventPage({ ev, st, go }: { ev: any; st: any; go: (view: string,
     if (bucket?.owner) keys.push('event_owner', 'event_manager');
     if (bucket?.admin) keys.push('co_host');
     if (bucket?.moderator) keys.push('checkin_lead', 'gate_staff', 'session_gate_staff', 'ticket_scanner');
-    if (bucket?.member) keys.push('member');
+    if (bucket?.member) keys.push('registered_user');
     const validKeys = new Set((availableRoles || []).map(r => r.key));
     return keys.filter(k => validKeys.has(k));
   };

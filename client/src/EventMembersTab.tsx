@@ -238,7 +238,7 @@ export function EventMembersTab({
                   }
                 };
 
-                const userRoleKey = isOwner ? (availableRoles || [])[0]?.key : (eventMembers.find(m => m.id === ME?.id)?.role || 'member');
+                const userRoleKey = isOwner ? (availableRoles || [])[0]?.key : (eventMembers.find(m => m.id === ME?.id)?.role || 'registered_user');
                 const myLevel = roleMeta(userRoleKey)?.hierarchy_level ?? Infinity;
                 const theirLevel = roleMeta(a.role)?.hierarchy_level ?? Infinity;
                 const canChangeRole = isHostOrCoHost && myLevel < theirLevel;
@@ -281,7 +281,7 @@ export function EventMembersTab({
                           ))}
                         </select>
                       ) : (
-                        <span style={{ fontSize: 11, fontWeight: 600, color: a.role === 'member' ? "#1f9d57" : (ROLE_BADGE_COLORS[(availableRoles || []).findIndex(r => r.key === a.role) % ROLE_BADGE_COLORS.length] || "#1f9d57"), background: "rgba(0,0,0,0.05)", padding: "3px 8px", borderRadius: 999 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: a.role === 'registered_user' ? "#1f9d57" : (ROLE_BADGE_COLORS[(availableRoles || []).findIndex(r => r.key === a.role) % ROLE_BADGE_COLORS.length] || "#1f9d57"), background: "rgba(0,0,0,0.05)", padding: "3px 8px", borderRadius: 999 }}>
                           {roleMeta(a.role)?.display_name || 'Member'}
                         </span>
                       )}
