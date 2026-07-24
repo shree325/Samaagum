@@ -7,7 +7,7 @@ import { COVERS, EVENTS, GROUPS, ME } from './home-data';
 import { Avatar } from './home-icons';
 import { I } from './home-icons';
 import { Events } from './landing-features';
-
+import { usePlanEntitlements } from './usePlanEntitlements';
 /* ============================================================
    Samaagum Home — Public profile (TAPOnn-grade)
    ============================================================ */
@@ -279,6 +279,7 @@ export function EditProfileForm({ profile, onCancel }) {
 }
 
 export function Profile({ st, go }) {
+  const { plan } = usePlanEntitlements();
   const [tab, setTab] = useState("about");
   const tabs = [["about", "About"], ["events", "Events"], ["groups", "Groups"]];
   const myEvents = [EVENTS[0], EVENTS[5], EVENTS[1]];
@@ -1002,15 +1003,17 @@ export function Profile({ st, go }) {
               )}
 
               {/* Premium Upgrade Card */}
-              <div style={{ background: colors.premiumBg, borderRadius: 24, padding: 32, marginTop: 32, color: colors.premiumText, boxShadow: "0 12px 30px rgba(0,0,0,0.12)" }}>
-                <h3 style={{ fontSize: 20, fontWeight: 800, margin: 0, color: colors.premiumText }}>Samaagum+</h3>
-                <p style={{ color: "rgba(255,255,255,0.9)", fontSize: 16, lineHeight: 1.5, marginTop: 8, marginBottom: 24 }}>
-                  The best of Samaagum for people seeking connection. Free for 7 days.
-                </p>
-                <button onClick={() => go("upgrade")} style={{ background: colors.premiumBtn, color: colors.premiumBtnText, border: "none", borderRadius: 28, padding: "14px 24px", fontSize: 16, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 16px rgba(0,0,0,0.1)" }}>
-                  Try Samaagum+ for free
-                </button>
-              </div>
+              {plan === 'free' && (
+                <div style={{ background: colors.premiumBg, borderRadius: 24, padding: 32, marginTop: 32, color: colors.premiumText, boxShadow: "0 12px 30px rgba(0,0,0,0.12)" }}>
+                  <h3 style={{ fontSize: 20, fontWeight: 800, margin: 0, color: colors.premiumText }}>Samaagum+</h3>
+                  <p style={{ color: "rgba(255,255,255,0.9)", fontSize: 16, lineHeight: 1.5, marginTop: 8, marginBottom: 24 }}>
+                    The best of Samaagum for people seeking connection. Free for 7 days.
+                  </p>
+                  <button onClick={() => go("upgrade")} style={{ background: colors.premiumBtn, color: colors.premiumBtnText, border: "none", borderRadius: 28, padding: "14px 24px", fontSize: 16, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 16px rgba(0,0,0,0.1)" }}>
+                    Try Samaagum+ for free
+                  </button>
+                </div>
+              )}
 
               {/* Interests Section */}
               <div style={{ marginTop: 40 }}>

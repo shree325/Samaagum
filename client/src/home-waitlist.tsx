@@ -60,22 +60,28 @@ export function Waitlist({ ev, st, go }) {
   const targetId = ev?.id || "ev-feat";
   const e = ev ? { ...base, ev: ev.title || base.ev, cover: ev.cover || base.cover, date: ev.date || base.date, time: ev.time || base.time, venue: ev.venue || base.venue } : base;
   
-  // Detect if user is already waitlisted or if we start in join state
-  const isWaitlisted = (st.waitlisted ? st.waitlisted.has(targetId) : false) || (st.joinedEvents?.some(je => je.id === targetId && je.bookingStatus === 'waitlisted') ?? false);
-  
-  const [state, setState] = useState(isWaitlisted ? "QUEUED" : "JOIN"); // JOIN | QUEUED | INVITED | CONVERTED | EXPIRED | COMPLETED
+  // Always start in LOADING state — the server is the source of truth.
+  // This prevents a removed user being stuck on QUEUED due to stale localStorage.
+  const [state, setState] = useState("LOADING"); // LOADING | JOIN | QUEUED | INVITED | CONVERTED | EXPIRED | COMPLETED | CLOSED
   const [refs, setRefs] = useState(0);
   
   const [realPosition, setRealPosition] = useState(null);
   const [realTotal, setRealTotal] = useState(null);
   
   useEffect(() => {
-    if (!targetId || targetId === "ev-feat") return;
+    if (!targetId || targetId === "ev-feat") {
+      // No real event — fall back to local state for demo/preview
+      const localWaitlisted = (st.waitlisted ? st.waitlisted.has(targetId) : false) || (st.joinedEvents?.some(je => je.id === targetId && je.bookingStatus === 'waitlisted') ?? false);
+      setState(localWaitlisted ? "QUEUED" : "JOIN");
+      return;
+    }
     const token = localStorage.getItem('token');
-    if (!token) return;
+    if (!token) { setState("JOIN"); return; }
     const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
     
-    // Initial fetch
+    // Always check the server first — this is the fix for the removed-user bug.
+    // A user who was removed has a stale 'waitlisted' entry in localStorage,
+    // but the server knows their booking is cancelled and they're NOT on the waitlist.
     fetch(`${apiBase}/api/events/${targetId}/waitlist/status`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
@@ -86,12 +92,22 @@ export function Waitlist({ ev, st, go }) {
         setRealTotal(res.data.totalWaiting);
         if (res.data.isWaitlisted) {
           setState("QUEUED");
+          // Sync localStorage if out of sync
           if (st.toggleWaitlist && (!st.waitlisted || !st.waitlisted.has(targetId))) {
             st.toggleWaitlist(targetId);
           }
+        } else {
+          // Server says NOT waitlisted — clear any stale localStorage entry
+          // (this is the case for a user who was removed by the organizer)
+          if (st.toggleWaitlist && st.waitlisted && st.waitlisted.has(targetId)) {
+            st.toggleWaitlist(targetId); // removes from Set
+          }
+          setState("JOIN");
         }
+      } else {
+        setState("JOIN");
       }
-    }).catch(() => {});
+    }).catch(() => { setState("JOIN"); });
 
     if (window.io) {
       const socketUrl = apiBase ? `${apiBase}/groups` : "/groups";
@@ -146,7 +162,7 @@ export function Waitlist({ ev, st, go }) {
     
     if (token && targetId && targetId !== "ev-feat") {
       try {
-        const res = await fetch(`${apiBase}/api/messaging/events/${targetId}/join`, {
+        const res = await fetch(`${apiBase}/api/messaging/events/${targetId}/request-join`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -275,6 +291,16 @@ export function Waitlist({ ev, st, go }) {
           </div>
         )}
 
+        {/* LOADING — checking server state */}
+        {state === "LOADING" && (
+          <div className="fcard fcard-pad" style={{ textAlign: "center" }}>
+            <div className="empty" style={{ padding: "16px 0" }}>
+              <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.5 }}>⏳</div>
+              <p style={{ fontSize: 13, color: "var(--ink-3)" }}>Checking waitlist status…</p>
+            </div>
+          </div>
+        )}
+
         {/* JOIN */}
         {state === "JOIN" && (
           <div className="fcard fcard-pad" style={{ textAlign: "center" }}>
@@ -352,7 +378,7 @@ export function Waitlist({ ev, st, go }) {
             </div>
             <div className="fcard-pad" style={{ paddingTop: 4, paddingBottom: 24 }}>
               <div style={{ display: "flex", gap: 10 }}>
-                <button className="hbtn hbtn--primary hbtn--block" onClick={() => { setState("QUEUED"); if (inviteTimer?.reset) inviteTimer.reset(); }}>Rejoin waitlist</button>
+                <button className="hbtn hbtn--primary hbtn--block" onClick={handleJoinWaitlist}>Rejoin waitlist</button>
                 <button className="hbtn hbtn--ghost" onClick={() => go("back")}>Back</button>
               </div>
             </div>

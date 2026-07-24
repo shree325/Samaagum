@@ -166,7 +166,8 @@ export function JoinEventPage({ ev, st, go }) {
                         attendeeId: data.data.attendeeId ?? null,
                         ticketId: data.data.ticketId ?? null,
                         qrToken: data.data.qrToken ?? null,
-                        checkinStatus: data.data.checkinStatus ?? null
+                        checkinStatus: data.data.checkinStatus ?? null,
+                        isHost: data.data.isHost ?? false
                     }));
                     let s = srv.registrationStatus || srv.registration_status || "OPEN";
                     if (s === "SCHEDULED" && srv.registration_opens_at) {
@@ -547,7 +548,20 @@ export function JoinEventPage({ ev, st, go }) {
 
                         {/* Ticket sidebar */}
                         <div className="ev-aside">
-                            {claimToken && !claimAlreadyClaimed ? (
+                            {liveEvent.isHost ? (
+                                <div className="ticket-box" style={{ padding: "32px 24px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+                                    <div style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--surface-3)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-2)" }}>
+                                        <I.setting style={{ width: 24, height: 24 }} />
+                                    </div>
+                                    <h3 style={{ margin: 0, fontSize: 18 }}>You are the host</h3>
+                                    <p style={{ margin: 0, fontSize: 13.5, color: "var(--ink-3)", lineHeight: 1.4 }}>
+                                        Manage your event details, tickets, and attendees from your dashboard.
+                                    </p>
+                                    <button className="hbtn hbtn--primary hbtn--block" style={{ marginTop: 8 }} onClick={() => go('event-dashboard', liveEvent)}>
+                                        Go to Dashboard
+                                    </button>
+                                </div>
+                            ) : claimToken && !claimAlreadyClaimed ? (
                                 <div className="ticket-box" style={{ padding: "32px 24px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
                                     <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(99,102,241,0.1)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent)" }}>
                                         <I.ticket style={{ width: 24, height: 24 }} />
@@ -751,8 +765,33 @@ export function JoinEventPage({ ev, st, go }) {
                                                         if (typeof settingsObj === 'string') {
                                                             try { settingsObj = JSON.parse(settingsObj); } catch {}
                                                         }
+                                                        
+                                                        if (tiers && tiers.length > 0) {
+                                                            const hasUnlimitedTier = tiers.some(t => t.remaining === null || t.remaining === undefined);
+                                                            const isGlobalCapLimited = settingsObj?.capacity?.limit === true || (evtCap && evtCap > 0 && evtCap < 9999);
+                                                            
+                                                            let actualRemaining = null;
+                                                            if (!hasUnlimitedTier) {
+                                                                actualRemaining = tiers.reduce((sum, t) => sum + Math.max(0, t.remaining || 0), 0);
+                                                            }
+                                                            if (isGlobalCapLimited && evtCap > 0) {
+                                                                const globalRemaining = Math.max(0, evtCap - evtGoing);
+                                                                if (actualRemaining === null || globalRemaining < actualRemaining) {
+                                                                    actualRemaining = globalRemaining;
+                                                                }
+                                                            }
+                                                            
+                                                            if (actualRemaining === null) return null;
+                                                            
+                                                            return (
+                                                                <div style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 500, marginTop: 10, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                                                                    {actualRemaining > 0 ? `${actualRemaining} tickets left` : "Sold Out"}
+                                                                </div>
+                                                            );
+                                                        }
+
                                                         const isCapacityLimited = settingsObj?.capacity?.limit === true || (evtCap && evtCap > 0 && evtCap < 9999);
-                                                        if (!isCapacityLimited) return null;
+                                                        if (!isCapacityLimited || !evtCap) return null;
                                                         const remaining = evtCap - evtGoing;
                                                         return (
                                                             <div style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 500, marginTop: 10, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>

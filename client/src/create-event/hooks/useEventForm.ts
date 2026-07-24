@@ -398,6 +398,14 @@ export function useEventForm({ go, st, editEv, hostGroupId }: any) {
       const eventObj = isEditing ? data.data : data.data.event;
 
       localStorage.removeItem(draftKey);
+
+      if (editEv?.__deleteOldDraftId) {
+        fetch(`${apiBase}/api/drafts/${editEv.__oldDraftType}/${editEv.__deleteOldDraftId}`, {
+          method: 'DELETE',
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        }).catch(e => console.warn('Failed to delete old draft', e));
+      }
+
       if (st && st.addCreatedEvent) {
         st.addCreatedEvent(eventObj);
       }

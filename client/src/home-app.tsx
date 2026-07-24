@@ -31,6 +31,8 @@ import { EventPage } from './event';
 import { PreviewEventPage } from './preview_event';
 import { JoinEventPage } from './join_event';
 import { GlobalAIAssistantWidget } from './components/modals/GlobalAIAssistantWidget';
+import { useDraftRecovery } from './hooks/useDraftRecovery';
+import { DraftRecoveryModal, DraftInfo } from './components/modals/DraftRecoveryModal';
 
 /* ============================================================
    Samaagum Home — main app (routing, frame, theme, tweaks)
@@ -233,6 +235,9 @@ export function DashboardApp() {
   const [counts, setCounts] = useState({ notifs: 0, messages: 0 });
   const [toasts, setToasts] = useState([]);
   const [ioLoaded, setIoLoaded] = useState(!!window.io);
+
+  const { checkDraft, deleteBackendDraft, isChecking } = useDraftRecovery();
+  const [activeDraftModal, setActiveDraftModal] = useState<{ drafts: DraftInfo[], pendingGoArgs: { view: string, param: any } } | null>(null);
 
   useEffect(() => {
     if (window.io) return;
@@ -702,13 +707,22 @@ export function DashboardApp() {
     curRef.current = cur;
   }, [cur]);
 
-  const go = useCallback((view, param = null) => {
+  const go = useCallback(async (view, param = null) => {
     if (view === "back") {
       navigate(-1);
       return;
     }
     let targetView = view;
     let targetParam = param;
+
+    if (view === "create-event" || view === "create-group") {
+      const type = view === "create-event" ? "event" : "group";
+      const drafts = await checkDraft(type);
+      if (drafts && drafts.length > 0) {
+        setActiveDraftModal({ drafts, pendingGoArgs: { view, param } });
+        return; // pause navigation
+      }
+    }
 
     if (view === "public-profile") {
       const targetUserId = param?.id || param?.userId || (typeof param === 'string' ? param : null);
@@ -733,7 +747,7 @@ export function DashboardApp() {
     }
     // scroll the active view to top
     setTimeout(() => { document.querySelectorAll(".scroll").forEach(el => el.scrollTop = 0); }, 0);
-  }, [navigate]);
+  }, [navigate, checkDraft]);
 
   useEffect(() => {
     
@@ -1426,10 +1440,11 @@ useEffect(() => {
         st={st}
         hostGroupId={cur.param?.hostGroupId}
         hostGroupName={cur.param?.hostGroupName}
+        editEv={cur.param}
       />
     );
     if (v === "edit-event") return <CreateEvent editEv={cur.param} go={go} mobile={mobile} st={st} />;
-    if (v === "create-group") return <CreateGroup key={cur.param?.id || "create"} mode={cur.param?.settings?.isDraft ? "edit" : "create"} editGroup={cur.param} go={go} mobile={mobile} st={st} />;
+    if (v === "create-group") return <CreateGroup key={cur.param?.id || "create"} mode={(cur.param?.settings?.isDraft || cur.param?.__isCloudDraft || cur.param?.__isLocalDraft) ? "edit" : "create"} editGroup={cur.param} go={go} mobile={mobile} st={st} />;
     if (v === "edit-group") return <CreateGroup key={cur.param?.id || "edit"} mode="edit" editGroup={cur.param} go={go} mobile={mobile} st={st} />;
     if (v === "event-dashboard") return <EventDashboard ev={cur.param} st={st} go={go} />;
     if (v === "group-dashboard") return <GroupDashboard group={cur.param} st={st} go={go} />;
@@ -1707,6 +1722,81 @@ useEffect(() => {
         </div>
       )}
       <GlobalAIAssistantWidget aiEnabled={aiFeatureEnabled && (entitlements?.ai_assistant_enabled || false)} />
+      {activeDraftModal && (
+        <DraftRecoveryModal 
+          drafts={activeDraftModal.drafts}
+          onContinue={async (selectedDraft) => {
+            const { pendingGoArgs } = activeDraftModal;
+            
+            let finalParam = pendingGoArgs.param;
+            if (selectedDraft.source === 'cloud') {
+                try {
+                  const token = localStorage.getItem('token');
+                  const apiBaseUrl = window.location.port === "8080" ? "http://localhost:3000" : "";
+                  
+                  if (selectedDraft.type === 'event') {
+                    const res = await fetch(`${apiBaseUrl}/api/events/${selectedDraft.id}`, {
+                      headers: token ? { Authorization: `Bearer ${token}` } : {}
+                    });
+                    const data = await res.json();
+                    if (data.success && data.data && data.data.event) {
+                      finalParam = { ...data.data.event, __isCloudDraft: true };
+                    } else {
+                      finalParam = { id: selectedDraft.id, __isCloudDraft: true };
+                    }
+                  } else {
+                    const res = await fetch(`${apiBaseUrl}/api/groups/${selectedDraft.id}?includeSettings=true`, {
+                      headers: token ? { Authorization: `Bearer ${token}` } : {}
+                    });
+                    const data = await res.json();
+                    if (data.success && data.data && data.data.group) {
+                      finalParam = { ...data.data.group, __isCloudDraft: true };
+                    } else {
+                      finalParam = { id: selectedDraft.id, __isCloudDraft: true };
+                    }
+                  }
+                } catch (e) {
+                  finalParam = { id: selectedDraft.id, __isCloudDraft: true };
+                }
+            } else {
+               finalParam = { id: 'new', __isLocalDraft: true };
+            }
+            
+            setActiveDraftModal(null);
+
+            if (pendingGoArgs.view === 'create-event') {
+                navigate('/create-event', { state: finalParam });
+            } else if (pendingGoArgs.view === 'create-group') {
+                navigate('/create-group', { state: finalParam });
+            }
+          }}
+          onStartFresh={() => {
+            const { pendingGoArgs } = activeDraftModal;
+            setActiveDraftModal(null);
+            
+            // Delete local storage draft immediately since it's transient
+            if (pendingGoArgs.view === 'create-event') {
+                localStorage.removeItem('sg_draft_event');
+            } else {
+                localStorage.removeItem('sg_draft_group');
+            }
+
+            // We do NOT delete the cloud drafts immediately.
+            // (If starting fresh, they just create a new draft. Old drafts remain in list).
+            const freshState = { 
+               id: 'new', 
+               __startFresh: true
+            };
+
+            if (pendingGoArgs.view === 'create-event') {
+                navigate('/create-event', { state: freshState });
+            } else if (pendingGoArgs.view === 'create-group') {
+                navigate('/create-group', { state: freshState });
+            }
+          }}
+          onClose={() => setActiveDraftModal(null)}
+        />
+      )}
     </div>
   );
 }

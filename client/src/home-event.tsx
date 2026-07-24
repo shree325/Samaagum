@@ -556,7 +556,7 @@ function EventDetail({ ev, st, go }) {
                           <I.users /> View Waitlist Status
                         </button>
                       ) : (
-                        <button className="hbtn hbtn--primary hbtn--block" style={{ borderRadius: 14 }} onClick={() => { st.toggleWaitlist(e.id); go("waitlist", e); }}>
+                        <button className="hbtn hbtn--primary hbtn--block" style={{ borderRadius: 14 }} onClick={() => go("waitlist", e)}>
                           Join Waitlist
                         </button>
                       )

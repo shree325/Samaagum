@@ -229,6 +229,8 @@ fastify.register(connectionRoutes, { prefix: '/api/connections' });
 import { eventRoutes } from './controllers/eventRoutes';
 fastify.register(groupRoutes, { prefix: '/api/groups' });
 fastify.register(eventRoutes, { prefix: '/api/events' });
+import { draftRoutes } from './controllers/draftRoutes';
+fastify.register(draftRoutes, { prefix: '/api/drafts' });
 fastify.register(dashboardRoutes, { prefix: '/api/dashboard' });
 fastify.register(integrationRoutes, { prefix: '/api/integrations' });
 fastify.register(aiRoutes, { prefix: '/api/ai' });
