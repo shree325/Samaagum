@@ -60,6 +60,14 @@ export function Waitlist({ ev, st, go }) {
   const targetId = ev?.id || "ev-feat";
   const e = ev ? { ...base, ev: ev.title || base.ev, cover: ev.cover || base.cover, date: ev.date || base.date, time: ev.time || base.time, venue: ev.venue || base.venue } : base;
   
+  const me = (window as any).ME;
+  const isHost = me && ev && (
+    ev.created_by === me.id ||
+    ev.hostUserId === me.id ||
+    ev.hostBy === me.name ||
+    ev.host === me.name
+  );
+  
   // Always start in LOADING state — the server is the source of truth.
   // This prevents a removed user being stuck on QUEUED due to stale localStorage.
   const [state, setState] = useState("LOADING"); // LOADING | JOIN | QUEUED | INVITED | CONVERTED | EXPIRED | COMPLETED | CLOSED
@@ -315,7 +323,13 @@ export function Waitlist({ ev, st, go }) {
               <span className="ni"><I.spark /></span>
               <div style={{ fontSize: 12.5 }}><b>{totalWaiting} people</b> are waiting. Share your referral link after joining to move up the queue (capped, so it stays fair).</div>
             </div>
-            <button className="hbtn hbtn--primary hbtn--block" onClick={handleJoinWaitlist}>Join the waitlist</button>
+            {isHost ? (
+              <div style={{ padding: "10px 14px", background: "var(--surface-2)", borderRadius: 10, fontSize: 13, color: "var(--ink-2)", fontWeight: 500 }}>
+                👑 You are the host/organizer of this event. Waitlist registration is for attendees.
+              </div>
+            ) : (
+              <button className="hbtn hbtn--primary hbtn--block" onClick={handleJoinWaitlist}>Join the waitlist</button>
+            )}
           </div>
         )}
 

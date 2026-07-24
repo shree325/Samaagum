@@ -1,4 +1,6 @@
 import { FastifyInstance } from 'fastify';
+import fs from 'fs';
+import path from 'path';
 import { R_categories } from '../repositories/R_categories';
 import { R_cityControls } from '../repositories/R_cityControls';
 import { R_groups } from '../repositories/R_groups';
@@ -427,18 +429,30 @@ export const publicRoutes = async (fastify: FastifyInstance) => {
     }
   });
 
-  // Serve India districts GeoJSON boundary data from the database
+  // Serve India districts GeoJSON boundary data (DB first, fallback to file stream)
   fastify.get('/maps/india-districts', async (request, reply) => {
     try {
       const row = await prisma.platform_settings.findFirst({
         where: { key: 'india_districts_geojson' }
       });
-      if (!row) {
-        return reply.status(404).send({ success: false, message: 'GeoJSON data not found in database. Please run the seeder script.' });
+      if (row && row.value) {
+        return row.value;
       }
-      return row.value; // Returns the raw geojson structure directly
+      
+      const geojsonPath = path.join(__dirname, '../../public/india_district_simplified.geojson');
+      const fallbackPath = path.join(__dirname, '../../../client/public/india_district_simplified.geojson');
+      const filePath = fs.existsSync(geojsonPath) ? geojsonPath : (fs.existsSync(fallbackPath) ? fallbackPath : null);
+
+      if (!filePath) {
+        return reply.status(404).send({ success: false, message: 'GeoJSON map file not found' });
+      }
+
+      const stream = fs.createReadStream(filePath);
+      reply.header('Content-Type', 'application/json');
+      reply.header('Cache-Control', 'public, max-age=86400');
+      return reply.send(stream);
     } catch (error: any) {
-      return reply.status(500).send({ success: false, message: error.message || 'Failed to retrieve map data from database.' });
+      return reply.status(500).send({ success: false, message: error.message || 'Failed to retrieve map data.' });
     }
   });
 

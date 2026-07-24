@@ -35,6 +35,7 @@ export interface IR_events {
   getById(id: string): Promise<IEvent | null>;
   getByHostEntity(entityId: string): Promise<IEvent[]>;
   getByStatus(tenantId: string, status: string): Promise<IEvent[]>;
+  getByStatusFiltered(tenantId: string, status: string, radiusFilter?: number, lat?: number, lon?: number, refCityName?: string): Promise<(IEvent & { _distance?: number })[]>;
   getAll(tenantId: string): Promise<IEvent[]>;
   update(id: string, event: Partial<IEvent>): Promise<IEvent | null>;
   updateRegistrationStatus(id: string, status: 'OPEN'|'CLOSED'|'SCHEDULED', opensAt?: Date | null, closesAt?: Date | null): Promise<boolean>;

@@ -461,7 +461,39 @@ fastify.post('/:id/waitlist/:userId/approve', { preHandler: [(fastify as any).au
             const tenantId = request.headers['x-tenant-id'] || '00000000-0000-0000-0000-000000000000';
             const userId = tryDecodeUserId(fastify, request);
             const cityQuery = (request.query as any)?.city as string | undefined;
-            const data = await EventService.getPublicEvents(tenantId as string, userId, cityQuery);
+            const rawRadius = (request.query as any)?.radius;
+            const rawLat = (request.query as any)?.lat;
+            const rawLon = (request.query as any)?.lon;
+            const locationSource = (request.query as any)?.locationSource;
+
+            let radiusFilter: number | undefined;
+            let userLat: number | undefined;
+            let userLon: number | undefined;
+
+            if (rawRadius !== undefined && rawRadius !== null && rawRadius !== '') {
+                const r = Number(rawRadius);
+                if (isNaN(r) || r < 1 || r > 500) {
+                    return reply.status(400).send({ success: false, message: 'Invalid radius parameter. Must be between 1 km and 500 km.' });
+                }
+                radiusFilter = r;
+            }
+
+            if (rawLat !== undefined && rawLon !== undefined && rawLat !== '' && rawLon !== '') {
+                const parsedLat = Number(rawLat);
+                const parsedLon = Number(rawLon);
+                if (isNaN(parsedLat) || parsedLat < -90 || parsedLat > 90) {
+                    return reply.status(400).send({ success: false, message: 'Invalid latitude parameter. Must be between -90 and 90.' });
+                }
+                if (isNaN(parsedLon) || parsedLon < -180 || parsedLon > 180) {
+                    return reply.status(400).send({ success: false, message: 'Invalid longitude parameter. Must be between -180 and 180.' });
+                }
+                userLat = parsedLat;
+                userLon = parsedLon;
+            }
+
+            console.log(`[GET /api/events] Query: city="${cityQuery || ''}", radius=${radiusFilter || 'none'}km, lat=${userLat ?? 'null'}, lon=${userLon ?? 'null'}, source=${locationSource || 'unknown'}`);
+
+            const data = await EventService.getPublicEvents(tenantId as string, userId, cityQuery, radiusFilter, userLat, userLon);
             return reply.send({ success: true, data });
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });

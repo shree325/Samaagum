@@ -58,6 +58,36 @@ export class R_events implements IR_events {
     return result.rows;
   }
 
+  async getByStatusFiltered(tenantId: string, status: string, radiusFilter?: number, lat?: number, lon?: number, refCityName?: string): Promise<(IEvent & { _distance?: number })[]> {
+    if (radiusFilter !== undefined && lat !== undefined && lon !== undefined) {
+      const { getHaversineSQL } = await import('../utils/geo');
+      const distSql = getHaversineSQL("COALESCE(e.venue->>'lat', e.venue->'meta'->>'lat')", "COALESCE(e.venue->>'lon', e.venue->'meta'->>'lon')");
+      
+      const query = `
+        SELECT e.*,
+               ${distSql} AS _distance
+        FROM events e
+        WHERE e.tenant_id = $1 AND e.status = $2
+          AND (
+            e.location_type = 'online' OR
+            (
+              COALESCE(e.venue->>'lat', e.venue->'meta'->>'lat') IS NOT NULL AND
+              ${distSql} <= $5
+            )
+          )
+        ORDER BY _distance ASC NULLS LAST, starts_at DESC
+      `;
+      const result = await (this.db as any).query(query, [tenantId, status, lat, lon, radiusFilter]);
+      return result.rows;
+    } else {
+      const result = await (this.db as any).query(
+        'SELECT * FROM events WHERE tenant_id = $1 AND status = $2 ORDER BY starts_at DESC',
+        [tenantId, status]
+      );
+      return result.rows;
+    }
+  }
+
   async getAll(tenantId: string): Promise<IEvent[]> {
     const result = await this.db.query(
       'SELECT * FROM events WHERE tenant_id = $1 ORDER BY starts_at DESC',

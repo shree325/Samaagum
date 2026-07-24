@@ -1195,8 +1195,10 @@ export function EventDashboard({ ev, st, go, embedded = false, onTabChange }: an
             <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--ink)' }}>Recent Members</h3>
             <button className="hbtn hbtn--soft hbtn--sm" style={{ color: '#6366f1', background: 'transparent', border: 'none', fontWeight: 600 }}
               onClick={() => {
-                if (embedded && onTabChange) {
+                if (onTabChange) {
                   onTabChange('members');
+                } else if (embedded) {
+                  go('event', { ...e, initialTab: 'members' });
                 } else {
                   go('event', { ...e, initialTab: 'members' });
                 }

@@ -1652,6 +1652,9 @@ export async function messagingRoutes(fastify: FastifyInstance) {
       }
 
       const isHostOrCoHost = await EventService.verifyEventHostOrCoHost(userId, eventId);
+      if (isHostOrCoHost) {
+        return reply.status(400).send({ success: false, message: 'Event hosts and organizers cannot join the waitlist or register as attendees.' });
+      }
 
       // Check registration status
       let isActuallyOpen = event.registration_status === 'OPEN' || 
