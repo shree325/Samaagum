@@ -318,7 +318,39 @@ export const groupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) 
                 } catch (err) {}
             }
             const cityQuery = request.query.city;
-            const data = await GroupService.listGroups(userPayload, cityQuery);
+            const rawRadius = request.query.radius;
+            const rawLat = request.query.lat;
+            const rawLon = request.query.lon;
+            const locationSource = request.query.locationSource;
+
+            let radiusFilter: number | undefined;
+            let userLat: number | undefined;
+            let userLon: number | undefined;
+
+            if (rawRadius !== undefined && rawRadius !== null && rawRadius !== '') {
+                const r = Number(rawRadius);
+                if (isNaN(r) || r < 1 || r > 500) {
+                    return reply.status(400).send({ success: false, message: 'Invalid radius parameter. Must be between 1 km and 500 km.' });
+                }
+                radiusFilter = r;
+            }
+
+            if (rawLat !== undefined && rawLon !== undefined && rawLat !== '' && rawLon !== '') {
+                const parsedLat = Number(rawLat);
+                const parsedLon = Number(rawLon);
+                if (isNaN(parsedLat) || parsedLat < -90 || parsedLat > 90) {
+                    return reply.status(400).send({ success: false, message: 'Invalid latitude parameter. Must be between -90 and 90.' });
+                }
+                if (isNaN(parsedLon) || parsedLon < -180 || parsedLon > 180) {
+                    return reply.status(400).send({ success: false, message: 'Invalid longitude parameter. Must be between -180 and 180.' });
+                }
+                userLat = parsedLat;
+                userLon = parsedLon;
+            }
+
+            console.log(`[GET /api/groups] Query: city="${cityQuery || ''}", radius=${radiusFilter || 'none'}km, lat=${userLat ?? 'null'}, lon=${userLon ?? 'null'}, source=${locationSource || 'unknown'}`);
+
+            const data = await GroupService.listGroups(userPayload, cityQuery, radiusFilter, userLat, userLon);
             return { success: true, data };
         } catch (e: any) {
             return reply.status(500).send({ success: false, message: e.message });

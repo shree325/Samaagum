@@ -291,6 +291,31 @@ export class EventService {
       };
     }
 
+    // 1.8 Automatic Forward Geocoding for Physical Events
+    let processedVenue = body.venue;
+    if (body.location_type !== 'online' && processedVenue) {
+      const { reverseGeocodingService } = await import('./geocoding/ReverseGeocodingService');
+      let venueObj: any = typeof processedVenue === 'string' ? { address: processedVenue } : { ...processedVenue };
+      const currentLat = venueObj.lat || venueObj.meta?.lat;
+      const currentLon = venueObj.lon || venueObj.meta?.lon;
+
+      if (!currentLat || !currentLon) {
+        const addressToGeocode = venueObj.address || venueObj.name || (typeof processedVenue === 'string' ? processedVenue : '');
+        if (addressToGeocode) {
+          const geoRes = await reverseGeocodingService.forwardGeocode(addressToGeocode);
+          if (geoRes) {
+            venueObj.lat = geoRes.latitude;
+            venueObj.lon = geoRes.longitude;
+            if (!venueObj.meta) venueObj.meta = {};
+            venueObj.meta.lat = geoRes.latitude;
+            venueObj.meta.lon = geoRes.longitude;
+            processedVenue = venueObj;
+            console.log(`[EventService] Auto-geocoded venue "${addressToGeocode}" -> lat: ${geoRes.latitude}, lon: ${geoRes.longitude}`);
+          }
+        }
+      }
+    }
+
     // 2. Perform transactional event + tickets creation
     const event = await this.eventsRepo.create({
       tenant_id: tenantId,
@@ -302,7 +327,7 @@ export class EventService {
       ends_at: body.ends_at ? new Date(body.ends_at) : null,
       venue_timezone: body.venue_timezone,
       location_type: body.location_type,
-      venue: body.venue,
+      venue: processedVenue,
       online_link: body.online_link,
       capacity_total: body.capacity_total,
       registration_mode: body.registration_mode === 'free' ? 'free_rsvp' : (body.registration_mode || 'free_rsvp'),
@@ -564,8 +589,40 @@ export class EventService {
     return new Set(memberships.map((m: any) => m.group_id));
   }
 
-  static async getPublicEvents(tenantId: string, userId?: string, cityQuery?: string) {
-    const list = await this.eventsRepo.getByStatus(tenantId, 'published');
+  static async getPublicEvents(tenantId: string, userId?: string, cityQuery?: string, radiusFilter?: number, userLat?: number, userLon?: number) {
+    let refCityName = "";
+    let refStateName = "";
+    let refLat: number | null = userLat !== undefined ? userLat : null;
+    let refLon: number | null = userLon !== undefined ? userLon : null;
+
+    if (cityQuery && cityQuery !== 'Global') {
+      const queryName = cityQuery.split(',')[0].trim();
+      const matchedCities = await this.cityControlsRepo.findByCityName(queryName);
+      const refLoc = matchedCities.find(c => c.is_active) || matchedCities[0];
+      if (refLoc) {
+        refCityName = refLoc.city_name;
+        refStateName = refLoc.state_name || "";
+        if (refLat === null || refLon === null) {
+          refLat = Number(refLoc.latitude);
+          refLon = Number(refLoc.longitude);
+        }
+      }
+    }
+
+    // Effective radius applies if we have reference coordinates (from GPS or city)
+    const effectiveRadius = (refLat !== null && refLon !== null) ? radiusFilter : undefined;
+
+    console.log(`[EventService] Resolving Events: refLat=${refLat}, refLon=${refLon}, city="${refCityName}", effectiveRadius=${effectiveRadius || 'none'}km`);
+
+    const list = await this.eventsRepo.getByStatusFiltered(
+      tenantId, 
+      'published', 
+      effectiveRadius, 
+      effectiveRadius !== undefined ? (refLat as number) : undefined, 
+      effectiveRadius !== undefined ? (refLon as number) : undefined,
+      refCityName
+    );
+
     const enrichedList = [];
     for (const ev of list) {
       const visibility = (ev.venue as any)?.visibility;
@@ -616,23 +673,6 @@ export class EventService {
       });
     }
 
-    let refCityName = "";
-    let refStateName = "";
-    let refLat: number | null = null;
-    let refLon: number | null = null;
-
-    if (cityQuery && cityQuery !== 'Global') {
-      const queryName = cityQuery.split(',')[0].trim();
-      const matchedCities = await this.cityControlsRepo.findByCityName(queryName);
-      const refLoc = matchedCities.find(c => c.is_active) || matchedCities[0];
-      if (refLoc) {
-        refCityName = refLoc.city_name;
-        refStateName = refLoc.state_name || "";
-        refLat = Number(refLoc.latitude);
-        refLon = Number(refLoc.longitude);
-      }
-    }
-
     const mappedEvents = enrichedList.map(ev => {
       let isSameCity = false;
       let isSameState = false;
@@ -654,8 +694,16 @@ export class EventService {
           if (refStateName && state && state.toLowerCase().includes(refStateName.toLowerCase())) {
             isSameState = true;
           }
-          if (refLat !== null && refLon !== null && lat !== undefined && lon !== undefined) {
+          
+          if ((ev as any)._distance !== undefined) {
+            distance = (ev as any)._distance;
+          } else if (refLat !== null && refLon !== null && lat !== undefined && lon !== undefined) {
             distance = this.getDistance(refLat, refLon, Number(lat), Number(lon));
+          }
+          
+          // Fallback: If it's the same city but has no distance, treat distance as 0
+          if (distance === null && isSameCity) {
+            distance = 0;
           }
         }
       }
@@ -663,7 +711,27 @@ export class EventService {
       return { ...ev, _isSameCity: isSameCity, _isSameState: isSameState, _distance: distance, _hasLocation: hasLocation, _createdAt: ev.created_at?.getTime() || 0 };
     });
 
-    if (refCityName) {
+    if (effectiveRadius !== undefined) {
+      // Radius Applied -> Sort by distance ASC, then starts_at ASC
+      mappedEvents.sort((a, b) => {
+        if (a._distance !== null && b._distance !== null) {
+          if (a._distance !== b._distance) return a._distance - b._distance;
+        }
+        if (a._distance !== null) return -1;
+        if (b._distance !== null) return 1;
+        
+        // Fallback to starts_at
+        const aStart = a.starts_at?.getTime() || 0;
+        const bStart = b.starts_at?.getTime() || 0;
+        if (aStart !== bStart) {
+          return aStart - bStart;
+        }
+        
+        // Final fallback: newly created first
+        return b._createdAt - a._createdAt;
+      });
+    } else if (refCityName) {
+      // Existing sort logic when no radius is applied
       mappedEvents.sort((a, b) => {
         // 1. Same City
         if (a._isSameCity && !b._isSameCity) return -1;
@@ -1057,6 +1125,33 @@ export class EventService {
     const waitlistToggledOff = oldWaitlistEnabled && !newWaitlistEnabled;
     const approvalToggledOff = event.approval_required === true && body.approval_required === false;
 
+    // Automatic Forward Geocoding on Event Update
+    let processedVenue = body.venue;
+    const effectiveLocType = body.location_type || event.location_type;
+    if (effectiveLocType !== 'online' && processedVenue) {
+      const { reverseGeocodingService } = await import('./geocoding/ReverseGeocodingService');
+      let venueObj: any = typeof processedVenue === 'string' ? { address: processedVenue } : { ...processedVenue };
+      const addressToGeocode = venueObj.address || venueObj.name || (typeof processedVenue === 'string' ? processedVenue : '');
+      const oldVenue: any = event.venue || {};
+      const oldAddress = typeof oldVenue === 'string' ? oldVenue : (oldVenue.address || oldVenue.name || '');
+
+      // Re-geocode if lat/lon missing OR if venue address string changed
+      if (!venueObj.lat || !venueObj.lon || addressToGeocode !== oldAddress) {
+        if (addressToGeocode) {
+          const geoRes = await reverseGeocodingService.forwardGeocode(addressToGeocode);
+          if (geoRes) {
+            venueObj.lat = geoRes.latitude;
+            venueObj.lon = geoRes.longitude;
+            if (!venueObj.meta) venueObj.meta = {};
+            venueObj.meta.lat = geoRes.latitude;
+            venueObj.meta.lon = geoRes.longitude;
+            processedVenue = venueObj;
+            console.log(`[EventService] Auto-updated geocoded venue "${addressToGeocode}" -> lat: ${geoRes.latitude}, lon: ${geoRes.longitude}`);
+          }
+        }
+      }
+    }
+
     // The client always submits the full event snapshot (saveEventSettings in event.tsx), so a
     // ticket-manager-only editor's request still arrives with title/dates/etc. populated. Rather
     // than reject the whole request, silently drop the restricted fields (left undefined ->
@@ -1072,7 +1167,7 @@ export class EventService {
       approval_required: body.approval_required,
       cash_enabled: body.cash_enabled,
       location_type: body.location_type,
-      venue: body.venue,
+      venue: processedVenue,
       online_link: body.online_link,
       instruction: body.instruction,
       payment_instructions: body.payment_instructions,
@@ -1083,7 +1178,7 @@ export class EventService {
       registration_closes_at: body.registration_closes_at ? new Date(body.registration_closes_at) : undefined,
       settings: finalSettings,
     } : {
-      venue: body.venue,
+      venue: processedVenue,
     });
 
     if (waitlistToggledOff) {

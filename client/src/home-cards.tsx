@@ -53,7 +53,15 @@ export const EventCard = React.memo(function EventCard({ ev, onOpen, wishlisted,
           <div className="meta-row" style={{ color: "var(--brand-main)", fontWeight: 500 }}><span className="ic"><I.groups/></span>{ev.hostName}</div>
         )}
         <div className="meta-row"><span className="ic"><I.clock/></span>{dateStr} · {timeStr}</div>
-        <div className="meta-row"><span className="ic">{ev.online?<I.online/>:<I.pin/>}</span>{venueStr}</div>
+        <div className="meta-row">
+          <span className="ic">{ev.online?<I.online/>:<I.pin/>}</span>
+          {venueStr}
+          {ev._distance !== undefined && ev._distance !== null && !ev.online && (
+            <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 600, color: 'var(--brand-main)', background: 'var(--surface-2)', padding: '2px 6px', borderRadius: 4 }}>
+              {ev._distance < 1 ? `${Math.round(ev._distance * 1000)} m away` : `${ev._distance.toFixed(1)} km away`}
+            </span>
+          )}
+        </div>
         <div className="foot">
           <div className="going">
             <div className="stack">

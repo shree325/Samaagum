@@ -33,6 +33,7 @@ import { JoinEventPage } from './join_event';
 import { GlobalAIAssistantWidget } from './components/modals/GlobalAIAssistantWidget';
 import { useDraftRecovery } from './hooks/useDraftRecovery';
 import { DraftRecoveryModal, DraftInfo } from './components/modals/DraftRecoveryModal';
+import { LocationProvider } from './context/LocationContext';
 
 /* ============================================================
    Samaagum Home — main app (routing, frame, theme, tweaks)
@@ -1804,7 +1805,9 @@ useEffect(() => {
 export function App() {
   return (
     <HashRouter>
-      <DashboardApp />
+      <LocationProvider>
+        <DashboardApp />
+      </LocationProvider>
     </HashRouter>
   );
 }

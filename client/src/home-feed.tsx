@@ -7,6 +7,7 @@ import { apiBase } from './home-subscription';
 import { I, Grain, Avatar } from './home-icons';
 import { Communities, Events } from './landing-features';
 import { HtmlRenderer } from './components/HtmlRenderer';
+import { useLocation } from './context/LocationContext';
 
 /* ============================================================
    Samaagum Home — Home feed + Discover
@@ -816,6 +817,21 @@ export function Discover({ st, go, param }) {
   const [filterTime, setFilterTime] = useState({ today: false, thisWeek: false, other: false });
   const [filterReg, setFilterReg] = useState({ joined: false, notJoined: false });
   const [selectedCats, setSelectedCats] = useState(new Set());
+  
+  const [showDistancePopover, setShowDistancePopover] = useState(false);
+  const [customDistance, setCustomDistance] = useState('');
+  const [radiusFilter, setRadiusFilter] = useState<number | null>(() => {
+    const saved = sessionStorage.getItem('radiusFilter');
+    return saved ? Number(saved) : null;
+  });
+
+  useEffect(() => {
+    if (radiusFilter !== null) {
+      sessionStorage.setItem('radiusFilter', radiusFilter.toString());
+    } else {
+      sessionStorage.removeItem('radiusFilter');
+    }
+  }, [radiusFilter]);
 
   const isToday = (date: Date) => {
     const today = new Date();
@@ -850,12 +866,30 @@ export function Discover({ st, go, param }) {
   const cityRef = React.useRef(city);
   React.useEffect(() => { cityRef.current = city; }, [city]);
 
-  const fetchGroups = React.useCallback(async (currentCity) => {
+  const { location: locState } = useLocation();
+
+  const fetchGroups = React.useCallback(async (currentCity: string, radius?: number | null, signal?: AbortSignal) => {
     try {
       const token = localStorage.getItem('token');
-      const cityQuery = currentCity && currentCity !== "Global" ? `?city=${encodeURIComponent(currentCity)}` : '';
-      const res = await fetch(`${apiBase}/api/groups${cityQuery}`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      const params = new URLSearchParams();
+      if (currentCity && currentCity !== "Global") params.append('city', currentCity);
+      if (radius) params.append('radius', radius.toString());
+      
+      const isGpsActive = locState.source === 'GPS' && locState.latitude !== null && locState.longitude !== null;
+      if (isGpsActive) {
+        params.append('lat', locState.latitude!.toString());
+        params.append('lon', locState.longitude!.toString());
+        params.append('locationSource', 'GPS');
+      } else if (locState.source) {
+        params.append('locationSource', locState.source);
+      }
+
+      const qs = params.toString() ? `?${params.toString()}` : '';
+      console.log(`[Discover Frontend] Fetching Groups: source=${locState.source}, lat=${locState.latitude}, lon=${locState.longitude}, radius=${radius}km, url=${apiBase}/api/groups${qs}`);
+
+      const res = await fetch(`${apiBase}/api/groups${qs}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        signal
       });
       const data = await res.json();
       if (data.success) {
@@ -866,12 +900,14 @@ export function Discover({ st, go, param }) {
           else if (g.isPending) addPending && addPending(g.id);
         });
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      if (e.name !== 'AbortError') {
+        console.error(e);
+      }
     } finally {
       setLoading(false);
     }
-  }, [apiBase]);
+  }, [apiBase, locState.latitude, locState.longitude, locState.source]);
 
   React.useEffect(() => {
     const apiBase = window.location.port === "8080" ? "http://localhost:3000" : "";
@@ -890,26 +926,46 @@ export function Discover({ st, go, param }) {
     fetchCategories();
   }, [apiBase]);
 
-  const fetchEvents = React.useCallback(async (currentCity?: string) => {
+  const fetchEvents = React.useCallback(async (currentCity?: string, radius?: number | null, signal?: AbortSignal) => {
     try {
       const token = localStorage.getItem('token');
-      const cityQuery = currentCity && currentCity !== "Global" ? `?city=${encodeURIComponent(currentCity)}` : '';
-      const res = await fetch(`${apiBase}/api/events${cityQuery}`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      const params = new URLSearchParams();
+      if (currentCity && currentCity !== "Global") params.append('city', currentCity);
+      if (radius) params.append('radius', radius.toString());
+      
+      const isGpsActive = locState.source === 'GPS' && locState.latitude !== null && locState.longitude !== null;
+      if (isGpsActive) {
+        params.append('lat', locState.latitude!.toString());
+        params.append('lon', locState.longitude!.toString());
+        params.append('locationSource', 'GPS');
+      } else if (locState.source) {
+        params.append('locationSource', locState.source);
+      }
+
+      const qs = params.toString() ? `?${params.toString()}` : '';
+      console.log(`[Discover Frontend] Fetching Events: source=${locState.source}, lat=${locState.latitude}, lon=${locState.longitude}, radius=${radius}km, url=${apiBase}/api/events${qs}`);
+
+      const res = await fetch(`${apiBase}/api/events${qs}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        signal
       });
       const data = await res.json();
       if (data.success) {
         setDbEvents(data.data || []);
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      if (e.name !== 'AbortError') {
+        console.error(e);
+      }
     }
-  }, [apiBase]);
+  }, [apiBase, locState.latitude, locState.longitude, locState.source]);
 
   React.useEffect(() => {
-    fetchEvents(city);
-    fetchGroups(city);
-  }, [city, fetchEvents, fetchGroups]);
+    const controller = new AbortController();
+    fetchEvents(city, radiusFilter, controller.signal);
+    fetchGroups(city, radiusFilter, controller.signal);
+    return () => controller.abort();
+  }, [city, fetchEvents, fetchGroups, radiusFilter]);
 
   React.useEffect(() => {
     if (window.io) {
@@ -995,6 +1051,7 @@ export function Discover({ st, go, param }) {
       hostName: e.hostName,
       hostType: e.hostType,
       hostId: e.hostId,
+      _distance: e._distance,
       city: e.location_type === 'online' ? null : (venueObj.city || venueObj.address || venueObj.meta?.city || null),
       wishlistCount: e.wishlistCount,
       isWishlisted: e.isWishlisted
@@ -1064,13 +1121,131 @@ export function Discover({ st, go, param }) {
             <button className={tab === "events" ? "on" : ""} onClick={() => setTab("events")}>Events</button>
             <button className={tab === "groups" ? "on" : ""} onClick={() => setTab("groups")}>Groups</button>
           </div>
-          <button 
-            className="hbtn hbtn--soft" 
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', height: 36, fontSize: 13, fontWeight: 600 }}
-            onClick={() => setShowFilterPopup(true)}
-          >
-            <I.filter style={{ width: 14, height: 14 }} /> Filter
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div style={{ position: 'relative' }}>
+              <button 
+                className="hbtn hbtn--soft" 
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', height: 36, fontSize: 13, fontWeight: 600, color: radiusFilter ? 'var(--accent)' : 'inherit' }}
+                onClick={() => setShowDistancePopover(!showDistancePopover)}
+              >
+                📍 {radiusFilter ? `${radiusFilter} km` : 'Anywhere'} ▼
+              </button>
+              
+              {showDistancePopover && (
+                <>
+                  {/* Click outside overlay */}
+                  <div 
+                    style={{ position: 'fixed', inset: 0, zIndex: 99 }} 
+                    onClick={() => setShowDistancePopover(false)}
+                  />
+                  {/* Popover */}
+                  <div style={{ 
+                    position: 'absolute', top: '100%', right: 0, marginTop: 8, 
+                    background: 'var(--surface)', border: '1px solid var(--border)', 
+                    borderRadius: 12, padding: 8, zIndex: 100, width: 240, 
+                    boxShadow: 'var(--sh-md)', display: 'flex', flexDirection: 'column', gap: 4
+                  }}>
+                    <div style={{ padding: '8px 12px', fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Distance
+                    </div>
+                    {[
+                      { label: 'Anywhere', value: null },
+                      { label: '5 km', value: 5 },
+                      { label: '10 km', value: 10 },
+                      { label: '25 km', value: 25 },
+                      { label: '50 km', value: 50 },
+                      { label: '100 km', value: 100 }
+                    ].map(opt => (
+                      <button
+                        key={opt.label}
+                        className="hbtn"
+                        style={{
+                          textAlign: 'left', padding: '8px 12px', borderRadius: 8,
+                          background: radiusFilter === opt.value ? 'var(--accent-alpha)' : 'transparent',
+                          color: radiusFilter === opt.value ? 'var(--accent)' : 'var(--ink)',
+                          fontWeight: radiusFilter === opt.value ? 600 : 500,
+                          fontSize: 14, border: 'none', cursor: 'pointer'
+                        }}
+                        onClick={() => {
+                          setRadiusFilter(opt.value);
+                          setShowDistancePopover(false);
+                          setCustomDistance('');
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                    
+                    <div style={{ height: 1, background: 'var(--border-2)', margin: '4px 0' }} />
+                    
+                    <div style={{ padding: '4px 8px' }}>
+                      <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--ink-2)', marginBottom: 6 }}>Custom (km)</div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <input 
+                          type="number" 
+                          placeholder="e.g. 15"
+                          value={customDistance}
+                          onChange={(e) => setCustomDistance(e.target.value)}
+                          style={{
+                            flex: 1, padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)',
+                            background: 'var(--bg)', color: 'var(--ink)', fontSize: 13, width: '100%'
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && customDistance) {
+                              const val = parseInt(customDistance, 10);
+                              if (!isNaN(val) && val > 0) {
+                                setRadiusFilter(Math.min(500, val));
+                                setShowDistancePopover(false);
+                              }
+                            }
+                          }}
+                        />
+                        <button 
+                          className="hbtn hbtn--primary hbtn--sm"
+                          disabled={!customDistance}
+                          onClick={() => {
+                            const val = parseInt(customDistance, 10);
+                            if (!isNaN(val) && val > 0) {
+                              setRadiusFilter(Math.min(500, val));
+                              setShowDistancePopover(false);
+                            }
+                          }}
+                        >
+                          Apply
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <button 
+              className="hbtn hbtn--soft" 
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', height: 36, fontSize: 13, fontWeight: 600 }}
+              onClick={() => setShowFilterPopup(true)}
+            >
+              <I.filter style={{ width: 14, height: 14 }} /> Filter
+            </button>
+          </div>
+        </div>
+
+        {/* Categories Bar */}
+        <div className="filterbar" style={{ marginBottom: 20, overflowX: "auto", paddingBottom: 4 }}>
+          {['All', ...categoriesList.map((c: any) => c.name)].map((name: string) => {
+            const isChecked = name === 'All' ? (selectedCats.size === 0 || selectedCats.has('All')) : selectedCats.has(name);
+            return (
+              <FilterChip 
+                key={name} 
+                active={isChecked} 
+                onClick={() => {
+                  setSelectedCats(new Set([name]));
+                }}
+              >
+                {name}
+              </FilterChip>
+            );
+          })}
         </div>
 
         {/* Filter Popup Overlay Modal */}
@@ -1117,38 +1292,9 @@ export function Discover({ st, go, param }) {
               </div>
 
               {/* Scrollable Filters Content */}
-              <div className="scroll" style={{ padding: '20px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 20 }}>                {tab === "events" && (
+              <div className="scroll" style={{ padding: '20px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {tab === "events" && (
                   <>
-                    {/* Timing filters */}
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Timing</div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                        {[
-                          { key: 'today', label: 'Today' },
-                          { key: 'thisWeek', label: 'This Week' },
-                          { key: 'other', label: 'Later / Other' }
-                        ].map(item => {
-                          const isChecked = filterTime[item.key as keyof typeof filterTime];
-                          return (
-                            <div 
-                              key={item.key} 
-                              onClick={() => setFilterTime(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
-                              style={{
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                background: isChecked ? 'rgba(109, 94, 252, 0.15)' : 'var(--surface-2)',
-                                padding: '8px 16px', borderRadius: 8, 
-                                border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
-                                color: isChecked ? 'var(--accent)' : 'var(--ink-2)',
-                                fontWeight: isChecked ? '600' : 'normal',
-                                cursor: 'pointer', fontSize: 13, userSelect: 'none', transition: 'all 0.2s'
-                              }}
-                            >
-                              {item.label}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
 
                     {/* Cost filters */}
                     <div>
@@ -1244,27 +1390,6 @@ export function Discover({ st, go, param }) {
                   </div>
                 </div>
 
-                {/* Categories Selector */}
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Categories</div>
-                  <div 
-                    onClick={() => setShowCategoryPopup(true)}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      background: 'var(--surface-2)', padding: '10px 14px', borderRadius: 8,
-                      border: '1px solid var(--border)', cursor: 'pointer', fontSize: 13,
-                      transition: 'border-color 0.2s', userSelect: 'none'
-                    }}
-                    onMouseEnter={ev => ev.currentTarget.style.borderColor = 'var(--accent)'}
-                    onMouseLeave={ev => ev.currentTarget.style.borderColor = 'var(--border)'}
-                  >
-                    <span style={{ color: 'var(--ink)', maxWidth: '80%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {selectedCats.has('All') ? 'All Categories' : Array.from(selectedCats).join(', ')}
-                    </span>
-                    <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>Choose ❯</span>
-                  </div>
-                </div>
-
               </div>
 
               {/* Footer */}
@@ -1284,98 +1409,9 @@ export function Discover({ st, go, param }) {
           </div>
         )}
 
-        {/* Categories Nested Popup */}
-        {showCategoryPopup && (
-          <div style={{
-            position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.65)',
-            backdropFilter: 'blur(8px)', zIndex: 11000, display: 'flex',
-            alignItems: 'center', justifyContent: 'center', padding: 20
-          }}>
-            <div style={{
-              background: 'var(--surface)', border: '1px solid var(--border)',
-              borderRadius: 16, width: '100%', maxWidth: 400, maxHeight: '80vh',
-              display: 'flex', flexDirection: 'column', overflow: 'hidden',
-              boxShadow: 'var(--sh-lg)'
-            }}>
-              {/* Header */}
-              <div style={{
-                padding: '16px 20px', borderBottom: '1px solid var(--border-2)',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-              }}>
-                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--ink)' }}>Select Categories</h2>
-                <button 
-                  className="hbtn hbtn--ghost hbtn--sm" 
-                  onClick={() => setShowCategoryPopup(false)}
-                  style={{ padding: '4px 8px', fontSize: 15 }}
-                >
-                  ✕
-                </button>
-              </div>
-
-              {/* Scrollable Categories List */}
-              <div className="scroll" style={{ padding: '20px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {[
-                  { id: 'All', name: 'All' },
-                  ...categoriesList
-                ].map((c: any) => {
-                  const count = tab === "events" ? getEventCatCount(c.name) : getGroupCatCount(c.name);
-                  const isChecked = c.name === 'All' ? (selectedCats.size === 0 || selectedCats.has('All')) : selectedCats.has(c.name);
-                  return (
-                    <div 
-                      key={c.id} 
-                      onClick={() => {
-                        setSelectedCats(prev => {
-                          const next = new Set(prev);
-                          if (c.name === 'All') {
-                            next.clear();
-                          } else {
-                            next.delete('All');
-                            if (isChecked) {
-                              next.delete(c.name);
-                            } else {
-                              next.add(c.name);
-                            }
-                          }
-                          return next;
-                        });
-                      }}
-                      style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        padding: '10px 14px', 
-                        background: isChecked ? 'rgba(109, 94, 252, 0.15)' : 'var(--surface-2)',
-                        border: isChecked ? '1px solid var(--accent)' : '1px solid var(--border)',
-                        color: isChecked ? 'var(--accent)' : 'var(--ink-2)',
-                        fontWeight: isChecked ? '600' : 'normal',
-                        borderRadius: 8, cursor: 'pointer', fontSize: 13.5, userSelect: 'none', transition: 'all 0.2s'
-                      }}
-                    >
-                      <span>{c.icon_value ? `${c.icon_value} ` : ""}{c.name}</span>
-                      <span style={{ fontSize: 12, color: isChecked ? 'var(--accent)' : 'var(--ink-3)', fontWeight: 500 }}>({count})</span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Footer */}
-              <div style={{
-                padding: '12px 20px', borderTop: '1px solid var(--border-2)',
-                display: 'flex', justifyContent: 'flex-end', background: 'var(--surface-2)'
-              }}>
-                <button 
-                  className="hbtn hbtn--primary" 
-                  style={{ height: 36, padding: '0 20px', fontWeight: 600, fontSize: 13 }}
-                  onClick={() => setShowCategoryPopup(false)}
-                >
-                  Done
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {tab === "events" ? (
           evs.length === 0 ? (
-            <Empty icon={<I.ticket />} title="No events found" text="There are no events scheduled in this category matching the filters." />
+            <Empty icon={<I.ticket />} title="No events found" text="There are no events scheduled in this category." />
           ) : (
             <div className="ev-grid">
               {evs.map(ev => <EventCard key={ev.id} ev={ev} onOpen={(e) => go("event", e)} wishlisted={wishlisted.has(ev.id)} wishlistCount={wishlistCounts[ev.id] !== undefined ? wishlistCounts[ev.id] : (ev.wishlistCount || 0)} onWishlist={() => toggleWishlist(ev.id, ev.wishlistCount)} registered={registered.has(ev.id)} />)}
@@ -1383,9 +1419,7 @@ export function Discover({ st, go, param }) {
           )
         ) : (
           <div className="ev-grid">
-            {loading ? <div style={{ color: "var(--ink-3)", padding: 20 }}>Loading groups...</div> : grps.length === 0 ? (
-              <Empty icon={<I.groups />} title="No groups found" text="There are no groups scheduled in this category matching the filters." />
-            ) : grps.map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={g.isJoined || st.joined?.has(g.id) ? true : (g.isPending || st.pending?.has(g.id)) ? "pending" : false} onJoin={(g)=>{ st.toggleJoin(g); }} />)}
+            {loading ? <div style={{ color: "var(--ink-3)", padding: 20 }}>Loading groups...</div> : grps.map(g => <GroupCard key={g.id} g={g} onOpen={(g)=>go("group", g)} joined={g.isJoined || st.joined?.has(g.id) ? true : (g.isPending || st.pending?.has(g.id)) ? "pending" : false} onJoin={(g)=>{ st.toggleJoin(g); }} />)}
           </div>
         )}
       </div>

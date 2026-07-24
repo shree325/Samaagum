@@ -589,10 +589,53 @@ export class GroupService {
         await this.groupRepo.deleteGroupTx(groupId);
     }
 
-    static async listGroups(userPayload?: any, userCityQuery?: string) {
-        const groups = await this.groupRepo.getGroupsWithEntities({
-            entities: { visibility: { in: ['public', 'private'] } }
-        }, { entities: { created_at: 'desc' } });
+    static async listGroups(userPayload?: any, userCityQuery?: string, radiusFilter?: number, userLat?: number, userLon?: number) {
+        let refCityName = "";
+        let refStateName = "";
+        let refLat: number | null = userLat !== undefined ? userLat : null;
+        let refLon: number | null = userLon !== undefined ? userLon : null;
+
+        if (userCityQuery && userCityQuery !== 'Global') {
+            const queryName = userCityQuery.split(',')[0].trim();
+            const matchedCities = await this.cityControlsRepo.findByCityName(queryName);
+            const refLoc = matchedCities.find(c => c.is_active) || matchedCities[0];
+            if (refLoc) {
+                refCityName = refLoc.city_name;
+                refStateName = refLoc.state_name || "";
+                if (refLat === null || refLon === null) {
+                    refLat = Number(refLoc.latitude);
+                    refLon = Number(refLoc.longitude);
+                }
+            }
+        }
+
+        const effectiveRadius = (refLat !== null && refLon !== null) ? radiusFilter : undefined;
+        let groupDistanceMap = new Map<string, number>();
+        let allowedGroupIds: string[] | null = null;
+
+        if (effectiveRadius !== undefined) {
+            const { getHaversineSQL } = await import('../utils/geo');
+            const distSql = getHaversineSQL("settings->'location'->>'lat'", "settings->'location'->>'lon'", "$2", "$3");
+            
+            const rows = await prisma.$queryRawUnsafe<{ entity_id: string; distance: number }[]>(`
+                SELECT entity_id, ${distSql} AS distance
+                FROM groups
+                WHERE settings->'location'->>'lat' IS NOT NULL 
+                  AND ${distSql} <= $1
+            `, effectiveRadius, refLat, refLon);
+            
+            allowedGroupIds = rows.map(r => r.entity_id);
+            for (const r of rows) {
+                groupDistanceMap.set(r.entity_id, r.distance);
+            }
+        }
+
+        const groupsFilter: any = { entities: { visibility: { in: ['public', 'private'] } } };
+        if (allowedGroupIds !== null) {
+            groupsFilter.entity_id = { in: allowedGroupIds };
+        }
+
+        const groups = await this.groupRepo.getGroupsWithEntities(groupsFilter, { entities: { created_at: 'desc' } });
 
         const membershipCounts = await this.groupMembershipsRepo.getMembershipCountsAll();
         const countsMap = new Map(membershipCounts.map(m => [m.group_id, m._count._all]));
@@ -623,23 +666,6 @@ export class GroupService {
                 if (await this.userInGroups(userPayload.id, reqGroups)) allowed = true;
                 if (!allowed && await this.userInCommunities(userPayload.id, reqCommunities)) allowed = true;
                 if (allowed) publishedGroups.push(g);
-            }
-        }
-
-        let refCityName = "";
-        let refStateName = "";
-        let refLat: number | null = null;
-        let refLon: number | null = null;
-
-        if (userCityQuery && userCityQuery !== 'Global') {
-            const queryName = userCityQuery.split(',')[0].trim();
-            const matchedCities = await this.cityControlsRepo.findByCityName(queryName);
-            const refLoc = matchedCities.find(c => c.is_active) || matchedCities[0];
-            if (refLoc) {
-                refCityName = refLoc.city_name;
-                refStateName = refLoc.state_name || "";
-                refLat = Number(refLoc.latitude);
-                refLon = Number(refLoc.longitude);
             }
         }
 
@@ -681,15 +707,31 @@ export class GroupService {
                 if (refStateName && loc.state && loc.state.toLowerCase() === refStateName.toLowerCase()) {
                     isSameState = true;
                 }
-                if (refLat !== null && refLon !== null && loc.lat !== undefined && loc.lon !== undefined) {
+                if (groupDistanceMap.has(g.entity_id)) {
+                    distance = groupDistanceMap.get(g.entity_id) as number;
+                } else if (refLat !== null && refLon !== null && loc.lat !== undefined && loc.lon !== undefined) {
                     distance = this.getDistance(refLat, refLon, Number(loc.lat), Number(loc.lon));
+                }
+                
+                // Fallback: If it's the same city but has no distance, treat distance as 0
+                if (distance === null && isSameCity) {
+                    distance = 0;
                 }
             }
             
             return { ...clientGroup, _isSameCity: isSameCity, _isSameState: isSameState, _distance: distance, _hasLocation: hasLocation, _createdAt: g.entities?.created_at?.getTime() || 0 };
         });
 
-        if (refCityName) {
+        if (effectiveRadius !== undefined) {
+            mappedGroups.sort((a, b) => {
+                if (a._distance !== null && b._distance !== null) {
+                    if (a._distance !== b._distance) return a._distance - b._distance;
+                }
+                if (a._distance !== null) return -1;
+                if (b._distance !== null) return 1;
+                return b._createdAt - a._createdAt;
+            });
+        } else if (refCityName) {
             mappedGroups.sort((a, b) => {
                 // 1. Same City
                 if (a._isSameCity && !b._isSameCity) return -1;
