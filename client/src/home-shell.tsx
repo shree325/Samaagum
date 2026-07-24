@@ -506,7 +506,7 @@ export function CityPicker({ open, onClose, city, onPick }) {
   const handleSelect = async (loc) => {
     setSelectedLocation(loc);
     if (loc) {
-      onPick(loc.location_name);
+      onPick(loc.location_name, loc.latitude, loc.longitude);
 
       // Persist as manual (device-level) selection and lock out auto-detection
       const manualObj = {

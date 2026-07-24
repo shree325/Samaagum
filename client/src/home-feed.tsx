@@ -875,12 +875,11 @@ export function Discover({ st, go, param }) {
       if (currentCity && currentCity !== "Global") params.append('city', currentCity);
       if (radius) params.append('radius', radius.toString());
       
-      const isGpsActive = locState.source === 'GPS' && locState.latitude !== null && locState.longitude !== null;
-      if (isGpsActive) {
-        params.append('lat', locState.latitude!.toString());
-        params.append('lon', locState.longitude!.toString());
-        params.append('locationSource', 'GPS');
-      } else if (locState.source) {
+      if (locState.latitude !== null && locState.longitude !== null) {
+        params.append('lat', locState.latitude.toString());
+        params.append('lon', locState.longitude.toString());
+      }
+      if (locState.source) {
         params.append('locationSource', locState.source);
       }
 
@@ -933,12 +932,11 @@ export function Discover({ st, go, param }) {
       if (currentCity && currentCity !== "Global") params.append('city', currentCity);
       if (radius) params.append('radius', radius.toString());
       
-      const isGpsActive = locState.source === 'GPS' && locState.latitude !== null && locState.longitude !== null;
-      if (isGpsActive) {
-        params.append('lat', locState.latitude!.toString());
-        params.append('lon', locState.longitude!.toString());
-        params.append('locationSource', 'GPS');
-      } else if (locState.source) {
+      if (locState.latitude !== null && locState.longitude !== null) {
+        params.append('lat', locState.latitude.toString());
+        params.append('lon', locState.longitude.toString());
+      }
+      if (locState.source) {
         params.append('locationSource', locState.source);
       }
 
