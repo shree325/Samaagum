@@ -433,6 +433,10 @@ export function Profile({ st, go }) {
     return () => clearTimeout(timer);
   }, [networkSearch, showNetworkModal]);
 
+  React.useEffect(() => {
+    fetchNetwork("", 1, false);
+  }, []);
+
   const handleConnectFromModal = async (targetId, e) => {
     e.stopPropagation();
     setNetworkConnectStates(prev => ({ ...prev, [targetId]: 'loading' }));
@@ -556,12 +560,12 @@ export function Profile({ st, go }) {
 
   const isDark = theme === "dark";
   const colors = {
-    bgApp: isDark ? "#121212" : "#f9fafb",
-    bgContainer: isDark ? "#1a1a1b" : "#f3f4f6",
+    bgApp: isDark ? "#000000" : "#f9fafb",
+    bgContainer: isDark ? "#000000" : "#f3f4f6",
     textMain: isDark ? "#ffffff" : "#111827",
     textSub: isDark ? "#9ca3af" : "#4b5563",
     textMuted: isDark ? "#6b7280" : "#6b7280",
-    cardBg: isDark ? "#222224" : "#ffffff",
+    cardBg: isDark ? "#121417" : "#ffffff",
     cardShadow: isDark ? "none" : "0 -8px 40px rgba(0,0,0,0.08)",
     border: isDark ? "rgba(255,255,255,0.06)" : "#f3f4f6",
     navBg: isDark ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.75)",
@@ -641,53 +645,66 @@ export function Profile({ st, go }) {
           <div style={{ background: colors.cardBg, borderTopLeftRadius: 40, borderTopRightRadius: 40, padding: "40px 24px 100px 24px", flex: 1, display: "flex", flexDirection: "column", boxShadow: colors.cardShadow, transition: "background 0.3s ease" }}>
             <div style={{ maxWidth: 800, margin: "0 auto", width: "100%" }}>
 
-              {/* Stats Row */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 32, borderBottom: `1px solid ${colors.border}` }}>
-                <div style={{ flex: 1, textAlign: "center" }}>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: colors.textMain }}>{st?.joinedGroups?.length || 0}</div>
-                  <div style={{ fontSize: 14, color: colors.textMuted, marginTop: 6, fontWeight: 500 }}>Group</div>
+              {/* Stats Row Card */}
+              <div style={{
+                background: isDark ? "#16181c" : "#f8fafc",
+                borderRadius: 20,
+                padding: "28px 16px",
+                display: "grid",
+                gridTemplateColumns: "repeat(4, 1fr)",
+                alignItems: "center",
+                textAlign: "center",
+                border: `1.5px solid ${isDark ? "rgba(255,255,255,0.06)" : "#e2e8f0"}`,
+                boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.3)" : "0 4px 20px rgba(0,0,0,0.02)",
+                marginBottom: 32
+              }}>
+                {/* Groups */}
+                <div style={{ padding: "0 8px" }}>
+                  <div style={{ fontSize: 36, fontWeight: 800, color: "#22c55e", lineHeight: 1.1 }}>{st?.joinedGroups?.length || 0}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: colors.textMain, marginTop: 8 }}>Groups</div>
+                  <div style={{ fontSize: 12, color: colors.textSub, marginTop: 6, lineHeight: 1.3 }}>Communities you belong to</div>
                 </div>
-                <div style={{ color: colors.sparkle, fontSize: 18 }}>✦</div>
-                <div style={{ flex: 1, textAlign: "center" }}>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: colors.textMain }}>{ME.skills?.length || 0}</div>
-                  <div style={{ fontSize: 14, color: colors.textMuted, marginTop: 6, fontWeight: 500 }}>Interest{(ME.skills?.length || 0) !== 1 ? 's' : ''}</div>
-                </div>
-                <div style={{ color: colors.sparkle, fontSize: 18 }}>✦</div>
-                <div style={{ flex: 1, textAlign: "center" }}>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: colors.textMain }}>{st?.joinedEvents?.length || 0}</div>
-                  <div style={{ fontSize: 14, color: colors.textMuted, marginTop: 6, fontWeight: 500 }}>RSVPs</div>
-                </div>
-              </div>
 
-              {/* Connections Button */}
-              <div style={{ marginTop: 24, display: "flex", justifyContent: "center" }}>
-                <button
-                  onClick={() => {
-                    setShowNetworkModal(true);
-                    setNetworkSearch("");
-                    setNetworkPage(1);
-                    fetchNetwork("", 1, false);
-                  }}
-                  style={{
-                    padding: "14px 24px",
-                    borderRadius: 28,
-                    background: colors.pillBg,
-                    color: colors.textMain,
-                    border: `1.5px solid ${colors.pillBorder}`,
-                    fontSize: 15,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8,
-                    boxShadow: colors.pillShadow,
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  <svg viewBox="0 0 24 24" fill="none" width="18" height="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
-                  Connected
-                </button>
+                {/* Interests */}
+                <div style={{ padding: "0 8px", borderLeft: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#e2e8f0"}` }}>
+                  <div style={{ fontSize: 36, fontWeight: 800, color: "#3b82f6", lineHeight: 1.1 }}>{ME.skills?.length || 0}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: colors.textMain, marginTop: 8 }}>Interests</div>
+                  <div style={{ fontSize: 12, color: colors.textSub, marginTop: 6, lineHeight: 1.3 }}>Topics and activities you love</div>
+                </div>
+
+                {/* RSVPs */}
+                <div style={{ padding: "0 8px", borderLeft: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#e2e8f0"}` }}>
+                  <div style={{ fontSize: 36, fontWeight: 800, color: "#f97316", lineHeight: 1.1 }}>{st?.joinedEvents?.length || 0}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: colors.textMain, marginTop: 8 }}>RSVPs</div>
+                  <div style={{ fontSize: 12, color: colors.textSub, marginTop: 6, lineHeight: 1.3 }}>Events you've responded to</div>
+                </div>
+
+                {/* Connections */}
+                <div style={{ padding: "0 8px", borderLeft: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#e2e8f0"}` }}>
+                  <div 
+                    onClick={() => {
+                      setShowNetworkModal(true);
+                      setNetworkSearch("");
+                      setNetworkPage(1);
+                      fetchNetwork("", 1, false);
+                    }}
+                    style={{ fontSize: 36, fontWeight: 800, color: "#a855f7", lineHeight: 1.1, cursor: "pointer" }}
+                  >
+                    {networkData.totalCount}
+                  </div>
+                  <div 
+                    onClick={() => {
+                      setShowNetworkModal(true);
+                      setNetworkSearch("");
+                      setNetworkPage(1);
+                      fetchNetwork("", 1, false);
+                    }}
+                    style={{ fontSize: 16, fontWeight: 700, color: colors.textMain, marginTop: 8, cursor: "pointer" }}
+                  >
+                    Connections
+                  </div>
+                  <div style={{ fontSize: 12, color: colors.textSub, marginTop: 6, lineHeight: 1.3 }}>People you're connected with</div>
+                </div>
               </div>
 
               {/* Connected Users Modal */}
@@ -1015,17 +1032,25 @@ export function Profile({ st, go }) {
                 </div>
               )}
 
-              {/* Interests Section */}
-              <div style={{ marginTop: 40 }}>
-                <h2 style={{ fontSize: 24, fontWeight: 800, margin: 0, display: "flex", alignItems: "center", gap: 8, color: colors.textMain }}>
-                  Interests <span style={{ color: "var(--accent-1)", fontSize: 22 }}>✦</span>
-                  <button onClick={() => { setIsEditingInterests(!isEditingInterests); setInterestsForm(ME.skills || []); }} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--accent-1)", display: "flex", alignItems: "center", padding: 4, borderRadius: "50%", transition: "background 0.2s" }} className="hover:bg-gray-100 dark:hover:bg-gray-800">
-                    <I.plus style={{ width: 20, height: 20 }} />
+              {/* Interests Section Card */}
+              <div style={{
+                marginTop: 24,
+                background: isDark ? "#16181c" : "#f8fafc",
+                borderRadius: 20,
+                padding: "24px",
+                border: `1.5px solid ${isDark ? "rgba(255,255,255,0.06)" : "#e2e8f0"}`,
+                boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.3)" : "0 4px 20px rgba(0,0,0,0.02)"
+              }}>
+                <h2 style={{ fontSize: 22, fontWeight: 800, margin: 0, display: "flex", alignItems: "center", gap: 8, color: colors.textMain }}>
+                  Interests 
+                  <span style={{ color: "#ef4444", fontSize: 20 }}>✦</span>
+                  <button onClick={() => { setIsEditingInterests(!isEditingInterests); setInterestsForm(ME.skills || []); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", display: "flex", alignItems: "center", padding: 0, transition: "opacity 0.2s" }} className="hover:opacity-85">
+                    <span style={{ fontSize: 22, fontWeight: 600 }}>+</span>
                   </button>
                 </h2>
 
                 {isEditingInterests ? (
-                  <div style={{ marginTop: 24, background: colors.cardBg, border: `1px solid ${colors.border}`, padding: 24, borderRadius: 20 }}>
+                  <div style={{ marginTop: 20, background: isDark ? "#1a1c20" : "#ffffff", border: `1px solid ${colors.border}`, padding: 24, borderRadius: 20 }}>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>
                       {/* Render predefined INTERESTS */}
                       {INTERESTS.map(([name, col], i) => {
@@ -1038,8 +1063,8 @@ export function Profile({ st, go }) {
                               else setInterestsForm([...interestsForm, name]);
                             }}
                             style={{
-                              background: isSelected ? "var(--accent-1)" : "var(--bg-1)",
-                              border: `1px solid ${isSelected ? "var(--accent-1)" : colors.border}`,
+                              background: isSelected ? "var(--accent-1)" : (isDark ? "rgba(255,255,255,0.02)" : "#ffffff"),
+                              border: `1px solid ${isSelected ? "var(--accent-1)" : (isDark ? "rgba(255,255,255,0.08)" : "#cbd5e1")}`,
                               borderRadius: 24,
                               padding: "8px 16px",
                               color: isSelected ? "white" : colors.textMain,
@@ -1058,7 +1083,7 @@ export function Profile({ st, go }) {
                           </button>
                         );
                       })}
-                      {/* Render custom user interests that aren't in predefined INTERESTS */}
+                      {/* Render custom user interests */}
                       {interestsForm.filter(name => !INTERESTS.some(i => i[0] === name)).map((name, i) => (
                         <button
                           key={'custom-' + i}
@@ -1092,31 +1117,38 @@ export function Profile({ st, go }) {
                   </div>
                 ) : (
                   <>
-                    <p style={{ color: colors.textMuted, fontSize: 16, marginTop: 8, marginBottom: 24, fontWeight: 500 }}>Topics and skills you care about</p>
+                    <p style={{ color: colors.textSub, fontSize: 14, marginTop: 6, marginBottom: 20, fontWeight: 500 }}>Topics and skills you care about</p>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
                       {ME.skills && ME.skills.length > 0 ? ME.skills.map((skill, i) => (
-                        <button key={i} style={{ background: colors.chipBg, border: `1px solid ${colors.chipBorder}`, borderRadius: 24, padding: "12px 20px", color: colors.chipText, fontSize: 15, fontWeight: 600, display: "flex", alignItems: "center", gap: 8, cursor: "default", transition: "all 0.2s" }}>
-                          <span className="dot" style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent-1)", display: "inline-block" }}></span> {skill}
+                        <button key={i} style={{ background: isDark ? "rgba(255,255,255,0.02)" : "#ffffff", border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#cbd5e1"}`, borderRadius: 24, padding: "10px 18px", color: colors.textMain, fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", gap: 8, cursor: "default", transition: "all 0.2s" }}>
+                          <span className="dot" style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", display: "inline-block" }}></span> {skill}
                         </button>
                       )) : (
-                        <div style={{ color: colors.textMuted, fontSize: 15 }}>No interests selected yet.</div>
+                        <div style={{ color: colors.textSub, fontSize: 14 }}>No interests selected yet.</div>
                       )}
                     </div>
                   </>
                 )}
               </div>
 
-              {/* Social Links rendering */}
-              <div style={{ marginTop: 40 }}>
-                <h2 style={{ fontSize: 24, fontWeight: 800, margin: 0, display: "flex", alignItems: "center", gap: 8, color: colors.textMain }}>
+              {/* Links Section Card */}
+              <div style={{
+                marginTop: 24,
+                background: isDark ? "#16181c" : "#f8fafc",
+                borderRadius: 20,
+                padding: "24px",
+                border: `1.5px solid ${isDark ? "rgba(255,255,255,0.06)" : "#e2e8f0"}`,
+                boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.3)" : "0 4px 20px rgba(0,0,0,0.02)"
+              }}>
+                <h2 style={{ fontSize: 22, fontWeight: 800, margin: 0, display: "flex", alignItems: "center", gap: 8, color: colors.textMain }}>
                   Links
-                  <button onClick={() => setIsEditingLinks(!isEditingLinks)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--accent-1)", display: "flex", alignItems: "center", padding: 4, borderRadius: "50%", transition: "background 0.2s" }} className="hover:bg-gray-100 dark:hover:bg-gray-800">
-                    <I.plus style={{ width: 20, height: 20 }} />
+                  <button onClick={() => setIsEditingLinks(!isEditingLinks)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", display: "flex", alignItems: "center", padding: 0, transition: "opacity 0.2s" }} className="hover:opacity-85">
+                    <span style={{ fontSize: 22, fontWeight: 600 }}>+</span>
                   </button>
                 </h2>
 
                 {isEditingLinks ? (
-                  <div style={{ marginTop: 24, background: colors.cardBg, border: `1px solid ${colors.border}`, padding: 24, borderRadius: 20 }}>
+                  <div style={{ marginTop: 20, background: isDark ? "#1a1c20" : "#ffffff", border: `1px solid ${colors.border}`, padding: 24, borderRadius: 20 }}>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20 }}>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         <label style={{ fontSize: 14, fontWeight: 600, color: colors.textMain, display: "flex", alignItems: "center", gap: 6 }}>📷 Instagram</label>
@@ -1153,38 +1185,38 @@ export function Profile({ st, go }) {
                     {ME.socialLinks && Object.values(ME.socialLinks).some(link => link && typeof link === 'string' && link.trim() !== '') ? (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 16 }}>
                         {ME.socialLinks.instagram && (
-                          <a href={ME.socialLinks.instagram} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 8, color: colors.chipText, textDecoration: "none", fontSize: 15, padding: "12px 20px", background: colors.chipBg, borderRadius: 24, border: `1px solid ${colors.chipBorder}`, fontWeight: 600, transition: "all 0.2s", cursor: "pointer" }}>
-                            <span>📷</span> Instagram <I.external style={{ width: 14, height: 14, opacity: 0.5, marginLeft: 4 }} />
+                          <a href={ME.socialLinks.instagram} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 8, color: colors.textMain, textDecoration: "none", fontSize: 14, padding: "10px 18px", background: isDark ? "rgba(255,255,255,0.02)" : "#ffffff", borderRadius: 24, border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#cbd5e1"}`, fontWeight: 600, transition: "all 0.2s", cursor: "pointer" }}>
+                            <span>📸</span> Instagram <I.external style={{ width: 12, height: 12, opacity: 0.5, marginLeft: 4 }} />
                           </a>
                         )}
                         {ME.socialLinks.linkedin && (
-                          <a href={ME.socialLinks.linkedin} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 8, color: colors.chipText, textDecoration: "none", fontSize: 15, padding: "12px 20px", background: colors.chipBg, borderRadius: 24, border: `1px solid ${colors.chipBorder}`, fontWeight: 600, transition: "all 0.2s", cursor: "pointer" }}>
-                            <span>💼</span> LinkedIn <I.external style={{ width: 14, height: 14, opacity: 0.5, marginLeft: 4 }} />
+                          <a href={ME.socialLinks.linkedin} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 8, color: colors.textMain, textDecoration: "none", fontSize: 14, padding: "10px 18px", background: isDark ? "rgba(255,255,255,0.02)" : "#ffffff", borderRadius: 24, border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#cbd5e1"}`, fontWeight: 600, transition: "all 0.2s", cursor: "pointer" }}>
+                            <span>💼</span> LinkedIn <I.external style={{ width: 12, height: 12, opacity: 0.5, marginLeft: 4 }} />
                           </a>
                         )}
                         {ME.socialLinks.github && (
-                          <a href={ME.socialLinks.github} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 8, color: colors.chipText, textDecoration: "none", fontSize: 15, padding: "12px 20px", background: colors.chipBg, borderRadius: 24, border: `1px solid ${colors.chipBorder}`, fontWeight: 600, transition: "all 0.2s", cursor: "pointer" }}>
-                            <span>🐱</span> GitHub <I.external style={{ width: 14, height: 14, opacity: 0.5, marginLeft: 4 }} />
+                          <a href={ME.socialLinks.github} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 8, color: colors.textMain, textDecoration: "none", fontSize: 14, padding: "10px 18px", background: isDark ? "rgba(255,255,255,0.02)" : "#ffffff", borderRadius: 24, border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#cbd5e1"}`, fontWeight: 600, transition: "all 0.2s", cursor: "pointer" }}>
+                            <span>🐱</span> GitHub <I.external style={{ width: 12, height: 12, opacity: 0.5, marginLeft: 4 }} />
                           </a>
                         )}
                         {ME.socialLinks.twitter && (
-                          <a href={ME.socialLinks.twitter} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 8, color: colors.chipText, textDecoration: "none", fontSize: 15, padding: "12px 20px", background: colors.chipBg, borderRadius: 24, border: `1px solid ${colors.chipBorder}`, fontWeight: 600, transition: "all 0.2s", cursor: "pointer" }}>
-                            <span>✖</span> X <I.external style={{ width: 14, height: 14, opacity: 0.5, marginLeft: 4 }} />
+                          <a href={ME.socialLinks.twitter} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 8, color: colors.textMain, textDecoration: "none", fontSize: 14, padding: "10px 18px", background: isDark ? "rgba(255,255,255,0.02)" : "#ffffff", borderRadius: 24, border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#cbd5e1"}`, fontWeight: 600, transition: "all 0.2s", cursor: "pointer" }}>
+                            <span>✖</span> X <I.external style={{ width: 12, height: 12, opacity: 0.5, marginLeft: 4 }} />
                           </a>
                         )}
                         {ME.socialLinks.youtube && (
-                          <a href={ME.socialLinks.youtube} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 8, color: colors.chipText, textDecoration: "none", fontSize: 15, padding: "12px 20px", background: colors.chipBg, borderRadius: 24, border: `1px solid ${colors.chipBorder}`, fontWeight: 600, transition: "all 0.2s", cursor: "pointer" }}>
-                            <span>▶</span> YouTube <I.external style={{ width: 14, height: 14, opacity: 0.5, marginLeft: 4 }} />
+                          <a href={ME.socialLinks.youtube} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 8, color: colors.textMain, textDecoration: "none", fontSize: 14, padding: "10px 18px", background: isDark ? "rgba(255,255,255,0.02)" : "#ffffff", borderRadius: 24, border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#cbd5e1"}`, fontWeight: 600, transition: "all 0.2s", cursor: "pointer" }}>
+                            <span>▶</span> YouTube <I.external style={{ width: 12, height: 12, opacity: 0.5, marginLeft: 4 }} />
                           </a>
                         )}
                         {ME.socialLinks.website && (
-                          <a href={ME.socialLinks.website} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 8, color: colors.chipText, textDecoration: "none", fontSize: 15, padding: "12px 20px", background: colors.chipBg, borderRadius: 24, border: `1px solid ${colors.chipBorder}`, fontWeight: 600, transition: "all 0.2s", cursor: "pointer" }}>
-                            <span>🌐</span> Website <I.external style={{ width: 14, height: 14, opacity: 0.5, marginLeft: 4 }} />
+                          <a href={ME.socialLinks.website} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 8, color: colors.textMain, textDecoration: "none", fontSize: 14, padding: "10px 18px", background: isDark ? "rgba(255,255,255,0.02)" : "#ffffff", borderRadius: 24, border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#cbd5e1"}`, fontWeight: 600, transition: "all 0.2s", cursor: "pointer" }}>
+                            <span>🌐</span> Website <I.external style={{ width: 12, height: 12, opacity: 0.5, marginLeft: 4 }} />
                           </a>
                         )}
                       </div>
                     ) : (
-                      <div style={{ marginTop: 12, color: colors.textMuted, fontSize: 15 }}>No links added yet.</div>
+                      <div style={{ marginTop: 12, color: colors.textSub, fontSize: 14 }}>No links added yet.</div>
                     )}
                   </>
                 )}
