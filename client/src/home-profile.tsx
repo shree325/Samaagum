@@ -659,7 +659,11 @@ export function Profile({ st, go }) {
                 marginBottom: 32
               }}>
                 {/* Groups */}
-                <div style={{ padding: "0 8px" }}>
+                <div 
+                  onClick={() => go("groups")}
+                  style={{ padding: "0 8px", cursor: "pointer" }}
+                  className="hover:opacity-80"
+                >
                   <div style={{ fontSize: 36, fontWeight: 800, color: "#22c55e", lineHeight: 1.1 }}>{st?.joinedGroups?.length || 0}</div>
                   <div style={{ fontSize: 16, fontWeight: 700, color: colors.textMain, marginTop: 8 }}>Groups</div>
                   <div style={{ fontSize: 12, color: colors.textSub, marginTop: 6, lineHeight: 1.3 }}>Communities you belong to</div>
@@ -673,36 +677,29 @@ export function Profile({ st, go }) {
                 </div>
 
                 {/* RSVPs */}
-                <div style={{ padding: "0 8px", borderLeft: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#e2e8f0"}` }}>
+                <div 
+                  onClick={() => go("events")}
+                  style={{ padding: "0 8px", borderLeft: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#e2e8f0"}`, cursor: "pointer" }}
+                  className="hover:opacity-80"
+                >
                   <div style={{ fontSize: 36, fontWeight: 800, color: "#f97316", lineHeight: 1.1 }}>{st?.joinedEvents?.length || 0}</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: colors.textMain, marginTop: 8 }}>RSVPs</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: colors.textMain, marginTop: 8 }}>Events Joined</div>
                   <div style={{ fontSize: 12, color: colors.textSub, marginTop: 6, lineHeight: 1.3 }}>Events you've responded to</div>
                 </div>
 
                 {/* Connections */}
-                <div style={{ padding: "0 8px", borderLeft: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#e2e8f0"}` }}>
-                  <div 
-                    onClick={() => {
-                      setShowNetworkModal(true);
-                      setNetworkSearch("");
-                      setNetworkPage(1);
-                      fetchNetwork("", 1, false);
-                    }}
-                    style={{ fontSize: 36, fontWeight: 800, color: "#a855f7", lineHeight: 1.1, cursor: "pointer" }}
-                  >
-                    {networkData.totalCount}
-                  </div>
-                  <div 
-                    onClick={() => {
-                      setShowNetworkModal(true);
-                      setNetworkSearch("");
-                      setNetworkPage(1);
-                      fetchNetwork("", 1, false);
-                    }}
-                    style={{ fontSize: 16, fontWeight: 700, color: colors.textMain, marginTop: 8, cursor: "pointer" }}
-                  >
-                    Connections
-                  </div>
+                <div 
+                  onClick={() => {
+                    setShowNetworkModal(true);
+                    setNetworkSearch("");
+                    setNetworkPage(1);
+                    fetchNetwork("", 1, false);
+                  }}
+                  style={{ padding: "0 8px", borderLeft: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#e2e8f0"}`, cursor: "pointer" }}
+                  className="hover:opacity-80"
+                >
+                  <div style={{ fontSize: 36, fontWeight: 800, color: "#a855f7", lineHeight: 1.1 }}>{networkData.totalCount}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: colors.textMain, marginTop: 8 }}>Connections</div>
                   <div style={{ fontSize: 12, color: colors.textSub, marginTop: 6, lineHeight: 1.3 }}>People you're connected with</div>
                 </div>
               </div>
