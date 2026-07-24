@@ -1991,9 +1991,6 @@ export async function messagingRoutes(fastify: FastifyInstance) {
                     });
                     if (existingUser) {
                         assignedUserId = existingUser.id;
-                        if (existingUser.id === userId) {
-                            attName = requesterName;
-                        }
                     }
                 }
 

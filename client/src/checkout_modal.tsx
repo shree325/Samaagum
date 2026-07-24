@@ -73,7 +73,7 @@ export function CheckoutModal({
         if (duplicates.length > 0) {
             setAttendees(prev => {
                 const next = [...prev];
-                next[index] = { ...next[index], status: 'warning', warningMsg: '⚠️ This email is already entered in this order.' };
+                next[index] = { ...next[index], status: 'guest', warningMsg: '' };
                 return next;
             });
             return;
@@ -95,8 +95,8 @@ export function CheckoutModal({
                             ...next[index], 
                             name: data.name || next[index].name, 
                             gender: data.gender || next[index].gender, 
-                            status: 'warning', 
-                            warningMsg: '⚠️ This attendee already appears to have a ticket for this event.' 
+                            status: 'member', 
+                            warningMsg: 'ℹ️ This email already has a ticket, another ticket will be issued.' 
                         };
                     } else {
                         // Member found — always auto-fill name and gender from their profile
